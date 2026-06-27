@@ -27,23 +27,28 @@ Singleton {
     property int _pending: -1           // valor DDC pendiente (debounce)
 
     // ── Detección del método + lectura inicial ───────────────
+    //  Optimizada: el nº de bus i2c del monitor se CACHEA en disco. En el
+    //  primer arranque hace `ddcutil detect` (~0.4 s) y guarda el bus; en
+    //  los siguientes va directo a ese bus (~0.08 s, 5× más rápido). Si el
+    //  bus cacheado falla (monitor cambiado), reintenta con detect y
+    //  re-cachea → auto-reparable.
     Process {
         id: detect
         running: true
         command: ["sh", "-c",
             "bl=$(brightnessctl -m -c backlight 2>/dev/null | grep -m1 ',backlight,'); " +
-            "if [ -n \"$bl\" ]; then " +
-              "p=$(echo \"$bl\" | cut -d, -f4 | tr -d '%'); " +
-              "echo \"backlight ${p:-0} 100 -1\"; " +
-            "elif command -v ddcutil >/dev/null 2>&1; then " +
+            "if [ -n \"$bl\" ]; then p=$(echo \"$bl\" | cut -d, -f4 | tr -d '%'); echo \"backlight ${p:-0} 100 -1\"; exit 0; fi; " +
+            "command -v ddcutil >/dev/null 2>&1 || { echo 'none 0 100 -1'; exit 0; }; " +
+            "cache=\"${XDG_CACHE_HOME:-$HOME/.cache}/qs-brightness-bus\"; " +
+            "bus=$(cat \"$cache\" 2>/dev/null); " +
+            "if [ -n \"$bus\" ]; then v=$(ddcutil --bus \"$bus\" --brief getvcp 10 2>/dev/null); else v=''; fi; " +
+            "if [ -z \"$v\" ]; then " +
               "bus=$(ddcutil detect --brief 2>/dev/null | awk -F'i2c-' '/I2C bus/{print $2; exit}'); " +
-              "if [ -n \"$bus\" ]; then " +
-                "v=$(ddcutil --bus \"$bus\" --brief getvcp 10 2>/dev/null); " +
-                "c=$(echo \"$v\" | awk '{print $4}'); m=$(echo \"$v\" | awk '{print $5}'); " +
-                "if [ -n \"$c\" ] && [ -n \"$m\" ]; then echo \"ddc $c $m $bus\"; " +
-                "else echo 'none 0 100 -1'; fi; " +
-              "else echo 'none 0 100 -1'; fi; " +
-            "else echo 'none 0 100 -1'; fi"]
+              "if [ -n \"$bus\" ]; then v=$(ddcutil --bus \"$bus\" --brief getvcp 10 2>/dev/null); " +
+              "[ -n \"$v\" ] && mkdir -p \"$(dirname \"$cache\")\" && printf '%s' \"$bus\" > \"$cache\"; fi; " +
+            "fi; " +
+            "c=$(echo \"$v\" | awk '{print $4}'); m=$(echo \"$v\" | awk '{print $5}'); " +
+            "if [ -n \"$c\" ] && [ -n \"$m\" ]; then echo \"ddc $c $m $bus\"; else echo 'none 0 100 -1'; fi"]
         stdout: StdioCollector {
             onStreamFinished: bright._applyDetect((this.text || "").trim())
         }
@@ -106,8 +111,9 @@ Singleton {
         repeat: false
         onTriggered: {
             if (bright._pending >= 0 && bright._ddcBus >= 0) {
+                // --noverify: no re-lee tras escribir → respuesta más rápida.
                 Quickshell.execDetached(["ddcutil", "--bus", String(bright._ddcBus),
-                                         "setvcp", "10", String(bright._pending)])
+                                         "--noverify", "setvcp", "10", String(bright._pending)])
                 bright._pending = -1
             }
         }
