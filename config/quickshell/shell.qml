@@ -157,6 +157,10 @@ ShellRoot {
     }
     Variants {
         model: Quickshell.screens
+        delegate: IpSettingsModal {}
+    }
+    Variants {
+        model: Quickshell.screens
         delegate: VolumeOSD {}
     }
     Variants {

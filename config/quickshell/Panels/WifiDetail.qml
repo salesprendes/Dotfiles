@@ -72,6 +72,23 @@ ColumnLayout {
                         loops: Animation.Infinite; running: parent.visible
                     }
                 }
+                // Engranaje: ajustes IP de la conexión activa (wifi/ethernet).
+                Text {
+                    visible: Net.online
+                    text: "󰒓"
+                    color: gearMa.containsMouse ? Theme.accent : Theme.fgMuted
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.iconSize + 1
+                    Behavior on color { ColorAnimation { duration: Theme.animFast } }
+                    MouseArea {
+                        id: gearMa
+                        anchors.fill: parent
+                        anchors.margins: -Theme.space4
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: Net.openIpConfig()
+                    }
+                }
                 Rectangle {
                     implicitWidth: Theme.dp(40); implicitHeight: Theme.controlXS; radius: height / 2
                     color: Net.wifiEnabled ? Theme.accent : Theme.surface

@@ -60,6 +60,13 @@ Singleton {
     function requestPassword(n) { promptNetwork = n }
     function clearPrompt()       { promptNetwork = null }
 
+    // Ajustes IP de la conexión activa (los muestra IpSettingsModal).
+    // El modal resuelve por nmcli la conexión activa (wifi o ethernet),
+    // lee su configuración IPv4 y la aplica en NetworkManager.
+    property bool ipConfigOpen: false
+    function openIpConfig()  { ipConfigOpen = true }
+    function closeIpConfig() { ipConfigOpen = false }
+
     // Icono Nerd Font según estado.
     readonly property string icon: {
         if (ethernet) return "󰈁"                 // ethernet
