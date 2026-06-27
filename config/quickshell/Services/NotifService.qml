@@ -28,6 +28,37 @@ Singleton {
     property int nowTick: 0
     Timer { interval: 30000; running: true; repeat: true; onTriggered: root.nowTick++ }
 
+    function appNameFor(n) {
+        if (n && n.appName && n.appName !== "")
+            return n.appName
+        if (n && n.desktopEntry && n.desktopEntry !== "")
+            return n.desktopEntry
+        return "Sistema"
+    }
+
+    function isMutedApp(appName) {
+        return Settings.mutedNotificationApps.indexOf(appName) !== -1
+    }
+
+    function muteApp(appName) {
+        if (!appName || isMutedApp(appName))
+            return
+
+        const muted = Settings.mutedNotificationApps.slice()
+        muted.push(appName)
+        Settings.mutedNotificationApps = muted
+
+        const current = server.trackedNotifications.values.slice()
+        for (let i = 0; i < current.length; i++)
+            if (appNameFor(current[i]) === appName)
+                current[i].dismiss()
+    }
+
+    function unmuteApp(appName) {
+        const muted = Settings.mutedNotificationApps.filter(x => x !== appName)
+        Settings.mutedNotificationApps = muted
+    }
+
     function timeText(n) {
         const _ = root.nowTick   // dependencia reactiva
         const t = root._arrival.get(n)
@@ -51,6 +82,9 @@ Singleton {
         imageSupported: true
 
         onNotification: function (notif) {
+            if (root.isMutedApp(root.appNameFor(notif)))
+                return
+
             // Conservar en la lista persistente del centro.
             notif.tracked = true
             root._arrival.set(notif, Date.now())

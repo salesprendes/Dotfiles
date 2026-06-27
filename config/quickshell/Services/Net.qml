@@ -48,20 +48,21 @@ Singleton {
     readonly property bool online: ethernet || activeWifi !== null
 
     // ── Conexión PRIORITARIA (ruta por defecto) ──────────────
-    //  La prioridad real la decide la tabla de rutas: la ruta por defecto de
-    //  menor 'metric' gana. 'primaryType' la calcula primaryProbe a partir de
-    //  `ip route` ("ethernet" | "wifi" | "none"). Así, si hay cable pero el
-    //  sistema enruta por wifi (o al revés), el icono refleja lo REAL, no solo
-    //  "hay cable conectado".
+    //  La prioridad real la decide la tabla de rutas del kernel: la ruta por
+    //  defecto de menor 'metric' gana. Se lee /proc/net/route con FileView
+    //  (QML PURO, CERO subprocesos) y la interfaz resultante se mapea a su tipo
+    //  con Quickshell.Networking. Así, si hay cable pero el sistema enruta por
+    //  wifi (o al revés), el icono refleja lo REAL, no solo "hay cable".
+    //  Valores: "ethernet" | "wifi" | "none" | "" (sin resolver → respaldo).
     property string primaryType: ""
 
-    // ¿Es ethernet la conexión activa/prioritaria? Mientras la sonda no haya
-    // resuelto la ruta (primaryType ""), cae al estado físico (hay cable).
+    // ¿Es ethernet la conexión activa/prioritaria? Mientras no se haya resuelto
+    // la ruta (primaryType ""), cae al estado físico (hay cable conectado).
     readonly property bool primaryEthernet: primaryType === "ethernet"
                                           || (primaryType === "" && ethernet)
 
-    // Recalcula la prioridad (con pequeño debounce: la tabla de rutas tarda un
-    // instante en asentarse tras un cambio de conexión).
+    // Recalcula releyendo /proc/net/route (con pequeño debounce: la tabla de
+    // rutas tarda un instante en asentarse tras un cambio de conexión).
     function refreshPrimary() { primaryDebounce.restart() }
     onEthernetChanged:   refreshPrimary()
     onActiveWifiChanged: refreshPrimary()
@@ -71,22 +72,47 @@ Singleton {
     Timer {
         id: primaryDebounce
         interval: 300
-        onTriggered: primaryProbe.running = true
+        onTriggered: routeFile.reload()
     }
-    Process {
-        id: primaryProbe
-        // Un solo awk (antes awk|sort|head|grep|awk = 5 procesos): recorre las
-        // rutas por defecto y se queda con la interfaz de menor 'metric'.
-        command: ["sh", "-c",
-            "dev=$(ip -o route show default 2>/dev/null | awk 'BEGIN{best=2147483647} " +
-            "{m=0; d=\"\"; for(i=1;i<=NF;i++){if($i==\"metric\")m=$(i+1); if($i==\"dev\")d=$(i+1)} " +
-            "if(d!=\"\" && m<best){best=m; bd=d}} END{print bd}'); " +
-            "if [ -z \"$dev\" ]; then echo none; " +
-            "elif [ -d \"/sys/class/net/$dev/wireless\" ]; then echo wifi; " +
-            "else echo ethernet; fi"]
-        stdout: StdioCollector {
-            onStreamFinished: net.primaryType = (this.text || "").trim() || "none"
+
+    // Tabla de rutas del kernel (archivo virtual; se relee con reload()).
+    FileView {
+        id: routeFile
+        path: "/proc/net/route"
+        blockLoading: true
+        printErrors: false
+        watchChanges: false
+        onLoaded: net.computePrimary()
+    }
+
+    // Parsea /proc/net/route → tipo de la conexión prioritaria. Columnas:
+    // Iface Destination Gateway Flags RefCnt Use Metric ... La ruta por defecto
+    // tiene Destination "00000000"; gana la de menor Metric (decimal).
+    function computePrimary() {
+        const txt = routeFile.text()
+        if (!txt || txt.trim() === "") {              // ilegible → respaldo físico
+            net.primaryType = ""
+            return
         }
+        // Un solo recorrido: la ruta por defecto de menor 'metric'.
+        const best = txt.split("\n").slice(1).reduce((acc, line) => {
+            const f = line.trim().split(/\s+/)
+            const m = (f.length >= 7 && f[1] === "00000000") ? parseInt(f[6], 10) : NaN
+            return (!isNaN(m) && m < acc.metric) ? ({ iface: f[0], metric: m }) : acc
+        }, ({ iface: "", metric: Infinity }))
+
+        net.primaryType = best.iface === "" ? "none" : net.ifaceType(best.iface)
+    }
+
+    // Tipo de una interfaz ("wifi"|"ethernet"|"none"): vía Quickshell.Networking
+    // o, si no casa con ningún device, por el nombre (wl* = wifi).
+    function ifaceType(iface) {
+        const dev = (Networking.devices?.values ?? []).find(d => d.name === iface)
+        if (dev)
+            return dev.type === DeviceType.Wifi  ? "wifi"
+                 : dev.type === DeviceType.Wired ? "ethernet"
+                 : "none"
+        return iface.indexOf("wl") === 0 ? "wifi" : "ethernet"
     }
 
     // Lista de redes WiFi visibles (para el panel).

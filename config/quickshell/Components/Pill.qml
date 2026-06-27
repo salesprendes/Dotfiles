@@ -30,23 +30,23 @@ Rectangle {
 
     Behavior on color { ColorAnimation { duration: Theme.animFast } }
 
-    RowLayout {
-        id: row
-        anchors.centerIn: parent
-        spacing: pill.spacing
-    }
-
     MouseArea {
         id: ma
         anchors.fill: parent
-        enabled: pill.interactive
-        hoverEnabled: pill.interactive
-        cursorShape: pill.interactive ? Qt.PointingHandCursor : Qt.ArrowCursor
-        acceptedButtons: Qt.LeftButton | Qt.RightButton
+        enabled: pill.interactive || pill.hoverCursor
+        hoverEnabled: pill.interactive || pill.hoverCursor
+        cursorShape: (pill.interactive || pill.hoverCursor) ? Qt.PointingHandCursor : Qt.ArrowCursor
+        acceptedButtons: pill.interactive ? (Qt.LeftButton | Qt.RightButton) : Qt.NoButton
         onClicked: (m) => {
             if (m.button === Qt.RightButton) pill.rightClicked()
             else pill.clicked(m)
         }
+    }
+
+    RowLayout {
+        id: row
+        anchors.centerIn: parent
+        spacing: pill.spacing
     }
 
     HoverHandler {

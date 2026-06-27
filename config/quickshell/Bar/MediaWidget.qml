@@ -82,9 +82,8 @@ Pill {
             id: cma
             anchors.fill: parent
             hoverEnabled: true
-            enabled: cbtn.can
             cursorShape: Qt.PointingHandCursor
-            onClicked: cbtn.tapped()
+            onClicked: if (cbtn.can) cbtn.tapped()
         }
     }
 

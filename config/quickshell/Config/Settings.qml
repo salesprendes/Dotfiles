@@ -173,6 +173,7 @@ Singleton {
     property int    notifTimeout: 5            // segundos
     property int    notifMaxVisible: 4
     property string notifPosition: "tr"        // tr | tl | br | bl
+    property var    mutedNotificationApps: []
 
     // ── Fondos ───────────────────────────────────────────────
     // Transición del fondo (la dibuja Quickshell, no swww):
@@ -193,7 +194,7 @@ Singleton {
         "showTray", "showSysmon", "showBattery", "showClipboard", "showNotifications", "showPowerProfile", "showCaffeine",
         "clock24h", "clockShowSeconds", "clockShowDate",
         "weatherEnabled", "weatherLocation", "weatherMetric", "weatherRefreshMin",
-        "notifPopupsEnabled", "notifTimeout", "notifMaxVisible", "notifPosition",
+        "notifPopupsEnabled", "notifTimeout", "notifMaxVisible", "notifPosition", "mutedNotificationApps",
         "wallpaperTransition", "wallpaperTransitionDuration", "wallpaperDirs"]
 
     // ── Saneamiento de valores cargados ─────────────────────
@@ -229,6 +230,10 @@ Singleton {
             return (typeof val === "string" && /^#?[0-9a-fA-F]{3,8}$/.test(val)) ? val : undefined
         // wallpaperDirs: array de cadenas.
         if (k === "wallpaperDirs") {
+            if (!Array.isArray(val)) return undefined
+            return val.every(x => typeof x === "string") ? val : undefined
+        }
+        if (k === "mutedNotificationApps") {
             if (!Array.isArray(val)) return undefined
             return val.every(x => typeof x === "string") ? val : undefined
         }
@@ -296,7 +301,7 @@ Singleton {
         showClipboard = true; showNotifications = true; showPowerProfile = true; showCaffeine = false
         clock24h = true; clockShowSeconds = false; clockShowDate = true
         weatherEnabled = true; weatherLocation = ""; weatherMetric = true; weatherRefreshMin = 30
-        notifPopupsEnabled = true; notifTimeout = 5; notifMaxVisible = 4; notifPosition = "tr"
+        notifPopupsEnabled = true; notifTimeout = 5; notifMaxVisible = 4; notifPosition = "tr"; mutedNotificationApps = []
         wallpaperTransition = "fade"; wallpaperTransitionDuration = 1.0
         wallpaperDirs = [home + "/Pictures/Wallpapers", home + "/.config/wallpapers"]
     }
@@ -367,11 +372,71 @@ Singleton {
         accentColor = resolvedAccent
         scheduleSave()
         scheduleHyprSync()
+        scheduleKittySync()
     }
 
     function scheduleHyprSync() {
         if (_loaded && hyprlandAvailable)
             hyprSyncTimer.restart()
+    }
+
+    // ── Sincronización con kitty ─────────────────────────────
+    //  Al cambiar el tema o el acento, regenera ~/.config/kitty/theme.conf
+    //  (la PALETA; kitty.conf con la transparencia no se toca) y recarga las
+    //  instancias de kitty con SIGUSR1. Solo si kitty está instalado.
+    property bool kittyAvailable: false
+    function scheduleKittySync() {
+        if (_loaded && kittyAvailable)
+            kittySyncTimer.restart()
+    }
+
+    function kittyThemeConf() {
+        const p = currentPalette
+        const hex = colorHex
+        const lit = (c, f) => colorHex(Qt.lighter(c, f))
+        const accent = resolvedAccent
+        return [
+            "# Generado por Quickshell (Ajustes → Tema). No editar a mano:",
+            "# se regenera al cambiar el tema o el color de acento.",
+            "",
+            "foreground            " + hex(p.fg),
+            "background            " + hex(p.bg),
+            "selection_foreground  " + hex(p.bg),
+            "selection_background  " + hex(p.fgDim),
+            "cursor                " + hex(p.fg),
+            "cursor_text_color     " + hex(p.bg),
+            "url_color             " + hex(p.cyan),
+            "",
+            "active_border_color   " + hex(accent),
+            "inactive_border_color " + hex(p.surfaceHi),
+            "bell_border_color     " + hex(p.red),
+            "tab_bar_background        " + hex(p.bg),
+            "active_tab_foreground     " + hex(p.bg),
+            "active_tab_background     " + hex(accent),
+            "active_tab_font_style     bold",
+            "inactive_tab_foreground   " + hex(p.fgMuted),
+            "inactive_tab_background   " + hex(p.surface),
+            "inactive_tab_font_style   normal",
+            "",
+            "color0  " + hex(p.surface),
+            "color8  " + hex(p.overlay),
+            "color1  " + hex(p.red) + "\ncolor9  " + lit(p.red, 1.2),
+            "color2  " + hex(p.green) + "\ncolor10 " + lit(p.green, 1.2),
+            "color3  " + hex(p.yellow) + "\ncolor11 " + lit(p.yellow, 1.15),
+            "color4  " + hex(accent) + "\ncolor12 " + lit(accent, 1.2),
+            "color5  " + hex(p.magenta) + "\ncolor13 " + lit(p.magenta, 1.15),
+            "color6  " + hex(p.cyan) + "\ncolor14 " + lit(p.cyan, 1.15),
+            "color7  " + hex(p.fg) + "\ncolor15 " + lit(p.fg, 1.1),
+            ""
+        ].join("\n")
+    }
+
+    function applyKittyThemeNow() {
+        if (!kittyAvailable)
+            return
+        kittyThemeFile.setText(kittyThemeConf())
+        if (!kittyReload.running)
+            kittyReload.running = true
     }
 
     function hyprThemeLua() {
@@ -429,6 +494,7 @@ Singleton {
     onNotifTimeoutChanged: scheduleSave()
     onNotifMaxVisibleChanged: scheduleSave()
     onNotifPositionChanged: scheduleSave()
+    onMutedNotificationAppsChanged: scheduleSave()
     onShowTrayChanged: scheduleSave()
     onShowSysmonChanged: scheduleSave()
     onShowBatteryChanged: scheduleSave()
@@ -493,8 +559,39 @@ Singleton {
         command: ["sh", "-c", "test -n \"$HYPRLAND_INSTANCE_SIGNATURE\" && hyprctl reload >/dev/null 2>&1 || true"]
     }
 
+    // ── kitty: archivo de paleta, debounce, detección y recarga ──
+    FileView {
+        id: kittyThemeFile
+        path: s.home + "/.config/kitty/theme.conf"
+        blockLoading: true
+        printErrors: false
+        atomicWrites: true
+    }
+    Timer {
+        id: kittySyncTimer
+        interval: 250
+        onTriggered: s.applyKittyThemeNow()
+    }
+    Process {
+        id: kittyDetect
+        command: ["sh", "-c",
+            "command -v kitty >/dev/null 2>&1 && test -d \"$HOME/.config/kitty\" && echo yes || true"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                s.kittyAvailable = (this.text || "").indexOf("yes") !== -1
+                s.scheduleKittySync()
+            }
+        }
+    }
+    Process {
+        id: kittyReload
+        // SIGUSR1 → kitty recarga su config (que hace include de theme.conf).
+        command: ["sh", "-c", "pkill -USR1 -x kitty >/dev/null 2>&1 || true"]
+    }
+
     Component.onCompleted: {
         load()
         hyprDetect.running = true
+        kittyDetect.running = true
     }
 }

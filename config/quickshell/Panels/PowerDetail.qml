@@ -73,7 +73,7 @@ ColumnLayout {
     component ProfileRow: Rectangle {
         id: pr
         property var info
-        readonly property bool active: Power.profile === (info?.value ?? -1)
+        readonly property bool active: Power.matches(info?.value ?? -1)
 
         Layout.fillWidth: true
         implicitHeight: Theme.rowL

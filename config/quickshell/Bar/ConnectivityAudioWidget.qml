@@ -58,7 +58,7 @@ Pill {
     Text {
         visible: BT.available
         text: BT.icon
-        color: BT.enabled ? Theme.accent2 : Theme.fgMuted
+        color: BT.enabled ? Theme.accent : Theme.fgMuted
         font.family: Theme.fontFamily
         font.pixelSize: Theme.iconSize
     }
@@ -70,7 +70,7 @@ Pill {
              : root.volume < 34 ? "󰕿"
              : root.volume < 67 ? "󰖀"
              : "󰕾"
-        color: root.muted ? Theme.fgMuted : Theme.green
+        color: root.audio && !root.muted && root.volume > 0 ? Theme.accent : Theme.fgMuted
         font.family: Theme.fontFamily
         font.pixelSize: Theme.iconSize
     }

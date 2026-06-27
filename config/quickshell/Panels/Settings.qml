@@ -55,8 +55,10 @@ FloatingWindow {
             { key: "clock", glyph: "󰅐", label: I18n.tr("Clock and date") }
         ] },
         { label: I18n.tr("System"), glyph: "󰒓", items: [
-            { key: "weather", glyph: "󰖕", label: I18n.tr("Weather") },
-            { key: "notif",   glyph: "󰂚", label: I18n.tr("Notifications") }
+            { key: "displays", glyph: "󰍹", label: I18n.tr("Displays") },
+            { key: "network",  glyph: "󰤨", label: I18n.tr("Network") },
+            { key: "weather",  glyph: "󰖕", label: I18n.tr("Weather") },
+            { key: "notif",    glyph: "󰂚", label: I18n.tr("Notifications") }
         ] }
     ]
     readonly property string catLabel: {
@@ -207,6 +209,8 @@ FloatingWindow {
                     : cfg.cat === "weather"   ? weatherCol
                     : cfg.cat === "notif"     ? notifCol
                     : cfg.cat === "wallpaper" ? wpCol
+                    : cfg.cat === "displays"  ? displaysCol
+                    : cfg.cat === "network"   ? netCol
                     :                            themeCol
 
                 // ════ TEMA ════
@@ -788,31 +792,184 @@ FloatingWindow {
                         valueText: Settings.wallpaperTransitionDuration.toFixed(1) + " s"
                         onMoved: (v) => Settings.wallpaperTransitionDuration = Math.round(v * 10) / 10
                     }
-                    ColumnLayout {
-                        Layout.fillWidth: true; spacing: Theme.space2
-                        Text {
-                            text: I18n.tr("Wallpaper folders")
-                            color: Theme.fg
-                            font.family: Theme.fontFamily; font.pixelSize: Theme.fontSize; font.bold: true
+                }
+
+                // ════ PANTALLAS ════
+                ColumnLayout {
+                    id: displaysCol
+                    anchors { left: parent.left; right: parent.right; top: parent.top
+                              leftMargin: Theme.space18; rightMargin: Theme.space18; topMargin: Theme.space18 }
+                    spacing: Theme.space12
+                    opacity: cfg.cat === "displays" ? 1 : 0
+                    visible: opacity > 0.01
+                    Behavior on opacity { NumberAnimation { duration: Theme.animNormal } }
+
+                    // Orden / alineación (con 2+ monitores).
+                    SettingsCard {
+                        title: I18n.tr("Arrangement"); glyph: "󰍹"
+                        visible: Displays.monitors.length > 1
+                        MonitorArrangement { Layout.fillWidth: true }
+                    }
+
+                    // Una tarjeta por monitor: resolución, escala, rotación…
+                    Repeater {
+                        model: Displays.monitors
+                        delegate: MonitorCard {
+                            required property var modelData
+                            monitor: modelData
                         }
-                        Repeater {
-                            model: Settings.wallpaperDirs
-                            delegate: Text {
-                                required property var modelData
-                                Layout.fillWidth: true
-                                text: "•  " + modelData
-                                color: Theme.fgMuted
-                                font.family: Theme.fontFamily; font.pixelSize: Theme.fontSize - 3
-                                elide: Text.ElideMiddle
-                            }
+                    }
+
+                    Text {
+                        Layout.fillWidth: true
+                        visible: Displays.monitors.length === 0
+                        text: I18n.tr("No displays found")
+                        color: Theme.fgMuted
+                        horizontalAlignment: Text.AlignHCenter
+                        font.family: Theme.fontFamily; font.pixelSize: Theme.fontSize - 2
+                    }
+                }
+
+                // ════ RED ════
+                ColumnLayout {
+                    id: netCol
+                    anchors { left: parent.left; right: parent.right; top: parent.top
+                              leftMargin: Theme.space18; rightMargin: Theme.space18; topMargin: Theme.space18 }
+                    spacing: Theme.space12
+                    opacity: cfg.cat === "network" ? 1 : 0
+                    visible: opacity > 0.01
+                    Behavior on opacity { NumberAnimation { duration: Theme.animNormal } }
+
+                    // WiFi + selección de conexión + comportamiento.
+                    SettingsCard {
+                        title: I18n.tr("Connection"); glyph: "󰤨"
+                        SwitchRow {
+                            label: I18n.tr("WiFi")
+                            checked: Net.wifiEnabled
+                            onToggled: Net.toggleWifi()
                         }
-                        Text {
+                        DropdownRow {
+                            label: I18n.tr("Connection")
+                            options: NetConfig.connections.map(c => ({ text: c.name, value: c.name }))
+                            current: NetConfig.selected
+                            onPicked: (v) => NetConfig.select(v)
+                        }
+                        SwitchRow {
+                            label: I18n.tr("Connect automatically")
+                            checked: NetConfig.autoconnect
+                            onToggled: NetConfig.autoconnect = !NetConfig.autoconnect
+                        }
+                        SliderRow {
+                            label: I18n.tr("Priority"); glyph: "󰓅"
+                            from: -100; to: 100; value: NetConfig.priority
+                            valueText: NetConfig.priority
+                            onMoved: (v) => NetConfig.priority = Math.round(v)
+                        }
+                    }
+
+                    // IPv4 + DNS.
+                    SettingsCard {
+                        title: "IPv4"; glyph: "󰩟"
+                        SegRow {
+                            label: I18n.tr("Method")
+                            options: [ { text: I18n.tr("Automatic (DHCP)"), value: "auto" },
+                                       { text: I18n.tr("Manual (static)"), value: "manual" } ]
+                            current: NetConfig.ip4method
+                            onPicked: (v) => NetConfig.ip4method = v
+                        }
+                        TextField {
+                            visible: NetConfig.ip4method === "manual"; Layout.fillWidth: true
+                            label: I18n.tr("IP address"); placeholder: "192.168.1.50"
+                            value: NetConfig.ip4addr
+                            invalid: NetConfig.ip4addr !== "" && !NetConfig.validIp(NetConfig.ip4addr)
+                            onEdited: (t) => NetConfig.ip4addr = t
+                        }
+                        TextField {
+                            visible: NetConfig.ip4method === "manual"; Layout.fillWidth: true
+                            label: I18n.tr("Subnet mask"); placeholder: "255.255.255.0"
+                            value: NetConfig.ip4mask
+                            invalid: NetConfig.ip4mask !== "" && NetConfig.maskToPrefix(NetConfig.ip4mask) < 0
+                            onEdited: (t) => NetConfig.ip4mask = t
+                        }
+                        TextField {
+                            visible: NetConfig.ip4method === "manual"; Layout.fillWidth: true
+                            label: I18n.tr("Gateway"); placeholder: "192.168.1.1"
+                            value: NetConfig.ip4gw
+                            invalid: NetConfig.ip4gw !== "" && !NetConfig.validIp(NetConfig.ip4gw)
+                            onEdited: (t) => NetConfig.ip4gw = t
+                        }
+                        TextField {
                             Layout.fillWidth: true
-                            text: I18n.tr("%1 images · choose them in the clock Wallpapers tab").arg(Wallpaper.list.length)
-                            color: Theme.fgMuted
-                            font.family: Theme.fontFamily; font.pixelSize: Theme.fontSize - 3
-                            wrapMode: Text.WordWrap
+                            label: "DNS"; placeholder: "1.1.1.1, 8.8.8.8"
+                            value: NetConfig.ip4dns
+                            onEdited: (t) => NetConfig.ip4dns = t
                         }
+                    }
+
+                    // IPv6.
+                    SettingsCard {
+                        title: "IPv6"; glyph: "󰩟"
+                        SegRow {
+                            label: I18n.tr("Method")
+                            options: [ { text: I18n.tr("Automatic (DHCP)"), value: "auto" },
+                                       { text: I18n.tr("Disabled"), value: "disabled" },
+                                       { text: "Link-local", value: "link-local" } ]
+                            current: NetConfig.ip6method
+                            onPicked: (v) => NetConfig.ip6method = v
+                        }
+                    }
+
+                    // Privacidad / avanzado.
+                    SettingsCard {
+                        title: I18n.tr("Privacy and advanced"); glyph: "󰒃"
+                        DropdownRow {
+                            label: I18n.tr("MAC address")
+                            options: [ { text: I18n.tr("Default"), value: "default" },
+                                       { text: I18n.tr("Random"), value: "random" },
+                                       { text: I18n.tr("Stable"), value: "stable" } ]
+                            current: NetConfig.mac
+                            onPicked: (v) => NetConfig.mac = v
+                        }
+                        TextField {
+                            Layout.fillWidth: true
+                            label: "MTU"; placeholder: I18n.tr("Automatic")
+                            value: NetConfig.mtu
+                            onEdited: (t) => NetConfig.mtu = t
+                        }
+                    }
+
+                    // Error.
+                    Text {
+                        Layout.fillWidth: true
+                        visible: NetConfig.error !== ""
+                        text: NetConfig.error
+                        color: Theme.red
+                        font.family: Theme.fontFamily; font.pixelSize: Theme.fontSize - 2
+                        wrapMode: Text.WordWrap
+                    }
+
+                    // Acciones.
+                    RowLayout {
+                        Layout.fillWidth: true
+                        visible: NetConfig.connections.length > 0
+                        spacing: Theme.space8
+                        TextButton { text: I18n.tr("Forget network"); onClicked: NetConfig.forget() }
+                        Item { Layout.fillWidth: true }
+                        TextButton {
+                            text: I18n.tr("Apply")
+                            primary: true
+                            enabled: NetConfig.ready && !NetConfig.loading
+                            onClicked: NetConfig.apply()
+                        }
+                    }
+
+                    Text {
+                        Layout.fillWidth: true
+                        visible: NetConfig.connections.length === 0
+                        text: I18n.tr("No active connection found.")
+                        color: Theme.fgMuted
+                        horizontalAlignment: Text.AlignHCenter
+                        font.family: Theme.fontFamily; font.pixelSize: Theme.fontSize - 2
                     }
                 }
             }
@@ -1413,6 +1570,237 @@ FloatingWindow {
                     text: tr.placeholder
                     color: Theme.fgMuted
                     font: ti.font
+                }
+            }
+        }
+    }
+
+    // ── Tarjeta de un monitor: resolución, escala, rotación, on/off ──
+    component MonitorCard: SettingsCard {
+        id: mc
+        property var monitor
+        readonly property var inf: Displays.info(monitor)
+        readonly property var modes: Displays.modesFor(monitor)
+        title: inf.name + (inf.description ? "  ·  " + inf.description : "")
+        glyph: "󰍹"
+
+        // Estado en edición (inicializado desde el estado actual).
+        property string selMode: mc.defaultMode()
+        property real   selScale: inf.scale
+        property int    selTransform: inf.transform
+        property bool   selEnabled: !inf.disabled
+
+        function defaultMode() {
+            const cur = mc.inf.width + "x" + mc.inf.height
+            const m = mc.modes.find(x => x.res === cur)
+            return m ? m.value : (mc.modes.length ? mc.modes[0].value : "")
+        }
+
+        DropdownRow {
+            label: I18n.tr("Resolution")
+            options: mc.modes
+            current: mc.selMode
+            onPicked: (v) => mc.selMode = v
+        }
+        DropdownRow {
+            label: I18n.tr("Scale")
+            options: [ { text: "100%", value: 1 }, { text: "125%", value: 1.25 },
+                       { text: "150%", value: 1.5 }, { text: "175%", value: 1.75 },
+                       { text: "200%", value: 2 } ]
+            current: mc.selScale
+            onPicked: (v) => mc.selScale = v
+        }
+        SegRow {
+            label: I18n.tr("Rotation")
+            options: [ { text: "0°", value: 0 }, { text: "90°", value: 1 },
+                       { text: "180°", value: 2 }, { text: "270°", value: 3 } ]
+            current: mc.selTransform
+            onPicked: (v) => mc.selTransform = v
+        }
+        // Activar/desactivar solo con 2+ monitores (no apagar la única pantalla).
+        SwitchRow {
+            visible: Displays.monitors.length > 1
+            label: I18n.tr("Enabled")
+            checked: mc.selEnabled
+            onToggled: mc.selEnabled = !mc.selEnabled
+        }
+        RowLayout {
+            Layout.fillWidth: true
+            Item { Layout.fillWidth: true }
+            TextButton {
+                text: I18n.tr("Apply")
+                primary: true
+                onClicked: {
+                    const parts = mc.selMode.split("@")
+                    Displays.apply(({
+                        name: mc.inf.name,
+                        res: parts[0],
+                        refresh: (parts[1] || "").replace("Hz", "").trim(),
+                        scale: mc.selScale,
+                        transform: mc.selTransform,
+                        x: mc.inf.x, y: mc.inf.y,
+                        enabled: mc.selEnabled
+                    }))
+                }
+            }
+        }
+    }
+
+    // ── Orden / alineación: lienzo con arrastrar-y-soltar (estilo Windows) ──
+    //  Arrastra cada monitor; al soltar, imanta sus bordes a los de los demás.
+    component MonitorArrangement: ColumnLayout {
+        id: arr
+        spacing: Theme.space8
+        Layout.fillWidth: true
+
+        property var  pos: ({})        // name -> {x,y} lógico (en edición)
+        property real f: 0.05          // escala lógico→lienzo (congelada al arrastrar)
+        property real originX: 0       // lógico que mapea a canvas.pad
+        property real originY: 0
+
+        Component.onCompleted: arr.initPos()
+        Connections { target: Displays; function onMonitorsChanged() { arr.initPos() } }
+
+        function infoByName(n) {
+            const m = Displays.monitors.find(x => Displays.info(x).name === n)
+            return m ? Displays.info(m) : null
+        }
+        function initPos() {
+            const p = ({})
+            Displays.monitors.forEach(m => { const i = Displays.info(m); p[i.name] = ({ x: i.x, y: i.y }) })
+            arr.pos = p
+            arr.recalcView()
+        }
+        function setPos(n, x, y) {
+            const p = Object.assign({}, arr.pos)
+            p[n] = ({ x: x, y: y })
+            arr.pos = p
+        }
+        // Reajusta escala+origen para encajar el conjunto (NO durante el arrastre).
+        function recalcView() {
+            let minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9
+            Displays.monitors.forEach(m => {
+                const i = Displays.info(m); const p = arr.pos[i.name] || ({ x: i.x, y: i.y })
+                minX = Math.min(minX, p.x);          minY = Math.min(minY, p.y)
+                maxX = Math.max(maxX, p.x + i.width); maxY = Math.max(maxY, p.y + i.height)
+            })
+            if (minX > maxX) return
+            const w = Math.max(1, maxX - minX), h = Math.max(1, maxY - minY)
+            const availW = canvas.width - canvas.pad * 2
+            const availH = canvas.height - canvas.pad * 2
+            arr.f = Math.max(0.001, Math.min(availW / w, availH / h))
+            arr.originX = minX - (availW / arr.f - w) / 2     // centrar
+            arr.originY = minY - (availH / arr.f - h) / 2
+        }
+        // Imán a los bordes de otros monitores al soltar.
+        function snap(n) {
+            const me = arr.infoByName(n); if (!me) return
+            const p = arr.pos[n]; let lx = p.x, ly = p.y
+            const th = Math.max(40, me.width * 0.06)
+            Displays.monitors.forEach(m => {
+                const o = Displays.info(m); if (o.name === n) return
+                const op = arr.pos[o.name] || ({ x: o.x, y: o.y })
+                if (Math.abs(lx - (op.x + o.width)) < th) lx = op.x + o.width             // a su derecha
+                if (Math.abs((lx + me.width) - op.x) < th) lx = op.x - me.width            // a su izquierda
+                if (Math.abs(lx - op.x) < th) lx = op.x                                    // alinear izq.
+                if (Math.abs(ly - op.y) < th) ly = op.y                                    // alinear arriba
+                if (Math.abs((ly + me.height) - (op.y + o.height)) < th) ly = op.y + o.height - me.height  // abajo
+                if (Math.abs(ly - (op.y + o.height)) < th) ly = op.y + o.height            // debajo
+                if (Math.abs((ly + me.height) - op.y) < th) ly = op.y - me.height          // encima
+            })
+            arr.setPos(n, Math.round(lx), Math.round(ly))
+            arr.recalcView()
+        }
+
+        Rectangle {
+            id: canvas
+            Layout.fillWidth: true
+            implicitHeight: Theme.dp(190)
+            radius: Theme.barRadius
+            color: Qt.rgba(Theme.surface.r, Theme.surface.g, Theme.surface.b, 0.5)
+            border.width: Theme.hairline
+            border.color: cfg.settingsBorder
+            clip: true
+            readonly property real pad: Theme.space16
+            onWidthChanged: arr.recalcView()
+            onHeightChanged: arr.recalcView()
+
+            Repeater {
+                model: Displays.monitors
+                delegate: Rectangle {
+                    id: tile
+                    required property var modelData
+                    readonly property var i: Displays.info(modelData)
+                    readonly property string mName: i.name
+                    readonly property var p: arr.pos[mName] || ({ x: i.x, y: i.y })
+                    width: i.width * arr.f
+                    height: i.height * arr.f
+                    x: canvas.pad + (p.x - arr.originX) * arr.f
+                    y: canvas.pad + (p.y - arr.originY) * arr.f
+                    radius: Theme.space4
+                    color: dragMa.active ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.34)
+                                         : Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.16)
+                    border.width: Math.max(1, Theme.dp(2)); border.color: Theme.accent
+                    z: dragMa.active ? 2 : 1
+
+                    Column {
+                        anchors.centerIn: parent
+                        spacing: 0
+                        Text { anchors.horizontalCenter: parent.horizontalCenter; text: tile.mName
+                               color: Theme.fg; font.family: Theme.fontFamily; font.pixelSize: Theme.fontSize - 4; font.bold: true }
+                        Text { anchors.horizontalCenter: parent.horizontalCenter; text: tile.i.width + "×" + tile.i.height
+                               color: Theme.fgMuted; font.family: Theme.fontFamily; font.pixelSize: Theme.fontSize - 6 }
+                    }
+
+                    MouseArea {
+                        id: dragMa
+                        anchors.fill: parent
+                        cursorShape: Qt.SizeAllCursor
+                        property real grabDX: 0
+                        property real grabDY: 0
+                        property bool active: false
+                        onPressed: (mouse) => {
+                            const c = mapToItem(canvas, mouse.x, mouse.y)
+                            dragMa.grabDX = c.x - tile.x
+                            dragMa.grabDY = c.y - tile.y
+                            dragMa.active = true
+                        }
+                        onPositionChanged: (mouse) => {
+                            if (!dragMa.active) return
+                            const c = mapToItem(canvas, mouse.x, mouse.y)
+                            const lx = arr.originX + (c.x - dragMa.grabDX - canvas.pad) / arr.f
+                            const ly = arr.originY + (c.y - dragMa.grabDY - canvas.pad) / arr.f
+                            arr.setPos(tile.mName, lx, ly)
+                        }
+                        onReleased: { dragMa.active = false; arr.snap(tile.mName) }
+                    }
+                }
+            }
+        }
+
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: Theme.space8
+            Text {
+                Layout.fillWidth: true
+                text: I18n.tr("Drag monitors to arrange them")
+                color: Theme.fgMuted
+                font.family: Theme.fontFamily; font.pixelSize: Theme.fontSize - 3
+                wrapMode: Text.WordWrap
+            }
+            TextButton {
+                text: I18n.tr("Apply layout")
+                primary: true
+                onClicked: {
+                    Displays.monitors.forEach(m => {
+                        const i = Displays.info(m)
+                        const p = arr.pos[i.name] || ({ x: i.x, y: i.y })
+                        Displays.apply(({
+                            name: i.name, res: i.width + "x" + i.height,
+                            refresh: Number(i.refresh).toFixed(2), scale: i.scale,
+                            transform: i.transform, x: p.x, y: p.y, enabled: !i.disabled
+                        }))
+                    })
                 }
             }
         }

@@ -33,34 +33,56 @@ Singleton {
         }
     }
 
-    // Perfil activo (enum: PowerSaver=0, Balanced=1, Performance=2).
-    readonly property int profile: PowerProfiles.profile
+    // Perfil activo. Se mantiene como var para no forzar conversiones del enum
+    // de QuickShell a int, que pueden romper el estado visual.
+    readonly property var profile: PowerProfiles.profile
     // Performance solo está disponible en cierto hardware.
     readonly property bool hasPerformance: PowerProfiles.hasPerformanceProfile
 
-    readonly property bool isSaver: profile === PowerProfile.PowerSaver
-    readonly property bool isBalanced: profile === PowerProfile.Balanced
-    readonly property bool isPerformance: profile === PowerProfile.Performance
+    property string currentProfileKey: keyFor(profile)
+    onProfileChanged: currentProfileKey = keyFor(profile)
+
+    readonly property bool isSaver: currentProfileKey === "power-saver"
+    readonly property bool isBalanced: currentProfileKey === "balanced"
+    readonly property bool isPerformance: currentProfileKey === "performance"
+
+    function keyFor(p) {
+        if (p === PowerProfile.PowerSaver || Number(p) === Number(PowerProfile.PowerSaver))
+            return "power-saver"
+        if (p === PowerProfile.Performance || Number(p) === Number(PowerProfile.Performance))
+            return "performance"
+
+        const text = String(p).toLowerCase()
+        if (text.indexOf("saver") !== -1 || text.indexOf("power-saver") !== -1)
+            return "power-saver"
+        if (text.indexOf("performance") !== -1)
+            return "performance"
+        return "balanced"
+    }
+
+    function matches(p) {
+        return keyFor(p) === currentProfileKey
+    }
 
     function iconFor(p) {
-        if (p === PowerProfile.PowerSaver) return "󰌪"        // hoja (ahorro)
-        if (p === PowerProfile.Performance) return "󰓅"       // velocímetro
+        const key = keyFor(p)
+        if (key === "power-saver") return "󰌪"                // hoja (ahorro)
+        if (key === "performance") return "󰓅"                // velocímetro
         return "󰾅"                                            // medidor (equilibrado)
     }
     function labelFor(p) {
-        if (p === PowerProfile.PowerSaver) return I18n.tr("Power saver")
-        if (p === PowerProfile.Performance) return I18n.tr("Performance")
+        const key = keyFor(p)
+        if (key === "power-saver") return I18n.tr("Power saver")
+        if (key === "performance") return I18n.tr("Performance")
         return I18n.tr("Balanced")
     }
     function colorFor(p) {
-        if (p === PowerProfile.PowerSaver) return Theme.green
-        if (p === PowerProfile.Performance) return Theme.cyan
         return Theme.accent
     }
 
-    readonly property string icon: iconFor(profile)
-    readonly property string name: labelFor(profile)
-    readonly property color color: colorFor(profile)
+    readonly property string icon: iconFor(currentProfileKey)
+    readonly property string name: labelFor(currentProfileKey)
+    readonly property color color: colorFor(currentProfileKey)
 
     // Lista para el selector. PowerSaver/Balanced siempre; Performance
     // solo si el hardware lo soporta.
@@ -75,6 +97,7 @@ Singleton {
     }
 
     function set(p) {
+        currentProfileKey = keyFor(p)
         PowerProfiles.profile = p
     }
 
@@ -83,7 +106,7 @@ Singleton {
         const list = profiles
         let idx = 0
         for (let i = 0; i < list.length; i++)
-            if (list[i].value === profile) { idx = i; break }
+            if (matches(list[i].value)) { idx = i; break }
         set(list[(idx + 1) % list.length].value)
     }
 }

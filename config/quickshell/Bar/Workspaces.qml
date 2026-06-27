@@ -10,6 +10,7 @@ import qs.Config
 Pill {
     id: root
     property var screen
+    hoverCursor: true
 
     function focusWorkspace(workspace) {
         const id = workspace && workspace.id !== undefined ? workspace.id : 1
@@ -65,6 +66,7 @@ Pill {
 
             MouseArea {
                 anchors.fill: parent
+                hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
                 onClicked: root.focusWorkspace(ws.modelData)
             }
