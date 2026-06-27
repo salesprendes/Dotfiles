@@ -3,6 +3,7 @@ import QtQuick.Layouts
 import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
+import qs.Components
 import qs.Config
 import qs.Services
 
@@ -276,25 +277,33 @@ PanelWindow {
                     width: parent.width
                     spacing: Theme.space8
 
-                    Field {
+                    TextField {
+                        Layout.fillWidth: true
                         label: I18n.tr("IP address"); placeholder: "192.168.1.50"
                         value: modal.ip; invalid: modal.ip !== "" && !modal.validIp(modal.ip)
                         onEdited: (t) => modal.ip = t
+                        onCanceled: Net.closeIpConfig()
                     }
-                    Field {
+                    TextField {
+                        Layout.fillWidth: true
                         label: I18n.tr("Subnet mask"); placeholder: "255.255.255.0"
                         value: modal.mask; invalid: modal.mask !== "" && modal.maskToPrefix(modal.mask) < 0
                         onEdited: (t) => modal.mask = t
+                        onCanceled: Net.closeIpConfig()
                     }
-                    Field {
+                    TextField {
+                        Layout.fillWidth: true
                         label: I18n.tr("Gateway"); placeholder: "192.168.1.1"
                         value: modal.gateway; invalid: modal.gateway !== "" && !modal.validIp(modal.gateway)
                         onEdited: (t) => modal.gateway = t
+                        onCanceled: Net.closeIpConfig()
                     }
-                    Field {
+                    TextField {
+                        Layout.fillWidth: true
                         label: I18n.tr("DNS"); placeholder: "1.1.1.1, 8.8.8.8"
                         value: modal.dns; invalid: false
                         onEdited: (t) => modal.dns = t
+                        onCanceled: Net.closeIpConfig()
                     }
                 }
             }
@@ -317,41 +326,16 @@ PanelWindow {
                 spacing: Theme.space8
                 Item { Layout.fillWidth: true }
 
-                Rectangle {
-                    implicitWidth: cancelTxt.implicitWidth + Theme.controlS
-                    implicitHeight: Theme.dp(32)
-                    radius: Theme.pillRadius
-                    color: cancelMa.containsMouse ? Theme.surfaceHi : Theme.surface
-                    Behavior on color { ColorAnimation { duration: Theme.animFast } }
-                    Text { id: cancelTxt; anchors.centerIn: parent; text: I18n.tr("Cancel"); color: Theme.fgDim; font.family: Theme.fontFamily; font.pixelSize: Theme.fontSize }
-                    MouseArea { id: cancelMa; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: Net.closeIpConfig() }
+                TextButton {
+                    text: I18n.tr("Cancel")
+                    onClicked: Net.closeIpConfig()
                 }
 
-                Rectangle {
-                    implicitWidth: applyTxt.implicitWidth + Theme.controlS
-                    implicitHeight: Theme.dp(32)
-                    radius: Theme.pillRadius
+                TextButton {
+                    text: modal.applying ? I18n.tr("Applying...") : I18n.tr("Apply")
+                    primary: true
                     enabled: modal.ready && !modal.loading
-                    opacity: (modal.ready && !modal.loading) ? 1 : 0.5
-                    color: applyMa.containsMouse ? Qt.lighter(Theme.accent, 1.1) : Theme.accent
-                    Behavior on color { ColorAnimation { duration: Theme.animFast } }
-                    Text {
-                        id: applyTxt
-                        anchors.centerIn: parent
-                        text: modal.applying ? I18n.tr("Applying...") : I18n.tr("Apply")
-                        color: Theme.bg
-                        font.family: Theme.fontFamily
-                        font.pixelSize: Theme.fontSize
-                        font.bold: true
-                    }
-                    MouseArea {
-                        id: applyMa
-                        anchors.fill: parent
-                        enabled: modal.ready && !modal.loading
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: modal.apply()
-                    }
+                    onClicked: modal.apply()
                 }
             }
         }
@@ -382,57 +366,4 @@ PanelWindow {
     }
 
     // ── Componente: campo etiquetado con entrada de texto ────
-    component Field: ColumnLayout {
-        id: field
-        property string label: ""
-        property string placeholder: ""
-        property string value: ""
-        property bool invalid: false
-        signal edited(string text)
-        Layout.fillWidth: true
-        spacing: Theme.space2
-
-        Text {
-            text: field.label
-            color: Theme.fgMuted
-            font.family: Theme.fontFamily
-            font.pixelSize: Theme.fontSize - 3
-        }
-        Rectangle {
-            Layout.fillWidth: true
-            implicitHeight: Theme.rowM
-            radius: Theme.pillRadius
-            color: Theme.surface
-            border.width: Theme.hairline
-            border.color: field.invalid ? Theme.red
-                         : fInput.activeFocus ? Theme.accent
-                         : Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.4)
-            Behavior on border.color { ColorAnimation { duration: Theme.animFast } }
-
-            TextInput {
-                id: fInput
-                anchors.fill: parent
-                anchors.leftMargin: Theme.space12
-                anchors.rightMargin: Theme.space10
-                clip: true
-                color: Theme.fg
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontSize
-                selectionColor: Theme.accent
-                verticalAlignment: TextInput.AlignVCenter
-                inputMethodHints: Qt.ImhNoPredictiveText
-                // Sincroniza desde el estado (precarga nmcli) sin romper la edición.
-                text: field.value
-                onTextChanged: if (text !== field.value) field.edited(text)
-
-                Text {
-                    anchors.verticalCenter: parent.verticalCenter
-                    visible: fInput.text === ""
-                    text: field.placeholder
-                    color: Theme.fgMuted
-                    font: fInput.font
-                }
-            }
-        }
-    }
 }

@@ -67,9 +67,9 @@ ColumnLayout {
         }
 
         // Volver a hoy (solo si no estamos en el mes actual).
-        NavBtn { glyph: "󰃭"; visible: !cal.onCurrentMonth; onTapped: cal.goToday() }
-        NavBtn { glyph: "󰅁"; onTapped: cal.prevMonth() }
-        NavBtn { glyph: "󰅂"; onTapped: cal.nextMonth() }
+        NavBtn { icon: "󰃭"; visible: !cal.onCurrentMonth; onClicked: cal.goToday() }
+        NavBtn { icon: "󰅁"; onClicked: cal.prevMonth() }
+        NavBtn { icon: "󰅂"; onClicked: cal.nextMonth() }
     }
 
     // ── Cabecera de días de la semana ────────────────────────
@@ -126,28 +126,13 @@ ColumnLayout {
         }
     }
 
-    // Botón redondo de navegación reutilizable.
-    component NavBtn: Rectangle {
-        property string glyph: ""
-        signal tapped()
-        implicitWidth: Theme.controlS
-        implicitHeight: Theme.controlS
-        radius: width / 2
-        color: navMa.containsMouse ? Theme.surfaceHi : Theme.surface
-        Behavior on color { ColorAnimation { duration: Theme.animFast } }
-        Text {
-            anchors.centerIn: parent
-            text: parent.glyph
-            color: navMa.containsMouse ? Theme.accent : Theme.fgDim
-            font.family: Theme.fontFamily
-            font.pixelSize: Theme.iconSize - 1
-        }
-        MouseArea {
-            id: navMa
-            anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: parent.tapped()
-        }
+    // Botón redondo de navegación = IconButton con el estilo del calendario.
+    component NavBtn: IconButton {
+        diameter: Theme.controlS
+        iconPixelSize: Theme.iconSize - 1
+        baseColor: Theme.surface
+        hoverColor: Theme.surfaceHi
+        iconColor: Theme.fgDim
+        hoverIconColor: Theme.accent
     }
 }

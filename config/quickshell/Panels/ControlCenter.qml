@@ -231,13 +231,21 @@ Popout {
             ControlTile {
                 Layout.fillWidth: true
                 icon: Net.icon
-                // Conectado → SSID arriba y % de cobertura abajo; si no, "WiFi".
-                title: Net.ssid !== "" ? Net.ssid : "WiFi"
-                subtitle: Net.ssid !== "" ? Net.signal + "%" : Net.label
-                active: Net.wifiEnabled
+                // Display inteligente: si hay cable, el tile representa la
+                // conexión ETHERNET (prioritaria; convive con el wifi, que se
+                // gestiona en el desplegable). Si no, la WiFi: SSID + cobertura,
+                // o el estado cuando no hay red.
+                title: Net.primaryEthernet ? "Ethernet"
+                     : Net.ssid !== "" ? Net.ssid : "WiFi"
+                subtitle: Net.primaryEthernet ? I18n.tr("Connected")
+                        : Net.ssid !== "" ? Net.signal + "%" : Net.label
+                // Activo (icono resaltado) si la red prioritaria es ethernet o
+                // el radio wifi está on.
+                active: Net.primaryEthernet || Net.wifiEnabled
                 accent: Theme.accent
                 expandable: true
                 expanded: cc.expanded === "wifi"
+                // Pulsar el icono alterna el radio WiFi (ethernet es por cable).
                 onToggled: Net.toggleWifi()
                 onExpand: cc.expanded = (cc.expanded === "wifi" ? "" : "wifi")
             }

@@ -196,19 +196,79 @@ Singleton {
         "notifPopupsEnabled", "notifTimeout", "notifMaxVisible", "notifPosition",
         "wallpaperTransition", "wallpaperTransitionDuration", "wallpaperDirs"]
 
+    // ── Saneamiento de valores cargados ─────────────────────
+    //  Rangos numéricos (se recortan a [min,max]) y conjuntos de valores
+    //  válidos (enums). Lo que no encaje se IGNORA y se conserva el default.
+    readonly property var _numBounds: ({
+        "uiScale": [0.5, 2.0], "animScale": [0.0, 3.0], "animationSpeed": [0, 4],
+        "customAnimationDuration": [50, 3000], "barOpacity": [0.0, 1.0],
+        "popupOpacity": [0.0, 1.0], "widgetOpacity": [0.0, 1.0], "cornerScale": [0.0, 2.0],
+        "barScale": [0.5, 2.0], "fontScale": [0.5, 2.0], "weatherRefreshMin": [1, 1440],
+        "notifTimeout": [1, 120], "notifMaxVisible": [1, 20],
+        "wallpaperTransitionDuration": [0.1, 5.0]
+    })
+    readonly property var _enums: ({
+        "panelAnimationStyle": ["material", "fluent", "dynamic"],
+        "panelMotionEffect": ["standard", "directional", "depth"],
+        "language": ["en", "es", "ca"],
+        "notifPosition": ["tl", "tr", "bl", "br"],
+        "wallpaperTransition": ["fade", "zoom", "slide", "push", "wipe"]
+    })
+    // Claves que deben ser enteros (se redondean tras recortar).
+    readonly property var _intKeys: ["animationSpeed", "customAnimationDuration",
+        "weatherRefreshMin", "notifTimeout", "notifMaxVisible"]
+
+    // Devuelve un valor válido para 'k', o 'undefined' si hay que descartarlo
+    // (→ se conserva el valor por defecto). Infiere el tipo esperado del default.
+    function sanitize(k, val) {
+        // Enums: solo valores de la lista.
+        if (_enums[k] !== undefined)
+            return _enums[k].indexOf(val) !== -1 ? val : undefined
+        // accentColor: cadena hex de color.
+        if (k === "accentColor")
+            return (typeof val === "string" && /^#?[0-9a-fA-F]{3,8}$/.test(val)) ? val : undefined
+        // wallpaperDirs: array de cadenas.
+        if (k === "wallpaperDirs") {
+            if (!Array.isArray(val)) return undefined
+            return val.every(x => typeof x === "string") ? val : undefined
+        }
+        // Numéricos con rango: número finito recortado (y entero si procede).
+        if (_numBounds[k] !== undefined) {
+            if (typeof val !== "number" || !isFinite(val)) return undefined
+            let v = Math.max(_numBounds[k][0], Math.min(_numBounds[k][1], val))
+            if (_intKeys.indexOf(k) !== -1) v = Math.round(v)
+            return v
+        }
+        // Resto: comprobación de tipo contra el default.
+        const def = s[k]
+        if (typeof def === "boolean") return (typeof val === "boolean") ? val : undefined
+        if (typeof def === "number")  return (typeof val === "number" && isFinite(val)) ? val : undefined
+        if (typeof def === "string")  return (typeof val === "string") ? val : undefined
+        return val
+    }
+
     function load() {
         const t = file.text()
+        let ok = false
         if (t && t.trim() !== "") {
             try {
                 const o = JSON.parse(t)
-                for (const k of _keys)
-                    if (o[k] !== undefined && o[k] !== null) s[k] = o[k]
+                for (const k of _keys) {
+                    if (o[k] === undefined || o[k] === null) continue
+                    const v = sanitize(k, o[k])
+                    if (v !== undefined) s[k] = v
+                }
                 normalizeSavedSettings()
+                ok = true
             } catch (e) {
-                console.warn("Settings: JSON inválido,", e)
+                console.warn("Settings: JSON inválido, se regenera con valores por defecto.", e)
             }
         }
         _loaded = true
+        // Si no había archivo válido (ausente o corrupto), créalo/recupéralo ya
+        // con los valores actuales (por defecto), sin esperar a cambiar un ajuste.
+        if (!ok)
+            save()
     }
 
     function scheduleSave() {

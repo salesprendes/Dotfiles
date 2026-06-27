@@ -2,6 +2,7 @@ pragma Singleton
 
 import QtQuick
 import Quickshell
+import Quickshell.Io
 import Quickshell.Networking
 import qs.Config
 
@@ -46,6 +47,48 @@ Singleton {
     readonly property int signal: Math.round((activeWifi?.signalStrength ?? 0) * 100)
     readonly property bool online: ethernet || activeWifi !== null
 
+    // ── Conexión PRIORITARIA (ruta por defecto) ──────────────
+    //  La prioridad real la decide la tabla de rutas: la ruta por defecto de
+    //  menor 'metric' gana. 'primaryType' la calcula primaryProbe a partir de
+    //  `ip route` ("ethernet" | "wifi" | "none"). Así, si hay cable pero el
+    //  sistema enruta por wifi (o al revés), el icono refleja lo REAL, no solo
+    //  "hay cable conectado".
+    property string primaryType: ""
+
+    // ¿Es ethernet la conexión activa/prioritaria? Mientras la sonda no haya
+    // resuelto la ruta (primaryType ""), cae al estado físico (hay cable).
+    readonly property bool primaryEthernet: primaryType === "ethernet"
+                                          || (primaryType === "" && ethernet)
+
+    // Recalcula la prioridad (con pequeño debounce: la tabla de rutas tarda un
+    // instante en asentarse tras un cambio de conexión).
+    function refreshPrimary() { primaryDebounce.restart() }
+    onEthernetChanged:   refreshPrimary()
+    onActiveWifiChanged: refreshPrimary()
+    onWifiEnabledChanged: refreshPrimary()
+    Component.onCompleted: refreshPrimary()
+
+    Timer {
+        id: primaryDebounce
+        interval: 300
+        onTriggered: primaryProbe.running = true
+    }
+    Process {
+        id: primaryProbe
+        // Un solo awk (antes awk|sort|head|grep|awk = 5 procesos): recorre las
+        // rutas por defecto y se queda con la interfaz de menor 'metric'.
+        command: ["sh", "-c",
+            "dev=$(ip -o route show default 2>/dev/null | awk 'BEGIN{best=2147483647} " +
+            "{m=0; d=\"\"; for(i=1;i<=NF;i++){if($i==\"metric\")m=$(i+1); if($i==\"dev\")d=$(i+1)} " +
+            "if(d!=\"\" && m<best){best=m; bd=d}} END{print bd}'); " +
+            "if [ -z \"$dev\" ]; then echo none; " +
+            "elif [ -d \"/sys/class/net/$dev/wireless\" ]; then echo wifi; " +
+            "else echo ethernet; fi"]
+        stdout: StdioCollector {
+            onStreamFinished: net.primaryType = (this.text || "").trim() || "none"
+        }
+    }
+
     // Lista de redes WiFi visibles (para el panel).
     readonly property var networks: wifiDevice?.networks ?? null
     readonly property bool scanning: wifiDevice?.scannerEnabled ?? false
@@ -69,7 +112,7 @@ Singleton {
 
     // Icono Nerd Font según estado.
     readonly property string icon: {
-        if (ethernet) return "󰈁"                 // ethernet
+        if (primaryEthernet) return "󰈁"           // ethernet (ruta prioritaria)
         if (!wifiEnabled) return "󰤮"              // wifi off
         if (!online) return "󰤯"                   // sin conexión
         if (signal >= 75) return "󰤨"
@@ -79,7 +122,7 @@ Singleton {
     }
 
     readonly property string label: {
-        if (ethernet) return "Ethernet"
+        if (primaryEthernet) return "Ethernet"
         if (!wifiEnabled) return I18n.tr("WiFi off")
         if (ssid !== "") return ssid
         return I18n.tr("No connection")

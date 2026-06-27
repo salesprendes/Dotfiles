@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
+import qs.Components
 import qs.Config
 import qs.Services
 
@@ -69,17 +70,10 @@ ColumnLayout {
                         loops: Animation.Infinite; running: parent.visible
                     }
                 }
-                Rectangle {
-                    implicitWidth: Theme.dp(40); implicitHeight: Theme.controlXS; radius: height / 2
-                    color: BT.enabled ? Theme.accent2 : Theme.surface
-                    Behavior on color { ColorAnimation { duration: Theme.animFast } }
-                    Rectangle {
-                        width: Theme.space16; height: Theme.space16; radius: height / 2; color: Theme.fg
-                        anchors.verticalCenter: parent.verticalCenter
-                        x: BT.enabled ? parent.width - width - Theme.space2 : Theme.space2
-                        Behavior on x { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
-                    }
-                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: BT.toggle() }
+                Switch {
+                    checked: BT.enabled
+                    onColor: Theme.accent2
+                    onToggled: BT.toggle()
                 }
             }
 

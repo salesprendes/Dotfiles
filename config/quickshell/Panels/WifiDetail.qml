@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import Quickshell.Networking
+import qs.Components
 import qs.Config
 import qs.Services
 
@@ -89,17 +90,9 @@ ColumnLayout {
                         onClicked: Net.openIpConfig()
                     }
                 }
-                Rectangle {
-                    implicitWidth: Theme.dp(40); implicitHeight: Theme.controlXS; radius: height / 2
-                    color: Net.wifiEnabled ? Theme.accent : Theme.surface
-                    Behavior on color { ColorAnimation { duration: Theme.animFast } }
-                    Rectangle {
-                        width: Theme.space16; height: Theme.space16; radius: height / 2; color: Theme.fg
-                        anchors.verticalCenter: parent.verticalCenter
-                        x: Net.wifiEnabled ? parent.width - width - Theme.space2 : Theme.space2
-                        Behavior on x { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
-                    }
-                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: Net.toggleWifi() }
+                Switch {
+                    checked: Net.wifiEnabled
+                    onToggled: Net.toggleWifi()
                 }
             }
 

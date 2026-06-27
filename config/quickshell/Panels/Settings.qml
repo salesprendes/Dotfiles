@@ -1104,29 +1104,6 @@ FloatingWindow {
     }
 
 
-    component Switch: Rectangle {
-        property bool checked: false
-        signal toggled()
-        implicitWidth: Theme.dp(44); implicitHeight: Theme.dp(24)
-        radius: height / 2
-        color: checked ? Theme.accent : cfg.settingsControl
-        border.width: Theme.hairline
-        border.color: checked ? Theme.accent : cfg.settingsBorder
-        Behavior on color { ColorAnimation { duration: Theme.animFast } }
-        Rectangle {
-            width: parent.height - Theme.dp(6); height: width; radius: height / 2
-            y: Theme.dp(3)
-            x: parent.checked ? parent.width - width - Theme.dp(3) : Theme.dp(3)
-            color: parent.checked ? Theme.bg : Theme.fgDim
-            Behavior on x { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
-        }
-        MouseArea {
-            anchors.fill: parent
-            cursorShape: Qt.PointingHandCursor
-            onClicked: parent.toggled()
-        }
-    }
-
     component SwitchRow: RowLayout {
         id: sr
         property string label: ""
@@ -1150,7 +1127,12 @@ FloatingWindow {
                 wrapMode: Text.WordWrap
             }
         }
-        Switch { checked: sr.checked; onToggled: sr.toggled() }
+        Switch {
+            checked: sr.checked
+            offColor: cfg.settingsControl
+            offBorderColor: cfg.settingsBorder
+            onToggled: sr.toggled()
+        }
     }
 
     // Caja/tarjeta reutilizable con cabecera (icono + título), igual que
