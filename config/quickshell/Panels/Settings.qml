@@ -775,10 +775,10 @@ FloatingWindow {
                     Behavior on opacity { NumberAnimation { duration: Theme.animNormal } }
 
                     SegRow {
-                        label: I18n.tr("swww transition")
-                        options: [ { text: "Grow", value: "grow" }, { text: "Fade", value: "fade" },
-                                   { text: "Wipe", value: "wipe" }, { text: "Outer", value: "outer" },
-                                   { text: "Any", value: "any" } ]
+                        label: I18n.tr("Transition")
+                        options: [ { text: "Fade", value: "fade" }, { text: "Zoom", value: "zoom" },
+                                   { text: "Slide", value: "slide" }, { text: "Push", value: "push" },
+                                   { text: "Wipe", value: "wipe" } ]
                         current: Settings.wallpaperTransition
                         onPicked: (v) => Settings.wallpaperTransition = v
                     }

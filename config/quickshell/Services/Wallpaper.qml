@@ -6,9 +6,12 @@ import Quickshell.Io
 import qs.Config
 
 // ─────────────────────────────────────────────────────────────
-//  Servicio de fondos de pantalla (swww).
-//  Escanea una o varias carpetas en busca de imágenes y aplica el
-//  fondo con transición. Carpetas y transición se leen de Settings.
+//  Servicio de fondos de pantalla.
+//  Escanea una o varias carpetas en busca de imágenes y expone la
+//  ruta del fondo actual. El fondo lo RENDERIZA Quickshell mismo
+//  (ver Background/Backdrop.qml) con un cross-fade — sin daemons
+//  externos tipo swww/hyprpaper. 'apply()' solo cambia 'current';
+//  la ventana de fondo se encarga de la transición.
 // ─────────────────────────────────────────────────────────────
 Singleton {
     id: root
@@ -17,11 +20,6 @@ Singleton {
 
     // Carpetas donde buscar fondos (configurable desde ajustes).
     property var searchDirs: Settings.wallpaperDirs
-
-    // Parámetros de la transición de swww.
-    property string transition: Settings.wallpaperTransition
-    property int    transitionFps: 60
-    property real   transitionDuration: Settings.wallpaperTransitionDuration
 
     // Re-escanea si cambian las carpetas.
     onSearchDirsChanged: refresh()
@@ -32,26 +30,15 @@ Singleton {
 
     function shellQuote(s) { return "'" + String(s).replace(/'/g, "'\\''") + "'" }
 
-    // Lanza el daemon de swww si no está corriendo.
-    function ensureDaemon() {
-        Quickshell.execDetached(["sh", "-c",
-            "pgrep -x swww-daemon >/dev/null 2>&1 || (swww-daemon >/dev/null 2>&1 &)"])
-    }
-
     function refresh() { scanProc.running = true }
 
+    // Cambia el fondo: basta con fijar 'current'; Backdrop.qml hace el fundido.
     function apply(path) {
         if (!path) return
         current = path
-        Quickshell.execDetached(["sh", "-c",
-            "pgrep -x swww-daemon >/dev/null 2>&1 || { swww-daemon >/dev/null 2>&1 & sleep 0.4; }; "
-            + "swww img " + shellQuote(path)
-            + " --transition-type " + transition
-            + " --transition-fps " + transitionFps
-            + " --transition-duration " + transitionDuration])
     }
 
-    Component.onCompleted: { ensureDaemon(); refresh(); queryProc.running = true }
+    Component.onCompleted: refresh()
 
     // Escaneo de imágenes con `find` sobre todas las carpetas.
     Process {
@@ -65,19 +52,6 @@ Singleton {
         stdout: StdioCollector {
             onStreamFinished: {
                 root.list = text.split("\n").filter(l => l.trim() !== "")
-            }
-        }
-    }
-
-    // Detecta el fondo actual que muestra swww (al arrancar).
-    Process {
-        id: queryProc
-        command: ["sh", "-c",
-            "swww query 2>/dev/null | head -1 | sed -n 's/.*image: //p'"]
-        stdout: StdioCollector {
-            onStreamFinished: {
-                const t = text.trim()
-                if (t !== "") root.current = t
             }
         }
     }

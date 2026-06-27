@@ -9,6 +9,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import qs.Background
 import qs.Bar
 import qs.Config
 import qs.Panels
@@ -55,6 +56,13 @@ ShellRoot {
         running: true
         repeat: true
         onTriggered: if (!lockMonitor.running) lockMonitor.running = true
+    }
+
+    // Fondo de pantalla (uno por monitor, capa Background). Lo dibuja
+    // Quickshell mismo con cross-fade; no usa swww ni hyprpaper.
+    Variants {
+        model: Quickshell.screens
+        delegate: Backdrop {}
     }
 
     // Una instancia de Bar por pantalla conectada.

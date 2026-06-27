@@ -175,7 +175,9 @@ Singleton {
     property string notifPosition: "tr"        // tr | tl | br | bl
 
     // ── Fondos ───────────────────────────────────────────────
-    property string wallpaperTransition: "grow"
+    // Transición del fondo (la dibuja Quickshell, no swww):
+    // fade | zoom | slide | push | wipe.
+    property string wallpaperTransition: "fade"
     property real   wallpaperTransitionDuration: 1.0
     property var    wallpaperDirs: [home + "/Pictures/Wallpapers",
                                     home + "/.config/wallpapers"]
@@ -235,7 +237,7 @@ Singleton {
         clock24h = true; clockShowSeconds = false; clockShowDate = true
         weatherEnabled = true; weatherLocation = ""; weatherMetric = true; weatherRefreshMin = 30
         notifPopupsEnabled = true; notifTimeout = 5; notifMaxVisible = 4; notifPosition = "tr"
-        wallpaperTransition = "grow"; wallpaperTransitionDuration = 1.0
+        wallpaperTransition = "fade"; wallpaperTransitionDuration = 1.0
         wallpaperDirs = [home + "/Pictures/Wallpapers", home + "/.config/wallpapers"]
     }
 

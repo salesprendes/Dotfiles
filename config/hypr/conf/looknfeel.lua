@@ -41,8 +41,11 @@ hl.config({
 
         shadow = {
             enabled      = true,
-            range        = 10,
-            render_power = 3,
+            -- range 6 (antes 10) y render_power 2 (antes 3): la sombra se
+            -- redibuja al mover ventanas; reducirla baja ese coste de GPU
+            -- (gratis en batería) sin un cambio visual apreciable.
+            range        = 6,
+            render_power = 2,
             color        = theme.shadow,
         },
 
@@ -51,7 +54,9 @@ hl.config({
         blur = {
             enabled     = true,
             size        = 3,
-            passes      = 2,
+            -- 1 pase (antes 2): el blur es lo que más cuesta en la APU;
+            -- bajar a 1 casi lo divide a la mitad sin diferencia visible.
+            passes      = 1,
             new_optimizations = true,
             vibrancy    = 0.08,
             brightness  = 0.60,
@@ -129,6 +134,12 @@ hl.config({
         -- Arrastrar/redimensionar con animación → sensación más fluida.
         animate_manual_resizes      = true,
         animate_mouse_windowdragging = true,
+
+        -- VRR (FreeSync) solo en pantalla completa: sincroniza el refresco
+        -- del monitor con lo que dibuja Hyprland → sin micro-tirones en
+        -- juegos/vídeo. Modo 2 (y no 1) para evitar el parpadeo que la iGPU
+        -- puede dar al aplicar VRR en el escritorio/navegador.
+        vrr = 2,
     },
 })
 

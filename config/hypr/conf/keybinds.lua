@@ -33,7 +33,8 @@ hl.bind(mainMod .. " + N",         hl.dsp.exec_cmd("qs ipc call panel notificati
 hl.bind(mainMod .. " + SHIFT + N", hl.dsp.exec_cmd("qs ipc call panel dnd"))
 hl.bind(mainMod .. " + T",         hl.dsp.exec_cmd("qs ipc call panel sysmon"))
 
--- ── Capturas de pantalla (requiere 'hyprshot') ──────────────
+-- ── Capturas de pantalla (hyprshot) ─────────────────────────
+--  Guarda en ~/Imágenes (XDG_PICTURES_DIR) + copia al portapapeles + notifica.
 --  Print: pantalla completa · SUPER+Print: área · SUPER+SHIFT+Print: ventana
 hl.bind("Print",                       hl.dsp.exec_cmd("hyprshot -m output"))
 hl.bind(mainMod .. " + Print",         hl.dsp.exec_cmd("hyprshot -m region"))

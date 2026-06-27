@@ -48,7 +48,7 @@
   "notifTimeout": 5,
   "notifMaxVisible": 4,
   "notifPosition": "tr",
-  "wallpaperTransition": "grow",
+  "wallpaperTransition": "fade",
   "wallpaperTransitionDuration": 1,
   "wallpaperDirs": [
     "/home/salesprendes/Pictures/Wallpapers",

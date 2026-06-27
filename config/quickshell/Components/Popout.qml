@@ -137,9 +137,21 @@ PanelWindow {
         border.width: Theme.hairline
         border.color: Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.5)
         clip: true
+        antialiasing: true
         opacity: win.directionalMotion ? 1 : win.openProgress
         scale: win.panelScale
         transformOrigin: Item.Top
+
+        // Renderiza la tarjeta a una textura (FBO) durante toda su vida
+        // visible y escala ESA textura, en vez de re-rasterizar el borde
+        // fino (hairline) y las esquinas redondeadas en cada frame del
+        // escalado → elimina el parpadeo de las líneas del contorno. Se
+        // mantiene activa toda la vida visible (no se conmuta a mitad de la
+        // animación) para que los paneles altos/pesados no tengan ningún
+        // frame de transición al asignar el FBO. En reposo scale=1 y la
+        // geometría es entera, así que la textura se muestrea 1:1 → nítido.
+        layer.enabled: win.visible
+        layer.smooth: true
 
         transform: Translate { y: win.panelOffsetY }
 
