@@ -665,6 +665,8 @@ FloatingWindow {
                             onToggled: Settings.showClipboard = !Settings.showClipboard }
                         SwitchRow { label: I18n.tr("Notifications"); checked: Settings.showNotifications
                             onToggled: Settings.showNotifications = !Settings.showNotifications }
+                        SwitchRow { label: I18n.tr("Caffeine"); checked: Settings.showCaffeine
+                            onToggled: Settings.showCaffeine = !Settings.showCaffeine }
                     }
                 }
 

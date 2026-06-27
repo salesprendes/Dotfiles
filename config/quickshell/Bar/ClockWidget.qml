@@ -42,7 +42,8 @@ Pill {
     }
     Text {
         visible: Settings.clockShowDate
-        text: Qt.formatDateTime(clock.date, "ddd dd MMM")
+        // Nombres de día/mes según el idioma de la app (en/es/ca), no el locale C.
+        text: clock.date.toLocaleDateString(I18n.locale(), "ddd dd MMM")
         color: Theme.fgMuted
         font.family: Theme.fontFamily
         font.pixelSize: Theme.fontSize

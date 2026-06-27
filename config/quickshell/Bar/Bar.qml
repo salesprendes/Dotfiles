@@ -32,6 +32,13 @@ PanelWindow {
     // Reserva el espacio justo de la barra + su margen.
     exclusiveZone: Theme.barHeight + Theme.barMargin
 
+    // Modo "cafeína": mientras esté activo, inhibe el idle del compositor
+    // (no se suspende ni se bloquea). Se ancla a esta ventana, siempre visible.
+    IdleInhibitor {
+        window: bar
+        enabled: Globals.caffeine
+    }
+
     // ── Fondo de la barra ────────────────────────────────────
     Rectangle {
         anchors.fill: parent
@@ -76,6 +83,7 @@ PanelWindow {
             SysMonWidget { visible: Settings.showSysmon }
             ConnectivityAudioWidget {}
             PowerWidget {}
+            CaffeineWidget { visible: Settings.showCaffeine }
             BatteryWidget {}
             ClipboardWidget { visible: Settings.showClipboard }
             NotificationsWidget { visible: Settings.showNotifications }

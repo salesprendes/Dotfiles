@@ -299,20 +299,34 @@ Popout {
                            : null
         }
 
-        // Fila 3 · Perfil de energía (tile a ancho completo, expandible).
-        // Oculto si no está instalado power-profiles-daemon.
-        ControlTile {
+        // Fila 3 · Perfil de energía + Cafeína.
+        // El perfil se oculta si no está instalado power-profiles-daemon;
+        // en ese caso Cafeína ocupa toda la fila.
+        RowLayout {
             Layout.fillWidth: true
-            visible: Power.available
-            icon: Power.icon
-            title: I18n.tr("Power profile")
-            subtitle: Power.name
-            active: true
-            accent: Power.color
-            expandable: true
-            expanded: cc.expanded === "power"
-            onToggled: Power.cycle()   // pulsar el icono → siguiente perfil
-            onExpand: cc.expanded = (cc.expanded === "power" ? "" : "power")
+            spacing: Theme.space10
+            ControlTile {
+                Layout.fillWidth: true
+                visible: Power.available
+                icon: Power.icon
+                title: I18n.tr("Power profile")
+                subtitle: Power.name
+                active: true
+                accent: Power.color
+                expandable: true
+                expanded: cc.expanded === "power"
+                onToggled: Power.cycle()   // pulsar el icono → siguiente perfil
+                onExpand: cc.expanded = (cc.expanded === "power" ? "" : "power")
+            }
+            ControlTile {
+                Layout.fillWidth: true
+                icon: "󰅶"   // taza de café
+                title: I18n.tr("Caffeine")
+                subtitle: Globals.caffeine ? I18n.tr("Stays awake") : I18n.tr("Disabled")
+                active: Globals.caffeine
+                accent: Theme.accent
+                onToggled: Globals.caffeine = !Globals.caffeine
+            }
         }
         // Detalle en línea del perfil de energía (selector desplegable).
         ExpandableDetail {

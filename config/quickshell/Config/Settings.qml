@@ -155,6 +155,7 @@ Singleton {
     property bool   showClipboard: true
     property bool   showNotifications: true
     property bool   showPowerProfile: true
+    property bool   showCaffeine: false
 
     // ── Reloj ────────────────────────────────────────────────
     property bool   clock24h: true
@@ -187,7 +188,7 @@ Singleton {
         "popupOpacity", "widgetOpacity",
         "cornerScale", "barScale", "fontFamily", "monoFontFamily", "fontScale",
         "panelAnimationStyle", "panelMotionEffect", "language",
-        "showTray", "showSysmon", "showBattery", "showClipboard", "showNotifications", "showPowerProfile",
+        "showTray", "showSysmon", "showBattery", "showClipboard", "showNotifications", "showPowerProfile", "showCaffeine",
         "clock24h", "clockShowSeconds", "clockShowDate",
         "weatherEnabled", "weatherLocation", "weatherMetric", "weatherRefreshMin",
         "notifPopupsEnabled", "notifTimeout", "notifMaxVisible", "notifPosition",
@@ -230,7 +231,7 @@ Singleton {
         panelMotionEffect = "standard"
         language = "es"
         showTray = true; showSysmon = true; showBattery = true
-        showClipboard = true; showNotifications = true; showPowerProfile = true
+        showClipboard = true; showNotifications = true; showPowerProfile = true; showCaffeine = false
         clock24h = true; clockShowSeconds = false; clockShowDate = true
         weatherEnabled = true; weatherLocation = ""; weatherMetric = true; weatherRefreshMin = 30
         notifPopupsEnabled = true; notifTimeout = 5; notifMaxVisible = 4; notifPosition = "tr"

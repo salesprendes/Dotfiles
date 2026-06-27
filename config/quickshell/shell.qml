@@ -26,6 +26,7 @@ ShellRoot {
         function dashboard(): void { Globals.toggleDashboard() }
         function settings(): void { Globals.toggleSettings() }
         function dnd(): void { Globals.dnd = !Globals.dnd }
+        function caffeine(): void { Globals.caffeine = !Globals.caffeine }
         function close(): void { Globals.closeAll() }
     }
 

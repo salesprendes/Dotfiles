@@ -19,6 +19,10 @@ Singleton {
     // No molestar (silencia popups).
     property bool dnd: false
 
+    // Cafeína: inhibe el idle del compositor → no se suspende ni bloquea.
+    // El IdleInhibitor real vive en la barra (Bar.qml) y lee este estado.
+    property bool caffeine: false
+
     readonly property bool controlCenterOpen: openPanel === "control"
     readonly property bool notifCenterOpen:   openPanel === "notif"
     readonly property bool sysMonOpen:         openPanel === "sysmon"
