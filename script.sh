@@ -128,6 +128,10 @@ run_spinner() {
   local frames=("⠋" "⠙" "⠹" "⠸" "⠼" "⠴" "⠦" "⠧" "⠇" "⠏")
   local i=0
 
+  trap 'exit 0' TERM INT
+  trap - ERR
+  set +e
+
   printf "\033[?25l"
   while true; do
     printf "\r  %s%s%s %s" "${COLOR_CYAN}" "${frames[$i]}" "${COLOR_RESET}" "${message}"
