@@ -18,17 +18,19 @@ PanelWindow {
     screen: modelData
 
     property int nextKey: 1
+    property int activePopupCount: 0
     property var notificationsByKey: ({})
-    property var cleanupKeys: []
 
     // Se ocultan mientras haya cualquier panel abierto (centro rápido,
     // notificaciones, lanzador, etc.); las notificaciones siguen llegando
     // al centro de notificaciones.
-    visible: popupModel.count > 0 && Settings.notifPopupsEnabled && Globals.openPanel === ""
+    visible: activePopupCount > 0 && Settings.notifPopupsEnabled && Globals.openPanel === ""
     color: "transparent"
     exclusionMode: ExclusionMode.Ignore
     implicitWidth: Theme.panelWidth(screen, 410, 320, 0.94)
-    implicitHeight: Math.max(1, list.contentHeight)
+    implicitHeight: activePopupCount > 0
+        ? Math.max(reservedStackHeight, list.contentHeight, exitContentHeight())
+        : 1
 
     WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.namespace: "qs-popups"
@@ -36,19 +38,19 @@ PanelWindow {
     // Posición configurable: tr | tl | br | bl.
     readonly property string pos: Settings.notifPosition
 
-    // ── Animaciones adaptadas de DankMaterialShell (efecto por defecto) ──
-    // La tarjeta entra/sale deslizando + atenuando + escalando; la pila se
-    // reordena animando la posición (sin colapso con recorte visible → sin
-    // banda gris). Curvas cubic-bezier copiadas de DMS:
-    //   · entrada: espacial con leve overshoot (expressiveDefaultSpatial)
-    //   · salida:  "emphasized"
-    //   · reflujo: decel estándar (standardDecel)
-    readonly property real enterOffset: (pos.charAt(1) === "l" ? -1 : 1) * Theme.dp(20)
-    readonly property real exitOffset:  (pos.charAt(1) === "l" ? -1 : 1) * Theme.dp(80)
-    readonly property var  enterCurve:  [0.38, 1.21, 0.22, 1, 1, 1]
-    readonly property var  exitCurve:   [0.05, 0.0, 0.133333, 0.06, 0.166667, 0.40, 0.208333, 0.82, 0.25, 1.0, 1.0, 1.0]
-    readonly property var  reflowCurve: [0, 0, 0, 1, 1, 1]
-    readonly property real collapsedScale: 0.96
+    // Animación de popup: desplazamiento lateral, fundido corto y reacomodo
+    // estable. La altura reservada evita que la primera notificación de una
+    // nueva tanda nazca recortada por el primer cálculo de layout.
+    readonly property int  reservedStackHeight: Theme.dp(190)
+    readonly property int  enterDuration: Theme.animNormal <= 0 ? 0 : 260
+    readonly property int  exitDuration:  Theme.animNormal <= 0 ? 0 : 260
+    readonly property int  reflowDuration: Theme.animNormal <= 0 ? 0 : Math.min(230, Math.max(150, Math.round(Theme.animNormal * 0.68)))
+    readonly property real enterOffset: (pos.charAt(1) === "l" ? -1 : 1) * Theme.dp(58)
+    readonly property real exitOffset:  (pos.charAt(1) === "l" ? -1 : 1) * Theme.dp(48)
+    readonly property var  enterCurve:  [0.19, 1.0, 0.22, 1.0, 1.0, 1.0]
+    readonly property var  exitCurve:   [0.22, 0.0, 0.18, 1.0, 1.0, 1.0]
+    readonly property var  reflowCurve: [0.22, 1.0, 0.36, 1.0, 1.0, 1.0]
+    readonly property real collapsedScale: 0.972
     anchors {
         top: pos.charAt(0) === "t"
         bottom: pos.charAt(0) === "b"
@@ -85,50 +87,69 @@ PanelWindow {
         return notificationsByKey[key] || null
     }
 
+    function exitContentHeight() {
+        let h = 0
+        for (let i = 0; i < exitModel.count; i++) {
+            const e = exitModel.get(i)
+            h = Math.max(h, Math.round((e.startY || 0) + (e.startHeight || 0)))
+        }
+        return h
+    }
+
     function add(n) {
         const key = nextKey++
         const map = Object.assign({}, notificationsByKey)
         map[key] = n
         notificationsByKey = map
 
+        activePopupCount++
         popupModel.insert(0, { "key": key })
-        if (popupModel.count > Settings.notifMaxVisible)
-            removeKey(popupModel.get(popupModel.count - 1).key)
+        trimVisiblePopups()
     }
 
     function clear() {
+        activePopupCount = 0
         popupModel.clear()
+        exitModel.clear()
         notificationsByKey = ({})
-        cleanupKeys = []
     }
 
-    // Quita la notificación del modelo. El delegate retrasa su destrucción
-    // (ListView.delayRemove) para reproducir su animación de salida. La entrada
-    // de notificationsByKey se limpia un poco después (cleanupTimer), cuando la
-    // animación ya terminó y nadie la lee.
     function removeKey(key) {
         for (let i = 0; i < popupModel.count; i++) {
             if (popupModel.get(i).key === key) {
+                const item = list.itemAtIndex(i)
+                exitModel.append({
+                    "key": key,
+                    "startY": item ? item.y : 0,
+                    "startHeight": item ? item.height : Theme.dp(120)
+                })
                 popupModel.remove(i)
+                return
+            }
+        }
+    }
+
+    function finishExit(key) {
+        for (let i = 0; i < exitModel.count; i++) {
+            if (exitModel.get(i).key === key) {
+                exitModel.remove(i)
                 break
             }
         }
-        const pending = cleanupKeys.slice()
-        pending.push(key)
-        cleanupKeys = pending
-        cleanupTimer.restart()
+        const map = Object.assign({}, notificationsByKey)
+        delete map[key]
+        notificationsByKey = map
+        activePopupCount = Math.max(0, activePopupCount - 1)
     }
 
-    Timer {
-        id: cleanupTimer
-        interval: 600
-        repeat: false
-        onTriggered: {
-            const map = Object.assign({}, notificationsByKey)
-            for (let i = 0; i < cleanupKeys.length; i++)
-                delete map[cleanupKeys[i]]
-            cleanupKeys = []
-            notificationsByKey = map
+    function trimVisiblePopups() {
+        let visibleCount = popupModel.count
+        while (visibleCount > Settings.notifMaxVisible) {
+            for (let i = popupModel.count - 1; i >= 0; i--) {
+                removeKey(popupModel.get(i).key)
+                visibleCount--
+                break
+            }
         }
     }
 
@@ -136,15 +157,19 @@ PanelWindow {
         id: popupModel
     }
 
-    // Pila en ListView (preserva la identidad de cada delegate al insertar/
-    // quitar; las que ya están NO se reinician). Reflujo entre tarjetas con la
-    // transición 'displaced' (anima la Y, no toca la altura → la ventana NO se
-    // reajusta cada frame al entrar). La salida usa el mecanismo canónico
-    // ListView.delayRemove para animar de forma determinista (sin banda gris).
+    ListModel {
+        id: exitModel
+    }
+
+    // Pila en ListView. Al cerrar, el item se saca de esta lista y se anima en
+    // una capa flotante; así la salida no puede deformar ni dejar bandas.
     ListView {
         id: list
         width: parent.width
-        height: contentHeight
+        height: popups.activePopupCount > 0
+            ? Math.max(contentHeight, popups.reservedStackHeight, popups.exitContentHeight())
+            : 1
+        y: popups.pos.charAt(0) === "b" ? Math.max(0, parent.height - height) : 0
         interactive: false
         clip: false
         spacing: Theme.space8
@@ -153,11 +178,10 @@ PanelWindow {
         verticalLayoutDirection: popups.pos.charAt(0) === "b" ? ListView.BottomToTop
                                                               : ListView.TopToBottom
 
-        // Reacomodo de las demás cuando entra/sale una (solo mueve la Y, no la
-        // altura → la ventana NO se reajusta cada frame). Curva de DMS. Esto es
-        // lo que hace que la NUEVA se coloque encima y "arrastre" la otra abajo.
+        // Reacomodo de los delegates cuando entra o sale un item. Solo cambia
+        // la coordenada Y para evitar reajustes de altura en cada frame.
         displaced: Transition {
-            NumberAnimation { properties: "y"; duration: Theme.animNormal
+            NumberAnimation { properties: "y"; duration: popups.reflowDuration
                 easing.type: Easing.BezierSpline; easing.bezierCurve: popups.reflowCurve }
         }
 
@@ -166,14 +190,10 @@ PanelWindow {
             required property int key
             readonly property var notification: popups.notificationFor(key)
 
-            // 'collapse' 1→0 SOLO al salir; el alto es COMPLETO desde el inicio
-            // (no hay "desplegado" lento ni reajuste de ventana cada frame).
-            property real collapse: 1
-
             width: ListView.view.width
-            implicitHeight: card.implicitHeight * collapse
+            implicitHeight: card.implicitHeight
             height: implicitHeight
-            clip: true
+            clip: false
 
             NotificationItem {
                 id: card
@@ -182,45 +202,27 @@ PanelWindow {
                 popupMode: true
                 onCloseRequested: popups.removeKey(row.key)
 
-                // ENTRADA (DMS): deslizamiento + fundido + escala 0.96→1, con la
-                // curva espacial. SIN tocar la altura (un único reajuste de
-                // ventana → sin el "desplegado" lento ni tirones).
+                // Entrada del popup: desplazamiento lateral con fundido y escala sutil.
+                // No toca la altura para evitar reajustes verticales al nacer.
                 opacity: 0
                 x: popups.enterOffset
                 scale: popups.collapsedScale
-                transformOrigin: Item.Center
+                transformOrigin: popups.pos.charAt(1) === "r" ? Item.Right : Item.Left
+                layer.enabled: opacity < 0.999 || Math.abs(x) > 0.5 || scale < 0.999
+                layer.smooth: true
                 // Diferido: arranca tras el primer pase de layout (cuando el
                 // delegate ya está medido y posicionado), evitando la carrera
                 // que hacía que la primera "saltara" abajo y volviera arriba.
                 Component.onCompleted: Qt.callLater(enterAnim.start)
                 ParallelAnimation {
                     id: enterAnim
-                    NumberAnimation { target: card; property: "opacity"; to: 1; duration: Theme.animNormal
+                    NumberAnimation { target: card; property: "opacity"; to: 1; duration: popups.enterDuration
                         easing.type: Easing.OutCubic }
-                    NumberAnimation { target: card; property: "x"; to: 0; duration: Theme.animNormal
+                    NumberAnimation { target: card; property: "x"; to: 0; duration: popups.enterDuration
                         easing.type: Easing.BezierSpline; easing.bezierCurve: popups.enterCurve }
-                    NumberAnimation { target: card; property: "scale"; to: 1; duration: Theme.animNormal
+                    NumberAnimation { target: card; property: "scale"; to: 1; duration: popups.enterDuration
                         easing.type: Easing.BezierSpline; easing.bezierCurve: popups.enterCurve }
                 }
-            }
-
-            // SALIDA (DMS): la tarjeta se desliza (80px) + atenúa a 0 + escala a
-            // 0.96 con la curva "emphasized"; al quedar invisible, colapsa el alto
-            // para cerrar el hueco (sin banda gris, la tarjeta ya no se dibuja).
-            // Usa ListView.delayRemove para que sea determinista (sin interrumpir).
-            ListView.onRemove: SequentialAnimation {
-                PropertyAction { target: row; property: "ListView.delayRemove"; value: true }
-                ParallelAnimation {
-                    NumberAnimation { target: card; property: "opacity"; to: 0; duration: Theme.animNormal
-                        easing.type: Easing.BezierSpline; easing.bezierCurve: popups.exitCurve }
-                    NumberAnimation { target: card; property: "x"; to: popups.exitOffset; duration: Theme.animNormal
-                        easing.type: Easing.BezierSpline; easing.bezierCurve: popups.exitCurve }
-                    NumberAnimation { target: card; property: "scale"; to: popups.collapsedScale; duration: Theme.animNormal
-                        easing.type: Easing.BezierSpline; easing.bezierCurve: popups.exitCurve }
-                }
-                NumberAnimation { target: row; property: "collapse"; to: 0; duration: Theme.animFast
-                    easing.type: Easing.BezierSpline; easing.bezierCurve: popups.reflowCurve }
-                PropertyAction { target: row; property: "ListView.delayRemove"; value: false }
             }
 
             MouseArea {
@@ -231,10 +233,51 @@ PanelWindow {
             }
 
             Timer {
+                id: autoDismiss
                 interval: Math.max(1000, Settings.notifTimeout * 1000)
                 repeat: false
                 running: !hov.containsMouse
                 onTriggered: popups.removeKey(row.key)
+            }
+        }
+    }
+
+    Repeater {
+        model: exitModel
+        delegate: Item {
+            id: exitRow
+            required property int key
+            required property real startY
+            required property real startHeight
+            readonly property var notification: popups.notificationFor(key)
+
+            width: popups.width
+            height: startHeight
+            y: startY
+            z: 100
+            clip: false
+
+            NotificationItem {
+                id: exitCard
+                width: parent.width
+                notif: exitRow.notification
+                popupMode: true
+                opacity: 1
+                x: 0
+                transformOrigin: popups.pos.charAt(1) === "r" ? Item.Right : Item.Left
+                layer.enabled: true
+                layer.smooth: true
+            }
+
+            Component.onCompleted: Qt.callLater(exitAnim.start)
+
+            ParallelAnimation {
+                id: exitAnim
+                onFinished: popups.finishExit(exitRow.key)
+                NumberAnimation { target: exitCard; property: "opacity"; to: 0; duration: popups.exitDuration
+                    easing.type: Easing.BezierSpline; easing.bezierCurve: popups.exitCurve }
+                NumberAnimation { target: exitCard; property: "x"; to: popups.exitOffset; duration: popups.exitDuration
+                    easing.type: Easing.BezierSpline; easing.bezierCurve: popups.exitCurve }
             }
         }
     }

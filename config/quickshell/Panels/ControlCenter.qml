@@ -8,8 +8,8 @@ import qs.Config
 import qs.Panels
 import qs.Services
 
-// Centro de control estilo macOS: tarjetas compactas, sliders y
-// detalles desplegables para WiFi / Bluetooth / Audio / Micro.
+// Centro de control: tarjetas compactas, sliders y detalles desplegables para
+// WiFi, Bluetooth, audio y micrófono.
 Popout {
     id: cc
     ns: "qs-controlcenter"

@@ -85,9 +85,8 @@ Singleton {
         onLoaded: net.computePrimary()
     }
 
-    // Parsea /proc/net/route → tipo de la conexión prioritaria. Columnas:
-    // Iface Destination Gateway Flags RefCnt Use Metric ... La ruta por defecto
-    // tiene Destination "00000000"; gana la de menor Metric (decimal).
+    // Parsea /proc/net/route para identificar el tipo de conexión prioritaria.
+    // La ruta por defecto usa Destination "00000000"; gana la de menor Metric.
     function computePrimary() {
         const txt = routeFile.text()
         if (!txt || txt.trim() === "") {              // ilegible → respaldo físico

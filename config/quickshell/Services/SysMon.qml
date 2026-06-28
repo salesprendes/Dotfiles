@@ -225,7 +225,7 @@ Singleton {
         return pct >= 85 ? Theme.red : pct >= 60 ? Theme.yellow : Theme.green
     }
 
-    // Logo de la distribución (glifos Nerd Font, set nf-linux).
+    // Logo de la distribución mediante glifos Nerd Font.
     readonly property var _distroGlyphs: ({
         "arch": "󰣇", "archlinux": "󰣇", "debian": "󰣚", "ubuntu": "󰕈",
         "fedora": "󰣛", "nixos": "󱄅", "gentoo": "󰣨", "manjaro": "󱘊",
@@ -235,7 +235,7 @@ Singleton {
     })
     // ¿Hay glifo Nerd Font para esta distro?
     readonly property bool hasGlyph: _distroGlyphs[distroId] !== undefined
-    readonly property string distroGlyph: _distroGlyphs[distroId] ?? "󰌽"  // fallback: Linux
+    readonly property string distroGlyph: _distroGlyphs[distroId] ?? "󰌽"  // fallback genérico
 
     readonly property string distroLogoIcon: distroLogo !== ""
         ? Quickshell.iconPath(distroLogo, true) : ""

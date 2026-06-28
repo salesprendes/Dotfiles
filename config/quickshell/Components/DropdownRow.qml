@@ -3,9 +3,9 @@ import QtQuick.Layouts
 import qs.Config
 
 // Desplegable reutilizable (etiqueta + selector con panel animado). Antes era
-// un componente inline de Ajustes; extraído a Components para usarlo en todo el
-// shell. La animación (altura + opacidad al abrir; hover por opacidad para no
-// dejar "sombra negra") es la misma que el FontPicker de Tipografía.
+// un componente inline de Ajustes; extraído a Components para compartirlo entre
+// vistas. La animación usa altura + opacidad al abrir y hover por opacidad para
+// evitar artefactos de fondo.
 //
 // Uso:
 //   DropdownRow {
