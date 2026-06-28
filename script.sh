@@ -32,6 +32,8 @@ BASE_PACKAGES=(
   net-tools
 )
 
+# Nota: libva-mesa-driver y lib32-libva-mesa-driver ya no existen como paquetes
+# independientes; sus drivers VA-API van incluidos en mesa / lib32-mesa.
 AMD_PACKAGES=(
   mesa
   vulkan-radeon
@@ -39,10 +41,8 @@ AMD_PACKAGES=(
   mesa-utils
   vulkan-tools
   libva-utils
-  libva-mesa-driver
   lib32-mesa
   lib32-vulkan-radeon
-  lib32-libva-mesa-driver
 )
 
 YAY_BUILD_PACKAGES=(base-devel git)
