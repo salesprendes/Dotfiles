@@ -1,0 +1,6 @@
+[Desktop Entry]
+Name=Hyprland
+Comment=An intelligent dynamic tiling Wayland compositor
+Exec=/home/salesprendes/.local/bin/start-hyprland
+Type=Application
+DesktopNames=Hyprland

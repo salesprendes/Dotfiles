@@ -5,7 +5,7 @@ import Quickshell
 import qs.Config
 
 // ─────────────────────────────────────────────────────────────
-//  Tema "Solitude" — Omarchy con acentos fríos y bordes sobrios.
+//  Tema "Solitude": paleta global, radios, espaciado y escala visual.
 //  Singleton global: usa Theme.<prop> desde cualquier componente.
 // ─────────────────────────────────────────────────────────────
 Singleton {

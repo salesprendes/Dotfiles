@@ -5,8 +5,8 @@ import qs.Config
 import qs.Services
 
 // ─────────────────────────────────────────────────────────────
-//  Fondo de pantalla renderizado por Quickshell (sin daemon externo
-//  tipo swww/hyprpaper). Una ventana por monitor en la capa Background.
+//  Fondo de pantalla renderizado en QML. Una ventana por monitor en la capa
+//  Background, sincronizada con el servicio Wallpaper.
 //
 //  Transiciones en QML puro, seleccionables (Settings.wallpaperTransition):
 //    fade   · fundido cruzado de opacidad

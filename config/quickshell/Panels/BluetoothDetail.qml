@@ -4,9 +4,9 @@ import qs.Components
 import qs.Config
 import qs.Services
 
-// Detalle Bluetooth unificado en una "caja" (como audio / WiFi): cabecera con
-// estado + interruptor, y lista de dispositivos con el conectado RESALTADO
-// estilo DMS. Click conecta/desconecta. Debajo del nombre: % de batería si
+// Detalle Bluetooth unificado en una caja: cabecera con estado + interruptor,
+// y lista de dispositivos con el conectado resaltado por color y borde.
+// Click conecta/desconecta. Debajo del nombre: % de batería si
 // está disponible; si no, "conectado".
 ColumnLayout {
     id: root

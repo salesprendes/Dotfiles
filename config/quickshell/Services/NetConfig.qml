@@ -5,22 +5,32 @@ import Quickshell
 import Quickshell.Io
 
 // ─────────────────────────────────────────────────────────────
-//  Configuración de red (NetworkManager vía nmcli). Lista las
-//  conexiones activas, LEE todos los parámetros de la seleccionada
-//  y los APLICA (modify + up). Cubre IPv4/DNS, IPv6, autoconexión,
-//  prioridad, aleatorización de MAC y MTU. Olvida conexiones.
+//  Configuración de red (NetworkManager vía nmcli), estilo Windows:
+//  · Por INTERFAZ/adaptador: lista todas las wifi y ethernet y edita
+//    IPv4/DNS, IPv6, MAC, MTU del perfil activo de la seleccionada.
+//  · Gestión de WIFIS GUARDADAS: lista perfiles wifi, permite olvidar
+//    (borrar), conectar y cambiar su prioridad de autoconexión.
 // ─────────────────────────────────────────────────────────────
 Singleton {
     id: root
 
-    // [{ name, type, device }] de conexiones activas (wifi/ethernet).
-    property var    connections: []
-    property string selected: ""
-    property string connType: ""        // 802-11-wireless | 802-3-ethernet
-    property bool   loading: false
-    property string error: ""
+    // ── Interfaces (adaptadores) ─────────────────────────────
+    // [{ device, type, state, connection }]  type: wifi | ethernet
+    property var    interfaces: []
+    property string selectedIface: ""    // nombre del dispositivo (p.ej. wlp2s0)
+    property string ifaceType: ""        // wifi | ethernet
+    property string ifaceConn: ""        // perfil de conexión activo a editar ("" si ninguno)
 
-    // Estado leído/editable de la conexión seleccionada.
+    // ── Wifis guardadas ──────────────────────────────────────
+    // [{ name, uuid, autoconnect, priority, active }]
+    property var    savedWifis: []
+
+    property bool   loading: false
+    property bool   applying: false
+    property string error: ""
+    signal applyDone(bool ok)
+
+    // Estado IP editable de la interfaz seleccionada (de su perfil activo).
     property string ip4method: "auto"   // auto | manual
     property string ip4addr: ""
     property string ip4mask: ""
@@ -32,9 +42,11 @@ Singleton {
     property string mac: "default"      // default | random | stable
     property string mtu: ""             // "" / "auto" = automático
 
-    readonly property bool isWifi: connType === "802-11-wireless"
+    readonly property bool isWifi: ifaceType === "wifi"
+    readonly property bool hasConn: ifaceConn !== ""
 
     function shellQuote(s) { return "'" + String(s).replace(/'/g, "'\\''") + "'" }
+    function unesc(s) { return String(s).replace(/\\:/g, ":") }   // des-escapa ':' de nmcli -t
 
     function maskToPrefix(m) {
         const p = String(m).split(".")
@@ -66,18 +78,35 @@ Singleton {
         || (validIp(ip4addr) && maskToPrefix(ip4mask) >= 0
             && (ip4gw === "" || validIp(ip4gw)))
 
-    Component.onCompleted: refreshConnections()
-    function refreshConnections() { listProc.running = true }
+    Component.onCompleted: refreshAll()
+    function refreshAll() { ifaceProc.running = true; wifiProc.running = true }
+    function refreshConnections() { refreshAll() }   // alias compat
 
-    function select(name) {
-        root.selected = name
-        const c = root.connections.find(x => x.name === name)
-        root.connType = c ? c.type : ""
+    // ── Interfaz seleccionada ────────────────────────────────
+    function selectIface(dev) {
+        root.selectedIface = dev
+        const d = root.interfaces.find(x => x.device === dev)
+        root.ifaceType = d ? d.type : ""
+        root.ifaceConn = d ? d.connection : ""
         readSelected()
     }
 
+    // Selecciona automáticamente la interfaz "activa" (la conectada; si hay
+    // varias, prioriza ethernet). La usa el engranaje del centro rápido.
+    function selectActive() {
+        const conns = root.interfaces.filter(i => i.connection !== "")
+        const pick = conns.find(i => i.type === "ethernet") || conns[0]
+                   || (root.interfaces.length > 0 ? root.interfaces[0] : null)
+        if (pick) root.selectIface(pick.device)
+    }
+
     function readSelected() {
-        if (root.selected === "") return
+        if (root.ifaceConn === "") {
+            // Interfaz sin perfil activo: nada que leer/editar.
+            root.ip4method = "auto"; root.ip4addr = ""; root.ip4mask = ""; root.ip4gw = ""; root.ip4dns = ""
+            root.ip6method = "auto"; root.autoconnect = true; root.priority = 0; root.mac = "default"; root.mtu = ""
+            return
+        }
         root.loading = true
         root.error = ""
         const k = root.isWifi ? "802-11-wireless" : "802-3-ethernet"
@@ -85,16 +114,17 @@ Singleton {
                      + "connection.autoconnect,connection.autoconnect-priority,"
                      + k + ".cloned-mac-address," + k + ".mtu"
         readProc.command = ["sh", "-c",
-            "nmcli -t -f " + fields + " connection show " + shellQuote(root.selected)]
+            "nmcli -t -f " + fields + " connection show " + shellQuote(root.ifaceConn)]
         readProc.running = true
     }
 
     function apply() {
-        if (root.selected === "" || !root.ready) return
+        if (!root.hasConn || !root.ready) return
         root.error = ""
+        root.applying = true
         const q = root.shellQuote
         const k = root.isWifi ? "802-11-wireless" : "802-3-ethernet"
-        let cmd = "nmcli connection modify " + q(root.selected)
+        let cmd = "nmcli connection modify " + q(root.ifaceConn)
         // IPv4
         cmd += (root.ip4method === "manual")
             ? " ipv4.method manual ipv4.addresses " + q(root.ip4addr + "/" + root.maskToPrefix(root.ip4mask))
@@ -106,42 +136,89 @@ Singleton {
         // Conexión
         cmd += " connection.autoconnect " + (root.autoconnect ? "yes" : "no")
         cmd += " connection.autoconnect-priority " + q(String(root.priority))
-        // Privacidad / avanzado
-        cmd += " " + k + ".cloned-mac-address " + q(root.mac)
+        // Privacidad / avanzado. "default" en NetworkManager = cadena vacía.
+        cmd += " " + k + ".cloned-mac-address " + q(root.mac === "default" ? "" : root.mac)
         const m = (root.mtu === "" || root.mtu.toLowerCase() === "auto") ? "0" : root.mtu
         cmd += " " + k + ".mtu " + q(m)
-        cmd += " && nmcli connection up " + q(root.selected)
+        cmd += " && nmcli connection up " + q(root.ifaceConn)
         applyProc.command = ["sh", "-c", cmd]
         applyProc.running = true
     }
 
-    function forget() {
-        if (root.selected === "") return
-        forgetProc.command = ["nmcli", "connection", "delete", root.selected]
-        forgetProc.running = true
+    // ── Gestión de wifis guardadas ───────────────────────────
+    function forgetWifi(name) {
+        wifiOpProc.command = ["nmcli", "connection", "delete", name]
+        wifiOpProc.running = true
+    }
+    function connectWifi(name) {
+        wifiOpProc.command = ["nmcli", "connection", "up", name]
+        wifiOpProc.running = true
+    }
+    function setWifiPriority(name, val) {
+        const q = root.shellQuote
+        wifiOpProc.command = ["sh", "-c",
+            "nmcli connection modify " + q(name) + " connection.autoconnect-priority " + q(String(val))]
+        wifiOpProc.running = true
+    }
+    function setWifiAutoconnect(name, on) {
+        const q = root.shellQuote
+        wifiOpProc.command = ["sh", "-c",
+            "nmcli connection modify " + q(name) + " connection.autoconnect " + (on ? "yes" : "no")]
+        wifiOpProc.running = true
     }
 
     // ── Procesos ─────────────────────────────────────────────
     Process {
-        id: listProc
-        command: ["sh", "-c",
-            "nmcli -t -f NAME,TYPE,DEVICE connection show --active"]
+        id: ifaceProc
+        command: ["sh", "-c", "nmcli -t -f DEVICE,TYPE,STATE,CONNECTION device status"]
         stdout: StdioCollector {
             onStreamFinished: {
                 const out = []
                 ;(this.text || "").split("\n").forEach(line => {
                     if (line.trim() === "") return
                     const parts = line.split(":")
-                    if (parts.length < 3) return
-                    const device = parts.pop()
-                    const type = parts.pop()
-                    const name = parts.join(":")
-                    if (type === "802-11-wireless" || type === "802-3-ethernet")
-                        out.push(({ name: name, type: type, device: device }))
+                    if (parts.length < 4) return
+                    const device = parts[0]
+                    const type = parts[1]
+                    if (type !== "wifi" && type !== "ethernet") return
+                    const state = parts[2]
+                    let conn = root.unesc(parts.slice(3).join(":")).trim()
+                    if (conn === "--") conn = ""
+                    out.push(({ device: device, type: type, state: state, connection: conn }))
                 })
-                root.connections = out
-                if (out.length > 0 && (root.selected === "" || !out.find(c => c.name === root.selected)))
-                    root.select(out[0].name)
+                root.interfaces = out
+                if (out.length > 0 && (root.selectedIface === "" || !out.find(i => i.device === root.selectedIface)))
+                    root.selectIface(out[0].device)
+                else if (out.length === 0) {
+                    root.selectedIface = ""; root.ifaceType = ""; root.ifaceConn = ""
+                }
+            }
+        }
+    }
+
+    Process {
+        id: wifiProc
+        command: ["sh", "-c",
+            "nmcli -t -f UUID,TYPE,AUTOCONNECT,AUTOCONNECT-PRIORITY,ACTIVE,NAME connection show"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const out = []
+                ;(this.text || "").split("\n").forEach(line => {
+                    if (line.trim() === "") return
+                    const parts = line.split(":")
+                    if (parts.length < 6) return
+                    if (parts[1] !== "802-11-wireless") return
+                    out.push(({
+                        uuid: parts[0],
+                        autoconnect: parts[2] === "yes",
+                        priority: parseInt(parts[3]) || 0,
+                        active: parts[4] === "yes",
+                        name: root.unesc(parts.slice(5).join(":"))
+                    }))
+                })
+                // Orden: activa primero, luego por prioridad desc, luego nombre.
+                out.sort((a, b) => (b.active - a.active) || (b.priority - a.priority) || a.name.localeCompare(b.name))
+                root.savedWifis = out
             }
         }
     }
@@ -181,13 +258,19 @@ Singleton {
         stdout: StdioCollector {}
         stderr: StdioCollector { id: applyErr }
         onExited: (code, status) => {
+            root.applying = false
             if (code === 0) root.readSelected()
             else root.error = (applyErr.text || "").trim()
+            root.applyDone(code === 0)
         }
     }
 
     Process {
-        id: forgetProc
-        onExited: (code, status) => root.refreshConnections()
+        id: wifiOpProc
+        stderr: StdioCollector { id: wifiOpErr }
+        onExited: (code, status) => {
+            if (code !== 0) root.error = (wifiOpErr.text || "").trim()
+            root.refreshAll()
+        }
     }
 }

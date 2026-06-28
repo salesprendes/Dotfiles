@@ -3,8 +3,8 @@ import QtQuick.Layouts
 import qs.Config
 import qs.Services
 
-// Selector de perfil de energía unificado en una "caja" (como audio / WiFi):
-// cabecera con estado y lista de perfiles con el activo RESALTADO estilo DMS.
+// Selector de perfil de energía unificado en una caja: cabecera con estado
+// y lista de perfiles con el activo resaltado por color y borde.
 // Click fija el perfil (escribe a power-profiles-daemon vía el servicio Power).
 ColumnLayout {
     id: root
@@ -54,7 +54,7 @@ ColumnLayout {
                 }
             }
 
-            // Filas de perfiles, activo resaltado estilo DMS.
+            // Filas de perfiles; el perfil activo queda resaltado.
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: Theme.space6

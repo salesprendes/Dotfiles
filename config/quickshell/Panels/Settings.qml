@@ -48,6 +48,10 @@ FloatingWindow {
         { label: I18n.tr("Personalization"), glyph: "󰏘", items: [
             { key: "theme",     glyph: "󰸌", label: I18n.tr("Theme") },
             { key: "font",      glyph: "󰛖", label: I18n.tr("Typography") },
+            // La pestaña Terminal solo aparece si hay kitty/alacritty/foot instalado.
+            ...(Terminal.available.length > 0
+                ? [{ key: "terminal", glyph: "󰆍", label: I18n.tr("Terminal") }]
+                : []),
             { key: "wallpaper", glyph: "󰋩", label: I18n.tr("Wallpaper") }
         ] },
         { label: I18n.tr("Bar and widgets"), glyph: "󰍜", items: [
@@ -211,6 +215,7 @@ FloatingWindow {
                     : cfg.cat === "wallpaper" ? wpCol
                     : cfg.cat === "displays"  ? displaysCol
                     : cfg.cat === "network"   ? netCol
+                    : cfg.cat === "terminal"  ? termCol
                     :                            themeCol
 
                 // ════ TEMA ════
@@ -395,25 +400,12 @@ FloatingWindow {
                 // ════ TIPOGRAFÍA ════
                 ColumnLayout {
                     id: fontCol
-                    property bool normalMenuOpen: false
-                    property bool monoMenuOpen: false
                     anchors { left: parent.left; right: parent.right; top: parent.top
                               leftMargin: Theme.space18; rightMargin: Theme.space18; topMargin: Theme.space18 }
                     spacing: Theme.space12
                     opacity: cfg.cat === "font" ? 1 : 0
                     visible: opacity > 0.01
                     Behavior on opacity { NumberAnimation { duration: Theme.animNormal } }
-
-                    // Pliega el desplegable al salir de la página.
-                    Connections {
-                        target: cfg
-                        function onCatChanged() {
-                            if (cfg.cat !== "font") {
-                                fontCol.normalMenuOpen = false
-                                fontCol.monoMenuOpen = false
-                            }
-                        }
-                    }
 
                     Rectangle {
                         Layout.fillWidth: true
@@ -601,34 +593,22 @@ FloatingWindow {
                                 }
                             }
 
-                            FontPicker {
+                            DropdownRow {
                                 label: I18n.tr("Normal Font")
-                                fonts: Fonts.list
+                                options: Fonts.list.map(f => ({ text: f, value: f, font: f }))
                                 current: Settings.fontFamily
-                                open: fontCol.normalMenuOpen
-                                onToggle: {
-                                    fontCol.normalMenuOpen = !fontCol.normalMenuOpen
-                                    if (fontCol.normalMenuOpen) fontCol.monoMenuOpen = false
-                                }
-                                onPicked: (font) => {
-                                    Settings.fontFamily = font
-                                    fontCol.normalMenuOpen = false
-                                }
+                                detailText: I18n.tr("%1 fonts").arg(Fonts.list.length)
+                                maxVisibleItems: 6
+                                onPicked: (font) => Settings.fontFamily = font
                             }
 
-                            FontPicker {
+                            DropdownRow {
                                 label: I18n.tr("Monospace Font")
-                                fonts: Fonts.monoList
+                                options: Fonts.monoList.map(f => ({ text: f, value: f, font: f }))
                                 current: Settings.monoFontFamily
-                                open: fontCol.monoMenuOpen
-                                onToggle: {
-                                    fontCol.monoMenuOpen = !fontCol.monoMenuOpen
-                                    if (fontCol.monoMenuOpen) fontCol.normalMenuOpen = false
-                                }
-                                onPicked: (font) => {
-                                    Settings.monoFontFamily = font
-                                    fontCol.monoMenuOpen = false
-                                }
+                                detailText: I18n.tr("%1 fonts").arg(Fonts.monoList.length)
+                                maxVisibleItems: 6
+                                onPicked: (font) => Settings.monoFontFamily = font
                             }
 
                             SliderRow {
@@ -840,26 +820,39 @@ FloatingWindow {
                     visible: opacity > 0.01
                     Behavior on opacity { NumberAnimation { duration: Theme.animNormal } }
 
-                    // WiFi + selección de conexión + comportamiento.
+                    // Interfaz/adaptador (estilo Windows): WiFi + selección
+                    // de interfaz cuyos parámetros IP se editan abajo.
                     SettingsCard {
-                        title: I18n.tr("Connection"); glyph: "󰤨"
+                        title: I18n.tr("Interface"); glyph: "󰛳"
                         SwitchRow {
                             label: I18n.tr("WiFi")
                             checked: Net.wifiEnabled
                             onToggled: Net.toggleWifi()
                         }
                         DropdownRow {
-                            label: I18n.tr("Connection")
-                            options: NetConfig.connections.map(c => ({ text: c.name, value: c.name }))
-                            current: NetConfig.selected
-                            onPicked: (v) => NetConfig.select(v)
+                            label: I18n.tr("Interface")
+                            options: NetConfig.interfaces.map(i => ({
+                                text: i.device + " · " + (i.type === "wifi" ? I18n.tr("WiFi") : I18n.tr("Ethernet"))
+                                      + (i.connection !== "" ? " — " + i.connection : ""),
+                                value: i.device }))
+                            current: NetConfig.selectedIface
+                            onPicked: (v) => NetConfig.selectIface(v)
+                        }
+                        Text {
+                            Layout.fillWidth: true
+                            visible: NetConfig.selectedIface !== "" && !NetConfig.hasConn
+                            text: I18n.tr("Interface not connected. Connect it to edit its settings.")
+                            color: Theme.fgMuted; wrapMode: Text.WordWrap
+                            font.family: Theme.fontFamily; font.pixelSize: Theme.fontSize - 2
                         }
                         SwitchRow {
+                            visible: NetConfig.hasConn
                             label: I18n.tr("Connect automatically")
                             checked: NetConfig.autoconnect
                             onToggled: NetConfig.autoconnect = !NetConfig.autoconnect
                         }
                         SliderRow {
+                            visible: NetConfig.hasConn
                             label: I18n.tr("Priority"); glyph: "󰓅"
                             from: -100; to: 100; value: NetConfig.priority
                             valueText: NetConfig.priority
@@ -869,6 +862,7 @@ FloatingWindow {
 
                     // IPv4 + DNS.
                     SettingsCard {
+                        visible: NetConfig.hasConn
                         title: "IPv4"; glyph: "󰩟"
                         SegRow {
                             label: I18n.tr("Method")
@@ -908,6 +902,7 @@ FloatingWindow {
 
                     // IPv6.
                     SettingsCard {
+                        visible: NetConfig.hasConn
                         title: "IPv6"; glyph: "󰩟"
                         SegRow {
                             label: I18n.tr("Method")
@@ -921,6 +916,7 @@ FloatingWindow {
 
                     // Privacidad / avanzado.
                     SettingsCard {
+                        visible: NetConfig.hasConn
                         title: I18n.tr("Privacy and advanced"); glyph: "󰒃"
                         DropdownRow {
                             label: I18n.tr("MAC address")
@@ -948,12 +944,11 @@ FloatingWindow {
                         wrapMode: Text.WordWrap
                     }
 
-                    // Acciones.
+                    // Aplicar cambios de la interfaz seleccionada.
                     RowLayout {
                         Layout.fillWidth: true
-                        visible: NetConfig.connections.length > 0
+                        visible: NetConfig.hasConn
                         spacing: Theme.space8
-                        TextButton { text: I18n.tr("Forget network"); onClicked: NetConfig.forget() }
                         Item { Layout.fillWidth: true }
                         TextButton {
                             text: I18n.tr("Apply")
@@ -965,11 +960,196 @@ FloatingWindow {
 
                     Text {
                         Layout.fillWidth: true
-                        visible: NetConfig.connections.length === 0
-                        text: I18n.tr("No active connection found.")
+                        visible: NetConfig.interfaces.length === 0
+                        text: I18n.tr("No network interfaces found.")
                         color: Theme.fgMuted
                         horizontalAlignment: Text.AlignHCenter
                         font.family: Theme.fontFamily; font.pixelSize: Theme.fontSize - 2
+                    }
+
+                    // ── Gestión de wifis guardadas (conexión) ──────────
+                    SettingsCard {
+                        title: I18n.tr("Saved networks"); glyph: "󰤨"
+
+                        Repeater {
+                            model: NetConfig.savedWifis
+                            delegate: RowLayout {
+                                required property var modelData
+                                Layout.fillWidth: true
+                                spacing: Theme.space8
+
+                                ColumnLayout {
+                                    Layout.fillWidth: true; spacing: 0
+                                    RowLayout {
+                                        Layout.fillWidth: true; spacing: Theme.space6
+                                        Text {
+                                            Layout.fillWidth: true
+                                            text: modelData.name; color: Theme.fg; elide: Text.ElideRight
+                                            font.family: Theme.fontFamily; font.pixelSize: Theme.fontSize
+                                        }
+                                        Rectangle {
+                                            visible: modelData.active
+                                            radius: Theme.pillRadius
+                                            color: Qt.rgba(Theme.green.r, Theme.green.g, Theme.green.b, 0.18)
+                                            implicitWidth: badge.implicitWidth + Theme.space10
+                                            implicitHeight: badge.implicitHeight + Theme.space4
+                                            Text {
+                                                id: badge; anchors.centerIn: parent
+                                                text: I18n.tr("Connected"); color: Theme.green
+                                                font.family: Theme.fontFamily; font.pixelSize: Theme.fontSize - 4
+                                            }
+                                        }
+                                    }
+                                    Text {
+                                        text: I18n.tr("Priority") + ": " + modelData.priority
+                                              + (modelData.autoconnect ? "" : "  ·  " + I18n.tr("Auto-connect off"))
+                                        color: Theme.fgMuted
+                                        font.family: Theme.fontFamily; font.pixelSize: Theme.fontSize - 4
+                                    }
+                                }
+
+                                // Prioridad −/+
+                                IconButton {
+                                    icon: "󰍴"; diameter: Theme.controlS
+                                    onClicked: NetConfig.setWifiPriority(modelData.name, modelData.priority - 1)
+                                }
+                                Text {
+                                    text: modelData.priority; color: Theme.fgDim
+                                    horizontalAlignment: Text.AlignHCenter
+                                    Layout.minimumWidth: Theme.space18 + Theme.space6
+                                    font.family: Theme.fontFamily; font.pixelSize: Theme.fontSize - 1
+                                }
+                                IconButton {
+                                    icon: "󰐕"; diameter: Theme.controlS
+                                    onClicked: NetConfig.setWifiPriority(modelData.name, modelData.priority + 1)
+                                }
+                                // Conectar (si no está activa)
+                                IconButton {
+                                    icon: "󰐊"; diameter: Theme.controlS
+                                    visible: !modelData.active
+                                    onClicked: NetConfig.connectWifi(modelData.name)
+                                }
+                                // Olvidar (borrar)
+                                IconButton {
+                                    icon: "󰩹"; diameter: Theme.controlS
+                                    hoverColor: Theme.red
+                                    onClicked: NetConfig.forgetWifi(modelData.name)
+                                }
+                            }
+                        }
+
+                        Text {
+                            Layout.fillWidth: true
+                            visible: NetConfig.savedWifis.length === 0
+                            text: I18n.tr("No saved networks.")
+                            color: Theme.fgMuted
+                            horizontalAlignment: Text.AlignHCenter
+                            font.family: Theme.fontFamily; font.pixelSize: Theme.fontSize - 2
+                        }
+                    }
+                }
+
+                // ════ TERMINAL ════
+                ColumnLayout {
+                    id: termCol
+                    anchors { left: parent.left; right: parent.right; top: parent.top
+                              leftMargin: Theme.space18; rightMargin: Theme.space18; topMargin: Theme.space18 }
+                    spacing: Theme.space12
+                    opacity: cfg.cat === "terminal" ? 1 : 0
+                    visible: opacity > 0.01
+                    Behavior on opacity { NumberAnimation { duration: Theme.animNormal } }
+
+                    // Selección de terminal (detectados en el sistema).
+                    SettingsCard {
+                        title: I18n.tr("Terminal"); glyph: "󰆍"
+                        DropdownRow {
+                            label: I18n.tr("Terminal")
+                            options: Terminal.available
+                            current: Settings.terminalApp
+                            onPicked: (v) => Settings.terminalApp = v
+                        }
+                        Text {
+                            Layout.fillWidth: true
+                            visible: Terminal.available.length === 0
+                            text: I18n.tr("No terminals detected.")
+                            color: Theme.fgMuted
+                            font.family: Theme.fontFamily; font.pixelSize: Theme.fontSize - 3
+                            wrapMode: Text.WordWrap
+                        }
+                        Text {
+                            Layout.fillWidth: true
+                            visible: Terminal.available.length > 0 && !Terminal.canConfigure(Settings.terminalApp)
+                            text: I18n.tr("Auto-config not available for this terminal yet.")
+                            color: Theme.fgMuted
+                            font.family: Theme.fontFamily; font.pixelSize: Theme.fontSize - 3
+                            wrapMode: Text.WordWrap
+                        }
+                    }
+
+                    // Apariencia (los COLORES siguen el tema de Quickshell; aquí
+                    // solo el resto de parámetros).
+                    SettingsCard {
+                        title: I18n.tr("Appearance"); glyph: "󰉼"
+                        visible: Terminal.canConfigure(Settings.terminalApp)
+
+                        DropdownRow {
+                            label: I18n.tr("Font")
+                            options: Fonts.monoList.map(f => ({ text: f, value: f, font: f }))
+                            current: Settings.terminalFont !== "" ? Settings.terminalFont : Settings.fontFamily
+                            detailText: I18n.tr("%1 fonts").arg(Fonts.monoList.length)
+                            maxVisibleItems: 6
+                            onPicked: (font) => Settings.terminalFont = font
+                        }
+                        SliderRow {
+                            label: I18n.tr("Font size"); glyph: "󰛖"
+                            from: 8; to: 18; value: Settings.terminalFontSize
+                            valueText: Settings.terminalFontSize.toFixed(1)
+                            onMoved: (v) => Settings.terminalFontSize = Math.round(v * 2) / 2
+                        }
+                        SliderRow {
+                            label: I18n.tr("Opacity")
+                            from: 0.5; to: 1.0; value: Settings.terminalOpacity
+                            valueText: Math.round(Settings.terminalOpacity * 100) + "%"
+                            onMoved: (v) => Settings.terminalOpacity = Math.round(v * 20) / 20
+                        }
+                        SliderRow {
+                            label: I18n.tr("Padding")
+                            from: 0; to: 30; value: Settings.terminalPadding
+                            valueText: Settings.terminalPadding + " px"
+                            onMoved: (v) => Settings.terminalPadding = Math.round(v)
+                        }
+                        SliderRow {
+                            label: I18n.tr("Line spacing")
+                            from: 0; to: 6; value: Settings.terminalLineHeight
+                            valueText: Settings.terminalLineHeight + " px"
+                            onMoved: (v) => Settings.terminalLineHeight = Math.round(v)
+                        }
+                        SegRow {
+                            label: I18n.tr("Cursor")
+                            options: [ { text: I18n.tr("Beam"), value: "beam" },
+                                       { text: I18n.tr("Block"), value: "block" },
+                                       { text: I18n.tr("Underline"), value: "underline" } ]
+                            current: Settings.terminalCursorShape
+                            onPicked: (v) => Settings.terminalCursorShape = v
+                        }
+                        SwitchRow {
+                            label: I18n.tr("Cursor blink")
+                            checked: Settings.terminalCursorBlink
+                            onToggled: Settings.terminalCursorBlink = !Settings.terminalCursorBlink
+                        }
+                        SwitchRow {
+                            label: I18n.tr("Ligatures")
+                            checked: Settings.terminalLigatures
+                            onToggled: Settings.terminalLigatures = !Settings.terminalLigatures
+                        }
+                        SegRow {
+                            visible: Settings.terminalApp === "kitty"
+                            label: I18n.tr("Tabs")
+                            options: [ { text: "Powerline", value: "powerline" }, { text: "Separator", value: "separator" },
+                                       { text: "Fade", value: "fade" }, { text: I18n.tr("Hidden"), value: "hidden" } ]
+                            current: Settings.terminalTabStyle
+                            onPicked: (v) => Settings.terminalTabStyle = v
+                        }
                     }
                 }
             }
@@ -1113,153 +1293,6 @@ FloatingWindow {
             }
         }
     }
-
-
-    component FontPicker: ColumnLayout {
-        id: fp
-        property string label: ""
-        property var fonts: []
-        property string current: ""
-        property bool open: false
-        signal toggle()
-        signal picked(string fontName)
-
-        Layout.fillWidth: true
-        spacing: Theme.space6
-
-        Text {
-            text: fp.label
-            color: Theme.fg
-            font.family: Theme.fontFamily
-            font.pixelSize: Theme.fontSize
-        }
-
-        Rectangle {
-            Layout.fillWidth: true
-            implicitHeight: Theme.rowM
-            radius: Theme.pillRadius
-            color: cfg.settingsControl
-            border.width: Theme.hairline
-            border.color: fp.open ? Theme.accent
-                         : cfg.settingsBorder
-            Behavior on border.color { ColorAnimation { duration: Theme.animFast } }
-
-            RowLayout {
-                anchors.fill: parent
-                anchors.leftMargin: Theme.space12
-                anchors.rightMargin: Theme.space12
-                spacing: Theme.space8
-
-                Text {
-                    Layout.fillWidth: true
-                    text: fp.current
-                    color: Theme.fg
-                    font.family: fp.current
-                    font.pixelSize: Theme.fontSize
-                    elide: Text.ElideRight
-                }
-                Text {
-                    text: I18n.tr("%1 fonts").arg(fp.fonts.length)
-                    color: Theme.fgMuted
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSize - 4
-                }
-                Text {
-                    text: "󰅀"
-                    rotation: fp.open ? 180 : 0
-                    Behavior on rotation { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
-                    color: Theme.fgMuted
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.iconSize - 1
-                }
-            }
-
-            MouseArea {
-                anchors.fill: parent
-                cursorShape: Qt.PointingHandCursor
-                onClicked: fp.toggle()
-            }
-        }
-
-        Item {
-            Layout.fillWidth: true
-            clip: true
-            implicitHeight: fp.open ? Math.min(Theme.dp(220), fontList.contentHeight + Theme.space4 * 2) : 0
-            Behavior on implicitHeight { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
-            opacity: fp.open ? 1 : 0
-            Behavior on opacity { NumberAnimation { duration: Theme.animFast } }
-
-            Rectangle {
-                anchors.fill: parent
-                radius: Theme.pillRadius
-                color: cfg.settingsCard
-                border.width: Theme.hairline
-                border.color: cfg.settingsBorder
-
-                ListView {
-                    id: fontList
-                    anchors.fill: parent
-                    anchors.margins: Theme.space4
-                    clip: true
-                    model: fp.fonts
-                    boundsBehavior: Flickable.StopAtBounds
-
-                    delegate: Rectangle {
-                        id: fontRow
-                        required property var modelData
-                        readonly property bool sel: fp.current === modelData
-                        width: ListView.view.width
-                        implicitHeight: Theme.rowM
-                        radius: Theme.pillRadius - Theme.space2
-                        color: sel ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.18)
-                                   : "transparent"
-                        Behavior on color { ColorAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
-
-                        Rectangle {
-                            anchors.fill: parent
-                            radius: parent.radius
-                            color: cfg.settingsHover
-                            opacity: fontMa.containsMouse && !fontRow.sel ? 1 : 0
-                            Behavior on opacity { NumberAnimation { duration: 90; easing.type: Easing.OutQuad } }
-                        }
-
-                        RowLayout {
-                            anchors.fill: parent
-                            anchors.leftMargin: Theme.space10
-                            anchors.rightMargin: Theme.space10
-                            spacing: Theme.space8
-
-                            Text {
-                                Layout.fillWidth: true
-                                text: fontRow.modelData
-                                color: fontRow.sel ? Theme.fg : Theme.fgDim
-                                font.family: fontRow.modelData
-                                font.pixelSize: Theme.fontSize
-                                font.bold: fontRow.sel
-                                elide: Text.ElideRight
-                            }
-                            Text {
-                                visible: fontRow.sel
-                                text: "󰄬"
-                                color: Theme.accent
-                                font.family: Theme.fontFamily
-                                font.pixelSize: Theme.iconSize - 1
-                            }
-                        }
-
-                        MouseArea {
-                            id: fontMa
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: fp.picked(fontRow.modelData)
-                        }
-                    }
-                }
-            }
-        }
-    }
-
 
     component SwitchRow: RowLayout {
         id: sr

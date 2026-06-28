@@ -1,6 +1,6 @@
 //@ pragma UseQApplication
 //  ╔══════════════════════════════════════════════════════════╗
-//  ║   Quickshell · Tema "Storm"  (Tokyo Night × Omarchy)       ║
+//  ║   Quickshell · Tema "Storm"                                ║
 //  ║   Punto de entrada — una barra por cada monitor.           ║
 //  ╚══════════════════════════════════════════════════════════╝
 //  UseQApplication: necesario para los menús nativos del tray
@@ -50,7 +50,7 @@ ShellRoot {
             }
         }
     }
-    // Vigilante: si dbus-monitor muriera, lo relanza.
+    // Vigilante: si el monitor de logind se detiene, lo relanza.
     Timer {
         interval: 3000
         running: true
@@ -58,11 +58,18 @@ ShellRoot {
         onTriggered: if (!lockMonitor.running) lockMonitor.running = true
     }
 
-    // Fondo de pantalla (uno por monitor, capa Background). Lo dibuja
-    // Quickshell mismo con cross-fade; no usa swww ni hyprpaper.
+    // Fondo de pantalla: una ventana por monitor en la capa Background,
+    // con la transición de imagen gestionada desde QML.
     Variants {
         model: Quickshell.screens
         delegate: Backdrop {}
+    }
+
+    // Splash breve al entrar en la sesión; oculta el salto visual entre TTY
+    // y escritorio mientras terminan de aparecer la barra y el fondo.
+    Variants {
+        model: Quickshell.screens
+        delegate: StartupSplash {}
     }
 
     // Una instancia de Bar por pantalla conectada.

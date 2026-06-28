@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+set -u
+
+log_dir="${XDG_STATE_HOME:-$HOME/.local/state}/hyprland"
+log_file="$log_dir/start-hyprland.log"
+
+mkdir -p "$log_dir"
+
+if [ -t 1 ]; then
+    clear
+    printf '\033[?25l'
+fi
+
+/usr/bin/start-hyprland >"$log_file" 2>&1
+status=$?
+
+if [ -t 1 ]; then
+    printf '\033[?25h'
+    clear
+fi
+
+if [ "$status" -ne 0 ]; then
+    printf 'Hyprland terminó con código %s.\n' "$status"
+    printf 'Log: %s\n\n' "$log_file"
+    tail -n 80 "$log_file"
+fi
+
+exit "$status"

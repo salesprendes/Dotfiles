@@ -5,7 +5,7 @@ import Quickshell.Wayland
 import qs.Bar
 import qs.Config
 
-// Barra superior flotante, redondeada y semitransparente (estilo Omarchy).
+// Barra superior flotante con margen exterior, bordes redondeados y fondo translúcido.
 PanelWindow {
     id: bar
 

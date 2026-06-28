@@ -5,9 +5,9 @@ import qs.Components
 import qs.Config
 import qs.Services
 
-// Detalle WiFi unificado en una "caja" (como el de audio): cabecera con
-// estado + interruptor, y lista de redes con la conectada RESALTADA estilo
-// DMS. Escanea solo mientras está visible. Click conecta/desconecta.
+// Detalle WiFi unificado en una caja: cabecera con estado + interruptor,
+// y lista de redes con la conectada resaltada por color y borde.
+// Escanea solo mientras está visible. Click conecta/desconecta.
 ColumnLayout {
     id: root
     width: parent ? parent.width : implicitWidth
@@ -109,7 +109,7 @@ ColumnLayout {
                 font.pixelSize: Theme.fontSize - 2
             }
 
-            // Lista de redes (capada + scroll), cada una resaltada estilo DMS.
+            // Lista de redes con altura acotada y scroll; la activa queda resaltada.
             ListView {
                 Layout.fillWidth: true
                 Layout.preferredHeight: Math.min(Theme.dp(248), contentHeight)

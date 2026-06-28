@@ -8,9 +8,8 @@ import qs.Config
 // ─────────────────────────────────────────────────────────────
 //  Servicio de fondos de pantalla.
 //  Escanea una o varias carpetas en busca de imágenes y expone la
-//  ruta del fondo actual. El fondo lo RENDERIZA Quickshell mismo
-//  (ver Background/Backdrop.qml) con un cross-fade — sin daemons
-//  externos tipo swww/hyprpaper. 'apply()' solo cambia 'current';
+//  ruta del fondo actual. Background/Backdrop.qml renderiza la imagen y sus
+//  transiciones; 'apply()' solo cambia 'current';
 //  la ventana de fondo se encarga de la transición.
 // ─────────────────────────────────────────────────────────────
 Singleton {

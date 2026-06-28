@@ -433,16 +433,30 @@ Popout {
                                     elide: Text.ElideRight
                                 }
 
+                                // Botón unificado: muestra el total del grupo
+                                // y, al pulsarlo, lo despliega/colapsa (chevron
+                                // visible solo si hay más de una notificación).
                                 Rectangle {
-                                    implicitWidth: countRow.implicitWidth + Theme.space12
+                                    id: countExpandButton
+                                    readonly property bool canExpand: groupDelegate.items.length > 1
+                                    implicitWidth: ceRow.implicitWidth + Theme.space12
                                     implicitHeight: Theme.controlS
                                     radius: height / 2
-                                    color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.18)
+                                    scale: ceMa.pressed && canExpand ? 0.93 : ceMa.containsMouse && canExpand ? 1.05 : 1
+                                    color: groupDelegate.expanded
+                                        ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, ceMa.containsMouse ? 0.30 : 0.24)
+                                        : ceMa.containsMouse && canExpand ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.24)
+                                                                          : Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.16)
                                     border.width: Theme.hairline
-                                    border.color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.45)
+                                    border.color: groupDelegate.expanded
+                                        ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.55)
+                                        : Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.45)
+                                    Behavior on color { ColorAnimation { duration: 160; easing.type: Easing.OutCubic } }
+                                    Behavior on border.color { ColorAnimation { duration: 160; easing.type: Easing.OutCubic } }
+                                    Behavior on scale { NumberAnimation { duration: 130; easing.type: Easing.OutBack } }
 
                                     RowLayout {
-                                        id: countRow
+                                        id: ceRow
                                         anchors.centerIn: parent
                                         spacing: Theme.space4
                                         Text {
@@ -458,118 +472,58 @@ Popout {
                                             font.pixelSize: Theme.fontSize - 2
                                             font.bold: true
                                         }
-                                    }
-                                }
-
-                                Rectangle {
-                                    id: expandButton
-                                    implicitWidth: Theme.controlS
-                                    implicitHeight: Theme.controlS
-                                    radius: height / 2
-                                    scale: expandMa.pressed ? 0.92 : expandMa.containsMouse ? 1.06 : 1
-                                    color: groupDelegate.expanded
-                                        ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, expandMa.containsMouse ? 0.28 : 0.20)
-                                        : expandMa.containsMouse ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.16)
-                                                                 : Qt.rgba(Theme.surface.r, Theme.surface.g, Theme.surface.b, 0.72)
-                                    border.width: Theme.hairline
-                                    border.color: groupDelegate.expanded
-                                        ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.52)
-                                        : Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.34)
-                                    Behavior on color { ColorAnimation { duration: 160; easing.type: Easing.OutCubic } }
-                                    Behavior on border.color { ColorAnimation { duration: 160; easing.type: Easing.OutCubic } }
-                                    Behavior on scale { NumberAnimation { duration: 130; easing.type: Easing.OutBack } }
-
-                                    Text {
-                                        anchors.centerIn: parent
-                                        text: "󰅂"
-                                        rotation: groupDelegate.expanded ? 90 : 0
-                                        color: groupDelegate.expanded || expandMa.containsMouse ? Theme.accent : Theme.fgMuted
-                                        font.family: Theme.fontFamily
-                                        font.pixelSize: Theme.iconSize - 2
-                                        Behavior on rotation { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
-                                        Behavior on color { ColorAnimation { duration: 160; easing.type: Easing.OutCubic } }
-                                    }
-
-                                    MouseArea {
-                                        id: expandMa
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        cursorShape: Qt.PointingHandCursor
-                                        onClicked: if (groupDelegate.items.length > 1) groupDelegate.expanded = !groupDelegate.expanded
-                                    }
-                                }
-
-                                Rectangle {
-                                    id: closeButton
-                                    implicitWidth: Theme.controlS
-                                    implicitHeight: Theme.controlS
-                                    radius: height / 2
-                                    scale: closeMa.pressed ? 0.90 : closeMa.containsMouse ? 1.06 : 1
-                                    color: closeMa.containsMouse ? Qt.rgba(Theme.red.r, Theme.red.g, Theme.red.b, 0.18) : "transparent"
-                                    border.width: closeMa.containsMouse ? Theme.hairline : 0
-                                    border.color: Qt.rgba(Theme.red.r, Theme.red.g, Theme.red.b, 0.42)
-                                    Behavior on color { ColorAnimation { duration: 150; easing.type: Easing.OutCubic } }
-                                    Behavior on scale { NumberAnimation { duration: 120; easing.type: Easing.OutBack } }
-                                    Behavior on border.width { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
-
-                                    Text {
-                                        anchors.centerIn: parent
-                                        text: "󰅖"
-                                        color: closeMa.containsMouse ? Theme.red : Theme.fgMuted
-                                        font.family: Theme.fontFamily
-                                        font.pixelSize: Theme.iconSize - 1
-                                        rotation: closeMa.containsMouse ? 90 : 0
-                                        Behavior on color { ColorAnimation { duration: 150; easing.type: Easing.OutCubic } }
-                                        Behavior on rotation { NumberAnimation { duration: 170; easing.type: Easing.OutCubic } }
-                                    }
-
-                                    MouseArea {
-                                        id: closeMa
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        cursorShape: Qt.PointingHandCursor
-                                        onClicked: {
-                                            if (groupDelegate.closing)
-                                                return
-                                            groupDelegate.closing = true
-                                            closeGroupTimer.restart()
+                                        Text {
+                                            visible: countExpandButton.canExpand
+                                            text: "󰅂"
+                                            rotation: groupDelegate.expanded ? 90 : 0
+                                            color: groupDelegate.expanded || ceMa.containsMouse ? Theme.accent : Theme.fgMuted
+                                            font.family: Theme.fontFamily
+                                            font.pixelSize: Theme.iconSize - 4
+                                            Behavior on rotation { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
+                                            Behavior on color { ColorAnimation { duration: 160; easing.type: Easing.OutCubic } }
                                         }
                                     }
-                                }
-
-                                Rectangle {
-                                    id: muteButton
-                                    implicitWidth: Theme.controlS
-                                    implicitHeight: Theme.controlS
-                                    radius: height / 2
-                                    scale: muteMa.pressed ? 0.90 : muteMa.containsMouse ? 1.06 : 1
-                                    color: muteMa.containsMouse ? Qt.rgba(Theme.yellow.r, Theme.yellow.g, Theme.yellow.b, 0.18) : "transparent"
-                                    border.width: muteMa.containsMouse ? Theme.hairline : 0
-                                    border.color: Qt.rgba(Theme.yellow.r, Theme.yellow.g, Theme.yellow.b, 0.42)
-                                    Behavior on color { ColorAnimation { duration: 150; easing.type: Easing.OutCubic } }
-                                    Behavior on scale { NumberAnimation { duration: 120; easing.type: Easing.OutBack } }
-                                    Behavior on border.width { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
-
-                                    Text {
-                                        anchors.centerIn: parent
-                                        text: "󰂛"
-                                        color: muteMa.containsMouse ? Theme.yellow : Theme.fgMuted
-                                        font.family: Theme.fontFamily
-                                        font.pixelSize: Theme.iconSize - 1
-                                        Behavior on color { ColorAnimation { duration: 150; easing.type: Easing.OutCubic } }
-                                    }
 
                                     MouseArea {
-                                        id: muteMa
+                                        id: ceMa
                                         anchors.fill: parent
                                         hoverEnabled: true
-                                        cursorShape: Qt.PointingHandCursor
-                                        onClicked: {
-                                            if (groupDelegate.closing)
-                                                return
-                                            groupDelegate.closing = true
-                                            muteGroupTimer.restart()
-                                        }
+                                        cursorShape: countExpandButton.canExpand ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                        onClicked: if (countExpandButton.canExpand) groupDelegate.expanded = !groupDelegate.expanded
+                                    }
+                                }
+
+                                // Cerrar grupo (descarta todas sus notificaciones).
+                                IconButton {
+                                    icon: "󰅖"
+                                    diameter: Theme.controlS
+                                    iconPixelSize: Theme.iconSize - 1
+                                    baseColor: "transparent"
+                                    iconColor: Theme.fgMuted
+                                    hoverIconColor: Theme.red
+                                    hoverColor: Qt.rgba(Theme.red.r, Theme.red.g, Theme.red.b, 0.18)
+                                    onClicked: {
+                                        if (groupDelegate.closing)
+                                            return
+                                        groupDelegate.closing = true
+                                        closeGroupTimer.restart()
+                                    }
+                                }
+
+                                // Silenciar la app del grupo.
+                                IconButton {
+                                    icon: "󰂛"
+                                    diameter: Theme.controlS
+                                    iconPixelSize: Theme.iconSize - 1
+                                    baseColor: "transparent"
+                                    iconColor: Theme.fgMuted
+                                    hoverIconColor: Theme.yellow
+                                    hoverColor: Qt.rgba(Theme.yellow.r, Theme.yellow.g, Theme.yellow.b, 0.18)
+                                    onClicked: {
+                                        if (groupDelegate.closing)
+                                            return
+                                        groupDelegate.closing = true
+                                        muteGroupTimer.restart()
                                     }
                                 }
                             }
