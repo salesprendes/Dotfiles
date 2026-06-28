@@ -9,6 +9,8 @@ BASE_PACKAGES=(
   cliphist
   wl-clipboard
   hyprlock
+  polkit
+  hyprpolkitagent
   curl
   procps-ng
   nano
@@ -39,15 +41,13 @@ AMD_PACKAGES=(
   lib32-mesa
   lib32-vulkan-radeon
   lib32-libva-mesa-driver
-  mesa-vdpau
-  lib32-mesa-vdpau
-  xf86-video-amdgpu
 )
 
 YAY_BUILD_PACKAGES=(base-devel git)
 BRIGHTNESSCTL_PACKAGES=(brightnessctl)
 DDC_PACKAGES=(ddcutil)
 
+DOTFILES_REPO="${DOTFILES_REPO:-https://github.com/salesprendes/Dotfiles.git}"
 PACMAN="${PACMAN:-pacman}"
 SUDO="${SUDO:-sudo}"
 INSTALL_USER="${SUDO_USER:-${USER:-}}"
@@ -58,6 +58,11 @@ fi
 
 if [[ ${EUID} -eq 0 ]]; then
   SUDO=""
+fi
+
+INSTALL_HOME="$(getent passwd "${INSTALL_USER}" | cut -d: -f6)"
+if [[ -z "${INSTALL_HOME}" ]]; then
+  INSTALL_HOME="${HOME}"
 fi
 
 COLOR_RESET=$'\033[0m'
@@ -159,7 +164,9 @@ require_arch() {
 
 require_sudo() {
   if [[ -n "${SUDO}" ]]; then
-    with_spinner "Preparando privilegios de administrador" "${SUDO}" -v
+    "${SUDO}" -k
+    "${SUDO}" -p "  Se requiere sudo. Contrasena: " true
+    ok "Privilegios de administrador preparados"
   fi
 }
 
@@ -295,6 +302,65 @@ makepkg -f --noconfirm'
     ${SUDO} "${PACMAN}" -U --noconfirm -- "${pkg_file}"
 }
 
+script_dir() {
+  local source="${BASH_SOURCE[0]:-}"
+  if [[ -n "${source}" && -f "${source}" ]]; then
+    cd -- "$(dirname -- "${source}")" && pwd -P
+  else
+    return 1
+  fi
+}
+
+run_as_install_user() {
+  if [[ ${EUID} -eq 0 && "${INSTALL_USER}" != "root" ]]; then
+    runuser -u "${INSTALL_USER}" -- "$@"
+  else
+    "$@"
+  fi
+}
+
+copy_tree_contents() {
+  local src="$1"
+  local dst="$2"
+
+  [[ -d "${src}" ]] || return 0
+  mkdir -p "${dst}"
+  cp -a "${src}/." "${dst}/"
+  if [[ ${EUID} -eq 0 ]]; then
+    chown -R "${INSTALL_USER}:${INSTALL_USER}" "${dst}"
+  fi
+}
+
+install_dotfiles() {
+  local source_dir=""
+  local dir=""
+
+  install_group "herramientas para descargar dotfiles" git
+
+  if dir="$(script_dir 2>/dev/null)"; then
+    if [[ -d "${dir}/config" || -d "${dir}/local" ]]; then
+      source_dir="${dir}"
+    fi
+  fi
+
+  if [[ -z "${source_dir}" ]]; then
+    source_dir="/tmp/storm-dotfiles-${INSTALL_USER}-$$"
+    rm -rf "${source_dir}"
+    with_spinner "Descargando dotfiles" \
+      run_as_install_user git clone --depth 1 "${DOTFILES_REPO}" "${source_dir}"
+  fi
+
+  with_spinner "Copiando config a ${INSTALL_HOME}/.config" \
+    copy_tree_contents "${source_dir}/config" "${INSTALL_HOME}/.config"
+
+  with_spinner "Copiando local a ${INSTALL_HOME}/.local" \
+    copy_tree_contents "${source_dir}/local" "${INSTALL_HOME}/.local"
+
+  if [[ -d "${INSTALL_HOME}/.local/bin" ]]; then
+    chmod -R u+rx "${INSTALL_HOME}/.local/bin"
+  fi
+}
+
 enable_services() {
   local services=(
     NetworkManager.service
@@ -335,6 +401,7 @@ main() {
   install_amd_stack
   enable_services
   post_install
+  install_dotfiles
 
   echo
   ok "Instalacion finalizada"
