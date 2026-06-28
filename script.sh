@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+SCRIPT_NAME=salesprendes
+
 BASE_PACKAGES=(
   quickshell
   qt6-declarative
@@ -47,22 +49,15 @@ YAY_BUILD_PACKAGES=(base-devel git)
 BRIGHTNESSCTL_PACKAGES=(brightnessctl)
 DDC_PACKAGES=(ddcutil)
 
+# --- Valores por defecto (entorno) -----------------------------------------
 DOTFILES_REPO="${DOTFILES_REPO:-https://github.com/salesprendes/Dotfiles.git}"
 PACMAN="${PACMAN:-pacman}"
 SUDO="${SUDO:-sudo}"
 INSTALL_USER="${SUDO_USER:-${USER:-}}"
 
-if [[ -z "${INSTALL_USER}" ]]; then
-  INSTALL_USER="$(id -un)"
-fi
-
-if [[ ${EUID} -eq 0 ]]; then
-  SUDO=""
-fi
-
-INSTALL_HOME="$(getent passwd "${INSTALL_USER}" | cut -d: -f6)"
-if [[ -z "${INSTALL_HOME}" ]]; then
-  INSTALL_HOME="${HOME}"
+# --- Asegurar una locale UTF-8 para que los acentos se vean bien (#10) -----
+if ! locale 2>/dev/null | grep -qi 'utf-?8'; then
+  export LC_ALL=C.UTF-8
 fi
 
 COLOR_RESET=$'\033[0m'
@@ -74,54 +69,65 @@ COLOR_BLUE=$'\033[34m'
 COLOR_CYAN=$'\033[36m'
 COLOR_BOLD=$'\033[1m'
 
+# Estado interno.
+LOG_FILE=""
+INSTALLED_SET=""
+
+# ---------------------------------------------------------------------------
+# Spinner, traps y logging
+# ---------------------------------------------------------------------------
 spinner_pid=""
 
-cleanup() {
-  if [[ -n "${spinner_pid}" ]] && kill -0 "${spinner_pid}" 2>/dev/null; then
+_stop_spinner() {
+  if [[ -n "${spinner_pid}" ]]; then
     kill "${spinner_pid}" 2>/dev/null || true
     wait "${spinner_pid}" 2>/dev/null || true
+    spinner_pid=""
   fi
+}
+
+cleanup() {
+  _stop_spinner
   printf "\033[?25h" || true
 }
 trap cleanup EXIT
 
 on_error() {
-  local line="$1"
   cleanup
   echo
-  printf "%sError en la linea %s.%s\n" "${COLOR_RED}" "${line}" "${COLOR_RESET}" >&2
+  printf "%sError en la línea %s.%s\n" "${COLOR_RED}" "$1" "${COLOR_RESET}" >&2
 }
 trap 'on_error "$LINENO"' ERR
 
+on_interrupt() {
+  cleanup
+  echo
+  warn "Cancelado por el usuario."
+  exit 130
+}
+trap on_interrupt INT
+
 title() {
   clear
-  printf "%s\n" "${COLOR_CYAN}${COLOR_BOLD}"
-  printf "  ███████╗████████╗ ██████╗ ██████╗ ███╗   ███╗\n"
-  printf "  ██╔════╝╚══██╔══╝██╔═══██╗██╔══██╗████╗ ████║\n"
-  printf "  ███████╗   ██║   ██║   ██║██████╔╝██╔████╔██║\n"
-  printf "  ╚════██║   ██║   ██║   ██║██╔══██╗██║╚██╔╝██║\n"
-  printf "  ███████║   ██║   ╚██████╔╝██║  ██║██║ ╚═╝ ██║\n"
-  printf "  ╚══════╝   ╚═╝    ╚═════╝ ╚═╝  ╚═╝╚═╝     ╚═╝\n"
-  printf "%s\n" "${COLOR_RESET}"
+  printf "%s" "${COLOR_CYAN}${COLOR_BOLD}"
+  cat <<'BANNER'
+
+  ███████╗ █████╗ ██╗     ███████╗███████╗██████╗ ██████╗ ███████╗███╗   ██╗██████╗ ███████╗███████╗
+  ██╔════╝██╔══██╗██║     ██╔════╝██╔════╝██╔══██╗██╔══██╗██╔════╝████╗  ██║██╔══██╗██╔════╝██╔════╝
+  ███████╗███████║██║     █████╗  ███████╗██████╔╝██████╔╝█████╗  ██╔██╗ ██║██║  ██║█████╗  ███████╗
+  ╚════██║██╔══██║██║     ██╔══╝  ╚════██║██╔═══╝ ██╔══██╗██╔══╝  ██║╚██╗██║██║  ██║██╔══╝  ╚════██║
+  ███████║██║  ██║███████╗███████╗███████║██║     ██║  ██║███████╗██║ ╚████║██████╔╝███████╗███████║
+  ╚══════╝╚═╝  ╚═╝╚══════╝╚══════╝╚══════╝╚═╝     ╚═╝  ╚═╝╚══════╝╚═╝  ╚═══╝╚═════╝ ╚══════╝╚══════╝
+
+BANNER
+  printf "%s" "${COLOR_RESET}"
   printf "  Instalador de paquetes para Arch Linux\n\n"
 }
 
-note() {
-  printf "%s%s%s\n" "${COLOR_DIM}" "$*" "${COLOR_RESET}"
-}
-
-ok() {
-  printf "  %s✓%s %s\n" "${COLOR_GREEN}" "${COLOR_RESET}" "$*"
-}
-
-warn() {
-  printf "  %s!%s %s\n" "${COLOR_YELLOW}" "${COLOR_RESET}" "$*"
-}
-
-fail() {
-  printf "  %s✗%s %s\n" "${COLOR_RED}" "${COLOR_RESET}" "$*" >&2
-  exit 1
-}
+note() { printf "%s%s%s\n" "${COLOR_DIM}" "$*" "${COLOR_RESET}"; }
+ok()   { printf "  %s✓%s %s\n" "${COLOR_GREEN}" "${COLOR_RESET}" "$*"; }
+warn() { printf "  %s!%s %s\n" "${COLOR_YELLOW}" "${COLOR_RESET}" "$*"; }
+fail() { printf "  %s✗%s %s\n" "${COLOR_RED}" "${COLOR_RESET}" "$*" >&2; exit 1; }
 
 run_spinner() {
   local message="$1"
@@ -140,55 +146,76 @@ run_spinner() {
   done
 }
 
+# Ejecuta un comando con spinner. En fallo muestra la cola del log (#2).
 with_spinner() {
   local message="$1"
   shift
+  local status=0
 
   run_spinner "${message}" &
   spinner_pid=$!
-  if "$@" >/dev/null 2>&1; then
-    kill "${spinner_pid}" 2>/dev/null || true
-    wait "${spinner_pid}" 2>/dev/null || true
-    spinner_pid=""
+
+  "$@" >"${LOG_FILE:?}" 2>&1 || status=$?
+  _stop_spinner
+
+  if [[ ${status} -eq 0 ]]; then
     printf "\r  %s✓%s %s\n" "${COLOR_GREEN}" "${COLOR_RESET}" "${message}"
   else
-    local status=$?
-    kill "${spinner_pid}" 2>/dev/null || true
-    wait "${spinner_pid}" 2>/dev/null || true
-    spinner_pid=""
     printf "\r  %s✗%s %s\n" "${COLOR_RED}" "${COLOR_RESET}" "${message}"
+    note "Últimas líneas del log (${LOG_FILE}):"
+    tail -n 30 "${LOG_FILE}" >&2 || true
     return "${status}"
   fi
 }
 
+# ---------------------------------------------------------------------------
+# Validaciones iniciales
+# ---------------------------------------------------------------------------
 require_arch() {
-  [[ -f /etc/arch-release ]] || fail "Este instalador esta pensado para Arch Linux."
-  command -v "${PACMAN}" >/dev/null 2>&1 || fail "No se encontro pacman."
+  [[ -f /etc/arch-release ]] || fail "Este instalador está pensado para Arch Linux."
+  command -v "${PACMAN}" >/dev/null 2>&1 || fail "No se encontró pacman."
+}
+
+validate_user() {  # (#9)
+  [[ -n "${INSTALL_USER}" ]] || fail "No se pudo determinar el usuario destino."
+  getent passwd "${INSTALL_USER}" >/dev/null 2>&1 \
+    || fail "El usuario '${INSTALL_USER}' no existe."
 }
 
 require_sudo() {
   if [[ -n "${SUDO}" ]]; then
     "${SUDO}" -k
-    "${SUDO}" -p "  Se requiere sudo. Contrasena: " true
+    "${SUDO}" -p "  Se requiere sudo. Contraseña: " true
     ok "Privilegios de administrador preparados"
   fi
 }
 
-sync_databases() {
-  with_spinner "Actualizando sistema y bases de datos de paquetes" ${SUDO} "${PACMAN}" -Syu --noconfirm
+# ---------------------------------------------------------------------------
+# Cache de paquetes instalados (#8): una sola consulta a pacman.
+# ---------------------------------------------------------------------------
+load_installed_cache() {
+  INSTALLED_SET="$("${PACMAN}" -Qq 2>/dev/null || true)"
 }
 
 is_installed() {
-  "${PACMAN}" -Qq "$1" >/dev/null 2>&1
+  [[ -n "${INSTALLED_SET}" ]] || load_installed_cache
+  grep -qxF -- "$1" <<<"${INSTALLED_SET}"
 }
 
 missing_packages() {
+  [[ -n "${INSTALLED_SET}" ]] || load_installed_cache
   local pkg
   for pkg in "$@"; do
-    if ! is_installed "${pkg}"; then
-      printf "%s\n" "${pkg}"
-    fi
+    is_installed "${pkg}" || printf "%s\n" "${pkg}"
   done
+}
+
+# ---------------------------------------------------------------------------
+# Instalación
+# ---------------------------------------------------------------------------
+sync_databases() {
+  with_spinner "Actualizando sistema y bases de datos de paquetes (-Syu)" \
+    ${SUDO} "${PACMAN}" -Syu --noconfirm
 }
 
 install_group() {
@@ -204,42 +231,48 @@ install_group() {
     return
   fi
 
-  note "${label}: ${#missing[@]} paquetes pendientes"
+  note "${label}: ${#missing[@]} paquete(s) pendiente(s)"
   for pkg in "${missing[@]}"; do
     printf "    %s•%s %s\n" "${COLOR_BLUE}" "${COLOR_RESET}" "${pkg}"
   done
 
   with_spinner "Descargando e instalando ${label}" \
     ${SUDO} "${PACMAN}" -S --needed --noconfirm -- "${missing[@]}"
+
+  load_installed_cache
 }
 
+# ---------------------------------------------------------------------------
+# Detección de hardware (nullglob confinado a un subshell: #4)
+# ---------------------------------------------------------------------------
 supports_brightnessctl() {
-  local dev
-  shopt -s nullglob
-  for dev in /sys/class/backlight/*; do
-    [[ -r "${dev}/brightness" && -r "${dev}/max_brightness" ]] || continue
-    [[ "$(cat "${dev}/max_brightness" 2>/dev/null || echo 0)" -gt 0 ]] || continue
-    return 0
-  done
-  return 1
+  (
+    shopt -s nullglob
+    local dev
+    for dev in /sys/class/backlight/*; do
+      [[ -r "${dev}/brightness" && -r "${dev}/max_brightness" ]] || continue
+      [[ "$(cat "${dev}/max_brightness" 2>/dev/null)" -gt 0 ]] || continue
+      return 0
+    done
+    return 1
+  )
 }
 
 has_amd_graphics() {
-  local vendor
-  shopt -s nullglob
-  for vendor in /sys/class/drm/card*/device/vendor; do
-    [[ -r "${vendor}" ]] || continue
-    if [[ "$(cat "${vendor}")" == "0x1002" ]]; then
-      return 0
+  (
+    shopt -s nullglob
+    local vendor
+    for vendor in /sys/class/drm/card*/device/vendor; do
+      [[ -r "${vendor}" ]] || continue
+      [[ "$(cat "${vendor}")" == "0x1002" ]] && return 0
+    done
+
+    if command -v lspci >/dev/null 2>&1; then
+      lspci -nn | grep -Ei 'VGA|3D|Display' | grep -qi 'AMD|ATI' && return 0
     fi
-  done
 
-  if command -v lspci >/dev/null 2>&1; then
-    lspci -nn | grep -Eiq 'VGA|3D|Display' && lspci -nn | grep -Eiq 'AMD|ATI'
-    return $?
-  fi
-
-  return 1
+    return 1
+  )
 }
 
 configure_ddc_permissions() {
@@ -250,8 +283,9 @@ configure_ddc_permissions() {
   if id -nG "${INSTALL_USER}" | tr ' ' '\n' | grep -qx i2c; then
     ok "${INSTALL_USER} ya pertenece al grupo i2c"
   else
-    with_spinner "Anadiendo ${INSTALL_USER} al grupo i2c" ${SUDO} usermod -aG i2c "${INSTALL_USER}"
-    warn "Cierra sesion y vuelve a entrar para activar el grupo i2c."
+    with_spinner "Añadiendo ${INSTALL_USER} al grupo i2c" \
+      ${SUDO} usermod -aG i2c "${INSTALL_USER}"
+    warn "Cierra sesión y vuelve a entrar para activar el grupo i2c."
   fi
 }
 
@@ -266,46 +300,58 @@ install_brightness_stack() {
 
 install_amd_stack() {
   if has_amd_graphics; then
-    install_group "graficos AMD" "${AMD_PACKAGES[@]}"
+    install_group "gráficos AMD" "${AMD_PACKAGES[@]}"
   else
-    ok "Graficos AMD no detectados; se omite ese grupo"
+    ok "Gráficos AMD no detectados; se omite ese grupo"
   fi
 }
 
+# ---------------------------------------------------------------------------
+# yay (build script en fichero temporal en vez de cadena: #14)
+# ---------------------------------------------------------------------------
 install_yay() {
   if command -v yay >/dev/null 2>&1; then
-    ok "yay ya esta instalado"
+    ok "yay ya está instalado"
     return
   fi
 
   install_group "herramientas para compilar yay" "${YAY_BUILD_PACKAGES[@]}"
 
-  local build_dir="/tmp/storm-yay-build-${INSTALL_USER}-$$"
-  local pkg_file=""
-  local build_cmd
-  build_cmd='set -Eeuo pipefail
+  local build_dir="/tmp/${SCRIPT_NAME}-yay-build-${INSTALL_USER}-$$"
+  local build_script
+  build_script="$(mktemp)"
+
+  cat > "${build_script}" <<'BUILD'
+set -Eeuo pipefail
 build_dir="$1"
 rm -rf "$build_dir"
 git clone https://aur.archlinux.org/yay.git "$build_dir"
 cd "$build_dir"
-makepkg -f --noconfirm'
+makepkg -f --noconfirm
+BUILD
 
   if [[ ${EUID} -eq 0 ]]; then
     rm -rf "${build_dir}"
     with_spinner "Compilando yay como ${INSTALL_USER}" \
-      runuser -u "${INSTALL_USER}" -- bash -lc "${build_cmd}" _ "${build_dir}"
+      runuser -u "${INSTALL_USER}" -- bash "${build_script}" _ "${build_dir}"
   else
     with_spinner "Compilando yay como ${INSTALL_USER}" \
-      bash -lc "${build_cmd}" _ "${build_dir}"
+      bash "${build_script}" _ "${build_dir}"
   fi
 
+  rm -f "${build_script}"
+
+  local pkg_file
   pkg_file="$(find "${build_dir}" -maxdepth 1 -type f -name 'yay-*.pkg.tar.*' | head -n 1)"
-  [[ -n "${pkg_file}" ]] || fail "No se encontro el paquete compilado de yay."
+  [[ -n "${pkg_file}" ]] || fail "No se encontró el paquete compilado de yay."
 
   with_spinner "Instalando paquete yay compilado" \
     ${SUDO} "${PACMAN}" -U --noconfirm -- "${pkg_file}"
 }
 
+# ---------------------------------------------------------------------------
+# Dotfiles
+# ---------------------------------------------------------------------------
 script_dir() {
   local source="${BASH_SOURCE[0]:-}"
   if [[ -n "${source}" && -f "${source}" ]]; then
@@ -323,12 +369,33 @@ run_as_install_user() {
   fi
 }
 
+# Copia un árbol; respalda SOLO los ficheros que se sobreescribirían (#6).
 copy_tree_contents() {
-  local src="$1"
-  local dst="$2"
+  local src="$1" dst="$2"
 
   [[ -d "${src}" ]] || return 0
   mkdir -p "${dst}"
+
+  local conflicts=()
+  local f rel
+  while IFS= read -r -d '' f; do
+    rel="${f#./}"
+    [[ -e "${dst}/${rel}" ]] && conflicts+=("${rel}")
+  done < <(cd "${src}" && find . -type f -print0)
+
+  if [[ ${#conflicts[@]} -gt 0 ]]; then
+    local stamp backup
+    stamp="$(date +%Y%m%d-%H%M%S)"
+    backup="${dst}.bak.${stamp}"
+    mkdir -p "${backup}"
+    local c
+    for c in "${conflicts[@]}"; do
+      mkdir -p "${backup}/$(dirname -- "${c}")"
+      mv -- "${dst}/${c}" "${backup}/${c}"
+    done
+    warn "${#conflicts[@]} fichero(s) existente(s) respaldado(s) en ${backup}"
+  fi
+
   cp -a "${src}/." "${dst}/"
   if [[ ${EUID} -eq 0 ]]; then
     chown -R "${INSTALL_USER}:${INSTALL_USER}" "${dst}"
@@ -336,8 +403,7 @@ copy_tree_contents() {
 }
 
 install_dotfiles() {
-  local source_dir=""
-  local dir=""
+  local source_dir="" dir=""
 
   install_group "herramientas para descargar dotfiles" git
 
@@ -348,7 +414,7 @@ install_dotfiles() {
   fi
 
   if [[ -z "${source_dir}" ]]; then
-    source_dir="/tmp/storm-dotfiles-${INSTALL_USER}-$$"
+    source_dir="/tmp/${SCRIPT_NAME}-dotfiles-${INSTALL_USER}-$$"
     rm -rf "${source_dir}"
     with_spinner "Descargando dotfiles" \
       run_as_install_user git clone --depth 1 "${DOTFILES_REPO}" "${source_dir}"
@@ -365,6 +431,9 @@ install_dotfiles() {
   fi
 }
 
+# ---------------------------------------------------------------------------
+# Servicios (#1)
+# ---------------------------------------------------------------------------
 enable_services() {
   local services=(
     NetworkManager.service
@@ -373,31 +442,61 @@ enable_services() {
     power-profiles-daemon.service
   )
   local service
-
   for service in "${services[@]}"; do
-    if systemctl list-unit-files "${service}" >/dev/null 2>&1; then
-      with_spinner "Habilitando ${service}" ${SUDO} systemctl enable --now "${service}"
+    if ! systemctl list-unit-files "${service}" 2>/dev/null | grep -q "${service}"; then
+      note "${service} no está disponible; se omite"
+      continue
     fi
+    if systemctl is-enabled --quiet "${service}" 2>/dev/null; then
+      ok "${service} ya habilitado"
+      continue
+    fi
+    with_spinner "Habilitando ${service}" \
+      ${SUDO} systemctl enable --now "${service}"
   done
 }
 
 post_install() {
-  if command -v xdg-user-dirs-update >/dev/null 2>&1; then
-    if [[ ${EUID} -eq 0 && "${INSTALL_USER}" != "root" ]]; then
-      with_spinner "Actualizando carpetas XDG de ${INSTALL_USER}" runuser -u "${INSTALL_USER}" -- xdg-user-dirs-update
-    else
-      with_spinner "Actualizando carpetas XDG del usuario" xdg-user-dirs-update
-    fi
+  command -v xdg-user-dirs-update >/dev/null 2>&1 || return 0
+  if [[ ${EUID} -eq 0 && "${INSTALL_USER}" != "root" ]]; then
+    with_spinner "Actualizando carpetas XDG de ${INSTALL_USER}" \
+      runuser -u "${INSTALL_USER}" -- xdg-user-dirs-update
+  else
+    with_spinner "Actualizando carpetas XDG del usuario" xdg-user-dirs-update
   fi
 }
 
+# ---------------------------------------------------------------------------
+# main
+# ---------------------------------------------------------------------------
 main() {
+  if [[ -z "${INSTALL_USER}" ]]; then
+    INSTALL_USER="$(id -un)"
+  fi
+
+  if [[ ${EUID} -eq 0 ]]; then
+    SUDO=""
+  fi
+
+  validate_user
+
+  INSTALL_HOME="$(getent passwd "${INSTALL_USER}" | cut -d: -f6)"
+  if [[ -z "${INSTALL_HOME}" ]]; then
+    INSTALL_HOME="${HOME}"
+  fi
+
+  LOG_FILE="${LOG_FILE:-/tmp/${SCRIPT_NAME}-install-${INSTALL_USER}-$$.log}"
+  : > "${LOG_FILE}"
+
   title
-  note "La salida de pacman/makepkg se oculta para mantener la animacion limpia."
+  note "La salida de pacman/makepkg se oculta para mantener la animación limpia."
+  note "Log completo: ${LOG_FILE}"
   echo
 
   require_arch
   require_sudo
+
+  load_installed_cache
   sync_databases
   install_group "paquetes base" "${BASE_PACKAGES[@]}"
   install_yay
@@ -408,8 +507,8 @@ main() {
   install_dotfiles
 
   echo
-  ok "Instalacion finalizada"
-  note "Si se modificaron grupos de usuario, reinicia la sesion antes de probar DDC/CI."
+  ok "Instalación finalizada"
+  note "Si se modificaron grupos de usuario, reinicia la sesión antes de probar DDC/CI."
 }
 
 main "$@"
