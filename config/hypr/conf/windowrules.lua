@@ -31,3 +31,15 @@ hl.window_rule({
 
     float = true,
 })
+
+-- Diálogo de autenticación de polkit: mantenerlo como popup centrado, con el
+-- borde/acento global que Quickshell escribe en conf/theme.lua.
+hl.window_rule({
+    name  = "polkit-auth-dialog",
+    match = { class = "^(hyprpolkitagent)$" },
+
+    float     = true,
+    center    = true,
+    stayfocused = true,
+    dimaround = true,
+})
