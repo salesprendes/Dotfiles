@@ -12,7 +12,7 @@ Rectangle {
     property bool interactive: false
     property bool hoverHighlight: false
     property bool hoverCursor: false
-    readonly property bool hovered: ma.containsMouse || hoverHandler.hovered
+    readonly property bool hovered: ma.containsMouse || hoverHandler.hovered || activeFocus
     property int spacing: Theme.spacing
     default property alias content: row.data
 
@@ -23,12 +23,19 @@ Rectangle {
     implicitWidth: row.implicitWidth + Theme.pad * 2
     implicitHeight: Theme.barHeight - Theme.barMargin * 2
 
+    activeFocusOnTab: interactive
     radius: Theme.pillRadius
     color: (interactive || hoverHighlight) && hovered ? Theme.surfaceHi : Theme.pillBg
-    border.width: Theme.hairline
-    border.color: Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.35)
+    border.width: activeFocus ? Theme.focusWidth : Theme.hairline
+    border.color: activeFocus ? Theme.focusRing : Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.35)
 
     Behavior on color { ColorAnimation { duration: Theme.animFast } }
+    Behavior on border.color { ColorAnimation { duration: Theme.animFast } }
+
+    Keys.onReturnPressed: pill.clicked({ x: -999999, y: -999999, button: Qt.LeftButton })
+    Keys.onEnterPressed: pill.clicked({ x: -999999, y: -999999, button: Qt.LeftButton })
+    Keys.onSpacePressed: pill.clicked({ x: -999999, y: -999999, button: Qt.LeftButton })
+    Keys.onEscapePressed: Globals.closeAll()
 
     MouseArea {
         id: ma

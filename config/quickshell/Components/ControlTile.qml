@@ -16,15 +16,23 @@ Rectangle {
     signal toggled()
     signal expand()
 
+    activeFocusOnTab: enabled
     implicitHeight: Theme.tileL
     radius: Theme.pillRadius + Theme.space4
 
-    color: bodyMa.containsMouse ? Theme.surfaceHi
+    color: (bodyMa.containsMouse || activeFocus) ? Theme.surfaceHi
                                 : Qt.rgba(Theme.surface.r, Theme.surface.g, Theme.surface.b, 0.82)
-    border.width: Theme.hairline
-    border.color: Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.38)
+    border.width: activeFocus ? Theme.focusWidth : Theme.hairline
+    border.color: activeFocus ? Theme.focusRing : Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.38)
 
     Behavior on color { ColorAnimation { duration: Theme.animFast } }
+    Behavior on border.color { ColorAnimation { duration: Theme.animFast } }
+
+    Keys.onReturnPressed: root.expandable ? root.expand() : root.toggled()
+    Keys.onEnterPressed: root.expandable ? root.expand() : root.toggled()
+    Keys.onSpacePressed: root.expandable ? root.expand() : root.toggled()
+    Keys.onRightPressed: if (root.expandable) root.expand()
+    Keys.onEscapePressed: Globals.closeAll()
 
     // Pulsar el cuerpo: expande (o alterna si no es expandible).
     MouseArea {

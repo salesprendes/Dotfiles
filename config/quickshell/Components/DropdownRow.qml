@@ -20,6 +20,7 @@ ColumnLayout {
     property bool open: false
     property int maxVisibleItems: 6
     property string detailText: ""
+    property int keyboardIndex: -1
     signal picked(var v)
 
     // Colores derivados de Theme (sobreescribibles). Equivalen a los tokens
@@ -48,6 +49,58 @@ ColumnLayout {
         return opt && opt.font !== undefined ? opt.font : Theme.fontFamily
     }
 
+    function currentOptionIndex() {
+        for (let i = 0; i < options.length; i++)
+            if (options[i].value === current) return i
+        return options.length > 0 ? 0 : -1
+    }
+
+    function syncKeyboardIndex() {
+        keyboardIndex = currentOptionIndex()
+        optionList.currentIndex = keyboardIndex
+    }
+
+    function openForKeyboard() {
+        root.open = true
+        syncKeyboardIndex()
+        if (keyboardIndex >= 0)
+            optionList.positionViewAtIndex(keyboardIndex, ListView.Contain)
+    }
+
+    function moveKeyboard(delta) {
+        if (options.length <= 0)
+            return
+        if (!root.open) {
+            openForKeyboard()
+            return
+        }
+
+        const start = keyboardIndex >= 0 ? keyboardIndex : currentOptionIndex()
+        keyboardIndex = Math.max(0, Math.min(options.length - 1, start + delta))
+        optionList.currentIndex = keyboardIndex
+        optionList.positionViewAtIndex(keyboardIndex, ListView.Contain)
+    }
+
+    function pickKeyboard() {
+        if (!root.open) {
+            openForKeyboard()
+            return
+        }
+
+        const idx = keyboardIndex >= 0 ? keyboardIndex : currentOptionIndex()
+        if (idx >= 0 && idx < options.length)
+            optionList.choose(options[idx].value)
+    }
+
+    function closeKeyboard() {
+        if (root.open)
+            root.open = false
+        else
+            Globals.closeAll()
+    }
+
+    onOpenChanged: if (open) syncKeyboardIndex()
+
     Text {
         text: root.label
         visible: root.label !== ""
@@ -57,13 +110,24 @@ ColumnLayout {
     }
 
     Rectangle {
+        id: selector
         Layout.fillWidth: true
         implicitHeight: Theme.rowM
+        activeFocusOnTab: enabled
         radius: Theme.pillRadius
         color: root.controlColor
-        border.width: Theme.hairline
-        border.color: root.open ? Theme.accent : root.borderColor
+        border.width: activeFocus ? Theme.focusWidth : Theme.hairline
+        border.color: activeFocus ? Theme.focusRing : (root.open ? Theme.accent : root.borderColor)
         Behavior on border.color { ColorAnimation { duration: Theme.animFast } }
+
+        Keys.onReturnPressed: root.pickKeyboard()
+        Keys.onEnterPressed: root.pickKeyboard()
+        Keys.onSpacePressed: root.pickKeyboard()
+        Keys.onDownPressed: root.moveKeyboard(1)
+        Keys.onRightPressed: root.moveKeyboard(1)
+        Keys.onUpPressed: root.moveKeyboard(-1)
+        Keys.onLeftPressed: root.moveKeyboard(-1)
+        Keys.onEscapePressed: root.closeKeyboard()
 
         RowLayout {
             anchors.fill: parent
@@ -100,7 +164,10 @@ ColumnLayout {
             anchors.fill: parent
             hoverEnabled: true
             cursorShape: Qt.PointingHandCursor
-            onClicked: root.open = !root.open
+            onClicked: {
+                root.open = !root.open
+                selector.forceActiveFocus()
+            }
         }
     }
 
@@ -142,7 +209,9 @@ ColumnLayout {
                 delegate: Rectangle {
                     id: optionRow
                     required property var modelData
+                    required property int index
                     readonly property bool sel: modelData.value === root.current
+                    readonly property bool focused: ListView.isCurrentItem
                     width: ListView.view.width
                     height: dropdownClip.optionHeight
                     radius: Theme.pillRadius - Theme.space2
@@ -150,14 +219,17 @@ ColumnLayout {
                     // el hover es una capa aparte que anima su OPACIDAD (así no
                     // se interpola hacia el negro de "transparent").
                     color: sel ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.18)
-                               : "transparent"
+                               : focused ? Theme.focusBg : "transparent"
                     Behavior on color { ColorAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
+
+                    border.width: focused ? Theme.focusWidth : 0
+                    border.color: Theme.focusRing
 
                     Rectangle {
                         anchors.fill: parent
                         radius: parent.radius
                         color: root.hoverColor
-                        opacity: rowMa.containsMouse && !optionRow.sel ? 1 : 0
+                        opacity: rowMa.containsMouse && !optionRow.sel && !optionRow.focused ? 1 : 0
                         Behavior on opacity { NumberAnimation { duration: 90; easing.type: Easing.OutQuad } }
                     }
 
@@ -190,7 +262,11 @@ ColumnLayout {
                         anchors.fill: parent
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
-                        onClicked: optionList.choose(optionRow.modelData.value)
+                        onClicked: {
+                            root.keyboardIndex = optionRow.index
+                            optionList.currentIndex = optionRow.index
+                            optionList.choose(optionRow.modelData.value)
+                        }
                     }
                 }
             }

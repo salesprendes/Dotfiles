@@ -80,6 +80,8 @@ PanelWindow {
 
     anchors { top: true; bottom: true; left: true; right: true }
 
+    Keys.onEscapePressed: Globals.closeAll()
+
     onShownChanged: {
         if (shown)
             openAnim.restart()

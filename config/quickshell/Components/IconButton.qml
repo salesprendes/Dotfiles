@@ -16,20 +16,29 @@ Rectangle {
     property color  hoverColor: Theme.accent
     property color  iconColor: Theme.fgDim
     property color  hoverIconColor: Theme.bg
-    readonly property bool hovered: ma.containsMouse
+    readonly property bool hovered: ma.containsMouse || activeFocus
 
     signal clicked()
 
+    activeFocusOnTab: enabled
     implicitWidth: diameter
     implicitHeight: diameter
     radius: height / 2
-    color: ma.containsMouse ? hoverColor : baseColor
+    color: hovered ? hoverColor : baseColor
+    border.width: activeFocus ? Theme.focusWidth : 0
+    border.color: Theme.focusRing
     Behavior on color { ColorAnimation { duration: Theme.animFast } }
+    Behavior on border.color { ColorAnimation { duration: Theme.animFast } }
+
+    Keys.onReturnPressed: btn.clicked()
+    Keys.onEnterPressed: btn.clicked()
+    Keys.onSpacePressed: btn.clicked()
+    Keys.onEscapePressed: Globals.closeAll()
 
     Text {
         anchors.centerIn: parent
         text: btn.icon
-        color: ma.containsMouse ? btn.hoverIconColor : btn.iconColor
+        color: btn.hovered ? btn.hoverIconColor : btn.iconColor
         font.family: Theme.fontFamily
         font.pixelSize: btn.iconPixelSize
     }

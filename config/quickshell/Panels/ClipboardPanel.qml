@@ -20,6 +20,7 @@ Popout {
     property real frozenListHeight: 0
     property real emptyBodyHeight: 120
     property real bodyHeight: emptyBodyHeight
+    property int selectedIndex: 0
 
     Behavior on bodyHeight { NumberAnimation { duration: 240; easing.type: Easing.OutCubic } }
 
@@ -47,10 +48,24 @@ Popout {
         clearAnim.restart()
     }
 
+    function moveSelection(delta) {
+        const count = Clipboard.filteredEntries.length
+        if (count <= 0)
+            return
+        selectedIndex = Math.max(0, Math.min(count - 1, selectedIndex + delta))
+        historyList.currentIndex = selectedIndex
+        historyList.positionViewAtIndex(selectedIndex, ListView.Contain)
+    }
+
+    function copySelected() {
+        Clipboard.copy(Clipboard.filteredEntries[selectedIndex])
+    }
+
     onShownChanged: {
         if (shown) {
             Clipboard.search = ""
             searchInput.text = ""
+            selectedIndex = 0
             Clipboard.refresh()
             refreshBodyHeight()
             focusTimer.restart()
@@ -60,6 +75,10 @@ Popout {
     Connections {
         target: Clipboard
         function onFilteredEntriesChanged() {
+            panel.selectedIndex = Clipboard.filteredEntries.length > 0
+                ? Math.min(panel.selectedIndex, Clipboard.filteredEntries.length - 1)
+                : -1
+            historyList.currentIndex = panel.selectedIndex
             panel.refreshBodyHeight()
         }
     }
@@ -201,8 +220,10 @@ Popout {
                 focus: true
                 onTextChanged: Clipboard.search = text
                 Keys.onEscapePressed: Globals.closeAll()
-                Keys.onReturnPressed: Clipboard.copy(Clipboard.filteredEntries[0])
-                Keys.onEnterPressed: Clipboard.copy(Clipboard.filteredEntries[0])
+                Keys.onReturnPressed: panel.copySelected()
+                Keys.onEnterPressed: panel.copySelected()
+                Keys.onDownPressed: panel.moveSelection(1)
+                Keys.onUpPressed: panel.moveSelection(-1)
 
                 Text {
                     anchors.verticalCenter: parent.verticalCenter
@@ -271,6 +292,7 @@ Popout {
             spacing: Theme.space4
             model: Clipboard.filteredEntries
             boundsBehavior: Flickable.StopAtBounds
+            currentIndex: panel.selectedIndex
             opacity: panel.listClearOpacity
             transform: Translate { y: panel.listClearOffset }
             onContentHeightChanged: panel.refreshBodyHeight()
@@ -292,10 +314,12 @@ Popout {
                 opacity: deleting ? 0 : 1
                 scale: deleting ? 0.96 : 1
                 radius: Theme.pillRadius
-                color: rowMa.containsMouse ? Theme.surfaceHi : Theme.surface
-                border.width: Theme.hairline
-                border.color: Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.28)
+                readonly property bool selected: ListView.isCurrentItem
+                color: rowMa.containsMouse || selected ? Theme.surfaceHi : Theme.surface
+                border.width: selected ? Theme.focusWidth : Theme.hairline
+                border.color: selected ? Theme.focusRing : Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.28)
                 Behavior on color { ColorAnimation { duration: Theme.animFast } }
+                Behavior on border.color { ColorAnimation { duration: Theme.animFast } }
                 Behavior on x { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
                 Behavior on opacity { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
                 Behavior on scale { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
@@ -319,6 +343,7 @@ Popout {
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
                     acceptedButtons: Qt.LeftButton
+                    onEntered: panel.selectedIndex = index
                     onClicked: Clipboard.copy(modelData)
                 }
 

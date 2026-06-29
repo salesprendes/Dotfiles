@@ -52,6 +52,8 @@ Singleton {
     // Superficie anidada dentro de un popup (chips/filas sobre la tarjeta).
     readonly property color popupSurface: withAlpha(surface, Math.min(1, Settings.popupOpacity + 0.05))
     readonly property color pillBg:     withAlpha(surface, Settings.widgetOpacity)
+    readonly property color focusRing:  withAlpha(accent, 0.92)
+    readonly property color focusBg:    withAlpha(accent, 0.14)
 
     //  densityScale se deriva AUTOMÁTICAMENTE de la resolución del
     //  monitor mayor conectado (lado corto/vertical relativo a 1080p).
@@ -113,6 +115,7 @@ Singleton {
 
     // ── Geometría / espaciado (tokens derivados) ─────────────
     readonly property int hairline: 1
+    readonly property int focusWidth: Math.max(2, dp(2))
     readonly property int space2: dp(2)
     readonly property int space4: dp(4)
     readonly property int space6: dp(6)

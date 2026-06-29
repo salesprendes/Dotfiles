@@ -18,14 +18,20 @@ Rectangle {
     property color offBorderColor: Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.4)
     signal toggled()
 
+    activeFocusOnTab: enabled
     implicitWidth: Theme.dp(44)
     implicitHeight: Theme.dp(24)
     radius: height / 2
     color: checked ? onColor : offColor
-    border.width: Theme.hairline
-    border.color: checked ? onColor : offBorderColor
+    border.width: activeFocus ? Theme.focusWidth : Theme.hairline
+    border.color: activeFocus ? Theme.focusRing : (checked ? onColor : offBorderColor)
     Behavior on color { ColorAnimation { duration: Theme.animFast } }
     Behavior on border.color { ColorAnimation { duration: Theme.animFast } }
+
+    Keys.onReturnPressed: sw.toggled()
+    Keys.onEnterPressed: sw.toggled()
+    Keys.onSpacePressed: sw.toggled()
+    Keys.onEscapePressed: Globals.closeAll()
 
     // Bolita deslizante.
     Rectangle {

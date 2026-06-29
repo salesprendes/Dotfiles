@@ -16,6 +16,7 @@ Popout {
     property string search: ""
     property var allEntries: []
     property var apps: []
+    property int selectedIndex: 0
 
     function rebuildApps() {
         allEntries = (DesktopEntries.applications?.values ?? [])
@@ -35,6 +36,8 @@ Popout {
     function applySearch() {
         const q = search.trim().toLowerCase()
         apps = q === "" ? allEntries : allEntries.filter(a => a.searchText.includes(q))
+        selectedIndex = apps.length > 0 ? Math.min(selectedIndex, apps.length - 1) : -1
+        appList.currentIndex = selectedIndex
     }
 
     onShownChanged: {
@@ -76,6 +79,18 @@ Popout {
         Globals.closeAll()
     }
 
+    function moveSelection(delta) {
+        if (apps.length <= 0)
+            return
+        selectedIndex = Math.max(0, Math.min(apps.length - 1, selectedIndex + delta))
+        appList.currentIndex = selectedIndex
+        appList.positionViewAtIndex(selectedIndex, ListView.Contain)
+    }
+
+    function launchSelected() {
+        launch(apps[selectedIndex]?.entry)
+    }
+
     // ── Buscador ─────────────────────────────────────────────
     Rectangle {
         Layout.fillWidth: true
@@ -111,8 +126,10 @@ Popout {
                 focus: true
                 onTextChanged: launcher.search = text
                 Keys.onEscapePressed: Globals.closeAll()
-                Keys.onReturnPressed: launcher.launch(launcher.apps[0]?.entry)
-                Keys.onEnterPressed: launcher.launch(launcher.apps[0]?.entry)
+                Keys.onReturnPressed: launcher.launchSelected()
+                Keys.onEnterPressed: launcher.launchSelected()
+                Keys.onDownPressed: launcher.moveSelection(1)
+                Keys.onUpPressed: launcher.moveSelection(-1)
 
                 Text {
                     anchors.verticalCenter: parent.verticalCenter
@@ -133,6 +150,7 @@ Popout {
 
     // ── Lista de aplicaciones ────────────────────────────────
     ListView {
+        id: appList
         Layout.fillWidth: true
         Layout.preferredHeight: Math.min(Theme.dp(440), launcher.apps.length * (Theme.dp(44) + Theme.space2))
         clip: true
@@ -141,6 +159,7 @@ Popout {
         reuseItems: true
         cacheBuffer: Theme.dp(360)
         boundsBehavior: Flickable.StopAtBounds
+        currentIndex: launcher.selectedIndex
 
         delegate: Rectangle {
             id: appRow
@@ -150,6 +169,7 @@ Popout {
             implicitHeight: Theme.dp(44)
             radius: Theme.pillRadius
             color: "transparent"
+            readonly property bool selected: ListView.isCurrentItem
 
             // Resaltado de hover/selección como capa aparte que anima su
             // OPACIDAD (no el color): nunca se interpola hacia el negro de
@@ -162,7 +182,7 @@ Popout {
                 color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.16)
                 border.width: Math.max(1, Theme.hairline)
                 border.color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.5)
-                opacity: rowMa.containsMouse ? 1 : 0
+                opacity: rowMa.containsMouse || appRow.selected ? 1 : 0
                 Behavior on opacity { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutQuad } }
             }
 
@@ -225,6 +245,7 @@ Popout {
                 anchors.fill: parent
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
+                onEntered: launcher.selectedIndex = index
                 onClicked: launcher.launch(modelData.entry)
             }
         }

@@ -39,7 +39,5 @@ hl.window_rule({
     match = { class = "^(hyprpolkitagent)$" },
 
     float     = true,
-    center    = true,
-    stayfocused = true,
-    dimaround = true,
+    center    = true
 })

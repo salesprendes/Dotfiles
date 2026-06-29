@@ -12,16 +12,26 @@ Rectangle {
 
     property string text: ""
     property bool   primary: false
+    readonly property bool hovered: ma.containsMouse || activeFocus
     signal clicked()
 
+    activeFocusOnTab: enabled
     implicitWidth: label.implicitWidth + Theme.controlS
     implicitHeight: Theme.dp(32)
     radius: Theme.pillRadius
     opacity: enabled ? 1 : 0.5
     color: primary
-           ? (ma.containsMouse ? Qt.lighter(Theme.accent, 1.1) : Theme.accent)
-           : (ma.containsMouse ? Theme.surfaceHi : Theme.surface)
+           ? (hovered ? Qt.lighter(Theme.accent, 1.1) : Theme.accent)
+           : (hovered ? Theme.surfaceHi : Theme.surface)
+    border.width: activeFocus ? Theme.focusWidth : 0
+    border.color: Theme.focusRing
     Behavior on color { ColorAnimation { duration: Theme.animFast } }
+    Behavior on border.color { ColorAnimation { duration: Theme.animFast } }
+
+    Keys.onReturnPressed: btn.clicked()
+    Keys.onEnterPressed: btn.clicked()
+    Keys.onSpacePressed: btn.clicked()
+    Keys.onEscapePressed: Globals.closeAll()
 
     Text {
         id: label
