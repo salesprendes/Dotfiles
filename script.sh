@@ -4,6 +4,7 @@ set -Eeuo pipefail
 SCRIPT_NAME=salesprendes
 
 BASE_PACKAGES=(
+  linux-firmware
   quickshell
   qt6-declarative
   hyprland
@@ -38,12 +39,13 @@ BASE_PACKAGES=(
 AMD_PACKAGES=(
   mesa
   vulkan-radeon
-  linux-firmware
   mesa-utils
   vulkan-tools
   libva-utils
   lib32-mesa
   lib32-vulkan-radeon
+  libva-mesa-driver
+  lib32-libva-mesa-driver
 )
 
 YAY_BUILD_PACKAGES=(base-devel git)

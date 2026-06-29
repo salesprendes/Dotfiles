@@ -32,6 +32,13 @@ Singleton {
     property string fontFamily: "JetBrainsMono Nerd Font"
     property string monoFontFamily: "JetBrainsMono Nerd Font"
     property real   fontScale: 1.0
+    // ── Render de fuentes (fontconfig) — editables; se vuelcan a fonts.conf ──
+    property bool   fontAntialias: true
+    property bool   fontHinting: true
+    property string fontHintstyle: "hintslight"   // hintnone | hintslight | hintmedium | hintfull
+    property string fontRgba: "rgb"               // none | rgb | bgr | vrgb | vbgr
+    property string fontLcdfilter: "lcddefault"   // none | lcddefault | lcdlight | lcdlegacy
+    property bool   fontEmbeddedbitmap: false
     property string panelAnimationStyle: "material" // material | fluent | dynamic
     property string panelMotionEffect: "standard" // standard | directional | depth
     property string language: "es"
@@ -205,6 +212,7 @@ Singleton {
         "uiScale", "animScale", "animationSpeed", "customAnimationDuration", "barOpacity",
         "popupOpacity", "widgetOpacity",
         "cornerScale", "barScale", "fontFamily", "monoFontFamily", "fontScale",
+        "fontAntialias", "fontHinting", "fontHintstyle", "fontRgba", "fontLcdfilter", "fontEmbeddedbitmap",
         "panelAnimationStyle", "panelMotionEffect", "language",
         "showTray", "showSysmon", "showBattery", "showClipboard", "showNotifications", "showPowerProfile", "showCaffeine",
         "clock24h", "clockShowSeconds", "clockShowDate",
@@ -230,7 +238,10 @@ Singleton {
         "panelMotionEffect": ["standard", "directional", "depth"],
         "language": ["en", "es", "ca"],
         "notifPosition": ["tl", "tr", "bl", "br"],
-        "wallpaperTransition": ["fade", "zoom", "slide", "push", "wipe"]
+        "wallpaperTransition": ["fade", "zoom", "slide", "push", "wipe"],
+        "fontHintstyle": ["hintnone", "hintslight", "hintmedium", "hintfull"],
+        "fontRgba": ["none", "rgb", "bgr", "vrgb", "vbgr"],
+        "fontLcdfilter": ["none", "lcddefault", "lcdlight", "lcdlegacy"]
     })
     // Claves que deben ser enteros (se redondean tras recortar).
     readonly property var _intKeys: ["animationSpeed", "customAnimationDuration",
@@ -311,6 +322,8 @@ Singleton {
         popupOpacity = 0.85; widgetOpacity = 0.55
         cornerScale = 1.0; barScale = 1.0; fontFamily = "JetBrainsMono Nerd Font"
         monoFontFamily = "JetBrainsMono Nerd Font"; fontScale = 1.0
+        fontAntialias = true; fontHinting = true; fontHintstyle = "hintslight"
+        fontRgba = "rgb"; fontLcdfilter = "lcddefault"; fontEmbeddedbitmap = false
         panelAnimationStyle = "material"
         panelMotionEffect = "standard"
         language = "es"
@@ -393,6 +406,7 @@ Singleton {
         accentColor = resolvedAccent
         scheduleSave()
         scheduleHyprSync()
+        scheduleGtkSync()
     }
 
     function scheduleHyprSync() {
@@ -432,6 +446,148 @@ Singleton {
             hyprReload.running = true
     }
 
+    // ── Tematizado de apps GTK4/libadwaita (Nautilus, etc.) ──────────
+    //  Redefine los colores con nombre de libadwaita en ~/.config/gtk-4.0/
+    //  gtk.css según el tema activo y el modo claro/oscuro; el interruptor
+    //  real claro↔oscuro lo da gsettings color-scheme. Reescribe en cada
+    //  cambio de tema/acento/darkMode (igual que la sync de Hyprland).
+    function gtkColorCss(forGtk3) {
+        const p = currentPalette
+        const accent = colorHex(resolvedAccent)
+        let c
+        if (darkMode) {
+            // Fondo casi-negro del propio tema ("negro adaptado").
+            c = { accentBg: accent, accentFg: p.bg,
+                  winBg: p.bg, winFg: p.fg, viewBg: p.bgAlt, viewFg: p.fg,
+                  headBg: p.bg, headFg: p.fg, sideBg: p.bg, sideFg: p.fgDim,
+                  cardBg: p.surface, popBg: p.surface, popFg: p.fg, dlgBg: p.bgAlt,
+                  border: p.overlay }
+        } else {
+            c = { accentBg: (p.lightAccent || accent), accentFg: "#ffffff",
+                  winBg: p.lightBg, winFg: p.lightFg, viewBg: "#ffffff", viewFg: p.lightFg,
+                  headBg: p.lightBgAlt, headFg: p.lightFg, sideBg: p.lightBg, sideFg: (p.lightFgDim || p.lightFg),
+                  cardBg: p.lightSurface, popBg: p.lightSurface, popFg: p.lightFg, dlgBg: p.lightBg,
+                  border: (p.lightOverlay || p.lightSurface) }
+        }
+        // Colores con nombre de libadwaita (GTK4 / Nautilus).
+        let out = [
+            "/* Generado por Quickshell Settings — no editar a mano.",
+            "   Colores del tema adaptados a GTK según modo claro/oscuro. */",
+            "@define-color accent_color "       + c.accentBg + ";",
+            "@define-color accent_bg_color "    + c.accentBg + ";",
+            "@define-color accent_fg_color "    + c.accentFg + ";",
+            "@define-color window_bg_color "    + c.winBg + ";",
+            "@define-color window_fg_color "    + c.winFg + ";",
+            "@define-color view_bg_color "      + c.viewBg + ";",
+            "@define-color view_fg_color "      + c.viewFg + ";",
+            "@define-color headerbar_bg_color " + c.headBg + ";",
+            "@define-color headerbar_fg_color " + c.headFg + ";",
+            // backdrop = color cuando la ventana NO está enfocada (si no se
+            // define, libadwaita usa un gris por defecto que no pega).
+            "@define-color headerbar_backdrop_color " + c.headBg + ";",
+            "@define-color sidebar_bg_color "   + c.sideBg + ";",
+            "@define-color sidebar_fg_color "   + c.sideFg + ";",
+            "@define-color sidebar_backdrop_color " + c.sideBg + ";",
+            "@define-color secondary_sidebar_bg_color " + c.sideBg + ";",
+            "@define-color secondary_sidebar_backdrop_color " + c.sideBg + ";",
+            "@define-color card_bg_color "      + c.cardBg + ";",
+            "@define-color popover_bg_color "   + c.popBg + ";",
+            "@define-color popover_fg_color "   + c.popFg + ";",
+            "@define-color dialog_bg_color "    + c.dlgBg + ";"
+        ]
+        // GTK3 (Nemo y apps GTK3): añade los nombres heredados del tema, para
+        // que también se adapten sin depender solo de libadwaita.
+        if (forGtk3) {
+            out = out.concat([
+                "@define-color theme_bg_color "           + c.winBg + ";",
+                "@define-color theme_fg_color "           + c.winFg + ";",
+                "@define-color theme_base_color "         + c.viewBg + ";",
+                "@define-color theme_text_color "         + c.viewFg + ";",
+                "@define-color theme_selected_bg_color "  + c.accentBg + ";",
+                "@define-color theme_selected_fg_color "  + c.accentFg + ";",
+                "@define-color theme_unfocused_bg_color " + c.winBg + ";",
+                "@define-color theme_unfocused_fg_color " + c.winFg + ";",
+                "@define-color insensitive_bg_color "     + c.winBg + ";",
+                "@define-color menu_bg_color "            + c.popBg + ";",
+                "@define-color menu_fg_color "            + c.popFg + ";",
+                "@define-color borders "                  + c.border + ";"
+            ])
+        }
+        return out.join("\n") + "\n"
+    }
+
+    // refresh=true → tras escribir el CSS, reinicia Nautilus reabriendo su
+    // carpeta (GTK4/libadwaita no recarga CSS en caliente). En el arranque
+    // se llama con false para no reiniciar nada.
+    property bool _gtkPendingRefresh: false
+    function applyGtkTheme(refresh) {
+        const g4 = home + "/.config/gtk-4.0"
+        const g3 = home + "/.config/gtk-3.0"
+        // base64 evita cualquier problema de comillas al pasar el CSS por shell.
+        const b4 = Qt.btoa(gtkColorCss(false))
+        const b3 = Qt.btoa(gtkColorCss(true))
+        const mode = darkMode ? "prefer-dark" : "prefer-light"
+        // Un único comando, robusto aunque no exista nada: crea las carpetas,
+        // escribe ambos gtk.css y conmuta el modo claro/oscuro.
+        gtkApply.command = ["sh", "-c",
+            "mkdir -p '" + g4 + "' '" + g3 + "' && "
+            + "printf %s '" + b4 + "' | base64 -d > '" + g4 + "/gtk.css' && "
+            + "printf %s '" + b3 + "' | base64 -d > '" + g3 + "/gtk.css' && "
+            + "gsettings set org.gnome.desktop.interface color-scheme '" + mode + "' || true"]
+        _gtkPendingRefresh = (refresh === true)
+        if (!gtkApply.running)
+            gtkApply.running = true
+    }
+
+    function scheduleGtkSync() {
+        if (_loaded)
+            gtkSyncTimer.restart()
+    }
+
+    // ── fontconfig (~/.config/fontconfig/fonts.conf) ────────────────
+    //  Gestionado desde la Tipografía: combina la fuente elegida (fontFamily /
+    //  monoFontFamily) como familia preferida + los ajustes de render
+    //  (subpíxel RGB, hinting). Afecta a Brave, Discord, GTK, Qt…
+    function xmlEsc(t) {
+        return String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    }
+    function fontsConfXml() {
+        const sans = xmlEsc(fontFamily || "Noto Sans")
+        const mono = xmlEsc(monoFontFamily || fontFamily || "Noto Sans Mono")
+        return [
+            '<?xml version="1.0"?>',
+            '<!DOCTYPE fontconfig SYSTEM "fonts.dtd">',
+            '<!-- Generado por Quickshell Settings (Tipografía) — no editar a mano. -->',
+            '<fontconfig>',
+            '  <!-- Familia preferida = la elegida en Tipografía (con respaldos). -->',
+            '  <alias><family>sans-serif</family><prefer><family>' + sans + '</family><family>Noto Sans</family></prefer></alias>',
+            '  <alias><family>monospace</family><prefer><family>' + mono + '</family><family>Noto Sans Mono</family></prefer></alias>',
+            '  <!-- Render: subpíxel RGB + hinting slight, sin bitmaps embebidos. -->',
+            '  <match target="font">',
+            '    <edit name="antialias"      mode="assign"><bool>' + (fontAntialias ? "true" : "false") + '</bool></edit>',
+            '    <edit name="hinting"        mode="assign"><bool>' + (fontHinting ? "true" : "false") + '</bool></edit>',
+            '    <edit name="hintstyle"      mode="assign"><const>' + fontHintstyle + '</const></edit>',
+            '    <edit name="rgba"           mode="assign"><const>' + fontRgba + '</const></edit>',
+            '    <edit name="lcdfilter"      mode="assign"><const>' + fontLcdfilter + '</const></edit>',
+            '    <edit name="embeddedbitmap" mode="assign"><bool>' + (fontEmbeddedbitmap ? "true" : "false") + '</bool></edit>',
+            '  </match>',
+            '</fontconfig>',
+            ''
+        ].join("\n")
+    }
+    function applyFontsConf() {
+        const dir = home + "/.config/fontconfig"
+        const b = Qt.btoa(fontsConfXml())
+        fontsApply.command = ["sh", "-c",
+            "mkdir -p '" + dir + "' && printf %s '" + b + "' | base64 -d > '" + dir + "/fonts.conf'"]
+        if (!fontsApply.running)
+            fontsApply.running = true
+    }
+    function scheduleFontSync() {
+        if (_loaded)
+            fontSyncTimer.restart()
+    }
+
     onThemeNameChanged: notifyAppearanceChanged()
     onAccentNameChanged: notifyAppearanceChanged()
     onAccentColorChanged: scheduleSave()
@@ -445,9 +601,15 @@ Singleton {
     onWidgetOpacityChanged: scheduleSave()
     onCornerScaleChanged: scheduleSave()
     onBarScaleChanged: scheduleSave()
-    onFontFamilyChanged: scheduleSave()
-    onMonoFontFamilyChanged: scheduleSave()
+    onFontFamilyChanged: { scheduleSave(); scheduleFontSync() }
+    onMonoFontFamilyChanged: { scheduleSave(); scheduleFontSync() }
     onFontScaleChanged: scheduleSave()
+    onFontAntialiasChanged: { scheduleSave(); scheduleFontSync() }
+    onFontHintingChanged: { scheduleSave(); scheduleFontSync() }
+    onFontHintstyleChanged: { scheduleSave(); scheduleFontSync() }
+    onFontRgbaChanged: { scheduleSave(); scheduleFontSync() }
+    onFontLcdfilterChanged: { scheduleSave(); scheduleFontSync() }
+    onFontEmbeddedbitmapChanged: { scheduleSave(); scheduleFontSync() }
     onPanelAnimationStyleChanged: scheduleSave()
     onPanelMotionEffectChanged: scheduleSave()
     onLanguageChanged: scheduleSave()
@@ -531,8 +693,68 @@ Singleton {
         command: ["sh", "-c", "test -n \"$HYPRLAND_INSTANCE_SIGNATURE\" && hyprctl reload >/dev/null 2>&1 || true"]
     }
 
+    Timer {
+        id: gtkSyncTimer
+        interval: 400
+        onTriggered: s.applyGtkTheme(true)
+    }
+
+    Process {
+        id: gtkApply
+        // Al terminar de escribir el CSS, si fue un cambio del usuario,
+        // refresca las apps GTK abiertas (reinicio de Nautilus).
+        onRunningChanged: {
+            if (!running && s._gtkPendingRefresh) {
+                s._gtkPendingRefresh = false
+                if (!nautilusRefresh.running)
+                    nautilusRefresh.running = true
+            }
+        }
+    }
+
+    // Reinicia Nautilus reabriendo la(s) misma(s) carpeta(s): detecta sus
+    // ventanas por la clase en Hyprland y resuelve la carpeta desde el título
+    // (cae a la carpeta personal si no la puede resolver). En Python para
+    // evitar problemas de escapado en shell.
+    Process {
+        id: nautilusRefresh
+        command: ["python3", "-c", [
+            "import json,os,subprocess,time",
+            "home=os.path.expanduser('~')",
+            "try:",
+            "    data=json.loads(subprocess.check_output(['hyprctl','clients','-j']))",
+            "except Exception:",
+            "    raise SystemExit",
+            "def resolve(t):",
+            "    if not t or t in ('Home','Inicio','Carpeta personal','Personal'): return home",
+            "    p=os.path.join(home,t)",
+            "    return p if os.path.isdir(p) else home",
+            "folders=[]",
+            "for c in data:",
+            "    if 'nautilus' in (c.get('class') or '').lower():",
+            "        f=resolve(c.get('title') or '')",
+            "        if f not in folders: folders.append(f)",
+            "if not folders: raise SystemExit",
+            "subprocess.run(['nautilus','-q'])",
+            "time.sleep(0.5)",
+            "for f in folders: subprocess.Popen(['nautilus',f],start_new_session=True)"
+        ].join("\n")]
+    }
+
+    Timer {
+        id: fontSyncTimer
+        interval: 250
+        onTriggered: s.applyFontsConf()
+    }
+
+    Process {
+        id: fontsApply
+    }
+
     Component.onCompleted: {
         load()
         hyprDetect.running = true
+        applyGtkTheme(false)   // genera gtk.css y fija color-scheme (sin reiniciar apps)
+        applyFontsConf()       // genera ~/.config/fontconfig/fonts.conf (render + fuente)
     }
 }

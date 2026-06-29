@@ -661,6 +661,70 @@ FloatingWindow {
                             }
                         }
                     }
+
+                    // ── Renderizado de fuentes (fontconfig) ──────────────
+                    SettingsCard {
+                        title: I18n.tr("Font rendering"); glyph: "󰚌"
+
+                        SwitchRow {
+                            label: I18n.tr("Antialiasing")
+                            checked: Settings.fontAntialias
+                            onToggled: Settings.fontAntialias = !Settings.fontAntialias
+                        }
+                        SwitchRow {
+                            label: I18n.tr("Hinting")
+                            checked: Settings.fontHinting
+                            onToggled: Settings.fontHinting = !Settings.fontHinting
+                        }
+                        SegRow {
+                            label: I18n.tr("Hint style")
+                            options: [
+                                { text: I18n.tr("None"),   value: "hintnone" },
+                                { text: I18n.tr("Slight"), value: "hintslight" },
+                                { text: I18n.tr("Medium"), value: "hintmedium" },
+                                { text: I18n.tr("Full"),   value: "hintfull" }
+                            ]
+                            current: Settings.fontHintstyle
+                            onPicked: (v) => Settings.fontHintstyle = v
+                        }
+                        DropdownRow {
+                            label: I18n.tr("Subpixel order (RGBA)")
+                            options: [
+                                { text: I18n.tr("None (grayscale)"), value: "none" },
+                                { text: "RGB",  value: "rgb" },
+                                { text: "BGR",  value: "bgr" },
+                                { text: I18n.tr("Vertical RGB"), value: "vrgb" },
+                                { text: I18n.tr("Vertical BGR"), value: "vbgr" }
+                            ]
+                            current: Settings.fontRgba
+                            onPicked: (v) => Settings.fontRgba = v
+                        }
+                        DropdownRow {
+                            label: I18n.tr("LCD filter")
+                            options: [
+                                { text: I18n.tr("None"),    value: "none" },
+                                { text: I18n.tr("Default"), value: "lcddefault" },
+                                { text: I18n.tr("Light"),   value: "lcdlight" },
+                                { text: I18n.tr("Legacy"),  value: "lcdlegacy" }
+                            ]
+                            current: Settings.fontLcdfilter
+                            onPicked: (v) => Settings.fontLcdfilter = v
+                        }
+                        SwitchRow {
+                            label: I18n.tr("Embedded bitmaps")
+                            desc: I18n.tr("Disabled avoids pixelated bitmap fonts")
+                            checked: Settings.fontEmbeddedbitmap
+                            onToggled: Settings.fontEmbeddedbitmap = !Settings.fontEmbeddedbitmap
+                        }
+                        Text {
+                            Layout.fillWidth: true
+                            text: I18n.tr("Affects Brave, Discord and GTK/Qt apps. Reopen them to apply.")
+                            color: Theme.fgMuted
+                            font.family: Theme.fontFamily
+                            font.pixelSize: Theme.fontSize - 3
+                            wrapMode: Text.WordWrap
+                        }
+                    }
                 }
 
                 // ════ BARRA ════
