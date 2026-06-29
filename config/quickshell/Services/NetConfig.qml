@@ -45,8 +45,21 @@ Singleton {
     readonly property bool isWifi: ifaceType === "wifi"
     readonly property bool hasConn: ifaceConn !== ""
 
+    // ── Utilidades ───────────────────────────────────────────
     function shellQuote(s) { return "'" + String(s).replace(/'/g, "'\\''") + "'" }
     function unesc(s) { return String(s).replace(/\\:/g, ":") }   // des-escapa ':' de nmcli -t
+
+    // Parte la salida de `nmcli -t` en filas de campos (split por ':'),
+    // descartando líneas vacías y las que no tengan las columnas mínimas.
+    function nmRows(text, minCols) {
+        const rows = []
+        String(text || "").split("\n").forEach(line => {
+            if (line.trim() === "") return
+            const parts = line.split(":")
+            if (parts.length >= minCols) rows.push(parts)
+        })
+        return rows
+    }
 
     function maskToPrefix(m) {
         const p = String(m).split(".")
@@ -110,7 +123,7 @@ Singleton {
         root.loading = true
         root.error = ""
         const k = root.isWifi ? "802-11-wireless" : "802-3-ethernet"
-        const fields = "ipv4.method,ipv4.addresses,ipv4.gateway,ipv4.dns,ipv6.method,"
+        const fields = "ipv4.method,ipv4.addresses,ipv4.gateway,ipv4.dns,IP4.DNS,ipv6.method,"
                      + "connection.autoconnect,connection.autoconnect-priority,"
                      + k + ".cloned-mac-address," + k + ".mtu"
         readProc.command = ["sh", "-c",
@@ -124,46 +137,46 @@ Singleton {
         root.applying = true
         const q = root.shellQuote
         const k = root.isWifi ? "802-11-wireless" : "802-3-ethernet"
-        let cmd = "nmcli connection modify " + q(root.ifaceConn)
-        // IPv4
-        cmd += (root.ip4method === "manual")
-            ? " ipv4.method manual ipv4.addresses " + q(root.ip4addr + "/" + root.maskToPrefix(root.ip4mask))
-              + " ipv4.gateway " + q(root.ip4gw)
-              + " ipv4.dns " + q(root.ip4dns.trim().replace(/[\s,]+/g, ","))
-            : " ipv4.method auto ipv4.addresses '' ipv4.gateway '' ipv4.dns ''"
-        // IPv6
-        cmd += " ipv6.method " + q(root.ip6method)
-        // Conexión
-        cmd += " connection.autoconnect " + (root.autoconnect ? "yes" : "no")
-        cmd += " connection.autoconnect-priority " + q(String(root.priority))
-        // Privacidad / avanzado. "default" en NetworkManager = cadena vacía.
-        cmd += " " + k + ".cloned-mac-address " + q(root.mac === "default" ? "" : root.mac)
-        const m = (root.mtu === "" || root.mtu.toLowerCase() === "auto") ? "0" : root.mtu
-        cmd += " " + k + ".mtu " + q(m)
-        cmd += " && nmcli connection up " + q(root.ifaceConn)
-        applyProc.command = ["sh", "-c", cmd]
+        const manual = root.ip4method === "manual"
+        const dns = root.ip4dns.trim().replace(/[\s,]+/g, ",")
+        const mtu = (root.mtu === "" || root.mtu.toLowerCase() === "auto") ? "0" : root.mtu
+
+        // Pares propiedad/valor para `nmcli connection modify`. Se citan todos
+        // de forma uniforme, así "" se convierte en '' (limpiar la propiedad).
+        const args = manual
+            ? ["ipv4.method", "manual",
+               "ipv4.addresses", root.ip4addr + "/" + root.maskToPrefix(root.ip4mask),
+               "ipv4.gateway", root.ip4gw]
+            : ["ipv4.method", "auto", "ipv4.addresses", "", "ipv4.gateway", ""]
+        // DNS en AMBOS métodos: vacío = automático (DHCP). En auto con DNS
+        // propio, ignoramos los del DHCP para que prevalezca.
+        args.push("ipv4.dns", dns,
+                  "ipv4.ignore-auto-dns", (dns !== "" && !manual) ? "yes" : "no",
+                  "ipv6.method", root.ip6method,
+                  "connection.autoconnect", root.autoconnect ? "yes" : "no",
+                  "connection.autoconnect-priority", String(root.priority),
+                  // "default" en NetworkManager = cadena vacía.
+                  k + ".cloned-mac-address", root.mac === "default" ? "" : root.mac,
+                  k + ".mtu", mtu)
+
+        const modify = "nmcli connection modify " + q(root.ifaceConn) + " " + args.map(q).join(" ")
+        applyProc.command = ["sh", "-c", modify + " && nmcli connection up " + q(root.ifaceConn)]
         applyProc.running = true
     }
 
     // ── Gestión de wifis guardadas ───────────────────────────
-    function forgetWifi(name) {
-        wifiOpProc.command = ["nmcli", "connection", "delete", name]
-        wifiOpProc.running = true
-    }
-    function connectWifi(name) {
-        wifiOpProc.command = ["nmcli", "connection", "up", name]
-        wifiOpProc.running = true
-    }
+    // Comandos en forma de array: nmcli recibe los argumentos tal cual,
+    // sin shell intermedio ni necesidad de citar/escapar.
+    function forgetWifi(name)  { wifiOp(["connection", "delete", name]) }
+    function connectWifi(name) { wifiOp(["connection", "up", name]) }
     function setWifiPriority(name, val) {
-        const q = root.shellQuote
-        wifiOpProc.command = ["sh", "-c",
-            "nmcli connection modify " + q(name) + " connection.autoconnect-priority " + q(String(val))]
-        wifiOpProc.running = true
+        wifiOp(["connection", "modify", name, "connection.autoconnect-priority", String(val)])
     }
     function setWifiAutoconnect(name, on) {
-        const q = root.shellQuote
-        wifiOpProc.command = ["sh", "-c",
-            "nmcli connection modify " + q(name) + " connection.autoconnect " + (on ? "yes" : "no")]
+        wifiOp(["connection", "modify", name, "connection.autoconnect", on ? "yes" : "no"])
+    }
+    function wifiOp(args) {
+        wifiOpProc.command = ["nmcli"].concat(args)
         wifiOpProc.running = true
     }
 
@@ -173,19 +186,13 @@ Singleton {
         command: ["sh", "-c", "nmcli -t -f DEVICE,TYPE,STATE,CONNECTION device status"]
         stdout: StdioCollector {
             onStreamFinished: {
-                const out = []
-                ;(this.text || "").split("\n").forEach(line => {
-                    if (line.trim() === "") return
-                    const parts = line.split(":")
-                    if (parts.length < 4) return
-                    const device = parts[0]
-                    const type = parts[1]
-                    if (type !== "wifi" && type !== "ethernet") return
-                    const state = parts[2]
-                    let conn = root.unesc(parts.slice(3).join(":")).trim()
-                    if (conn === "--") conn = ""
-                    out.push(({ device: device, type: type, state: state, connection: conn }))
-                })
+                const out = root.nmRows(this.text, 4)
+                    .filter(p => p[1] === "wifi" || p[1] === "ethernet")
+                    .map(p => {
+                        const conn = root.unesc(p.slice(3).join(":")).trim()
+                        return ({ device: p[0], type: p[1], state: p[2],
+                                  connection: conn === "--" ? "" : conn })
+                    })
                 root.interfaces = out
                 if (out.length > 0 && (root.selectedIface === "" || !out.find(i => i.device === root.selectedIface)))
                     root.selectIface(out[0].device)
@@ -202,20 +209,15 @@ Singleton {
             "nmcli -t -f UUID,TYPE,AUTOCONNECT,AUTOCONNECT-PRIORITY,ACTIVE,NAME connection show"]
         stdout: StdioCollector {
             onStreamFinished: {
-                const out = []
-                ;(this.text || "").split("\n").forEach(line => {
-                    if (line.trim() === "") return
-                    const parts = line.split(":")
-                    if (parts.length < 6) return
-                    if (parts[1] !== "802-11-wireless") return
-                    out.push(({
-                        uuid: parts[0],
-                        autoconnect: parts[2] === "yes",
-                        priority: parseInt(parts[3]) || 0,
-                        active: parts[4] === "yes",
-                        name: root.unesc(parts.slice(5).join(":"))
+                const out = root.nmRows(this.text, 6)
+                    .filter(p => p[1] === "802-11-wireless")
+                    .map(p => ({
+                        uuid: p[0],
+                        autoconnect: p[2] === "yes",
+                        priority: parseInt(p[3]) || 0,
+                        active: p[4] === "yes",
+                        name: root.unesc(p.slice(5).join(":"))
                     }))
-                })
                 // Orden: activa primero, luego por prioridad desc, luego nombre.
                 out.sort((a, b) => (b.active - a.active) || (b.priority - a.priority) || a.name.localeCompare(b.name))
                 root.savedWifis = out
@@ -227,12 +229,14 @@ Singleton {
         id: readProc
         stdout: StdioCollector {
             onStreamFinished: {
+                let cfgDns = ""        // DNS guardados en el perfil (ipv4.dns)
+                let activeDns = []     // DNS en uso ahora mismo (IP4.DNS, p.ej. del DHCP)
                 ;(this.text || "").split("\n").forEach(ln => {
                     const idx = ln.indexOf(":")
                     if (idx < 0) return
                     const key = ln.slice(0, idx)
-                    const val = ln.slice(idx + 1)
-                    if (key === "ipv4.method") root.ip4method = (val.trim() === "manual") ? "manual" : "auto"
+                    const val = ln.slice(idx + 1).trim()
+                    if (key === "ipv4.method") root.ip4method = (val === "manual") ? "manual" : "auto"
                     else if (key === "ipv4.addresses") {
                         const first = val.split(",")[0].trim()
                         if (first.indexOf("/") >= 0) {
@@ -240,14 +244,18 @@ Singleton {
                             root.ip4mask = root.prefixToMask(first.split("/")[1])
                         } else { root.ip4addr = ""; root.ip4mask = "" }
                     }
-                    else if (key === "ipv4.gateway") root.ip4gw = val.trim()
-                    else if (key === "ipv4.dns") root.ip4dns = val.trim().replace(/,/g, ", ")
-                    else if (key === "ipv6.method") root.ip6method = val.trim() || "auto"
-                    else if (key === "connection.autoconnect") root.autoconnect = (val.trim() === "yes")
-                    else if (key === "connection.autoconnect-priority") root.priority = parseInt(val.trim()) || 0
-                    else if (key.endsWith("cloned-mac-address")) root.mac = (val.trim() === "") ? "default" : val.trim()
-                    else if (key.endsWith(".mtu")) root.mtu = (val.trim() === "auto" || val.trim() === "0") ? "" : val.trim()
+                    else if (key === "ipv4.gateway") root.ip4gw = val
+                    else if (key === "ipv4.dns") cfgDns = val.replace(/,/g, ", ")
+                    else if (key.indexOf("IP4.DNS") === 0) { if (val !== "") activeDns.push(val) }
+                    else if (key === "ipv6.method") root.ip6method = val || "auto"
+                    else if (key === "connection.autoconnect") root.autoconnect = (val === "yes")
+                    else if (key === "connection.autoconnect-priority") root.priority = parseInt(val) || 0
+                    else if (key.endsWith("cloned-mac-address")) root.mac = (val === "") ? "default" : val
+                    else if (key.endsWith(".mtu")) root.mtu = (val === "auto" || val === "0") ? "" : val
                 })
+                // En el campo: los DNS propios del perfil; si no hay, los que el
+                // sistema usa ahora (DHCP) para que se vean los configurados por defecto.
+                root.ip4dns = cfgDns !== "" ? cfgDns : activeDns.join(", ")
                 root.loading = false
             }
         }
