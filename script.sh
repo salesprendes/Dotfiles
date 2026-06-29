@@ -3,50 +3,11 @@ set -Eeuo pipefail
 
 SCRIPT_NAME=salesprendes
 
-BASE_PACKAGES=(
-  linux-firmware
-  quickshell
-  qt6-declarative
-  hyprland
-  ttf-jetbrains-mono-nerd
-  cliphist
-  wl-clipboard
-  hyprlock
-  polkit
-  hyprpolkitagent
-  curl
-  procps-ng
-  nano
-  networkmanager
-  bluez
-  bluez-utils
-  pipewire
-  wireplumber
-  pipewire-pulse
-  playerctl
-  upower
-  rtkit
-  hypridle
-  power-profiles-daemon
-  xdg-user-dirs
-  hyprshot
-  net-tools
-  imv
-)
+BASE_PACKAGES=(linux-firmware quickshell qt6-declarative hyprland ttf-jetbrains-mono-nerd cliphist wl-clipboard hyprlock polkit hyprpolkitagent curl procps-ng nano networkmanager bluez bluez-utils pipewire wireplumber pipewire-pulse playerctl upower rtkit hypridle power-profiles-daemon xdg-user-dirs hyprshot net-tools imv)
 
 # Nota: libva-mesa-driver y lib32-libva-mesa-driver ya no existen como paquetes
 # independientes; sus drivers VA-API van incluidos en mesa / lib32-mesa.
-AMD_PACKAGES=(
-  mesa
-  vulkan-radeon
-  mesa-utils
-  vulkan-tools
-  libva-utils
-  lib32-mesa
-  lib32-vulkan-radeon
-  libva-mesa-driver
-  lib32-libva-mesa-driver
-)
+AMD_PACKAGES=(mesa vulkan-radeon mesa-utils vulkan-tools libva-utils lib32-mesa lib32-vulkan-radeon libva-mesa-driver lib32-libva-mesa-driver)
 
 YAY_BUILD_PACKAGES=(base-devel git)
 BRIGHTNESSCTL_PACKAGES=(brightnessctl)
@@ -54,6 +15,7 @@ DDC_PACKAGES=(ddcutil)
 
 # --- Valores por defecto (entorno) -----------------------------------------
 DOTFILES_REPO="${DOTFILES_REPO:-https://github.com/salesprendes/Dotfiles.git}"
+WALLPAPERS_REPO="${WALLPAPERS_REPO:-https://github.com/D3Ext/aesthetic-wallpapers.git}"
 PACMAN="${PACMAN:-pacman}"
 SUDO="${SUDO:-sudo}"
 INSTALL_USER="${SUDO_USER:-${USER:-}}"
@@ -74,7 +36,9 @@ COLOR_BOLD=$'\033[1m'
 
 # Estado interno.
 LOG_FILE=""
-INSTALLED_SET=""
+INSTALL_HOME=""
+INSTALLED_CACHE_LOADED=0
+declare -A INSTALLED_PACKAGES=()
 
 # ---------------------------------------------------------------------------
 # Spinner, traps y logging
@@ -193,20 +157,47 @@ require_sudo() {
   fi
 }
 
+run_as_root() {
+  if [[ -n "${SUDO}" ]]; then
+    "${SUDO}" "$@"
+  else
+    "$@"
+  fi
+}
+
+make_temp_dir() {
+  local name="$1"
+  if [[ ${EUID} -eq 0 && "${INSTALL_USER}" != "root" ]]; then
+    runuser -u "${INSTALL_USER}" -- mktemp -d "/tmp/${SCRIPT_NAME}-${name}-${INSTALL_USER}.XXXXXX"
+  else
+    mktemp -d "/tmp/${SCRIPT_NAME}-${name}-${INSTALL_USER}.XXXXXX"
+  fi
+}
+
+chown_install_user() {
+  [[ ${EUID} -eq 0 ]] || return 0
+  chown -R "${INSTALL_USER}:${INSTALL_USER}" "$@"
+}
+
 # ---------------------------------------------------------------------------
 # Cache de paquetes instalados (#8): una sola consulta a pacman.
 # ---------------------------------------------------------------------------
 load_installed_cache() {
-  INSTALLED_SET="$("${PACMAN}" -Qq 2>/dev/null || true)"
+  INSTALLED_PACKAGES=()
+  local pkg
+  while IFS= read -r pkg; do
+    [[ -n "${pkg}" ]] && INSTALLED_PACKAGES["${pkg}"]=1
+  done < <("${PACMAN}" -Qq 2>/dev/null || true)
+  INSTALLED_CACHE_LOADED=1
 }
 
 is_installed() {
-  [[ -n "${INSTALLED_SET}" ]] || load_installed_cache
-  grep -qxF -- "$1" <<<"${INSTALLED_SET}"
+  [[ ${INSTALLED_CACHE_LOADED} -eq 1 ]] || load_installed_cache
+  [[ ${INSTALLED_PACKAGES[$1]+_} ]]
 }
 
 missing_packages() {
-  [[ -n "${INSTALLED_SET}" ]] || load_installed_cache
+  [[ ${INSTALLED_CACHE_LOADED} -eq 1 ]] || load_installed_cache
   local pkg
   for pkg in "$@"; do
     is_installed "${pkg}" || printf "%s\n" "${pkg}"
@@ -218,7 +209,7 @@ missing_packages() {
 # ---------------------------------------------------------------------------
 sync_databases() {
   with_spinner "Actualizando sistema y bases de datos de paquetes (-Syu)" \
-    ${SUDO} "${PACMAN}" -Syu --noconfirm
+    run_as_root "${PACMAN}" -Syu --noconfirm
 }
 
 install_group() {
@@ -240,7 +231,7 @@ install_group() {
   done
 
   with_spinner "Descargando e instalando ${label}" \
-    ${SUDO} "${PACMAN}" -S --needed --noconfirm -- "${missing[@]}"
+    run_as_root "${PACMAN}" -S --needed --noconfirm -- "${missing[@]}"
 
   load_installed_cache
 }
@@ -280,14 +271,14 @@ has_amd_graphics() {
 
 configure_ddc_permissions() {
   if ! getent group i2c >/dev/null 2>&1; then
-    with_spinner "Creando grupo i2c" ${SUDO} groupadd i2c
+    with_spinner "Creando grupo i2c" run_as_root groupadd i2c
   fi
 
   if id -nG "${INSTALL_USER}" | tr ' ' '\n' | grep -qx i2c; then
     ok "${INSTALL_USER} ya pertenece al grupo i2c"
   else
     with_spinner "Añadiendo ${INSTALL_USER} al grupo i2c" \
-      ${SUDO} usermod -aG i2c "${INSTALL_USER}"
+      run_as_root usermod -aG i2c "${INSTALL_USER}"
     warn "Cierra sesión y vuelve a entrar para activar el grupo i2c."
   fi
 }
@@ -320,9 +311,11 @@ install_yay() {
 
   install_group "herramientas para compilar yay" "${YAY_BUILD_PACKAGES[@]}"
 
-  local build_dir="/tmp/${SCRIPT_NAME}-yay-build-${INSTALL_USER}-$$"
+  local build_dir
   local build_script
+  build_dir="$(make_temp_dir yay-build)"
   build_script="$(mktemp)"
+  chmod 755 "${build_script}"
 
   cat > "${build_script}" <<'BUILD'
 set -Eeuo pipefail
@@ -349,7 +342,9 @@ BUILD
   [[ -n "${pkg_file}" ]] || fail "No se encontró el paquete compilado de yay."
 
   with_spinner "Instalando paquete yay compilado" \
-    ${SUDO} "${PACMAN}" -U --noconfirm -- "${pkg_file}"
+    run_as_root "${PACMAN}" -U --noconfirm -- "${pkg_file}"
+
+  rm -rf "${build_dir}"
 }
 
 # ---------------------------------------------------------------------------
@@ -400,13 +395,11 @@ copy_tree_contents() {
   fi
 
   cp -a "${src}/." "${dst}/"
-  if [[ ${EUID} -eq 0 ]]; then
-    chown -R "${INSTALL_USER}:${INSTALL_USER}" "${dst}"
-  fi
+  chown_install_user "${dst}"
 }
 
 install_dotfiles() {
-  local source_dir="" dir=""
+  local source_dir="" dir="" cleanup_source=0
 
   install_group "herramientas para descargar dotfiles" git
 
@@ -417,8 +410,8 @@ install_dotfiles() {
   fi
 
   if [[ -z "${source_dir}" ]]; then
-    source_dir="/tmp/${SCRIPT_NAME}-dotfiles-${INSTALL_USER}-$$"
-    rm -rf "${source_dir}"
+    source_dir="$(make_temp_dir dotfiles)"
+    cleanup_source=1
     with_spinner "Descargando dotfiles" \
       run_as_install_user git clone --depth 1 "${DOTFILES_REPO}" "${source_dir}"
   fi
@@ -432,18 +425,17 @@ install_dotfiles() {
   if [[ -d "${INSTALL_HOME}/.local/bin" ]]; then
     chmod -R u+rx "${INSTALL_HOME}/.local/bin"
   fi
+
+  if [[ ${cleanup_source} -eq 1 ]]; then
+    rm -rf "${source_dir}"
+  fi
 }
 
 # ---------------------------------------------------------------------------
 # Servicios (#1)
 # ---------------------------------------------------------------------------
 enable_services() {
-  local services=(
-    NetworkManager.service
-    bluetooth.service
-    rtkit-daemon.service
-    power-profiles-daemon.service
-  )
+  local services=(NetworkManager.service bluetooth.service rtkit-daemon.service power-profiles-daemon.service)
   local service
   for service in "${services[@]}"; do
     if ! systemctl list-unit-files "${service}" 2>/dev/null | grep -q "${service}"; then
@@ -455,7 +447,7 @@ enable_services() {
       continue
     fi
     with_spinner "Habilitando ${service}" \
-      ${SUDO} systemctl enable --now "${service}"
+      run_as_root systemctl enable --now "${service}"
   done
 }
 
@@ -467,6 +459,70 @@ post_install() {
   else
     with_spinner "Actualizando carpetas XDG del usuario" xdg-user-dirs-update
   fi
+}
+
+# ---------------------------------------------------------------------------
+# Fondos de pantalla (se ejecuta DESPUÉS de generar las carpetas XDG)
+# ---------------------------------------------------------------------------
+# Copia las imágenes (sin sobrescribir las existentes) y, si se ejecuta como
+# root, ajusta la propiedad al usuario destino.
+copy_wallpapers() {
+  local src="$1" dst="$2"
+  local file name copied=0 skipped=0
+
+  [[ -d "${src}" ]] || { warn "No se encontró ${src}"; return 0; }
+  mkdir -p "${dst}"
+
+  while IFS= read -r -d '' file; do
+    name="$(basename -- "${file}")"
+    if [[ -e "${dst}/${name}" ]]; then
+      ((skipped += 1))
+      continue
+    fi
+    cp -p -- "${file}" "${dst}/"
+    ((copied += 1))
+  done < <(find "${src}" -maxdepth 1 -type f \
+    \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' \
+       -o -iname '*.webp' -o -iname '*.gif' \) -print0)
+
+  chown_install_user "${dst}"
+  ok "Fondos copiados: ${copied}; ya existentes: ${skipped}"
+}
+
+install_wallpapers() {
+  local pics wall_dir tmp
+
+  # Carpeta de imágenes XDG (localizada: ~/Imágenes, ~/Images, ~/Pictures…).
+  # post_install ya ejecutó xdg-user-dirs-update, así que xdg-user-dir resuelve
+  # la ruta correcta para el idioma del sistema.
+  pics="$(run_as_install_user env HOME="${INSTALL_HOME}" xdg-user-dir PICTURES 2>/dev/null || true)"
+  [[ -n "${pics}" ]] || pics="${INSTALL_HOME}/Pictures"
+  wall_dir="${pics}/Wallpapers"
+
+  # Crear la carpeta Wallpapers si no existe.
+  if [[ -d "${wall_dir}" ]]; then
+    ok "Carpeta de fondos ya existe: ${wall_dir}"
+  else
+    run_as_install_user mkdir -p "${wall_dir}"
+    ok "Creada carpeta de fondos: ${wall_dir}"
+  fi
+
+  command -v git >/dev/null 2>&1 || install_group "git para descargar fondos" git
+
+  tmp="$(make_temp_dir wallpapers)"
+
+  # Best-effort: si falla la descarga, se avisa pero no se aborta la instalación.
+  if ! with_spinner "Descargando fondos (aesthetic-wallpapers)" \
+        run_as_install_user git clone --depth 1 "${WALLPAPERS_REPO}" "${tmp}"; then
+    warn "No se pudieron descargar los fondos; se continúa."
+    rm -rf "${tmp}"
+    return 0
+  fi
+
+  with_spinner "Copiando fondos a ${wall_dir}" \
+    copy_wallpapers "${tmp}/images" "${wall_dir}"
+
+  rm -rf "${tmp}"
 }
 
 # ---------------------------------------------------------------------------
@@ -507,6 +563,7 @@ main() {
   install_amd_stack
   enable_services
   post_install
+  install_wallpapers
   install_dotfiles
 
   echo

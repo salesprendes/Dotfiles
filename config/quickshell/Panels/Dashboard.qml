@@ -551,7 +551,8 @@ Popout {
                 Layout.fillWidth: true
                 Layout.topMargin: Theme.space12; Layout.bottomMargin: Theme.space12
                 visible: Wallpaper.list.length === 0
-                text: I18n.tr("No images in wallpaper folders.\n~/Pictures/Wallpapers · ~/.config/wallpapers")
+                text: I18n.tr("No images in wallpaper folders.") + "\n"
+                      + Settings.wallpaperDirs.map(d => d.replace(Settings.home, "~")).join(" · ")
                 color: Theme.fgMuted
                 font.family: Theme.fontFamily; font.pixelSize: Theme.fontSize - 2
                 horizontalAlignment: Text.AlignHCenter; lineHeight: 1.4

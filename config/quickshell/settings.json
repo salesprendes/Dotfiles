@@ -32,7 +32,7 @@
   "fontHintstyle": "hintslight",
   "fontRgba": "rgb",
   "fontLcdfilter": "lcddefault",
-  "fontEmbeddedbitmap": true,
+  "fontEmbeddedbitmap": false,
   "panelAnimationStyle": "material",
   "panelMotionEffect": "standard",
   "language": "es",
@@ -57,10 +57,6 @@
   "mutedNotificationApps": [],
   "wallpaperTransition": "fade",
   "wallpaperTransitionDuration": 1,
-  "wallpaperDirs": [
-    "/home/salesprendes/Pictures/Wallpapers",
-    "/home/salesprendes/.config/wallpapers"
-  ],
   "wallpaperCurrent": "",
   "terminalApp": "kitty",
   "terminalFont": "",

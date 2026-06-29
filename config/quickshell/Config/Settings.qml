@@ -201,8 +201,9 @@ Singleton {
     // fade | zoom | slide | push | wipe.
     property string wallpaperTransition: "fade"
     property real   wallpaperTransitionDuration: 1.0
-    property var    wallpaperDirs: [home + "/Pictures/Wallpapers",
-                                    home + "/.config/wallpapers"]
+    // Carpetas de fondos. La de imágenes se resuelve con `xdg-user-dir PICTURES`
+    // (localizada, p. ej. ~/Imágenes) al arrancar; no se persiste ni se edita.
+    property var    wallpaperDirs: [home + "/.config/wallpapers"]
     property string wallpaperCurrent: ""  // último fondo aplicado (ruta absoluta)
 
     // ── Persistencia ─────────────────────────────────────────
@@ -218,7 +219,7 @@ Singleton {
         "clock24h", "clockShowSeconds", "clockShowDate",
         "weatherEnabled", "weatherLocation", "weatherMetric", "weatherRefreshMin",
         "notifPopupsEnabled", "notifTimeout", "notifMaxVisible", "notifPosition", "mutedNotificationApps",
-        "wallpaperTransition", "wallpaperTransitionDuration", "wallpaperDirs", "wallpaperCurrent",
+        "wallpaperTransition", "wallpaperTransitionDuration", "wallpaperCurrent",
         "terminalApp", "terminalFont", "terminalFontSize", "terminalOpacity", "terminalPadding",
         "terminalCursorShape", "terminalCursorBlink", "terminalLineHeight", "terminalTabStyle", "terminalLigatures"]
 
@@ -256,11 +257,6 @@ Singleton {
         // accentColor: cadena hex de color.
         if (k === "accentColor")
             return (typeof val === "string" && /^#?[0-9a-fA-F]{3,8}$/.test(val)) ? val : undefined
-        // wallpaperDirs: array de cadenas.
-        if (k === "wallpaperDirs") {
-            if (!Array.isArray(val)) return undefined
-            return val.every(x => typeof x === "string") ? val : undefined
-        }
         if (k === "mutedNotificationApps") {
             if (!Array.isArray(val)) return undefined
             return val.every(x => typeof x === "string") ? val : undefined
@@ -333,7 +329,6 @@ Singleton {
         weatherEnabled = true; weatherLocation = ""; weatherMetric = true; weatherRefreshMin = 30
         notifPopupsEnabled = true; notifTimeout = 5; notifMaxVisible = 4; notifPosition = "tr"; mutedNotificationApps = []
         wallpaperTransition = "fade"; wallpaperTransitionDuration = 1.0
-        wallpaperDirs = [home + "/Pictures/Wallpapers", home + "/.config/wallpapers"]
         wallpaperCurrent = ""
         terminalApp = "kitty"; terminalFont = ""; terminalFontSize = 11.5; terminalOpacity = 0.80
         terminalPadding = 12; terminalCursorShape = "beam"; terminalCursorBlink = true
@@ -633,7 +628,6 @@ Singleton {
     onWeatherRefreshMinChanged: scheduleSave()
     onWallpaperTransitionChanged: scheduleSave()
     onWallpaperTransitionDurationChanged: scheduleSave()
-    onWallpaperDirsChanged: scheduleSave()
     onWallpaperCurrentChanged: scheduleSave()
     onTerminalAppChanged: scheduleSave()
     onTerminalFontChanged: scheduleSave()
@@ -751,9 +745,24 @@ Singleton {
         id: fontsApply
     }
 
+    // Resuelve la carpeta de imágenes XDG (localizada) y compone wallpaperDirs:
+    // <imágenes>/Wallpapers + ~/.config/wallpapers.
+    Process {
+        id: xdgPicturesProc
+        command: ["xdg-user-dir", "PICTURES"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const p = (text || "").trim()
+                if (p)
+                    s.wallpaperDirs = [p + "/Wallpapers", s.home + "/.config/wallpapers"]
+            }
+        }
+    }
+
     Component.onCompleted: {
         load()
         hyprDetect.running = true
+        xdgPicturesProc.running = true   // resuelve la carpeta de imágenes XDG
         applyGtkTheme(false)   // genera gtk.css y fija color-scheme (sin reiniciar apps)
         applyFontsConf()       // genera ~/.config/fontconfig/fonts.conf (render + fuente)
     }
