@@ -489,6 +489,13 @@ copy_wallpapers() {
   ok "Fondos copiados: ${copied}; ya existentes: ${skipped}"
 }
 
+download_wallpapers() {
+  local dst="$1"
+
+  run_as_install_user git clone --depth 1 --single-branch --filter=blob:none --sparse "${WALLPAPERS_REPO}" "${dst}"
+  run_as_install_user git -C "${dst}" sparse-checkout set images
+}
+
 install_wallpapers() {
   local pics wall_dir tmp
 
@@ -512,8 +519,8 @@ install_wallpapers() {
   tmp="$(make_temp_dir wallpapers)"
 
   # Best-effort: si falla la descarga, se avisa pero no se aborta la instalación.
-  if ! with_spinner "Descargando fondos (aesthetic-wallpapers)" \
-        run_as_install_user git clone --depth 1 "${WALLPAPERS_REPO}" "${tmp}"; then
+  if ! with_spinner "Descargando carpeta images de aesthetic-wallpapers" \
+        download_wallpapers "${tmp}"; then
     warn "No se pudieron descargar los fondos; se continúa."
     rm -rf "${tmp}"
     return 0
