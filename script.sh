@@ -403,11 +403,16 @@ enable_services() {
 
 post_install() {
   command -v xdg-user-dirs-update >/dev/null 2>&1 || return 0
+  local system_lang
+  system_lang="$(grep '^LANG=' /etc/locale.conf 2>/dev/null | cut -d= -f2 | tr -d '"')"
+  local lang_env=()
+  [[ -n "${system_lang}" ]] && lang_env=("LANG=${system_lang}")
+
   if [[ ${EUID} -eq 0 && "${INSTALL_USER}" != "root" ]]; then
     with_spinner "Actualizando carpetas XDG de ${INSTALL_USER}" \
-      runuser -u "${INSTALL_USER}" -- env -u LC_ALL xdg-user-dirs-update
+      runuser -u "${INSTALL_USER}" -- env -u LC_ALL "${lang_env[@]}" xdg-user-dirs-update
   else
-    with_spinner "Actualizando carpetas XDG del usuario" env -u LC_ALL xdg-user-dirs-update
+    with_spinner "Actualizando carpetas XDG del usuario" env -u LC_ALL "${lang_env[@]}" xdg-user-dirs-update
   fi
 }
 
