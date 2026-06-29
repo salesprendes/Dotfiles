@@ -275,6 +275,12 @@ Popout {
             transform: Translate { y: panel.listClearOffset }
             onContentHeightChanged: panel.refreshBodyHeight()
 
+            // Al borrar una entrada, las filas de debajo suben deslizándose
+            // en vez de dar un salto seco.
+            removeDisplaced: Transition {
+                NumberAnimation { properties: "y"; duration: Theme.animFast; easing.type: Easing.OutCubic }
+            }
+
             delegate: Rectangle {
                 id: row
                 required property var modelData
@@ -282,7 +288,7 @@ Popout {
 
                 width: ListView.view.width
                 implicitHeight: Math.max(Theme.rowL, preview.implicitHeight + Theme.controlXS)
-                x: deleting ? 34 : 0
+                x: deleting ? 24 : 0
                 opacity: deleting ? 0 : 1
                 scale: deleting ? 0.96 : 1
                 radius: Theme.pillRadius
@@ -290,16 +296,19 @@ Popout {
                 border.width: Theme.hairline
                 border.color: Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.28)
                 Behavior on color { ColorAnimation { duration: Theme.animFast } }
-                Behavior on x { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
+                Behavior on x { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
                 Behavior on opacity { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
                 Behavior on scale { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
 
                 property bool deleting: false
 
+                // Salida rápida: desliza+desvanece y, en cuanto termina (no antes,
+                // para no ver el "pop"), elimina la entrada. La pausa se liga a
+                // animFast para respetar la velocidad de animación del usuario.
                 SequentialAnimation {
                     id: deleteAnim
                     ScriptAction { script: row.deleting = true }
-                    PauseAnimation { duration: 240 }
+                    PauseAnimation { duration: Theme.animFast }
                     ScriptAction { script: Clipboard.remove(row.modelData) }
                 }
 

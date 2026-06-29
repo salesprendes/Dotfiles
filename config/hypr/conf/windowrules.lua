@@ -23,3 +23,11 @@ hl.window_rule({
 
     no_focus = true,
 })
+
+-- Visor de imágenes imv: abrir siempre en modo flotante.
+hl.window_rule({
+    name  = "imv-floating",
+    match = { class = "^(imv)$" },
+
+    float = true,
+})

@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import Quickshell
+import Quickshell.Hyprland
 import Quickshell.Services.UPower
 import qs.Components
 import qs.Config
@@ -42,6 +43,47 @@ FloatingWindow {
             navResetToken++
         }
         else if (Globals.settingsOpen) Globals.settingsOpen = false   // cerrada por Hyprland
+    }
+
+    // ── Reabrir cuando ya está abierta ───────────────────────────
+    //  Globals.toggleSettings() pide esto si la ventana ya existe. Si está
+    //  en ESTE workspace → cerrar (toggle de toda la vida). Si está en OTRO
+    //  → traerla al workspace actual y enfocarla, en vez de cerrarla.
+    Connections {
+        target: Globals
+        function onSettingsResummon() { cfg.summonOrClose() }
+    }
+
+    // Busca el toplevel de Hyprland de ESTA ventana por su título (que
+    // conocemos aquí mismo, así no depende del idioma de la interfaz).
+    function settingsToplevel() {
+        const list = Hyprland.toplevels ? Hyprland.toplevels.values : []
+        for (let i = 0; i < list.length; i++)
+            if (list[i] && list[i].title === cfg.title) return list[i]
+        return null
+    }
+
+    function summonOrClose() {
+        const tl = settingsToplevel()
+        const ws = Hyprland.focusedWorkspace
+        const here = tl && ws && tl.workspace && tl.workspace.id === ws.id
+        if (!tl || here) {
+            Globals.settingsOpen = false            // ya está aquí (o no se halló): cerrar
+            return
+        }
+        // En otro workspace: traerla al actual y enfocarla. Como el destino es
+        // el workspace activo, el "seguir la ventana" no cambia tu vista y deja
+        // la ventana enfocada. Este Hyprland está en modo Lua, así que la
+        // sintaxis clásica de dispatchers NO vale: hay que usar la API Lua.
+        let addr = String(tl.address)
+        if (addr.indexOf("0x") !== 0) addr = "0x" + addr
+        if (Hyprland.usingLua) {
+            Hyprland.dispatch('hl.dsp.window.move({ workspace = ' + ws.id
+                + ', window = "address:' + addr + '" })')
+        } else {
+            Hyprland.dispatch("movetoworkspace " + ws.id + ",address:" + addr)
+            Hyprland.dispatch("focuswindow address:" + addr)
+        }
     }
 
     readonly property var groups: [

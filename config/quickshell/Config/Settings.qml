@@ -196,6 +196,7 @@ Singleton {
     property real   wallpaperTransitionDuration: 1.0
     property var    wallpaperDirs: [home + "/Pictures/Wallpapers",
                                     home + "/.config/wallpapers"]
+    property string wallpaperCurrent: ""  // último fondo aplicado (ruta absoluta)
 
     // ── Persistencia ─────────────────────────────────────────
     property bool _loaded: false
@@ -209,7 +210,7 @@ Singleton {
         "clock24h", "clockShowSeconds", "clockShowDate",
         "weatherEnabled", "weatherLocation", "weatherMetric", "weatherRefreshMin",
         "notifPopupsEnabled", "notifTimeout", "notifMaxVisible", "notifPosition", "mutedNotificationApps",
-        "wallpaperTransition", "wallpaperTransitionDuration", "wallpaperDirs",
+        "wallpaperTransition", "wallpaperTransitionDuration", "wallpaperDirs", "wallpaperCurrent",
         "terminalApp", "terminalFont", "terminalFontSize", "terminalOpacity", "terminalPadding",
         "terminalCursorShape", "terminalCursorBlink", "terminalLineHeight", "terminalTabStyle", "terminalLigatures"]
 
@@ -320,6 +321,7 @@ Singleton {
         notifPopupsEnabled = true; notifTimeout = 5; notifMaxVisible = 4; notifPosition = "tr"; mutedNotificationApps = []
         wallpaperTransition = "fade"; wallpaperTransitionDuration = 1.0
         wallpaperDirs = [home + "/Pictures/Wallpapers", home + "/.config/wallpapers"]
+        wallpaperCurrent = ""
         terminalApp = "kitty"; terminalFont = ""; terminalFontSize = 11.5; terminalOpacity = 0.80
         terminalPadding = 12; terminalCursorShape = "beam"; terminalCursorBlink = true
         terminalLineHeight = 2; terminalTabStyle = "powerline"; terminalLigatures = true
@@ -470,6 +472,7 @@ Singleton {
     onWallpaperTransitionChanged: scheduleSave()
     onWallpaperTransitionDurationChanged: scheduleSave()
     onWallpaperDirsChanged: scheduleSave()
+    onWallpaperCurrentChanged: scheduleSave()
     onTerminalAppChanged: scheduleSave()
     onTerminalFontChanged: scheduleSave()
     onTerminalFontSizeChanged: scheduleSave()

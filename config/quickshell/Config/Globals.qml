@@ -37,7 +37,13 @@ Singleton {
     function toggleLauncher()      { toggle("launcher") }
     function toggleClipboard()     { toggle("clipboard") }
     function toggleDashboard()     { toggle("dashboard") }
-    function toggleSettings()      { settingsOpen = !settingsOpen }
+    // Si está cerrada, ábrela. Si ya está abierta, deja que la propia ventana
+    // decida: cerrarla (si está en este workspace) o traerla al actual.
+    signal settingsResummon()
+    function toggleSettings() {
+        if (settingsOpen) settingsResummon()
+        else settingsOpen = true
+    }
     // Cierra solo los popups (la ventana de Ajustes es independiente).
     function closeAll()            { openPanel = "" }
 }

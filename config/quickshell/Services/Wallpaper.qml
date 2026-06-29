@@ -32,12 +32,29 @@ Singleton {
     function refresh() { scanProc.running = true }
 
     // Cambia el fondo: basta con fijar 'current'; Backdrop.qml hace el fundido.
+    // Persiste la ruta en Settings para conservarla entre reinicios/recargas.
     function apply(path) {
         if (!path) return
         current = path
+        Settings.wallpaperCurrent = path
     }
 
-    Component.onCompleted: refresh()
+    // Restaura el último fondo guardado al arrancar y vuelve a escanear.
+    Component.onCompleted: {
+        if (Settings.wallpaperCurrent)
+            current = Settings.wallpaperCurrent
+        refresh()
+    }
+
+    // Si Settings carga después (orden de inicialización de singletons) o si
+    // otro proceso cambia el fondo guardado, refléjalo en 'current'.
+    Connections {
+        target: Settings
+        function onWallpaperCurrentChanged() {
+            if (Settings.wallpaperCurrent && Settings.wallpaperCurrent !== root.current)
+                root.current = Settings.wallpaperCurrent
+        }
+    }
 
     // Escaneo de imágenes con `find` sobre todas las carpetas.
     Process {
