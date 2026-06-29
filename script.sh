@@ -151,8 +151,10 @@ validate_user() {  # (#9)
 
 require_sudo() {
   if [[ -n "${SUDO}" ]]; then
-    "${SUDO}" -k
-    "${SUDO}" -p "  Se requiere sudo. Contraseña: " true
+    command -v "${SUDO}" >/dev/null 2>&1 || fail "No se encontró sudo."
+    if ! "${SUDO}" -v -p "  Se requiere sudo. Contraseña: "; then
+      fail "No se pudo validar sudo. Ejecuta el script con un usuario con permisos sudo o usa: sudo ./script.sh"
+    fi
     ok "Privilegios de administrador preparados"
   fi
 }
