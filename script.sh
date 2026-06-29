@@ -493,9 +493,18 @@ copy_wallpapers() {
 
 download_wallpapers() {
   local dst="$1"
+  local timeout_seconds=180
+  local clone_cmd=(git clone --depth 1 --single-branch --filter=blob:none --sparse "${WALLPAPERS_REPO}" "${dst}")
+  local sparse_cmd=(git -C "${dst}" sparse-checkout set images)
 
-  run_as_install_user git clone --depth 1 --single-branch --filter=blob:none --sparse "${WALLPAPERS_REPO}" "${dst}"
-  run_as_install_user git -C "${dst}" sparse-checkout set images
+  if command -v timeout >/dev/null 2>&1; then
+    clone_cmd=(timeout "${timeout_seconds}" "${clone_cmd[@]}")
+    sparse_cmd=(timeout "${timeout_seconds}" "${sparse_cmd[@]}")
+  fi
+
+  run_as_install_user env GIT_TERMINAL_PROMPT=0 GIT_LFS_SKIP_SMUDGE=1 "${clone_cmd[@]}"
+  run_as_install_user env GIT_TERMINAL_PROMPT=0 GIT_LFS_SKIP_SMUDGE=1 \
+    "${sparse_cmd[@]}"
 }
 
 install_wallpapers() {
@@ -520,12 +529,10 @@ install_wallpapers() {
 
   tmp="$(make_temp_dir wallpapers)"
 
-  # Best-effort: si falla la descarga, se avisa pero no se aborta la instalación.
   if ! with_spinner "Descargando carpeta images de aesthetic-wallpapers" \
         download_wallpapers "${tmp}"; then
-    warn "No se pudieron descargar los fondos; se continúa."
     rm -rf "${tmp}"
-    return 0
+    fail "No se pudieron descargar los fondos."
   fi
 
   with_spinner "Copiando fondos a ${wall_dir}" \
