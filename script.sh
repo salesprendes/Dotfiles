@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 SCRIPT_NAME=salesprendes
 
-BASE_PACKAGES=(linux-firmware quickshell qt6-declarative hyprland ttf-jetbrains-mono-nerd cliphist wl-clipboard hyprlock polkit hyprpolkitagent curl procps-ng nano networkmanager bluez bluez-utils pipewire wireplumber pipewire-pulse tar playerctl upower rtkit hypridle power-profiles-daemon xdg-user-dirs hyprshot net-tools imv)
+BASE_PACKAGES=(linux-firmware quickshell qt6-declarative hyprland ttf-jetbrains-mono-nerd cliphist wl-clipboard hyprlock polkit hyprpolkitagent procps-ng nano networkmanager bluez bluez-utils pipewire wireplumber pipewire-pulse playerctl upower rtkit hypridle power-profiles-daemon xdg-user-dirs hyprshot net-tools imv)
 AMD_PACKAGES=(mesa vulkan-radeon mesa-utils vulkan-tools libva-utils lib32-mesa lib32-vulkan-radeon libva-mesa-driver lib32-libva-mesa-driver)
 
 YAY_BUILD_PACKAGES=(base-devel git)
@@ -12,10 +12,6 @@ DDC_PACKAGES=(ddcutil)
 
 # --- Valores por defecto (entorno) -----------------------------------------
 DOTFILES_REPO="${DOTFILES_REPO:-https://github.com/salesprendes/Dotfiles.git}"
-WALLPAPERS_ARCHIVES=(
-  "https://github.com/D3Ext/aesthetic-wallpapers/archive/refs/heads/main.tar.gz"
-  "https://github.com/D3Ext/aesthetic-wallpapers/archive/refs/heads/master.tar.gz"
-)
 PACMAN="${PACMAN:-pacman}"
 SUDO="${SUDO:-sudo}"
 INSTALL_USER="${SUDO_USER:-${USER:-}}"
@@ -464,95 +460,6 @@ post_install() {
 }
 
 # ---------------------------------------------------------------------------
-# Fondos de pantalla (se ejecuta DESPUÉS de generar las carpetas XDG)
-# ---------------------------------------------------------------------------
-# Copia las imágenes (sin sobrescribir las existentes) y, si se ejecuta como
-# root, ajusta la propiedad al usuario destino.
-copy_wallpapers() {
-  local src="$1" dst="$2"
-  local file name copied=0 skipped=0
-
-  [[ -d "${src}" ]] || { warn "No se encontró ${src}"; return 0; }
-  mkdir -p "${dst}"
-
-  while IFS= read -r -d '' file; do
-    name="$(basename -- "${file}")"
-    if [[ -e "${dst}/${name}" ]]; then
-      ((skipped += 1))
-      continue
-    fi
-    cp -p -- "${file}" "${dst}/"
-    ((copied += 1))
-  done < <(find "${src}" -maxdepth 1 -type f \
-    \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' \
-       -o -iname '*.webp' -o -iname '*.gif' \) -print0)
-
-  chown_install_user "${dst}"
-  ok "Fondos copiados: ${copied}; ya existentes: ${skipped}"
-}
-
-download_wallpapers() {
-  local dst="$1"
-  local archive="${dst}/wallpapers.tar.gz"
-  local downloaded=0
-  local images_dir=""
-  local url
-
-  for url in "${WALLPAPERS_ARCHIVES[@]}"; do
-    rm -f "${archive}"
-    if run_as_install_user curl --fail --location --retry 2 \
-        --connect-timeout 15 --max-time 180 \
-        --output "${archive}" "${url}"; then
-      downloaded=1
-      break
-    fi
-  done
-
-  [[ ${downloaded} -eq 1 && -s "${archive}" ]] || return 1
-
-  run_as_install_user tar -xzf "${archive}" -C "${dst}"
-  images_dir="$(find "${dst}" -mindepth 2 -maxdepth 2 -type d -name images -print -quit)"
-  [[ -n "${images_dir}" ]] || return 1
-
-  mv -- "${images_dir}" "${dst}/images"
-}
-
-install_wallpapers() {
-  local pics wall_dir tmp
-
-  # Carpeta de imágenes XDG (localizada: ~/Imágenes, ~/Images, ~/Pictures…).
-  # post_install ya ejecutó xdg-user-dirs-update, así que xdg-user-dir resuelve
-  # la ruta correcta para el idioma del sistema.
-  pics="$(run_as_install_user env HOME="${INSTALL_HOME}" xdg-user-dir PICTURES 2>/dev/null || true)"
-  [[ -n "${pics}" ]] || pics="${INSTALL_HOME}/Pictures"
-  wall_dir="${pics}/Wallpapers"
-
-  # Crear la carpeta Wallpapers si no existe.
-  if [[ -d "${wall_dir}" ]]; then
-    ok "Carpeta de fondos ya existe: ${wall_dir}"
-  else
-    run_as_install_user mkdir -p "${wall_dir}"
-    ok "Creada carpeta de fondos: ${wall_dir}"
-  fi
-
-  command -v curl >/dev/null 2>&1 || install_group "curl para descargar fondos" curl
-  command -v tar >/dev/null 2>&1 || fail "No se encontró tar para extraer los fondos."
-
-  tmp="$(make_temp_dir wallpapers)"
-
-  if ! with_spinner "Descargando carpeta images de aesthetic-wallpapers" \
-        download_wallpapers "${tmp}"; then
-    rm -rf "${tmp}"
-    fail "No se pudieron descargar los fondos."
-  fi
-
-  with_spinner "Copiando fondos a ${wall_dir}" \
-    copy_wallpapers "${tmp}/images" "${wall_dir}"
-
-  rm -rf "${tmp}"
-}
-
-# ---------------------------------------------------------------------------
 # main
 # ---------------------------------------------------------------------------
 main() {
@@ -590,7 +497,6 @@ main() {
   install_amd_stack
   enable_services
   post_install
-  install_wallpapers
   install_dotfiles
 
   echo
