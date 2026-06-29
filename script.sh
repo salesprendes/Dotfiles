@@ -30,6 +30,7 @@ BASE_PACKAGES=(
   xdg-user-dirs
   hyprshot
   net-tools
+  imv
 )
 
 # Nota: libva-mesa-driver y lib32-libva-mesa-driver ya no existen como paquetes
