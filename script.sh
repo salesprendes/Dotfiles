@@ -3,10 +3,9 @@ set -Eeuo pipefail
 
 SCRIPT_NAME=salesprendes
 
-BASE_PACKAGES=(linux-firmware quickshell qt6-declarative hyprland ttf-jetbrains-mono-nerd cliphist wl-clipboard hyprlock polkit hyprpolkitagent procps-ng nano networkmanager bluez bluez-utils pipewire wireplumber pipewire-pulse playerctl upower rtkit hypridle power-profiles-daemon xdg-user-dirs hyprshot net-tools imv)
+BASE_PACKAGES=(base-devel git linux-firmware quickshell qt6-declarative hyprland ttf-jetbrains-mono-nerd cliphist wl-clipboard hyprlock polkit hyprpolkitagent procps-ng nano networkmanager bluez bluez-utils pipewire wireplumber pipewire-pulse playerctl upower rtkit hypridle power-profiles-daemon xdg-user-dirs hyprshot net-tools imv nautilus)
 AMD_PACKAGES=(mesa vulkan-radeon mesa-utils vulkan-tools libva-utils lib32-mesa lib32-vulkan-radeon libva-mesa-driver lib32-libva-mesa-driver)
 
-YAY_BUILD_PACKAGES=(base-devel git)
 BRIGHTNESSCTL_PACKAGES=(brightnessctl)
 DDC_PACKAGES=(ddcutil)
 
@@ -299,53 +298,6 @@ install_amd_stack() {
 }
 
 # ---------------------------------------------------------------------------
-# yay (build script en fichero temporal en vez de cadena: #14)
-# ---------------------------------------------------------------------------
-install_yay() {
-  if command -v yay >/dev/null 2>&1; then
-    ok "yay ya está instalado"
-    return
-  fi
-
-  install_group "herramientas para compilar yay" "${YAY_BUILD_PACKAGES[@]}"
-
-  local build_dir
-  local build_script
-  build_dir="$(make_temp_dir yay-build)"
-  build_script="$(mktemp)"
-  chmod 755 "${build_script}"
-
-  cat > "${build_script}" <<'BUILD'
-set -Eeuo pipefail
-build_dir="$1"
-rm -rf "$build_dir"
-git clone https://aur.archlinux.org/yay.git "$build_dir"
-cd "$build_dir"
-makepkg -f --noconfirm
-BUILD
-
-  if [[ ${EUID} -eq 0 ]]; then
-    rm -rf "${build_dir}"
-    with_spinner "Compilando yay como ${INSTALL_USER}" \
-      runuser -u "${INSTALL_USER}" -- bash "${build_script}" _ "${build_dir}"
-  else
-    with_spinner "Compilando yay como ${INSTALL_USER}" \
-      bash "${build_script}" _ "${build_dir}"
-  fi
-
-  rm -f "${build_script}"
-
-  local pkg_file
-  pkg_file="$(find "${build_dir}" -maxdepth 1 -type f -name 'yay-*.pkg.tar.*' | head -n 1)"
-  [[ -n "${pkg_file}" ]] || fail "No se encontró el paquete compilado de yay."
-
-  with_spinner "Instalando paquete yay compilado" \
-    run_as_root "${PACMAN}" -U --noconfirm -- "${pkg_file}"
-
-  rm -rf "${build_dir}"
-}
-
-# ---------------------------------------------------------------------------
 # Dotfiles
 # ---------------------------------------------------------------------------
 script_dir() {
@@ -453,9 +405,9 @@ post_install() {
   command -v xdg-user-dirs-update >/dev/null 2>&1 || return 0
   if [[ ${EUID} -eq 0 && "${INSTALL_USER}" != "root" ]]; then
     with_spinner "Actualizando carpetas XDG de ${INSTALL_USER}" \
-      runuser -u "${INSTALL_USER}" -- xdg-user-dirs-update
+      runuser -u "${INSTALL_USER}" -- env -u LC_ALL xdg-user-dirs-update
   else
-    with_spinner "Actualizando carpetas XDG del usuario" xdg-user-dirs-update
+    with_spinner "Actualizando carpetas XDG del usuario" env -u LC_ALL xdg-user-dirs-update
   fi
 }
 
@@ -492,7 +444,6 @@ main() {
   load_installed_cache
   sync_databases
   install_group "paquetes base" "${BASE_PACKAGES[@]}"
-  install_yay
   install_brightness_stack
   install_amd_stack
   enable_services
