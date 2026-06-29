@@ -3,10 +3,7 @@ set -Eeuo pipefail
 
 SCRIPT_NAME=salesprendes
 
-BASE_PACKAGES=(linux-firmware quickshell qt6-declarative hyprland ttf-jetbrains-mono-nerd cliphist wl-clipboard hyprlock polkit hyprpolkitagent curl procps-ng nano networkmanager bluez bluez-utils pipewire wireplumber pipewire-pulse playerctl upower rtkit hypridle power-profiles-daemon xdg-user-dirs hyprshot net-tools imv)
-
-# Nota: libva-mesa-driver y lib32-libva-mesa-driver ya no existen como paquetes
-# independientes; sus drivers VA-API van incluidos en mesa / lib32-mesa.
+BASE_PACKAGES=(linux-firmware quickshell qt6-declarative hyprland ttf-jetbrains-mono-nerd cliphist wl-clipboard hyprlock polkit hyprpolkitagent curl procps-ng nano networkmanager bluez bluez-utils pipewire wireplumber pipewire-pulse tar playerctl upower rtkit hypridle power-profiles-daemon xdg-user-dirs hyprshot net-tools imv)
 AMD_PACKAGES=(mesa vulkan-radeon mesa-utils vulkan-tools libva-utils lib32-mesa lib32-vulkan-radeon libva-mesa-driver lib32-libva-mesa-driver)
 
 YAY_BUILD_PACKAGES=(base-devel git)
@@ -15,7 +12,10 @@ DDC_PACKAGES=(ddcutil)
 
 # --- Valores por defecto (entorno) -----------------------------------------
 DOTFILES_REPO="${DOTFILES_REPO:-https://github.com/salesprendes/Dotfiles.git}"
-WALLPAPERS_REPO="${WALLPAPERS_REPO:-https://github.com/D3Ext/aesthetic-wallpapers.git}"
+WALLPAPERS_ARCHIVES=(
+  "https://github.com/D3Ext/aesthetic-wallpapers/archive/refs/heads/main.tar.gz"
+  "https://github.com/D3Ext/aesthetic-wallpapers/archive/refs/heads/master.tar.gz"
+)
 PACMAN="${PACMAN:-pacman}"
 SUDO="${SUDO:-sudo}"
 INSTALL_USER="${SUDO_USER:-${USER:-}}"
@@ -493,18 +493,28 @@ copy_wallpapers() {
 
 download_wallpapers() {
   local dst="$1"
-  local timeout_seconds=180
-  local clone_cmd=(git clone --depth 1 --single-branch --filter=blob:none --sparse "${WALLPAPERS_REPO}" "${dst}")
-  local sparse_cmd=(git -C "${dst}" sparse-checkout set images)
+  local archive="${dst}/wallpapers.tar.gz"
+  local downloaded=0
+  local images_dir=""
+  local url
 
-  if command -v timeout >/dev/null 2>&1; then
-    clone_cmd=(timeout "${timeout_seconds}" "${clone_cmd[@]}")
-    sparse_cmd=(timeout "${timeout_seconds}" "${sparse_cmd[@]}")
-  fi
+  for url in "${WALLPAPERS_ARCHIVES[@]}"; do
+    rm -f "${archive}"
+    if run_as_install_user curl --fail --location --retry 2 \
+        --connect-timeout 15 --max-time 180 \
+        --output "${archive}" "${url}"; then
+      downloaded=1
+      break
+    fi
+  done
 
-  run_as_install_user env GIT_TERMINAL_PROMPT=0 GIT_LFS_SKIP_SMUDGE=1 "${clone_cmd[@]}"
-  run_as_install_user env GIT_TERMINAL_PROMPT=0 GIT_LFS_SKIP_SMUDGE=1 \
-    "${sparse_cmd[@]}"
+  [[ ${downloaded} -eq 1 && -s "${archive}" ]] || return 1
+
+  run_as_install_user tar -xzf "${archive}" -C "${dst}"
+  images_dir="$(find "${dst}" -mindepth 2 -maxdepth 2 -type d -name images -print -quit)"
+  [[ -n "${images_dir}" ]] || return 1
+
+  mv -- "${images_dir}" "${dst}/images"
 }
 
 install_wallpapers() {
@@ -525,7 +535,8 @@ install_wallpapers() {
     ok "Creada carpeta de fondos: ${wall_dir}"
   fi
 
-  command -v git >/dev/null 2>&1 || install_group "git para descargar fondos" git
+  command -v curl >/dev/null 2>&1 || install_group "curl para descargar fondos" curl
+  command -v tar >/dev/null 2>&1 || fail "No se encontró tar para extraer los fondos."
 
   tmp="$(make_temp_dir wallpapers)"
 
