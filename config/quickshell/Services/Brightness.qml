@@ -3,6 +3,7 @@ pragma Singleton
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import qs.Config
 
 // ─────────────────────────────────────────────────────────────
 //  Servicio de brillo HÍBRIDO. Detecta el método al arrancar:
@@ -71,10 +72,16 @@ Singleton {
     }
 
     // ── Relectura periódica (solo backlight; DDC es lento) ────
+    //  El único consumidor de 'percent' es el slider del Centro de control,
+    //  así que solo se sondea mientras está abierto (con una lectura inmediata
+    //  al abrirlo vía triggeredOnStart). En reposo no se lanza ningún
+    //  subproceso: capturar los cambios por tecla de hardware solo importa
+    //  cuando el slider es visible.
     Timer {
         interval: 5000
-        running: bright.available && bright.method === "backlight"
+        running: bright.available && bright.method === "backlight" && Globals.controlCenterOpen
         repeat: true
+        triggeredOnStart: true
         onTriggered: reader.running = true
     }
     Process {

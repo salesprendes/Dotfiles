@@ -12,6 +12,12 @@ PanelWindow {
     property bool shown: true
     property bool mapped: true
 
+    // Se emite cuando el splash ha terminado (ya invisible). El cargador
+    // perezoso de shell.qml lo escucha para liberar la ventana y su árbol
+    // de escena: solo se usa una vez al arrancar, no tiene sentido que
+    // siga residente por monitor el resto de la sesión.
+    signal finished()
+
     visible: mapped
     color: "transparent"
     exclusionMode: ExclusionMode.Ignore
@@ -42,7 +48,10 @@ PanelWindow {
         id: unmapTimer
         interval: 520
         repeat: false
-        onTriggered: splash.mapped = false
+        onTriggered: {
+            splash.mapped = false
+            splash.finished()
+        }
     }
 
     Rectangle {

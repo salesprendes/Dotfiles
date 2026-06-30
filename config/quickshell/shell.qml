@@ -67,9 +67,20 @@ ShellRoot {
 
     // Splash breve al entrar en la sesión; oculta el salto visual entre TTY
     // y escritorio mientras terminan de aparecer la barra y el fondo.
+    //
+    // Solo se usa una vez al arrancar: tras la animación se libera (active=false)
+    // para no dejar una ventana por monitor residente el resto de la sesión.
     Variants {
         model: Quickshell.screens
-        delegate: StartupSplash {}
+        delegate: LazyLoader {
+            id: splashL
+            required property var modelData
+            active: true
+            StartupSplash {
+                modelData: splashL.modelData
+                onFinished: splashL.active = false
+            }
+        }
     }
 
     // Una instancia de Bar por pantalla conectada.
