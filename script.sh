@@ -348,6 +348,23 @@ copy_tree_contents() {
   chown_install_user "${dst}"
 }
 
+# Copia un fichero suelto al home respaldando el existente (#6) y ajustando dueño.
+install_home_file() {
+  local src="$1" dst="$2"
+
+  [[ -f "${src}" ]] || return 0
+
+  if [[ -e "${dst}" ]]; then
+    local backup
+    backup="${dst}.bak.$(date +%Y%m%d-%H%M%S)"
+    mv -- "${dst}" "${backup}"
+    warn "Respaldado ${dst} en ${backup}"
+  fi
+
+  cp -a "${src}" "${dst}"
+  chown_install_user "${dst}"
+}
+
 install_dotfiles() {
   local source_dir="" dir="" cleanup_source=0
 
@@ -371,6 +388,12 @@ install_dotfiles() {
 
   with_spinner "Copiando local a ${INSTALL_HOME}/.local" \
     copy_tree_contents "${source_dir}/local" "${INSTALL_HOME}/.local"
+
+  # .zshrc: el repo lo guarda como 'zshrc' (sin punto) en la raíz.
+  if [[ -f "${source_dir}/zshrc" ]]; then
+    with_spinner "Copiando .zshrc a ${INSTALL_HOME}/.zshrc" \
+      install_home_file "${source_dir}/zshrc" "${INSTALL_HOME}/.zshrc"
+  fi
 
   if [[ -d "${INSTALL_HOME}/.local/bin" ]]; then
     chmod -R u+rx "${INSTALL_HOME}/.local/bin"
