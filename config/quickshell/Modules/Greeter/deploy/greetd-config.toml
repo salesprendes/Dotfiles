@@ -1,0 +1,14 @@
+# /etc/greetd/config.toml
+# Lanza un Hyprland mínimo que arranca el greeter de Quickshell.
+
+[terminal]
+vt = 1
+
+[default_session]
+command = "Hyprland --config /etc/greetd/hyprland-greeter.conf"
+user = "greeter"
+
+# (Opcional) Autologin sin contraseña al usuario, si alguna vez lo quieres:
+# [initial_session]
+# command = "Hyprland"
+# user = "salesprendes"
