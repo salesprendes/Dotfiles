@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 SCRIPT_NAME=salesprendes
 
-BASE_PACKAGES=(base-devel git linux-firmware quickshell qt6-declarative hyprland ttf-jetbrains-mono-nerd cliphist wl-clipboard hyprlock polkit hyprpolkitagent procps-ng nano networkmanager bluez bluez-utils pipewire wireplumber pipewire-pulse playerctl upower rtkit hypridle power-profiles-daemon xdg-desktop-portal xdg-desktop-portal-gtk xdg-desktop-portal-hyprland xdg-user-dirs hyprshot net-tools imv wireless-regdb nautilus)
+BASE_PACKAGES=(base-devel git linux-firmware quickshell qt6-declarative hyprland ttf-jetbrains-mono-nerd cliphist wl-clipboard hyprlock polkit hyprpolkitagent procps-ng nano networkmanager bluez bluez-utils pipewire wireplumber pipewire-pulse playerctl upower rtkit hypridle power-profiles-daemon xdg-desktop-portal xdg-desktop-portal-gtk xdg-desktop-portal-hyprland xdg-user-dirs hyprshot net-tools imv wireless-regdb nautilus kitty zsh zsh-autosuggestions zsh-syntax-highlighting starship)
 AMD_PACKAGES=(mesa vulkan-radeon mesa-utils vulkan-tools libva-utils lib32-mesa lib32-vulkan-radeon libva-mesa-driver lib32-libva-mesa-driver)
 
 BRIGHTNESSCTL_PACKAGES=(brightnessctl)
@@ -417,6 +417,36 @@ post_install() {
 }
 
 # ---------------------------------------------------------------------------
+# Shell por defecto: zsh
+# ---------------------------------------------------------------------------
+set_default_shell() {
+  local zsh_bin
+  zsh_bin="$(command -v zsh 2>/dev/null || true)"
+  if [[ -z "${zsh_bin}" ]]; then
+    warn "zsh no está instalado; se omite el cambio de shell"
+    return 0
+  fi
+
+  # chsh solo acepta shells que figuren en /etc/shells.
+  if ! grep -qxF "${zsh_bin}" /etc/shells 2>/dev/null; then
+    if printf '%s\n' "${zsh_bin}" | run_as_root tee -a /etc/shells >/dev/null; then
+      ok "Registrado ${zsh_bin} en /etc/shells"
+    fi
+  fi
+
+  local current
+  current="$(getent passwd "${INSTALL_USER}" | cut -d: -f7)"
+  if [[ "${current}" == "${zsh_bin}" ]]; then
+    ok "zsh ya es el shell por defecto de ${INSTALL_USER}"
+    return 0
+  fi
+
+  with_spinner "Estableciendo zsh como shell por defecto de ${INSTALL_USER}" \
+    run_as_root chsh -s "${zsh_bin}" "${INSTALL_USER}"
+  note "El nuevo shell se aplicará en el próximo inicio de sesión."
+}
+
+# ---------------------------------------------------------------------------
 # main
 # ---------------------------------------------------------------------------
 main() {
@@ -454,6 +484,7 @@ main() {
   enable_services
   post_install
   install_dotfiles
+  set_default_shell
 
   echo
   ok "Instalación finalizada"

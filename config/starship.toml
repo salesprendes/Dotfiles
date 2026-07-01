@@ -1,0 +1,64 @@
+### ~/.config/starship.toml
+### Tema minimalista de una sola línea · estilo Tokyo Night · Nerd Font
+
+# Espacio en blanco antes de cada prompt, para que respire
+add_newline = true
+
+# Todo en UNA línea: ruta · git · duración · símbolo
+format = "$directory$git_branch$git_status$cmd_duration$character"
+
+# Paleta -------------------------------------------------------------------
+palette = "tokyonight"
+
+[palettes.tokyonight]
+fg     = "#c0caf5"
+blue   = "#7aa2f7"
+cyan   = "#7dcfff"
+green  = "#9ece6a"
+yellow = "#e0af68"
+red    = "#f7768e"
+purple = "#bb9af7"
+gray   = "#565f89"
+
+# Directorio ---------------------------------------------------------------
+[directory]
+style = "fg:cyan bold"
+format = "[$path]($style)[$read_only]($read_only_style) "
+truncation_length = 0       # 0 = sin recortar: muestra la ruta completa
+truncate_to_repo = false    # no colapsar a la raíz del repositorio git
+truncation_symbol = "…/"
+home_symbol = "~"
+read_only = " 󰌾"
+read_only_style = "fg:red"
+
+# Git ----------------------------------------------------------------------
+[git_branch]
+symbol = " "
+style = "fg:purple"
+format = "[$symbol$branch]($style) "
+
+[git_status]
+style = "fg:yellow"
+format = "[$all_status$ahead_behind]($style)"
+conflicted = "⚔ "
+ahead      = "⇡${count} "
+behind     = "⇣${count} "
+diverged   = "⇕ "
+untracked  = "?${count} "
+stashed    = "󰏗 "
+modified   = "!${count} "
+staged     = "+${count} "
+renamed    = "»${count} "
+deleted    = "✘${count} "
+
+# Duración del último comando (solo si tardó > 2s) -------------------------
+[cmd_duration]
+min_time = 2000
+style = "fg:gray"
+format = "[󱎫 $duration]($style) "
+
+# Símbolo de entrada -------------------------------------------------------
+[character]
+success_symbol = "[❯](bold green)"
+error_symbol = "[❯](bold red)"
+vimcmd_symbol = "[❮](bold blue)"
