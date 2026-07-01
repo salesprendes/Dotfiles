@@ -1,24 +1,18 @@
-//  Una superficie (ventana layer-shell) por monitor. Fondo + reloj en
-//  todos; tarjeta de login y energía solo en el principal.
+//  Una superficie (ventana normal, cage la maximiza) por monitor. Fondo +
+//  reloj en todos; tarjeta de login y energía solo en el principal.
+//  Nota: cage no soporta wlr-layer-shell, por eso no se usa PanelWindow.
 import QtQuick
 import Quickshell
-import Quickshell.Wayland
 import qs.Modules.Greeter
 
-PanelWindow {
+FloatingWindow {
     id: win
     required property var modelData
     screen: modelData
     readonly property bool primary: Quickshell.screens.length > 0
                                     && modelData === Quickshell.screens[0]
 
-    WlrLayershell.layer: WlrLayer.Overlay
-    WlrLayershell.namespace: "qs-greeter"
-    WlrLayershell.keyboardFocus: primary ? WlrKeyboardFocus.Exclusive
-                                         : WlrKeyboardFocus.None
-    exclusionMode: ExclusionMode.Ignore
     color: Theme.bg
-    anchors { top: true; bottom: true; left: true; right: true }
 
     // ── Fondo con leve zoom de entrada (one-shot) ────────────
     Image {

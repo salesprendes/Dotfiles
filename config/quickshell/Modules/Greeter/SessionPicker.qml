@@ -132,10 +132,12 @@ Item {
                         height: Theme.dp(36)
                         radius: Theme.dp(10)
                         readonly property bool current: index === GreeterState.sessionIndex
+                        // Resalte instantáneo: animar hacia "transparent" (negro
+                        // con alfa 0) dejaba un rastro oscuro al mover el ratón
+                        // rápido entre filas.
                         color: rowMa.containsMouse ? Theme.alpha(Theme.surfaceHi, 0.9)
                              : current ? Theme.alpha(Theme.accent, 0.14)
                              : "transparent"
-                        Behavior on color { ColorAnimation { duration: 120 } }
 
                         // Cascada: cada fila se revela un pelín tras la anterior.
                         readonly property real rp: Math.max(0, Math.min(1,

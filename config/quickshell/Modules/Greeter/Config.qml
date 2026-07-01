@@ -9,8 +9,8 @@ Singleton {
     id: root
 
     // Fondo. En despliegue, ruta legible por el usuario 'greeter'
-    // (el instalador copia tu wallpaper a /etc/greetd/wall.jpg).
-    readonly property string wallpaper: "/etc/greetd/wall.jpg"
+    // (el instalador copia tu wallpaper a /etc/greetd/wall.png).
+    readonly property string wallpaper: "/etc/greetd/wall.png"
 
     // Sesión por defecto: el lanzador OFICIAL de Hyprland (watchdog), no
     // "Hyprland" pelado. Así heredas tu entorno y no salta el aviso

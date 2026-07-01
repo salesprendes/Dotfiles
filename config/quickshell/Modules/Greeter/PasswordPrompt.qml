@@ -122,9 +122,15 @@ Item {
                     font.pixelSize: Theme.sp(15)
                 }
                 Row {
+                    id: dotsRow
                     anchors.verticalCenter: parent.verticalCenter
                     spacing: Theme.dp(7)
                     visible: GreeterState.masked
+                    // Si los puntos desbordan la celda, la fila se desplaza para
+                    // mantener el caret visible en el borde derecho; cada punto
+                    // nuevo empuja la fila con un deslizamiento suave.
+                    x: Math.min(0, inputCell.width - width)
+                    Behavior on x { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
                     Repeater {
                         model: pwInput.text.length
                         delegate: Rectangle {
@@ -155,7 +161,26 @@ Item {
                     anchors.fill: parent
                     verticalAlignment: TextInput.AlignVCenter
                     color: GreeterState.masked ? "transparent" : Theme.fg
-                    cursorVisible: false
+                    // Qt fuerza cursorVisible=true al recibir foco, así que un
+                    // "cursorVisible: false" no basta y se veía el cursor nativo
+                    // (negro) junto al caret propio (azul). Con un delegate
+                    // propio el cursor nativo nunca se dibuja: nada en modo
+                    // oculto (ya está el caret de los puntos) y un caret a
+                    // juego cuando la contraseña es visible.
+                    cursorDelegate: Rectangle {
+                        visible: !GreeterState.masked && pwInput.activeFocus
+                                 && !GreeterState.busy
+                        width: Theme.dp(2)
+                        height: pwInput.cursorRectangle.height
+                        radius: width / 2
+                        color: Theme.accent
+                        SequentialAnimation on opacity {
+                            running: visible
+                            loops: Animation.Infinite
+                            NumberAnimation { to: 0.15; duration: 480; easing.type: Easing.InOutQuad }
+                            NumberAnimation { to: 1;    duration: 480; easing.type: Easing.InOutQuad }
+                        }
+                    }
                     font.family: Theme.font
                     font.pixelSize: Theme.sp(15)
                     clip: true

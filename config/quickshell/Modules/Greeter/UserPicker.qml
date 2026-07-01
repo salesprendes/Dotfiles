@@ -43,7 +43,8 @@ FocusScope {
                               : Theme.alpha(Theme.surface, 0.35)
                 border.width: active ? 1 : 0
                 border.color: Theme.alpha(Theme.accent, 0.45)
-                Behavior on color { ColorAnimation { duration: 130 } }
+                // Resalte instantáneo: el fundido de 130 ms dejaba dos filas
+                // marcadas a la vez al mover el ratón rápido.
 
                 Row {
                     anchors.fill: parent
