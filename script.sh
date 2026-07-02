@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 SCRIPT_NAME=salesprendes
 
-BASE_PACKAGES=(base-devel git linux-firmware quickshell qt6-declarative hyprland ttf-jetbrains-mono-nerd cliphist wl-clipboard hyprlock polkit hyprpolkitagent procps-ng nano networkmanager bluez bluez-utils pipewire wireplumber pipewire-pulse playerctl upower rtkit hypridle power-profiles-daemon xdg-desktop-portal xdg-desktop-portal-gtk xdg-desktop-portal-hyprland xdg-user-dirs hyprshot net-tools imv wireless-regdb nautilus kitty zsh zsh-autosuggestions zsh-syntax-highlighting starship fastfetch)
+BASE_PACKAGES=(base-devel git linux-firmware quickshell qt6-declarative hyprland ttf-jetbrains-mono-nerd cliphist wl-clipboard hyprlock polkit hyprpolkitagent procps-ng nano networkmanager bluez bluez-utils pipewire wireplumber pipewire-pulse playerctl upower rtkit hypridle power-profiles-daemon xdg-desktop-portal xdg-desktop-portal-gtk xdg-desktop-portal-hyprland xdg-user-dirs hyprshot net-tools imv wireless-regdb nautilus kitty zsh zsh-autosuggestions zsh-syntax-highlighting starship fastfetch uwsm)
 AMD_PACKAGES=(mesa vulkan-radeon mesa-utils vulkan-tools libva-utils lib32-mesa lib32-vulkan-radeon libva-mesa-driver lib32-libva-mesa-driver)
 
 BRIGHTNESSCTL_PACKAGES=(brightnessctl)
@@ -495,8 +495,10 @@ set_default_shell() {
 # ---------------------------------------------------------------------------
 GREETD_THEME_DST=/etc/greetd/quickshell
 # cage no soporta wlr-layer-shell (el tema usa FloatingWindow) y sin la
-# variable Qt dibujaría barra de título en la ventana del greeter.
-GREETD_COMMAND='cage -s -- env QT_WAYLAND_DISABLE_WINDOWDECORATION=1 qs -p /etc/greetd/quickshell'
+# variable Qt dibujaría barra de título en la ventana del greeter. La
+# redirección silencia los logs de cage/quickshell, que greetd volcaría
+# a la consola VT1 y se verían un instante al arrancar.
+GREETD_COMMAND='cage -s -- env QT_WAYLAND_DISABLE_WINDOWDECORATION=1 qs -p /etc/greetd/quickshell >/dev/null 2>&1'
 
 # Copia el módulo Greeter (desde la config recién instalada del usuario) y
 # genera el shell.qml raíz que quickshell exige en la raíz de su config.

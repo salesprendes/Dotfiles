@@ -1,6 +1,6 @@
 //  Selector de sesión: desplegable flotante que se abre hacia arriba con
 //  animación fluida (fade + escala desde la base + cascada por fila).
-//  Lee /usr/share/wayland-sessions. Solo aparece si hay más de una sesión.
+//  Lee /usr/share/wayland-sessions.
 import QtQuick
 import Quickshell
 import qs.Modules.Greeter
@@ -9,7 +9,7 @@ Item {
     id: sp
     implicitWidth: trigger.width
     implicitHeight: trigger.height
-    visible: GreeterState.sessions.length > 1
+    visible: GreeterState.sessions.length > 0
     enabled: visible && !GreeterState.busy
 
     property bool open: false

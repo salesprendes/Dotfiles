@@ -62,9 +62,15 @@ Singleton {
     Process {
         id: sessionScan
         running: false
+        // Se descartan sesiones cuyo binario no está instalado (p.ej.
+        // hyprland-uwsm.desktop sin uwsm): elegirlas produce un login
+        // que muere al instante y devuelve al greeter.
         command: ["sh", "-c",
             "for f in /usr/share/wayland-sessions/*.desktop /usr/share/xsessions/*.desktop; do " +
-            "[ -e \"$f\" ] || continue; echo \"@@SESSION@@$f\"; cat \"$f\"; done"]
+            "[ -e \"$f\" ] || continue; " +
+            "exe=$(sed -n 's/^Exec=\\([^ ]*\\).*/\\1/p' \"$f\" | head -n 1); " +
+            "[ -n \"$exe\" ] && command -v \"$exe\" >/dev/null 2>&1 || continue; " +
+            "echo \"@@SESSION@@$f\"; cat \"$f\"; done"]
         stdout: StdioCollector { onStreamFinished: root._loadSessions(this.text) }
     }
     function _loadSessions(dump) {
@@ -241,7 +247,13 @@ Singleton {
     // no dejar un shell colgando de padre. Igual que entrar desde una TTY.
     function _launchArgv(loginShell, sessionExec) {
         const sh = (loginShell && loginShell !== "") ? loginShell : "/bin/sh"
-        return [sh, "-l", "-c", "exec " + sessionExec]
+        // greetd une este argv con espacios y lo vuelve a interpretar con el
+        // shell del usuario, así que el comando de -c debe ir entre comillas
+        // simples para sobrevivir; sin ellas "-c exec" quedaba como no-op y
+        // la sesión moría al instante sin error.
+        const inner = "exec " + sessionExec
+        return [sh, "-l", "-c",
+                "'" + inner.replace(/'/g, "'\\''") + "'"]
     }
 
     Component.onCompleted: {
