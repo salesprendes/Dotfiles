@@ -8,6 +8,7 @@ AMD_PACKAGES=(mesa vulkan-radeon mesa-utils vulkan-tools libva-utils lib32-mesa 
 
 BRIGHTNESSCTL_PACKAGES=(brightnessctl)
 DDC_PACKAGES=(ddcutil)
+GREETD_PACKAGES=(greetd cage)
 
 # --- Valores por defecto (entorno) -----------------------------------------
 DOTFILES_REPO="${DOTFILES_REPO:-https://github.com/salesprendes/Dotfiles.git}"
@@ -348,6 +349,18 @@ copy_tree_contents() {
   chown_install_user "${dst}"
 }
 
+# Carpeta de imágenes del usuario según xdg-user-dirs (XDG_PICTURES_DIR),
+# expandiendo $HOME al home del usuario destino.
+user_pictures_dir() {
+  local conf="${INSTALL_HOME}/.config/user-dirs.dirs" dir=""
+  if [[ -f "${conf}" ]]; then
+    dir="$(sed -n 's/^XDG_PICTURES_DIR="\(.*\)"$/\1/p' "${conf}" | head -n1)"
+    dir="${dir//\$HOME/${INSTALL_HOME}}"
+  fi
+  [[ -n "${dir}" ]] || dir="${INSTALL_HOME}/Imágenes"
+  printf '%s\n' "${dir}"
+}
+
 # Copia un fichero suelto al home respaldando el existente (#6) y ajustando dueño.
 install_home_file() {
   local src="$1" dst="$2"
@@ -388,6 +401,14 @@ install_dotfiles() {
 
   with_spinner "Copiando local a ${INSTALL_HOME}/.local" \
     copy_tree_contents "${source_dir}/local" "${INSTALL_HOME}/.local"
+
+  # Wallpapers del repo → carpeta de imágenes del usuario (xdg-user-dirs).
+  if [[ -d "${source_dir}/Wallpapers" ]]; then
+    local pictures
+    pictures="$(user_pictures_dir)"
+    with_spinner "Copiando Wallpapers a ${pictures}/Wallpapers" \
+      copy_tree_contents "${source_dir}/Wallpapers" "${pictures}/Wallpapers"
+  fi
 
   # .zshrc: el repo lo guarda como 'zshrc' (sin punto) en la raíz.
   if [[ -f "${source_dir}/zshrc" ]]; then
@@ -470,6 +491,135 @@ set_default_shell() {
 }
 
 # ---------------------------------------------------------------------------
+# greetd: pantalla de login (cage + quickshell)
+# ---------------------------------------------------------------------------
+GREETD_THEME_DST=/etc/greetd/quickshell
+# cage no soporta wlr-layer-shell (el tema usa FloatingWindow) y sin la
+# variable Qt dibujaría barra de título en la ventana del greeter.
+GREETD_COMMAND='cage -s -- env QT_WAYLAND_DISABLE_WINDOWDECORATION=1 qs -p /etc/greetd/quickshell'
+
+# Copia el módulo Greeter (desde la config recién instalada del usuario) y
+# genera el shell.qml raíz que quickshell exige en la raíz de su config.
+deploy_greetd_theme() {
+  local src="$1"
+  run_as_root mkdir -p "${GREETD_THEME_DST}/Modules"
+  run_as_root rm -rf "${GREETD_THEME_DST}/Modules/Greeter"
+  run_as_root cp -r "${src}" "${GREETD_THEME_DST}/Modules/Greeter"
+  run_as_root tee "${GREETD_THEME_DST}/shell.qml" >/dev/null <<'EOF'
+//  shell.qml — punto de entrada que Quickshell busca en la raíz de la
+//  config. Solo instancia el Greeter. (Generado por script.sh)
+import Quickshell
+import qs.Modules.Greeter
+
+ShellRoot {
+    Greeter {}
+}
+EOF
+  run_as_root chmod -R a+rX "${GREETD_THEME_DST}"
+}
+
+configure_greetd_session() {
+  local cfg=/etc/greetd/config.toml
+  if [[ -f "${cfg}" ]]; then
+    run_as_root cp -a "${cfg}" "${cfg}.bak.$(date +%Y%m%d-%H%M%S)"
+  fi
+  run_as_root tee "${cfg}" >/dev/null <<EOF
+[terminal]
+vt = 1
+
+[default_session]
+command = "${GREETD_COMMAND}"
+user = "greeter"
+EOF
+}
+
+# Fondo del greeter: el tema espera /etc/greetd/wall.png legible por el
+# usuario 'greeter'. Se toma el wallpaper actual de quickshell si existe.
+install_greeter_wallpaper() {
+  local dst=/etc/greetd/wall.png
+  if [[ -f "${dst}" ]]; then
+    ok "Fondo del greeter ya presente"
+    return 0
+  fi
+
+  local settings="${INSTALL_HOME}/.config/quickshell/settings.json" src=""
+  if [[ -f "${settings}" ]]; then
+    src="$(sed -n 's/.*"wallpaperCurrent"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "${settings}" | head -n1)"
+  fi
+  # Sin settings o con ruta rota → el fondo por defecto de los Wallpapers
+  # del repo (los copia install_dotfiles a la carpeta de imágenes).
+  if [[ -z "${src}" || ! -f "${src}" ]]; then
+    src="$(user_pictures_dir)/Wallpapers/kitty.png"
+  fi
+
+  if [[ -n "${src}" && -f "${src}" ]]; then
+    with_spinner "Copiando fondo del greeter desde ${src}" \
+      run_as_root install -m 644 "${src}" "${dst}"
+  else
+    warn "No se encontró wallpaper; el greeter saldrá sin fondo."
+    warn "Copia una imagen a ${dst} (legible por todos) cuando quieras."
+  fi
+}
+
+# Estado del greeter (recuerda el último usuario) + permisos del usuario
+# 'greeter' que crea el paquete greetd.
+prepare_greeter_runtime() {
+  if ! getent passwd greeter >/dev/null 2>&1; then
+    warn "El usuario 'greeter' no existe (¿falló la instalación de greetd?)"
+    return 0
+  fi
+  run_as_root mkdir -p /var/lib/greeter
+  run_as_root chown greeter:greeter /var/lib/greeter
+  if id -nG greeter | tr ' ' '\n' | grep -qx video; then
+    ok "greeter ya pertenece al grupo video"
+  else
+    with_spinner "Añadiendo greeter al grupo video" \
+      run_as_root usermod -aG video greeter
+  fi
+}
+
+enable_greetd_service() {
+  if systemctl is-enabled --quiet greetd.service 2>/dev/null; then
+    ok "greetd.service ya habilitado"
+    return 0
+  fi
+  # display-manager.service es el symlink que comparten todos los gestores
+  # de login: si apunta a otro (sddm, gdm...), no se pisa.
+  if [[ -e /etc/systemd/system/display-manager.service ]]; then
+    warn "Hay otro gestor de login habilitado; deshabilítalo y ejecuta:"
+    warn "  sudo systemctl enable greetd.service"
+    return 0
+  fi
+  # Sin --now: activarlo en caliente cortaría la sesión actual.
+  with_spinner "Habilitando greetd.service (activo tras reiniciar)" \
+    run_as_root systemctl enable greetd.service
+}
+
+setup_greetd() {
+  install_group "greetd (pantalla de login)" "${GREETD_PACKAGES[@]}"
+
+  local theme_src="${INSTALL_HOME}/.config/quickshell/Modules/Greeter"
+  if [[ ! -d "${theme_src}" ]]; then
+    warn "No se encontró el tema del greeter en ${theme_src}; se omite greetd."
+    return 0
+  fi
+
+  with_spinner "Desplegando tema del greeter en ${GREETD_THEME_DST}" \
+    deploy_greetd_theme "${theme_src}"
+
+  if [[ -f /etc/greetd/config.toml ]] \
+      && grep -qF "${GREETD_COMMAND}" /etc/greetd/config.toml; then
+    ok "config.toml de greetd ya configurado"
+  else
+    with_spinner "Escribiendo /etc/greetd/config.toml" \
+      configure_greetd_session
+  fi
+  install_greeter_wallpaper
+  prepare_greeter_runtime
+  enable_greetd_service
+}
+
+# ---------------------------------------------------------------------------
 # main
 # ---------------------------------------------------------------------------
 main() {
@@ -507,6 +657,7 @@ main() {
   enable_services
   post_install
   install_dotfiles
+  setup_greetd
   set_default_shell
 
   echo
