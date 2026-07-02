@@ -6,7 +6,8 @@ import Quickshell.Io
 import qs.Config
 
 // ─────────────────────────────────────────────────────────────
-//  Monitor de sistema. Lee /proc y ps (sin binarios externos).
+//  Monitor de sistema. Lee /proc con FileView (sin subprocesos) y usa
+//  `ps` solo para la lista de procesos con el panel abierto.
 //  CPU, RAM, procesos + información del sistema operativo y logo.
 // ─────────────────────────────────────────────────────────────
 Singleton {
@@ -32,28 +33,51 @@ Singleton {
     property string cpuModel: ""
     property int cpuThreads: 1
 
-    property bool _collectProcesses: false
-    property bool _processRunExpected: false
+    // Disco raíz. Cambia despacio: se consulta al arrancar y al abrir
+    // el panel Resumen, sin sondeo periódico.
+    property real diskPercent: 0
+    property real diskUsedGB: 0
+    property real diskTotalGB: 0
+
     property bool _pendingProcessRefresh: false
     property real _prevTotal: 0
     property real _prevIdle: 0
 
     // ── Recogida periódica ───────────────────────────────────
-    Process {
-        id: proc
-        command: ["sh", "-c",
-            "head -1 /proc/stat; echo @MEM; grep -E 'MemTotal|MemAvailable' /proc/meminfo; " +
-            "echo @SYS; cat /proc/loadavg; cat /proc/uptime" +
-            (s._collectProcesses ? "; echo @PS; ps -eo pid,comm,pcpu,pmem,rss --sort=-pcpu --no-headers 2>/dev/null" : "")]
-        onRunningChanged: {
-            if (!running && s._pendingProcessRefresh) {
-                s._pendingProcessRefresh = false
-                processRefreshTimer.restart()
-            }
-        }
-        stdout: StdioCollector {
-            onStreamFinished: s._parse(this.text)
-        }
+    //  CPU/RAM/carga/uptime se releen de /proc con FileView (QML puro,
+    //  cero subprocesos). Solo la lista de procesos necesita `ps`, y esta
+    //  solo se recoge mientras el panel SystemMonitor está abierto.
+    FileView {
+        id: statFile
+        path: "/proc/stat"
+        blockLoading: true
+        printErrors: false
+        watchChanges: false
+        onLoaded: s._parseStat(statFile.text())
+    }
+    FileView {
+        id: memFile
+        path: "/proc/meminfo"
+        blockLoading: true
+        printErrors: false
+        watchChanges: false
+        onLoaded: s._parseMem(memFile.text())
+    }
+    FileView {
+        id: loadFile
+        path: "/proc/loadavg"
+        blockLoading: true
+        printErrors: false
+        watchChanges: false
+        onLoaded: s._parseLoad(loadFile.text())
+    }
+    FileView {
+        id: upFile
+        path: "/proc/uptime"
+        blockLoading: true
+        printErrors: false
+        watchChanges: false
+        onLoaded: s._parseUptime(upFile.text())
     }
 
     Timer {
@@ -69,8 +93,35 @@ Singleton {
         function onSysMonOpenChanged() {
             if (Globals.sysMonOpen)
                 processRefreshTimer.restart()
-            else
+            else {
                 processRefreshTimer.stop()
+                s.processes = []   // libera la lista (cientos de objetos) al cerrar
+            }
+        }
+        function onDashboardOpenChanged() {
+            if (Globals.dashboardOpen && !diskProc.running)
+                diskProc.running = true
+        }
+    }
+
+    Process {
+        id: diskProc
+        running: true
+        command: ["sh", "-c", "df -P -B1 / | tail -1"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                // "df -P": fs total usado libre capacidad punto-de-montaje
+                const f = (this.text || "").trim().split(/\s+/)
+                if (f.length < 5)
+                    return
+                const total = parseFloat(f[1]) || 0
+                const used = parseFloat(f[2]) || 0
+                if (total > 0) {
+                    s.diskTotalGB = total / 1e9
+                    s.diskUsedGB = used / 1e9
+                    s.diskPercent = 100 * used / total
+                }
+            }
         }
     }
 
@@ -80,23 +131,41 @@ Singleton {
         onTriggered: s.refreshStats(true)
     }
 
+    // Refresco periódico de la lista de procesos SOLO con el panel abierto;
+    // antes corría siempre y barría todos los procesos del sistema cada 20 s.
     Timer {
-        id: processWarmCacheTimer
         interval: 20000
-        running: true
+        running: Globals.sysMonOpen
         repeat: true
         onTriggered: s.refreshStats(true)
     }
 
     function refreshStats(withProcesses) {
-        if (proc.running) {
-            if (withProcesses)
-                _pendingProcessRefresh = true
+        statFile.reload()
+        memFile.reload()
+        loadFile.reload()
+        upFile.reload()
+        if (!withProcesses)
+            return
+        if (psProc.running) {
+            _pendingProcessRefresh = true
             return
         }
-        _processRunExpected = withProcesses
-        _collectProcesses = withProcesses
-        proc.running = true
+        psProc.running = true
+    }
+
+    Process {
+        id: psProc
+        command: ["ps", "-eo", "pid,comm,pcpu,pmem,rss", "--sort=-pcpu", "--no-headers"]
+        onExited: {
+            if (s._pendingProcessRefresh) {
+                s._pendingProcessRefresh = false
+                processRefreshTimer.restart()
+            }
+        }
+        stdout: StdioCollector {
+            onStreamFinished: s._parsePs(this.text)
+        }
     }
 
     Process {
@@ -148,67 +217,72 @@ Singleton {
         }
     }
 
-    function _parse(txt) {
-        const lines = (txt || "").split("\n")
-        let sec = "cpu", sysIdx = 0
-        let memTotal = 0, memAvail = 0
-        const procs = []
+    function _parseStat(txt) {
+        const ln = (txt || "").split("\n")[0] || ""
+        if (ln.indexOf("cpu") !== 0)
+            return
+        const p = ln.trim().split(/\s+/).slice(1).map(Number)
+        const idle = (p[3] || 0) + (p[4] || 0)
+        const total = p.reduce((a, b) => a + (b || 0), 0)
+        const dt = total - s._prevTotal
+        const di = idle - s._prevIdle
+        if (dt > 0 && s._prevTotal > 0)
+            s.cpu = Math.max(0, Math.min(100, 100 * (dt - di) / dt))
+        s._prevTotal = total
+        s._prevIdle = idle
+    }
 
+    function _parseMem(txt) {
+        let memTotal = 0, memAvail = 0
+        const lines = (txt || "").split("\n")
         for (let i = 0; i < lines.length; i++) {
             const ln = lines[i]
-            if (ln === "@MEM") { sec = "mem"; continue }
-            if (ln === "@SYS") { sec = "sys"; continue }
-            if (ln === "@PS")  { sec = "ps";  continue }
-
-            if (sec === "cpu" && ln.indexOf("cpu") === 0) {
-                const p = ln.trim().split(/\s+/).slice(1).map(Number)
-                const idle = (p[3] || 0) + (p[4] || 0)
-                const total = p.reduce((a, b) => a + (b || 0), 0)
-                const dt = total - s._prevTotal
-                const di = idle - s._prevIdle
-                if (dt > 0 && s._prevTotal > 0)
-                    s.cpu = Math.max(0, Math.min(100, 100 * (dt - di) / dt))
-                s._prevTotal = total
-                s._prevIdle = idle
-            } else if (sec === "mem") {
-                if (ln.indexOf("MemTotal") === 0) memTotal = parseInt(ln.replace(/\D+/g, ""))
-                else if (ln.indexOf("MemAvailable") === 0) memAvail = parseInt(ln.replace(/\D+/g, ""))
-            } else if (sec === "sys") {
-                if (sysIdx === 0) {
-                    // loadavg: "0.50 0.42 0.40 1/1234 5678"
-                    const f = ln.trim().split(/\s+/)
-                    s.loadAvg = f.slice(0, 3).join("  ")
-                    if (f[3] && f[3].indexOf("/") >= 0) s.procCount = parseInt(f[3].split("/")[1]) || 0
-                } else if (sysIdx === 1) {
-                    s.uptime = s._fmtUptime(parseFloat(ln.trim().split(/\s+/)[0]) || 0)
-                }
-                sysIdx++
-            } else if (sec === "ps") {
-                const m = ln.trim().match(/^(\d+)\s+(.+?)\s+([\d.]+)\s+([\d.]+)\s+(\d+)$/)
-                if (m) {
-                    const cpuWholeSystem = (parseFloat(m[3]) || 0) / Math.max(1, s.cpuThreads)
-                    const memKB = parseInt(m[5]) || 0
-                    procs.push({
-                        pid: m[1],
-                        name: m[2],
-                        cpu: cpuWholeSystem,
-                        mem: parseFloat(m[4]),
-                        memKB: memKB,
-                        memMB: memKB / 1024
-                    })
-                }
-            }
+            if (ln.indexOf("MemTotal") === 0) memTotal = parseInt(ln.replace(/\D+/g, ""))
+            else if (ln.indexOf("MemAvailable") === 0) { memAvail = parseInt(ln.replace(/\D+/g, "")); break }
         }
-
         if (memTotal > 0) {
             s.memTotalGB = memTotal / 1024 / 1024
             s.memUsedGB = (memTotal - memAvail) / 1024 / 1024
             s.memPercent = 100 * (memTotal - memAvail) / memTotal
         }
-        if (s._processRunExpected)
-            s.processes = procs
-        s._processRunExpected = false
-        s._collectProcesses = false
+    }
+
+    function _parseLoad(txt) {
+        // loadavg: "0.50 0.42 0.40 1/1234 5678"
+        const f = (txt || "").trim().split(/\s+/)
+        if (f.length < 3)
+            return
+        s.loadAvg = f.slice(0, 3).join("  ")
+        if (f[3] && f[3].indexOf("/") >= 0) s.procCount = parseInt(f[3].split("/")[1]) || 0
+    }
+
+    function _parseUptime(txt) {
+        const secs = parseFloat((txt || "").trim().split(/\s+/)[0]) || 0
+        if (secs > 0) s.uptime = s._fmtUptime(secs)
+    }
+
+    function _parsePs(txt) {
+        // Si el panel se cerró mientras corría `ps`, no retengas la lista.
+        if (!Globals.sysMonOpen)
+            return
+        const procs = []
+        const lines = (txt || "").split("\n")
+        for (let i = 0; i < lines.length; i++) {
+            const m = lines[i].trim().match(/^(\d+)\s+(.+?)\s+([\d.]+)\s+([\d.]+)\s+(\d+)$/)
+            if (m) {
+                const cpuWholeSystem = (parseFloat(m[3]) || 0) / Math.max(1, s.cpuThreads)
+                const memKB = parseInt(m[5]) || 0
+                procs.push({
+                    pid: m[1],
+                    name: m[2],
+                    cpu: cpuWholeSystem,
+                    mem: parseFloat(m[4]),
+                    memKB: memKB,
+                    memMB: memKB / 1024
+                })
+            }
+        }
+        s.processes = procs
     }
 
     function _fmtUptime(sec) {

@@ -24,9 +24,10 @@ Singleton {
     property var _clearQueue: []
 
     // Marca temporal de llegada por notificación (para "hace X min").
+    // El tick solo corre si hay notificaciones que fechar.
     property var _arrival: new Map()
     property int nowTick: 0
-    Timer { interval: 30000; running: true; repeat: true; onTriggered: root.nowTick++ }
+    Timer { interval: 30000; running: root.count > 0; repeat: true; onTriggered: root.nowTick++ }
 
     function appNameFor(n) {
         if (n && n.appName && n.appName !== "")

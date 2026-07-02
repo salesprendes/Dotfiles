@@ -49,13 +49,14 @@ ShellRoot {
                     Globals.closeAll()
             }
         }
+        // Si el monitor muere (reinicio de dbus, etc.) se relanza tras una
+        // pausa. Por evento: antes un timer sondeaba cada 3 s para siempre.
+        onExited: lockRestart.restart()
     }
-    // Vigilante: si el monitor de logind se detiene, lo relanza.
     Timer {
+        id: lockRestart
         interval: 3000
-        running: true
-        repeat: true
-        onTriggered: if (!lockMonitor.running) lockMonitor.running = true
+        onTriggered: lockMonitor.running = true
     }
 
     // Fondo de pantalla: una ventana por monitor en la capa Background,

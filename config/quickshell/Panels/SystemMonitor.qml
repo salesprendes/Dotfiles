@@ -21,10 +21,11 @@ Popout {
     property bool nameSortDesc: false   // false = A→Z
     property bool processListReady: false
     property bool processListLoaded: false
-    readonly property bool showProcessPlaceholder: shown && !processListReady && SysMon.processes.length === 0
-    readonly property int processSectionPlaceholderHeight: Theme.rowS + Theme.controlXS + processListHeight + Theme.space8 * 2 + Theme.space12 * 2
-    readonly property int processRowsForHeight: processListReady ? Math.max(1, filtered.length) : 6
-    readonly property int processListHeight: Math.min(Theme.dp(280), processRowsForHeight * (Theme.rowS + Theme.space2))
+    // Lista visible de verdad: datos listos Y el componente async ya creado.
+    // Hasta entonces se muestra la animación de carga, que reserva la misma
+    // altura, así el panel no cambia de tamaño cuando llegan los procesos.
+    readonly property bool processViewReady: processListReady && procLoader.status === Loader.Ready
+    readonly property int processListHeight: Math.min(Theme.dp(280), Math.max(1, filtered.length) * (Theme.rowS + Theme.space2))
     onShownChanged: {
         if (shown) {
             if (SysMon.processes.length > 0) {
@@ -40,9 +41,12 @@ Popout {
         }
     }
 
+    // Cortacircuitos: si `ps` fallara y nunca llegaran datos, muestra la
+    // lista (vacía) en vez de dejar la animación de carga girando sin fin.
+    // El camino normal es onProcessesChanged (~0,5 s tras abrir).
     Timer {
         id: processRevealTimer
-        interval: 520
+        interval: 2500
         onTriggered: {
             if (!sm.shown)
                 return
@@ -409,129 +413,105 @@ Popout {
         }
     }
 
-    Loader {
+    // ── Sección de procesos ──────────────────────────────────
+    //  Una sola celda para la carga y la lista: ambas superpuestas con
+    //  fundido cruzado. La tarjeta de carga reserva EXACTAMENTE la altura
+    //  de la lista cargada (misma fórmula que SystemProcessList con la
+    //  lista al tope de dp(280)), así el panel abre ya con su tamaño
+    //  definitivo y no salta cuando llegan los datos.
+    Item {
         Layout.fillWidth: true
-        Layout.preferredHeight: sm.processListReady ? (item ? item.implicitHeight : sm.processSectionPlaceholderHeight)
-                                                    : (sm.showProcessPlaceholder ? sm.processSectionPlaceholderHeight : 0)
-        visible: sm.processListReady || sm.showProcessPlaceholder
-        opacity: sm.processListReady ? 1 : 0
-        active: sm.processListLoaded
-        asynchronous: true
-        sourceComponent: processSection
-        Behavior on opacity { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
-    }
+        Layout.preferredHeight: sm.processViewReady && procLoader.item
+                                ? procLoader.item.implicitHeight
+                                : processSkeleton.implicitHeight
 
-    Rectangle {
-        id: processSkeleton
-        Layout.fillWidth: true
-        Layout.preferredHeight: sm.processSectionPlaceholderHeight
-        visible: sm.showProcessPlaceholder
-        opacity: sm.showProcessPlaceholder ? 1 : 0
-        radius: Theme.barRadius
-        color: Qt.rgba(Theme.surface.r, Theme.surface.g, Theme.surface.b, 0.72)
-        border.width: Theme.hairline
-        border.color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.25)
-        Behavior on opacity { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
-
-        ColumnLayout {
+        Loader {
+            id: procLoader
             anchors.fill: parent
-            anchors.margins: Theme.space12
-            spacing: Theme.space8
+            active: sm.processListLoaded
+            asynchronous: true
+            sourceComponent: processSection
+            opacity: sm.processViewReady ? 1 : 0
+            visible: opacity > 0
+            Behavior on opacity { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
+        }
 
-            RowLayout {
-                Layout.fillWidth: true
+        // Tarjeta "cargando servicios": engranaje girando + texto pulsante.
+        Rectangle {
+            id: processSkeleton
+            anchors.fill: parent
+            implicitHeight: skelHeader.implicitHeight + Theme.controlXS + Theme.dp(280)
+                          + Theme.space8 * 2 + Theme.space12 * 2
+            radius: Theme.barRadius
+            color: Qt.rgba(Theme.surface.r, Theme.surface.g, Theme.surface.b, 0.72)
+            border.width: Theme.hairline
+            border.color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.25)
+            opacity: sm.processViewReady ? 0 : 1
+            visible: opacity > 0
+            Behavior on opacity { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
+
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: Theme.space12
                 spacing: Theme.space8
 
-                Rectangle {
-                    Layout.preferredWidth: Theme.dp(96)
-                    Layout.preferredHeight: Theme.dp(15)
-                    radius: Theme.space4
-                    color: Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.34)
-                }
-
-                Item { Layout.fillWidth: true }
-
-                Rectangle {
-                    Layout.preferredWidth: Theme.dp(62)
-                    Layout.preferredHeight: Theme.dp(12)
-                    radius: Theme.space4
-                    color: Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.24)
-                }
-            }
-
-            RowLayout {
-                Layout.fillWidth: true
-                Layout.leftMargin: Theme.space8
-                Layout.rightMargin: Theme.space8
-                spacing: Theme.space8
-
-                Rectangle {
-                    Layout.preferredWidth: Theme.iconSize
-                    Layout.preferredHeight: Theme.dp(10)
-                    radius: Theme.space4
-                    color: Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.2)
-                }
-                Rectangle {
+                // Cabecera real (mismo texto y fuente que la lista) para que
+                // la altura reservada coincida al píxel con la definitiva.
+                Text {
+                    id: skelHeader
                     Layout.fillWidth: true
-                    Layout.preferredHeight: Theme.dp(10)
-                    radius: Theme.space4
-                    color: Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.2)
+                    text: "󰊢  " + I18n.tr("Processes")
+                    color: Theme.fg
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.fontSize + 1
+                    font.bold: true
                 }
-                Rectangle {
-                    Layout.preferredWidth: Theme.dp(52)
-                    Layout.preferredHeight: Theme.dp(10)
-                    radius: Theme.space4
-                    color: Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.2)
-                }
-                Rectangle {
-                    Layout.preferredWidth: Theme.dp(70)
-                    Layout.preferredHeight: Theme.dp(10)
-                    radius: Theme.space4
-                    color: Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.2)
-                }
-                Item { Layout.preferredWidth: 26 }
-            }
 
-            Repeater {
-                model: 6
-
-                Rectangle {
+                Item {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: Theme.rowS
-                    radius: Theme.pillRadius - 2
-                    color: Qt.rgba(Theme.bgAlt.r, Theme.bgAlt.g, Theme.bgAlt.b, 0.34)
+                    Layout.fillHeight: true
 
-                    RowLayout {
-                        anchors.fill: parent
-                        anchors.leftMargin: Theme.space8
-                        anchors.rightMargin: Theme.space8
-                        spacing: Theme.space8
+                    ColumnLayout {
+                        anchors.centerIn: parent
+                        spacing: Theme.space12
 
                         Rectangle {
-                            Layout.preferredWidth: Theme.iconSize
-                            Layout.preferredHeight: Theme.iconSize
-                            radius: Theme.iconSize / 2
-                            color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.18)
+                            Layout.alignment: Qt.AlignHCenter
+                            implicitWidth: Theme.dp(56)
+                            implicitHeight: Theme.dp(56)
+                            radius: width / 2
+                            color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.12)
+                            border.width: Math.max(1, Theme.hairline)
+                            border.color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.45)
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: "󰒓"
+                                color: Theme.accent
+                                font.family: Theme.fontFamily
+                                font.pixelSize: Theme.sp(26)
+                                RotationAnimation on rotation {
+                                    running: processSkeleton.visible && sm.shown
+                                    loops: Animation.Infinite
+                                    from: 0; to: 360
+                                    duration: 1600
+                                }
+                            }
                         }
-                        Rectangle {
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: Theme.dp(11)
-                            radius: Theme.space4
-                            color: Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.26)
+
+                        Text {
+                            Layout.alignment: Qt.AlignHCenter
+                            text: I18n.tr("Loading services...")
+                            color: Theme.fgDim
+                            font.family: Theme.fontFamily
+                            font.pixelSize: Theme.fontSize - 1
+                            SequentialAnimation on opacity {
+                                running: processSkeleton.visible && sm.shown
+                                loops: Animation.Infinite
+                                NumberAnimation { to: 0.45; duration: 700; easing.type: Easing.InOutQuad }
+                                NumberAnimation { to: 1;    duration: 700; easing.type: Easing.InOutQuad }
+                            }
                         }
-                        Rectangle {
-                            Layout.preferredWidth: Theme.dp(38 + index * 3)
-                            Layout.preferredHeight: Theme.dp(11)
-                            radius: Theme.space4
-                            color: Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.22)
-                        }
-                        Rectangle {
-                            Layout.preferredWidth: Theme.dp(56)
-                            Layout.preferredHeight: Theme.dp(11)
-                            radius: Theme.space4
-                            color: Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.22)
-                        }
-                        Item { Layout.preferredWidth: 26 }
                     }
                 }
             }

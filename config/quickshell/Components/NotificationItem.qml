@@ -168,8 +168,10 @@ Rectangle {
                 implicitWidth: Theme.controlS
                 implicitHeight: Theme.controlS
                 radius: height / 2
-                color: closeButton.hovered ? Qt.rgba(Theme.red.r, Theme.red.g, Theme.red.b, 0.18) : "transparent"
-                Behavior on color { ColorAnimation { duration: Theme.animFast } }
+                // Apagado = rojo con alfa 0 (no "transparent", que es negro
+                // con alfa 0 y ensuciaba el fundido de salida).
+                color: Qt.rgba(Theme.red.r, Theme.red.g, Theme.red.b, closeButton.hovered ? 0.18 : 0)
+                Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
 
                 Text {
                     anchors.centerIn: parent
@@ -177,6 +179,8 @@ Rectangle {
                     color: closeButton.hovered ? Theme.red : Theme.fgMuted
                     font.family: Theme.fontFamily
                     font.pixelSize: Theme.iconSize - 1
+                    // Funde junto al fondo; antes cambiaba de golpe.
+                    Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
                 }
 
                 MouseArea {

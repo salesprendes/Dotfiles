@@ -18,7 +18,10 @@ Singleton {
     property string status: ""
     property var entries: []
     property var filteredEntries: []
-    readonly property int count: entries.length
+    // Conteo para el badge de la barra. Independiente de 'entries' para que
+    // en reposo (panel cerrado) baste un recuento barato, sin cargar ni
+    // retener el historial completo en memoria.
+    property int count: 0
     readonly property string missingTools: {
         const missing = []
         if (!cliphistAvailable) missing.push("cliphist")
@@ -60,6 +63,7 @@ Singleton {
             })
         }
         entries = list
+        count = list.length
         updateFilter()
     }
 
@@ -78,12 +82,20 @@ Singleton {
         if (!available) {
             entries = []
             filteredEntries = []
+            count = 0
             return
         }
         if (listProc.running)
             return
         loading = true
         listProc.running = true
+    }
+
+    // Recuento sin cargar el historial (para el badge con el panel cerrado).
+    function refreshCount() {
+        if (!available || countProc.running)
+            return
+        countProc.running = true
     }
 
     function copy(entry) {
@@ -115,6 +127,7 @@ Singleton {
         status = I18n.tr("History cleared")
         entries = []
         filteredEntries = []
+        count = 0
     }
 
     Process {
@@ -136,7 +149,7 @@ Singleton {
                 if (clip.available) {
                     clip.status = ""
                     watcher.running = true
-                    clip.refresh()
+                    clip.refreshCount()
                 } else {
                     clip.status = I18n.tr("Missing %1").arg(clip.missingTools)
                 }
@@ -156,7 +169,9 @@ Singleton {
             "command -v wl-paste >/dev/null 2>&1 && command -v cliphist >/dev/null 2>&1 && " +
             "wl-paste --watch sh -c 'cliphist store; echo .'"]
         stdout: SplitParser {
-            onRead: clip.refresh()
+            // Con el panel abierto se recarga la lista; cerrado, solo el
+            // recuento del badge (sin cargar el historial en memoria).
+            onRead: Globals.clipboardOpen ? clip.refresh() : clip.refreshCount()
         }
     }
 
@@ -169,6 +184,36 @@ Singleton {
         }
         onExited: {
             clip.loading = false
+        }
+    }
+
+    Process {
+        id: countProc
+        running: false
+        command: ["sh", "-c", "cliphist list 2>/dev/null | wc -l"]
+        stdout: StdioCollector {
+            onStreamFinished: clip.count = parseInt(this.text) || 0
+        }
+    }
+
+    // Suelta el historial un rato después de cerrar el panel (no de inmediato,
+    // para que la animación de cierre no se vea vaciarse). Al reabrir, el
+    // panel llama a refresh() y lo recarga.
+    Timer {
+        id: purgeTimer
+        interval: 600
+        onTriggered: {
+            clip.entries = []
+            clip.filteredEntries = []
+        }
+    }
+    Connections {
+        target: Globals
+        function onClipboardOpenChanged() {
+            if (Globals.clipboardOpen)
+                purgeTimer.stop()
+            else
+                purgeTimer.restart()
         }
     }
 

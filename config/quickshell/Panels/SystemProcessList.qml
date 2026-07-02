@@ -150,14 +150,14 @@ Rectangle {
                 // transición solo cambia la opacidad, sin pasar por tonos grises.
                 readonly property color rowOff: Qt.rgba(Theme.surfaceHi.r, Theme.surfaceHi.g, Theme.surfaceHi.b, 0)
                 readonly property bool hovered: processList.hoveredIndex === row.index
+                // Resalte instantáneo, sin Behavior: el truco de animar "solo
+                // al entrar" con enabled dependía del orden de actualización
+                // de las ligaduras y a veces el fundido de salida corría
+                // igual, dejando varias filas marcadas al mover rápido.
                 color: hovered ? Theme.surfaceHi : rowOff
                 readonly property color cpuCol: modelData.cpu > 80 ? Theme.red
                                               : modelData.cpu > 50 ? Theme.yellow
                                               : Theme.fgDim
-
-                // Anima SOLO al entrar (esta fila pasa a ser la marcada); al
-                // dejar de serlo limpia al instante → sin estela ni residuos.
-                Behavior on color { enabled: row.hovered; ColorAnimation { duration: Theme.animFast } }
 
                 RowLayout {
                     z: 1
@@ -205,14 +205,20 @@ Rectangle {
                         Layout.preferredWidth: 26
                         Layout.preferredHeight: 26
                         radius: 13
-                        color: killMa.containsMouse
-                               ? Qt.rgba(Theme.red.r, Theme.red.g, Theme.red.b, 0.18)
-                               : Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, row.hovered ? 0.12 : 0.0)
-                        border.width: killMa.containsMouse ? 1 : 0
-                        border.color: Qt.rgba(Theme.red.r, Theme.red.g, Theme.red.b, 0.45)
+                        // Capa base ligada a la fila: instantánea (si fundiera,
+                        // dejaría un circulito residual al saltar entre filas).
+                        color: Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, row.hovered ? 0.12 : 0.0)
 
-                        Behavior on color { ColorAnimation { duration: Theme.animFast } }
-                        Behavior on border.color { ColorAnimation { duration: Theme.animFast } }
+                        // Hover rojo del propio botón: aislado del movimiento
+                        // entre filas, así su fundido no deja estela.
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: parent.radius
+                            color: Qt.rgba(Theme.red.r, Theme.red.g, Theme.red.b, killMa.containsMouse ? 0.18 : 0)
+                            border.width: killMa.containsMouse ? 1 : 0
+                            border.color: Qt.rgba(Theme.red.r, Theme.red.g, Theme.red.b, 0.45)
+                            Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+                        }
 
                         Text {
                             anchors.centerIn: parent
@@ -220,7 +226,7 @@ Rectangle {
                             color: killMa.containsMouse ? Theme.red : Theme.fgMuted
                             font.family: Theme.fontFamily
                             font.pixelSize: Theme.fontSize
-                            Behavior on color { ColorAnimation { duration: Theme.animFast } }
+                            Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
                         }
 
                         MouseArea {

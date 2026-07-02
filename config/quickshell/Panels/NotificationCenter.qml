@@ -208,7 +208,7 @@ Popout {
                                          : Qt.rgba(Theme.surface.r, Theme.surface.g, Theme.surface.b, 0.85)
             border.width: Theme.hairline
             border.color: Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.34)
-            Behavior on color { ColorAnimation { duration: Theme.animFast } }
+            Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
 
             RowLayout {
                 id: clearRow
@@ -226,6 +226,8 @@ Popout {
                     font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSize - 2
                     font.bold: true
+                    // Funde junto al fondo; antes cambiaba de golpe.
+                    Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
                 }
             }
 
@@ -279,6 +281,8 @@ Popout {
                         color: unmuteMa.containsMouse ? Theme.red : Theme.fgMuted
                         font.family: Theme.fontFamily
                         font.pixelSize: Theme.iconSize - 5
+                        // Funde junto al fondo del chip; antes saltaba de golpe.
+                        Behavior on color { ColorAnimation { duration: 140; easing.type: Easing.OutCubic } }
                     }
                 }
 

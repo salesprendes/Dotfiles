@@ -71,6 +71,14 @@ PanelWindow {
             from: 0; to: 1
             duration: win.fadeMs
             easing.type: Easing.OutCubic
+            // Al terminar, libera la imagen del slot saliente: quedaba
+            // decodificada bajo el entrante (~8 MB por monitor) sin volver
+            // a usarse. Solo en el final natural (stop() no emite finished),
+            // así una transición interrumpida nunca vacía el slot que entra.
+            onFinished: {
+                const out = stage.showB ? holderA : holderB
+                out.source = ""
+            }
         }
 
         // ── Componente "Holder": aplica la transición elegida ─

@@ -1,12 +1,19 @@
 import QtQuick
 import QtQuick.Layouts
+import QtQuick.Shapes
 import Quickshell
 import Quickshell.Services.Mpris
+import Quickshell.Widgets
 import qs.Components
 import qs.Config
 import qs.Services
 
 // ─────────────────────────────────────────────────────────────
+//  Panel Resumen. Rejilla compacta (estilo dashboard de DMS):
+//  fila superior con clima y sistema (distro + equipo + tiempo
+//  activo en píldora); fila central con reloj vertical,
+//  calendario y anillos CPU/RAM (datos que SysMon ya sondea para
+//  la barra); mini-reproductor abajo solo si hay reproducción.
 // ─────────────────────────────────────────────────────────────
 Popout {
     id: dash
@@ -62,68 +69,6 @@ Popout {
         Weather.refresh()
     }
 
-    // ── Cabecera: hora + fecha + clima compacto ──────────────
-    RowLayout {
-        Layout.fillWidth: true
-        spacing: 0
-
-        Item { Layout.fillWidth: true }
-
-        RowLayout {
-            Layout.alignment: Qt.AlignHCenter
-            spacing: Theme.space12
-
-            ColumnLayout {
-                Layout.alignment: Qt.AlignVCenter
-                spacing: 0
-                Text {
-                    Layout.fillWidth: true
-                    horizontalAlignment: Text.AlignHCenter
-                    text: Qt.formatDateTime(clock.date, dash.timeFormat)
-                    color: Theme.fg
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.sp(38)
-                    font.bold: true
-                }
-                Text {
-                    Layout.fillWidth: true
-                    horizontalAlignment: Text.AlignHCenter
-                    text: {
-                        const d = clock.date
-                        if (Settings.language === "en")
-                            return I18n.dayName(d.getDay()) + ", " + I18n.monthName(d.getMonth(), true) + " " + d.getDate()
-                        return I18n.dayName(d.getDay()) + ", " + d.getDate()
-                             + " de " + I18n.monthName(d.getMonth(), false)
-                    }
-                    color: Theme.fgMuted
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSize
-                }
-            }
-
-            RowLayout {
-                visible: Weather.enabled && Weather.ready
-                Layout.alignment: Qt.AlignVCenter
-                spacing: Theme.space6
-                Text {
-                    text: Weather.icon
-                    color: Theme.yellow
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.iconSize + 8
-                }
-                Text {
-                    text: Weather.temp
-                    color: Theme.fg
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSize + 4
-                    font.bold: true
-                }
-            }
-        }
-
-        Item { Layout.fillWidth: true }
-    }
-
     // ── Barra de pestañas ────────────────────────────────────
     Rectangle {
         id: tabBar
@@ -177,7 +122,7 @@ Popout {
         ColumnLayout {
             id: overviewPage
             anchors { left: parent.left; right: parent.right; top: parent.top }
-            spacing: Theme.space12
+            spacing: Theme.space10
             opacity: dash.tab === "overview" ? 1 : 0
             visible: opacity > 0.01
             transform: Translate {
@@ -186,149 +131,338 @@ Popout {
             }
             Behavior on opacity { NumberAnimation { duration: dash.tabAnim; easing.type: Easing.OutCubic } }
 
-            // Clima.
-            Rectangle {
+            // ── Fila 1: clima + sistema ──
+            RowLayout {
                 Layout.fillWidth: true
-                visible: Weather.enabled && Weather.ready
-                implicitHeight: wRow.implicitHeight + Theme.space12 * 2
-                radius: Theme.pillRadius
-                color: Qt.rgba(Theme.surface.r, Theme.surface.g, Theme.surface.b, 0.45)
-                border.width: Theme.hairline
-                border.color: Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.4)
+                spacing: Theme.space8
 
-                RowLayout {
-                    id: wRow
-                    anchors { left: parent.left; right: parent.right; verticalCenter: parent.verticalCenter
-                              leftMargin: Theme.space14; rightMargin: Theme.space14 }
-                    spacing: Theme.space12
+                // Clima compacto (si está desactivado, sistema ocupa todo).
+                OverviewCard {
+                    visible: Weather.enabled && Weather.ready
+                    Layout.fillWidth: false
+                    Layout.preferredWidth: Theme.dp(168)
+                    Layout.fillHeight: true
+                    implicitHeight: Theme.dp(76)
 
-                    Text {
-                        text: Weather.icon
-                        color: Theme.yellow
-                        font.family: Theme.fontFamily
-                        font.pixelSize: Theme.iconSize + 22
-                    }
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 0
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: Theme.space12
+                        anchors.rightMargin: Theme.space12
+                        spacing: Theme.space10
+
+                        // Icono protagonista, como en la referencia: grande,
+                        // casi a la altura de la tarjeta.
                         Text {
+                            text: Weather.icon
+                            color: Theme.yellow
+                            font.family: Theme.fontFamily
+                            font.pixelSize: Theme.sp(36)
+                        }
+                        ColumnLayout {
                             Layout.fillWidth: true
-                            text: Weather.temp + "  ·  " + Weather.condition
-                            color: Theme.fg
-                            font.family: Theme.fontFamily
-                            font.pixelSize: Theme.fontSize + 1
-                            font.bold: true; elide: Text.ElideRight
-                        }
-                        Text {
-                            Layout.fillWidth: true
-                            text: Weather.location
-                            color: Theme.fgMuted
-                            font.family: Theme.fontFamily
-                            font.pixelSize: Theme.fontSize - 3
-                            elide: Text.ElideRight
+                            spacing: 0
+                            Text {
+                                Layout.fillWidth: true
+                                text: Weather.temp
+                                color: Theme.fg
+                                font.family: Theme.fontFamily
+                                font.pixelSize: Theme.fontSize + 7
+                                font.bold: true
+                                elide: Text.ElideRight
+                            }
+                            Text {
+                                Layout.fillWidth: true
+                                text: Weather.condition
+                                color: Theme.fgMuted
+                                font.family: Theme.fontFamily
+                                font.pixelSize: Theme.fontSize - 3
+                                elide: Text.ElideRight
+                            }
                         }
                     }
-                    ColumnLayout {
-                        spacing: 0
-                        Text {
-                            Layout.alignment: Qt.AlignRight
-                            text: I18n.tr("Feels like %1").arg(Weather.feels)
-                            color: Theme.fgDim
-                            font.family: Theme.fontFamily
-                            font.pixelSize: Theme.fontSize - 3
+                }
+
+                // Sistema: distro + equipo + tiempo activo en píldora.
+                OverviewCard {
+                    Layout.fillHeight: true
+                    implicitHeight: Theme.dp(76)
+
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: Theme.space12
+                        anchors.rightMargin: Theme.space12
+                        spacing: Theme.space10
+
+                        Rectangle {
+                            implicitWidth: Theme.dp(44)
+                            implicitHeight: Theme.dp(44)
+                            radius: width / 2
+                            color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.14)
+                            border.width: Theme.hairline
+                            border.color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.4)
+                            Text {
+                                anchors.centerIn: parent
+                                text: SysMon.distroGlyph
+                                color: Theme.accent
+                                font.family: Theme.fontFamily
+                                font.pixelSize: Theme.sp(22)
+                            }
                         }
-                        Text {
-                            Layout.alignment: Qt.AlignRight
-                            text: I18n.tr("Humidity %1").arg(Weather.humidity)
-                            color: Theme.fgMuted
-                            font.family: Theme.fontFamily
-                            font.pixelSize: Theme.fontSize - 3
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: Theme.space4
+                            Text {
+                                Layout.fillWidth: true
+                                text: SysMon.hostname !== "" ? SysMon.hostname
+                                     : (SysMon.distroName !== "" ? SysMon.distroName : "Linux")
+                                color: Theme.fg
+                                font.family: Theme.fontFamily
+                                font.pixelSize: Theme.fontSize + 1
+                                font.bold: true
+                                elide: Text.ElideRight
+                            }
+                            // Píldora de tiempo activo (verde, como en DMS).
+                            Rectangle {
+                                implicitWidth: upRow.implicitWidth + Theme.space12
+                                implicitHeight: Theme.dp(20)
+                                radius: height / 2
+                                color: Qt.rgba(Theme.green.r, Theme.green.g, Theme.green.b, 0.14)
+                                border.width: Theme.hairline
+                                border.color: Qt.rgba(Theme.green.r, Theme.green.g, Theme.green.b, 0.35)
+                                RowLayout {
+                                    id: upRow
+                                    anchors.centerIn: parent
+                                    spacing: Theme.space4
+                                    Text {
+                                        text: "󰅐"
+                                        color: Theme.green
+                                        font.family: Theme.fontFamily
+                                        font.pixelSize: Theme.fontSize - 3
+                                    }
+                                    Text {
+                                        text: SysMon.uptime !== "" ? SysMon.uptime : "—"
+                                        color: Theme.green
+                                        font.family: Theme.fontFamily
+                                        font.pixelSize: Theme.fontSize - 3
+                                        font.bold: true
+                                    }
+                                }
+                            }
                         }
                     }
                 }
             }
 
-            // Mini-reproductor.
-            Rectangle {
+            // ── Fila 2: reloj vertical + calendario + anillos ──
+            RowLayout {
                 Layout.fillWidth: true
-                visible: dash.hasMedia
-                implicitHeight: miniRow.implicitHeight + Theme.space12 * 2
-                radius: Theme.pillRadius
-                color: Qt.rgba(Theme.surface.r, Theme.surface.g, Theme.surface.b, 0.55)
-                border.width: Theme.hairline
-                border.color: Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.4)
+                spacing: Theme.space8
 
-                RowLayout {
-                    id: miniRow
+                // Reloj vertical (horas arriba, minutos abajo).
+                OverviewCard {
+                    Layout.fillWidth: false
+                    Layout.preferredWidth: Theme.dp(74)
+                    Layout.fillHeight: true
+
+                    ColumnLayout {
+                        anchors.centerIn: parent
+                        spacing: Theme.space4
+
+                        Text {
+                            Layout.alignment: Qt.AlignHCenter
+                            text: Qt.formatDateTime(clock.date, Settings.clock24h ? "HH" : "hh")
+                            color: Theme.accent
+                            font.family: Theme.fontFamily
+                            font.pixelSize: Theme.sp(26)
+                            font.bold: true
+                        }
+                        RowLayout {
+                            Layout.alignment: Qt.AlignHCenter
+                            spacing: Theme.dp(4)
+                            Repeater {
+                                model: 3
+                                Rectangle {
+                                    implicitWidth: Theme.dp(4.5)
+                                    implicitHeight: Theme.dp(4.5)
+                                    radius: width / 2
+                                    color: Theme.fgMuted
+                                }
+                            }
+                        }
+                        Text {
+                            Layout.alignment: Qt.AlignHCenter
+                            text: Qt.formatDateTime(clock.date, "mm")
+                            color: Theme.fg
+                            font.family: Theme.fontFamily
+                            font.pixelSize: Theme.sp(26)
+                            font.bold: true
+                        }
+                        Text {
+                            Layout.alignment: Qt.AlignHCenter
+                            visible: !Settings.clock24h
+                            text: Qt.formatDateTime(clock.date, "AP")
+                            color: Theme.fgMuted
+                            font.family: Theme.fontFamily
+                            font.pixelSize: Theme.fontSize - 3
+                            font.bold: true
+                        }
+                    }
+                }
+
+                // Calendario (marca la altura de la fila).
+                OverviewCard {
+                    implicitHeight: calBox.implicitHeight + Theme.space12 * 2
+
+                    Calendar {
+                        id: calBox
+                        anchors { left: parent.left; right: parent.right; verticalCenter: parent.verticalCenter
+                                  leftMargin: Theme.space12; rightMargin: Theme.space12 }
+                    }
+                }
+
+                // Anillos CPU / RAM / disco.
+                OverviewCard {
+                    Layout.fillWidth: false
+                    Layout.preferredWidth: Theme.dp(76)
+                    Layout.fillHeight: true
+
+                    ColumnLayout {
+                        anchors.centerIn: parent
+                        spacing: Theme.space12
+
+                        ColumnLayout {
+                            spacing: Theme.space2
+                            StatRing {
+                                Layout.alignment: Qt.AlignHCenter
+                                value: SysMon.cpu / 100
+                                tint: SysMon.color(SysMon.cpu)
+                                glyph: "󰻠"
+                            }
+                            Text {
+                                Layout.alignment: Qt.AlignHCenter
+                                text: Math.round(SysMon.cpu) + "%"
+                                color: Theme.fgMuted
+                                font.family: Theme.fontFamily
+                                font.pixelSize: Theme.fontSize - 4
+                            }
+                        }
+                        ColumnLayout {
+                            spacing: Theme.space2
+                            StatRing {
+                                Layout.alignment: Qt.AlignHCenter
+                                value: SysMon.memPercent / 100
+                                tint: SysMon.color(SysMon.memPercent)
+                                glyph: "󰍛"
+                            }
+                            Text {
+                                Layout.alignment: Qt.AlignHCenter
+                                text: Math.round(SysMon.memPercent) + "%"
+                                color: Theme.fgMuted
+                                font.family: Theme.fontFamily
+                                font.pixelSize: Theme.fontSize - 4
+                            }
+                        }
+                        ColumnLayout {
+                            spacing: Theme.space2
+                            StatRing {
+                                Layout.alignment: Qt.AlignHCenter
+                                value: SysMon.diskPercent / 100
+                                tint: SysMon.color(SysMon.diskPercent)
+                                glyph: "󰋊"
+                            }
+                            Text {
+                                Layout.alignment: Qt.AlignHCenter
+                                text: Math.round(SysMon.diskPercent) + "%"
+                                color: Theme.fgMuted
+                                font.family: Theme.fontFamily
+                                font.pixelSize: Theme.fontSize - 4
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ── Mini-reproductor con línea de progreso ──
+            OverviewCard {
+                visible: dash.hasMedia
+                implicitHeight: miniCol.implicitHeight + Theme.space12 * 2
+
+                ColumnLayout {
+                    id: miniCol
                     anchors { left: parent.left; right: parent.right; verticalCenter: parent.verticalCenter
                               leftMargin: Theme.space12; rightMargin: Theme.space12 }
-                    spacing: Theme.space12
+                    spacing: Theme.space8
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: Theme.space12
+
+                        ClippingRectangle {
+                            implicitWidth: Theme.tileM; implicitHeight: Theme.tileM
+                            radius: Theme.space8; color: Theme.bgAlt
+                            Image {
+                                anchors.fill: parent
+                                source: dash.player?.trackArtUrl ?? ""
+                                visible: status === Image.Ready
+                                fillMode: Image.PreserveAspectCrop
+                                sourceSize.width: Theme.tileM * 2; sourceSize.height: Theme.tileM * 2
+                                asynchronous: true
+                            }
+                            Text {
+                                anchors.centerIn: parent
+                                visible: (dash.player?.trackArtUrl ?? "") === ""
+                                text: "󰝚"; color: Theme.fgMuted
+                                font.family: Theme.fontFamily; font.pixelSize: Theme.iconSize + 6
+                            }
+                        }
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 0
+                            Text {
+                                Layout.fillWidth: true
+                                text: dash.player?.trackTitle || I18n.tr("Untitled")
+                                color: Theme.fg
+                                font.family: Theme.fontFamily; font.pixelSize: Theme.fontSize
+                                font.bold: true; elide: Text.ElideRight
+                            }
+                            Text {
+                                Layout.fillWidth: true
+                                text: dash.player?.trackArtist || dash.player?.identity || ""
+                                color: Theme.fgMuted
+                                font.family: Theme.fontFamily; font.pixelSize: Theme.fontSize - 3
+                                elide: Text.ElideRight
+                            }
+                        }
+                        MediaBtn {
+                            glyph: (dash.player?.isPlaying ?? false) ? "󰏤" : "󰐊"
+                            size: Theme.controlM; primary: true
+                            enabled: dash.player?.canTogglePlaying ?? false
+                            onTapped: dash.player?.togglePlaying()
+                        }
+                        MediaBtn {
+                            glyph: "󰒭"; size: Theme.controlM
+                            enabled: dash.player?.canGoNext ?? false
+                            onTapped: dash.player?.next()
+                        }
+                    }
 
                     Rectangle {
-                        implicitWidth: Theme.tileM; implicitHeight: Theme.tileM
-                        radius: Theme.space6; color: Theme.bgAlt; clip: true
-                        Image {
-                            anchors.fill: parent
-                            source: dash.player?.trackArtUrl ?? ""
-                            visible: status === Image.Ready
-                            fillMode: Image.PreserveAspectCrop
-                            sourceSize.width: Theme.tileM * 2; sourceSize.height: Theme.tileM * 2
-                            asynchronous: true
-                        }
-                        Text {
-                            anchors.centerIn: parent
-                            visible: (dash.player?.trackArtUrl ?? "") === ""
-                            text: "󰝚"; color: Theme.fgMuted
-                            font.family: Theme.fontFamily; font.pixelSize: Theme.iconSize + 6
-                        }
-                    }
-                    ColumnLayout {
                         Layout.fillWidth: true
-                        spacing: 0
-                        Text {
-                            Layout.fillWidth: true
-                            text: dash.player?.trackTitle || I18n.tr("Untitled")
-                            color: Theme.fg
-                            font.family: Theme.fontFamily; font.pixelSize: Theme.fontSize
-                            font.bold: true; elide: Text.ElideRight
+                        visible: (dash.player?.lengthSupported ?? false) && (dash.player?.length ?? 0) > 0
+                        implicitHeight: Theme.dp(3)
+                        radius: height / 2
+                        color: Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.45)
+                        Rectangle {
+                            height: parent.height; radius: parent.radius
+                            width: parent.width * Math.max(0, Math.min(1,
+                                dash.displayPos / Math.max(1, dash.player?.length ?? 1)))
+                            color: Theme.accent
+                            Behavior on width { NumberAnimation { duration: 250 } }
                         }
-                        Text {
-                            Layout.fillWidth: true
-                            text: dash.player?.trackArtist || dash.player?.identity || ""
-                            color: Theme.fgMuted
-                            font.family: Theme.fontFamily; font.pixelSize: Theme.fontSize - 3
-                            elide: Text.ElideRight
-                        }
-                    }
-                    MediaBtn {
-                        glyph: (dash.player?.isPlaying ?? false) ? "󰏤" : "󰐊"
-                        size: Theme.controlM; primary: true
-                        enabled: dash.player?.canTogglePlaying ?? false
-                        onTapped: dash.player?.togglePlaying()
-                    }
-                    MediaBtn {
-                        glyph: "󰒭"; size: Theme.controlM
-                        enabled: dash.player?.canGoNext ?? false
-                        onTapped: dash.player?.next()
                     }
                 }
             }
 
-            // Calendario.
-            Rectangle {
-                Layout.fillWidth: true
-                implicitHeight: calBox.implicitHeight + Theme.space14 * 2
-                radius: Theme.pillRadius
-                color: Qt.rgba(Theme.surface.r, Theme.surface.g, Theme.surface.b, 0.45)
-                border.width: Theme.hairline
-                border.color: Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.4)
-
-                Calendar {
-                    id: calBox
-                    anchors { left: parent.left; right: parent.right; verticalCenter: parent.verticalCenter
-                              leftMargin: Theme.space14; rightMargin: Theme.space14 }
-                }
-            }
         }
 
         // ═════════ PÁGINA: MÚSICA ════════════════════════════
@@ -612,6 +746,63 @@ Popout {
     }
 
     // ── Componentes reutilizables ────────────────────────────
+
+    // Tarjeta tonal del resumen (superficie suave, radio amplio).
+    component OverviewCard: Rectangle {
+        Layout.fillWidth: true
+        radius: Theme.dp(16)
+        color: Qt.rgba(Theme.surface.r, Theme.surface.g, Theme.surface.b, 0.42)
+        border.width: Theme.hairline
+        border.color: Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.3)
+    }
+
+    // Anillo de progreso con glifo central (pulso del sistema).
+    component StatRing: Item {
+        id: sr
+        property real value: 0
+        property color tint: Theme.accent
+        property string glyph: ""
+        implicitWidth: Theme.dp(50)
+        implicitHeight: Theme.dp(50)
+
+        Shape {
+            anchors.fill: parent
+            preferredRendererType: Shape.CurveRenderer
+
+            ShapePath {
+                strokeColor: Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.4)
+                fillColor: "transparent"
+                strokeWidth: Theme.dp(4)
+                capStyle: ShapePath.RoundCap
+                PathAngleArc {
+                    centerX: sr.width / 2; centerY: sr.height / 2
+                    radiusX: sr.width / 2 - Theme.dp(2.5); radiusY: radiusX
+                    startAngle: -90; sweepAngle: 360
+                }
+            }
+            ShapePath {
+                strokeColor: sr.tint
+                fillColor: "transparent"
+                strokeWidth: Theme.dp(4)
+                capStyle: ShapePath.RoundCap
+                PathAngleArc {
+                    centerX: sr.width / 2; centerY: sr.height / 2
+                    radiusX: sr.width / 2 - Theme.dp(2.5); radiusY: radiusX
+                    startAngle: -90
+                    sweepAngle: 360 * Math.max(0.02, Math.min(1, sr.value))
+                    Behavior on sweepAngle { NumberAnimation { duration: 600; easing.type: Easing.OutCubic } }
+                }
+            }
+        }
+        Text {
+            anchors.centerIn: parent
+            text: sr.glyph
+            color: sr.tint
+            font.family: Theme.fontFamily
+            font.pixelSize: Theme.iconSize + 6.5
+        }
+    }
+
     component TabBtn: Item {
         property string label: ""
         property string glyph: ""
