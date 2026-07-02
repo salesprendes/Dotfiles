@@ -251,7 +251,12 @@ Singleton {
         // shell del usuario, así que el comando de -c debe ir entre comillas
         // simples para sobrevivir; sin ellas "-c exec" quedaba como no-op y
         // la sesión moría al instante sin error.
-        const inner = "exec " + sessionExec
+        // La salida de la sesión iría a la consola VT (se ve el logo y los
+        // logs de start-hyprland al arrancar): se guarda en un log en su
+        // lugar, que además sirve para depurar sesiones que no arrancan.
+        const inner = "mkdir -p \"$HOME/.local/state\"; " +
+                      "exec " + sessionExec +
+                      " >\"$HOME/.local/state/greetd-session.log\" 2>&1"
         return [sh, "-l", "-c",
                 "'" + inner.replace(/'/g, "'\\''") + "'"]
     }
