@@ -156,5 +156,10 @@ hl.config({
 hl.config({
     render = {
         direct_scanout = 1,
+
+        -- Planificación de render nueva: triple búfer solo cuando hace
+        -- falta. La wiki lo describe como "mejora los FPS en equipos
+        -- modestos": si un frame llega justo, no se pierde el vsync entero.
+        new_render_scheduling = true,
     },
 })
