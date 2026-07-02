@@ -39,6 +39,14 @@ Singleton {
         Settings.wallpaperCurrent = path
     }
 
+    // Fondo por defecto: si no hay fondo guardado (sistema recién instalado)
+    // o el guardado ya no está entre las imágenes encontradas, usa simple.png.
+    function _applyDefaultIfNeeded() {
+        if (current !== "" && list.indexOf(current) !== -1) return
+        const def = list.find(p => p.endsWith("/simple.png"))
+        if (def) apply(def)
+    }
+
     // Restaura el último fondo guardado al arrancar y vuelve a escanear.
     Component.onCompleted: {
         if (Settings.wallpaperCurrent)
@@ -68,6 +76,7 @@ Singleton {
         stdout: StdioCollector {
             onStreamFinished: {
                 root.list = text.split("\n").filter(l => l.trim() !== "")
+                root._applyDefaultIfNeeded()
             }
         }
     }
