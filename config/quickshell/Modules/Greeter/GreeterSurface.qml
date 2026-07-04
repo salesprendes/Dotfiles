@@ -46,14 +46,21 @@ FloatingWindow {
         }
     }
 
+    // ── Reglas responsive ────────────────────────────────────
+    //  La tarjeta de login manda: en pantallas bajas el reloj reduce su
+    //  margen y su fuente, y si aun así no queda hueco, se oculta.
+    readonly property bool shortScreen: height < Theme.dp(820)
+    readonly property bool showClock: height - card.height >= Theme.dp(320)
+
     // ── Reloj (todos los monitores) ──────────────────────────
     SystemClock { id: clock; precision: SystemClock.Minutes }
     Column {
         id: clockCol
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.top: parent.top
-        anchors.topMargin: Math.round(parent.height * 0.15)
+        anchors.topMargin: Math.round(parent.height * (win.shortScreen ? 0.07 : 0.15))
         spacing: Theme.dp(6)
+        visible: win.showClock
         opacity: 0
         Component.onCompleted: clockIn.start()
         NumberAnimation {
@@ -66,7 +73,8 @@ FloatingWindow {
             text: Qt.formatDateTime(clock.date, "HH:mm")
             color: Theme.fg
             font.family: Theme.font
-            font.pixelSize: Theme.sp(64)
+            // Escala con la altura de la pantalla (tope: tamaño de diseño).
+            font.pixelSize: Math.max(Theme.sp(30), Math.min(Theme.sp(64), Math.round(win.height * 0.075)))
             font.bold: true
         }
         Text {
@@ -74,7 +82,7 @@ FloatingWindow {
             text: clock.date.toLocaleDateString(Theme.locale, "dddd, d 'de' MMMM")
             color: Theme.fgDim
             font.family: Theme.font
-            font.pixelSize: Theme.sp(15)
+            font.pixelSize: Math.max(Theme.sp(11), Math.min(Theme.sp(15), Math.round(win.height * 0.022)))
         }
     }
 
@@ -82,10 +90,21 @@ FloatingWindow {
     Item {
         id: card
         visible: win.primary
-        width: Theme.dp(380)
+        // Se estrecha en pantallas angostas en vez de desbordar.
+        width: Math.min(Theme.dp(380), win.width - Theme.dp(48))
         readonly property bool pwStage: GreeterState.selectedUser !== ""
         height: (pwStage ? pwv.implicitHeight : up.implicitHeight) + Theme.dp(56)
-        anchors.centerIn: parent
+        anchors.horizontalCenter: parent.horizontalCenter
+        // Centrada, pero nunca pisando el reloj ni saliéndose por abajo:
+        // si el centro toca el reloj, baja justo debajo de él; si tampoco
+        // hay sitio, se pega al borde inferior con margen.
+        y: {
+            const centered   = Math.round((win.height - height) / 2)
+            const belowClock = win.showClock ? clockCol.y + clockCol.height + Theme.dp(26)
+                                             : Theme.dp(26)
+            const maxY = win.height - height - Theme.dp(26)
+            return Math.min(Math.max(centered, belowClock), Math.max(Theme.dp(10), maxY))
+        }
         Behavior on height { NumberAnimation { duration: 320; easing.type: Easing.OutCubic } }
 
         // Entrada de la tarjeta.

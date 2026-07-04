@@ -187,14 +187,13 @@ Item {
                     enabled: !GreeterState.busy && GreeterState.selectedUser !== ""
                     echoMode: GreeterState.masked ? TextInput.Password : TextInput.Normal
                     selectByMouse: false
-                    // Tab cicla la sesión (Hyprland ↔ otras) sin ratón; aquí no
-                    // hay más campos entre los que saltar, así que se reutiliza
-                    // para el selector de sesión (Shift+Tab va hacia atrás).
-                    Keys.onTabPressed:     if (!GreeterState.busy) GreeterState.cycleSession(1)
-                    Keys.onBacktabPressed: if (!GreeterState.busy) GreeterState.cycleSession(-1)
-                    // ESC, en orden: cierra el desplegable de sesiones → borra
-                    // lo tecleado → vuelve al selector de usuarios (solo si hay
-                    // más de uno, como el botón atrás).
+                    // Tab recorre los controles con la cadena de foco de Qt:
+                    // contraseña → selector de sesión → botones de energía →
+                    // y vuelve aquí al completar el ciclo (Shift+Tab, al revés).
+                    activeFocusOnTab: true
+                    // ESC, en orden: cierra el desplegable de sesiones (si se
+                    // abrió con el ratón) → borra lo tecleado → vuelve al
+                    // selector de usuarios (solo si hay más de uno).
                     Keys.onEscapePressed: {
                         if (GreeterState.busy) return
                         if (sessionSel.open) { sessionSel.open = false; return }

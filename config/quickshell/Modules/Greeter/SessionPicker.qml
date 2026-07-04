@@ -15,13 +15,61 @@ Item {
     property bool open: false
     signal requestFocus()
 
+    // ── Manejo por teclado ───────────────────────────────────
+    //  Tab trae el foco aquí (anillo de acento en la píldora). Espacio o
+    //  Enter abren el menú; abierto: ↑/↓ recorren, Espacio/Enter eligen
+    //  y ESC cierra sin cambiar. Al cerrarse, el foco vuelve solo a la
+    //  contraseña (onOpenChanged → requestFocus).
+    activeFocusOnTab: true
+    property int hi: 0
+    function kbToggle() {
+        if (GreeterState.busy) return
+        if (!open) {
+            hi = GreeterState.sessionIndex
+            open = true
+        } else {
+            GreeterState.sessionIndex = hi
+            open = false
+        }
+    }
+    Keys.onSpacePressed:  kbToggle()
+    Keys.onReturnPressed: kbToggle()
+    Keys.onEnterPressed:  kbToggle()
+    Keys.onUpPressed:     if (open) hi = Math.max(0, hi - 1)
+    Keys.onDownPressed:   if (open) hi = Math.min(GreeterState.sessions.length - 1, hi + 1)
+    Keys.onEscapePressed: {
+        if (open) open = false
+        else requestFocus()   // sin menú: devuelve el foco a la contraseña
+    }
+    // Tab con el menú abierto: recorre las opciones; al pasar de la última
+    // el menú se cierra solo y el foco salta directo a los botones de
+    // energía (sin quedarse en el limbo). Shift+Tab, lo simétrico.
+    property bool _skipRefocus: false
+    Keys.onTabPressed: (event) => {
+        if (!open) { event.accepted = false; return } // cerrado: cadena normal
+        if (hi < GreeterState.sessions.length - 1) {
+            hi++
+        } else {
+            _skipRefocus = true
+            open = false
+            const nxt = nextItemInFocusChain(true)
+            if (nxt) nxt.forceActiveFocus(Qt.TabFocusReason)
+            _skipRefocus = false
+        }
+    }
+    Keys.onBacktabPressed: (event) => {
+        if (!open) { event.accepted = false; return }
+        if (hi > 0) hi--
+        else open = false     // al principio: cierra y vuelve a la contraseña
+    }
+
     // Se cierra si el usuario cambia o empieza la autenticación.
     Connections {
         target: GreeterState
         function onBusyChanged()          { if (GreeterState.busy) sp.open = false }
         function onSelectedUserChanged()  { sp.open = false }
     }
-    onOpenChanged: if (!open) sp.requestFocus()
+    onOpenChanged: if (!open && !_skipRefocus) sp.requestFocus()
 
     // ── Capa para descartar al hacer clic fuera (solo mientras abierto) ─
     MouseArea {
@@ -39,11 +87,12 @@ Item {
         height: Theme.dp(32)
         width: trigRow.implicitWidth + Theme.dp(26)
         radius: height / 2
-        color: (trigMa.containsMouse || sp.open) ? Theme.alpha(Theme.surfaceHi, 0.9)
-                                                 : Theme.alpha(Theme.surface, 0.5)
+        color: (trigMa.containsMouse || sp.open || sp.activeFocus)
+                   ? Theme.alpha(Theme.surfaceHi, 0.9)
+                   : Theme.alpha(Theme.surface, 0.5)
         border.width: 1
-        border.color: sp.open ? Theme.alpha(Theme.accent, 0.6)
-                              : Theme.alpha(Theme.overlay, 0.4)
+        border.color: (sp.open || sp.activeFocus) ? Theme.alpha(Theme.accent, 0.6)
+                                                  : Theme.alpha(Theme.overlay, 0.4)
         Behavior on color { ColorAnimation { duration: 140 } }
         Behavior on border.color { ColorAnimation { duration: 140 } }
 
@@ -54,7 +103,7 @@ Item {
             Text {
                 anchors.verticalCenter: parent.verticalCenter
                 text: "󰧨"
-                color: sp.open || trigMa.containsMouse ? Theme.accent : Theme.fgMuted
+                color: sp.open || sp.activeFocus || trigMa.containsMouse ? Theme.accent : Theme.fgMuted
                 font.family: Theme.font
                 font.pixelSize: Theme.sp(13)
                 Behavior on color { ColorAnimation { duration: 140 } }
@@ -62,7 +111,7 @@ Item {
             Text {
                 anchors.verticalCenter: parent.verticalCenter
                 text: GreeterState.currentSession ? GreeterState.currentSession.name : "Sesión"
-                color: sp.open || trigMa.containsMouse ? Theme.fg : Theme.fgDim
+                color: sp.open || sp.activeFocus || trigMa.containsMouse ? Theme.fg : Theme.fgDim
                 font.family: Theme.font
                 font.pixelSize: Theme.sp(12)
                 Behavior on color { ColorAnimation { duration: 140 } }
@@ -70,7 +119,7 @@ Item {
             Text {
                 anchors.verticalCenter: parent.verticalCenter
                 text: "󰅀"
-                color: sp.open || trigMa.containsMouse ? Theme.accent : Theme.fgMuted
+                color: sp.open || sp.activeFocus || trigMa.containsMouse ? Theme.accent : Theme.fgMuted
                 font.family: Theme.font
                 font.pixelSize: Theme.sp(11)
                 rotation: sp.open ? 180 : 0
@@ -132,10 +181,13 @@ Item {
                         height: Theme.dp(36)
                         radius: Theme.dp(10)
                         readonly property bool current: index === GreeterState.sessionIndex
-                        // Resalte instantáneo: animar hacia "transparent" (negro
-                        // con alfa 0) dejaba un rastro oscuro al mover el ratón
-                        // rápido entre filas.
-                        color: rowMa.containsMouse ? Theme.alpha(Theme.surfaceHi, 0.9)
+                        // Resaltado compartido ratón/teclado: el hover mueve
+                        // el índice hi (mismo que ↑/↓), así solo hay una fila
+                        // marcada. Resalte instantáneo: animar hacia
+                        // "transparent" (negro con alfa 0) dejaba un rastro
+                        // oscuro al mover el ratón rápido entre filas.
+                        readonly property bool hilite: index === sp.hi
+                        color: hilite ? Theme.alpha(Theme.surfaceHi, 0.9)
                              : current ? Theme.alpha(Theme.accent, 0.14)
                              : "transparent"
 
@@ -153,7 +205,7 @@ Item {
                             text: row.modelData.name
                             elide: Text.ElideRight
                             color: row.current ? Theme.accent
-                                 : rowMa.containsMouse ? Theme.fg : Theme.fgDim
+                                 : row.hilite ? Theme.fg : Theme.fgDim
                             font.family: Theme.font
                             font.pixelSize: Theme.sp(12)
                             font.bold: row.current
@@ -173,6 +225,7 @@ Item {
                             anchors.fill: parent
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
+                            onEntered: sp.hi = row.index
                             onClicked: {
                                 GreeterState.sessionIndex = row.index
                                 sp.open = false

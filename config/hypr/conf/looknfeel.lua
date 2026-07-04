@@ -131,6 +131,11 @@ hl.config({
         force_default_wallpaper = 0,     -- sin mascota anime
         disable_hyprland_logo   = true,
 
+        -- Primer frame del compositor del color del tema (#101315) en vez de
+        -- negro puro: la transición greeter → Hyprland → splash de quickshell
+        -- se percibe continua, sin salto de color al iniciar sesión.
+        background_color = "rgb(101315)",
+
         -- Arrastrar/redimensionar con animación → sensación más fluida.
         animate_manual_resizes      = true,
         animate_mouse_windowdragging = true,
