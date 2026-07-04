@@ -622,6 +622,167 @@ setup_greetd() {
 }
 
 # ---------------------------------------------------------------------------
+# Hook de suspensión: re-enumera los HID de ASUS al reanudar
+# ---------------------------------------------------------------------------
+# Tras reanudar (s2idle), el firmware del teclado/ratón ROG puede restaurar
+# estados HID latcheados en sus interfaces secundarias (Bloq Mayús fantasma
+# en la interfaz NKRO, macros a medias...). Este hook de systemd-sleep
+# re-enumera los dispositivos USB de ASUS en la fase "post" del ciclo de
+# sueño: equivale a desenchufarlos y enchufarlos, sin tocar nada más.
+SLEEP_HOOK_DST="/usr/lib/systemd/system-sleep/99-reset-asus-hid.sh"
+
+# ¿Hay algún dispositivo USB de ASUS (idVendor 0b05) conectado?
+has_asus_usb_hid() {
+  (
+    shopt -s nullglob
+    local vendor
+    for vendor in /sys/bus/usb/devices/*/idVendor; do
+      [[ -r "${vendor}" ]] || continue
+      [[ "$(cat "${vendor}" 2>/dev/null)" == "0b05" ]] && return 0
+    done
+    return 1
+  )
+}
+
+install_sleep_hook() {
+  if ! has_asus_usb_hid; then
+    ok "Sin periféricos USB de ASUS; se omite el hook de reanudación"
+    return 0
+  fi
+  local tmp
+  tmp="$(mktemp "/tmp/${SCRIPT_NAME}-sleephook.XXXXXX")"
+  cat > "${tmp}" <<'EOF'
+#!/bin/sh
+# Hook de systemd-sleep: tras reanudar (post), re-enumera los dispositivos
+# USB de ASUS (0b05: teclado ROG Scope II y dongle del ratón Keris II).
+# Equivale a desenchufar y enchufar: limpia estados HID latcheados
+# (Bloq Mayús fantasma en interfaces secundarias, macros a medias, etc.)
+# que el firmware restaura mal cuando la reanudación s2idle va "sucia".
+[ "$1" = "post" ] || exit 0
+for d in /sys/bus/usb/devices/*; do
+    [ -f "$d/idVendor" ] || continue
+    [ "$(cat "$d/idVendor")" = "0b05" ] || continue
+    echo 0 > "$d/authorized" 2>/dev/null
+    sleep 1
+    echo 1 > "$d/authorized" 2>/dev/null
+done
+exit 0
+EOF
+  if [[ -f "${SLEEP_HOOK_DST}" ]] && cmp -s "${tmp}" "${SLEEP_HOOK_DST}"; then
+    ok "Hook de reanudación ya instalado"
+    rm -f "${tmp}"
+    return 0
+  fi
+  with_spinner "Instalando hook de reanudación (${SLEEP_HOOK_DST})" \
+    run_as_root install -m 755 "${tmp}" "${SLEEP_HOOK_DST}"
+  rm -f "${tmp}"
+}
+
+# ---------------------------------------------------------------------------
+# Ajustes de sistema (inspirados en Omarchy)
+# ---------------------------------------------------------------------------
+# Instala un archivo de sistema desde stdin si no existe o cambió (idempotente).
+#   uso: install_root_file <destino> <modo> <etiqueta> <<'EOF' ... EOF
+install_root_file() {
+  local dst="$1" mode="$2" label="$3" tmp
+  tmp="$(mktemp "/tmp/${SCRIPT_NAME}-rootfile.XXXXXX")"
+  cat > "${tmp}"
+  if [[ -f "${dst}" ]] && cmp -s "${tmp}" "${dst}"; then
+    ok "${label}: ya instalado"
+  else
+    with_spinner "Instalando ${label}" \
+      run_as_root install -D -m "${mode}" "${tmp}" "${dst}"
+  fi
+  rm -f "${tmp}"
+}
+
+# El autosuspend USB (2 s por defecto) duerme periféricos HID que luego
+# despiertan con estados corruptos. usbcore va compilado en el kernel de
+# Arch, así que el clásico "options usbcore autosuspend=-1" de modprobe.d
+# NO aplica: se usa una regla udev por dispositivo, que sí funciona siempre.
+disable_usb_autosuspend() {
+  install_root_file /etc/udev/rules.d/50-usb-no-autosuspend.rules 644 \
+    "regla udev anti-autosuspend USB" <<'UDEVEOF'
+# Desactiva el autosuspend USB por dispositivo. En este kernel usbcore va
+# compilado (built-in), así que "options usbcore autosuspend=-1" en
+# modprobe.d NO aplica; esta regla udev cubre cada dispositivo al aparecer.
+# Evita periféricos HID que se duermen y despiertan con estados corruptos.
+ACTION=="add", SUBSYSTEM=="usb", TEST=="power/control", ATTR{power/control}="on"
+UDEVEOF
+  run_as_root udevadm control --reload 2>/dev/null || true
+  # La regla solo cubre dispositivos que aparezcan a partir de ahora;
+  # esto la aplica también a los ya conectados.
+  run_as_root sh -c 'for c in /sys/bus/usb/devices/*/power/control; do echo on > "$c" 2>/dev/null || true; done'
+}
+
+# Los demonios FUSE de gvfs (Nautilus) pueden bloquear la congelación del
+# kernel y hacer que la suspensión falle en silencio. Hook de Omarchy:
+# desmonta antes de dormir y reinicia gvfs al despertar.
+install_fuse_sleep_hook() {
+  if ! is_installed gvfs; then
+    ok "gvfs no instalado; se omite el hook FUSE de suspensión"
+    return 0
+  fi
+  install_root_file /usr/lib/systemd/system-sleep/unmount-fuse 755 \
+    "hook FUSE de suspensión (gvfs)" <<'FUSEEOF'
+#!/bin/bash
+
+# Lazy-unmount gvfsd-fuse filesystems before suspend/hibernate to prevent the
+# kernel's process freeze from timing out. FUSE daemons (like gvfsd-fuse from
+# Nautilus) can block in uninterruptible sleep during freeze, causing suspend
+# to silently fail. After wake, restart gvfs so the FUSE mount is restored.
+
+if [[ $1 == "pre" ]]; then
+  while IFS=' ' read -r _ mountpoint fstype _; do
+    if [[ $fstype == fuse.gvfsd-fuse ]]; then
+      mountpoint=$(printf '%b' "$mountpoint")
+      fusermount3 -uz "$mountpoint" 2>/dev/null || fusermount -uz "$mountpoint" 2>/dev/null || true
+    fi
+  done < /proc/mounts
+fi
+
+if [[ $1 == "post" ]]; then
+  # Run in background — user.slice is still frozen at this point, so a
+  # synchronous restart would block the thaw for up to 90 seconds.
+  (
+    sleep 5
+    for uid_dir in /run/user/*; do
+      uid=$(basename "$uid_dir")
+      if [[ -S $uid_dir/bus ]]; then
+        sudo -u "#$uid" env \
+          DBUS_SESSION_BUS_ADDRESS="unix:path=$uid_dir/bus" \
+          XDG_RUNTIME_DIR="$uid_dir" \
+          systemctl --user restart gvfs-daemon.service 2>/dev/null || true
+      fi
+    done
+  ) &
+fi
+FUSEEOF
+}
+
+# systemd espera 90 s a cada servicio colgado al apagar; con 5 s el
+# apagado es casi instantáneo (mismos valores que usa Omarchy).
+configure_fast_shutdown() {
+  install_root_file /etc/systemd/system.conf.d/10-faster-shutdown.conf 644 \
+    "apagado rápido (sistema)" <<'SHUTEOF'
+[Manager]
+DefaultTimeoutStopSec=5s
+SHUTEOF
+  install_root_file /etc/systemd/system/user@.service.d/faster-shutdown.conf 644 \
+    "apagado rápido (sesión de usuario)" <<'USEREOF'
+[Service]
+TimeoutStopSec=5s
+USEREOF
+  run_as_root systemctl daemon-reload
+}
+
+apply_system_tweaks() {
+  disable_usb_autosuspend
+  install_fuse_sleep_hook
+  configure_fast_shutdown
+}
+
+# ---------------------------------------------------------------------------
 # main
 # ---------------------------------------------------------------------------
 main() {
@@ -660,6 +821,8 @@ main() {
   post_install
   install_dotfiles
   setup_greetd
+  install_sleep_hook
+  apply_system_tweaks
   set_default_shell
 
   echo
