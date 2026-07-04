@@ -34,6 +34,29 @@ COLOR_BLUE=$'\033[34m'
 COLOR_CYAN=$'\033[36m'
 COLOR_BOLD=$'\033[1m'
 
+# --- Glifos según la capacidad del terminal (autónomo, sin parámetros) -----
+# La consola de texto del kernel (TERM=linux) y los terminales "tontos" no
+# tienen braille ni ✓/✗ en su fuente y los pintan como cuadros. Se detecta y
+# se cae a ASCII automáticamente, para que el spinner y los símbolos se vean
+# bien siempre, haya o no una fuente rica instalada.
+supports_unicode() {
+  case "${TERM:-}" in
+    linux | dumb | "") return 1 ;;
+  esac
+  case "${LC_ALL:-${LC_CTYPE:-${LANG:-}}}" in
+    *[Uu][Tt][Ff]8* | *[Uu][Tt][Ff]-8*) return 0 ;;
+  esac
+  return 1
+}
+
+if supports_unicode; then
+  SPINNER_FRAMES=("⠋" "⠙" "⠹" "⠸" "⠼" "⠴" "⠦" "⠧" "⠇" "⠏")
+  MARK_OK="✓"; MARK_WARN="!"; MARK_FAIL="✗"; MARK_BULLET="•"
+else
+  SPINNER_FRAMES=('|' '/' '-' '\')
+  MARK_OK="+"; MARK_WARN="!"; MARK_FAIL="x"; MARK_BULLET="*"
+fi
+
 # Estado interno.
 LOG_FILE=""
 INSTALL_HOME=""
@@ -92,13 +115,15 @@ BANNER
 }
 
 note() { printf "%s%s%s\n" "${COLOR_DIM}" "$*" "${COLOR_RESET}"; }
-ok()   { printf "  %s✓%s %s\n" "${COLOR_GREEN}" "${COLOR_RESET}" "$*"; }
-warn() { printf "  %s!%s %s\n" "${COLOR_YELLOW}" "${COLOR_RESET}" "$*"; }
-fail() { printf "  %s✗%s %s\n" "${COLOR_RED}" "${COLOR_RESET}" "$*" >&2; exit 1; }
+# Línea de estado con símbolo. El \r inicial reaprovecha la línea del spinner
+# (inofensivo fuera de él: ya estamos al inicio de la línea).
+_status_line() { printf "\r  %s%s%s %s\n" "$1" "$2" "${COLOR_RESET}" "$3"; }
+ok()   { _status_line "${COLOR_GREEN}"  "${MARK_OK}"   "$*"; }
+warn() { _status_line "${COLOR_YELLOW}" "${MARK_WARN}" "$*"; }
+fail() { _status_line "${COLOR_RED}"    "${MARK_FAIL}" "$*" >&2; exit 1; }
 
 run_spinner() {
   local message="$1"
-  local frames=("⠋" "⠙" "⠹" "⠸" "⠼" "⠴" "⠦" "⠧" "⠇" "⠏")
   local i=0
 
   trap 'exit 0' TERM INT
@@ -107,8 +132,8 @@ run_spinner() {
 
   printf "\033[?25l"
   while true; do
-    printf "\r  %s%s%s %s" "${COLOR_CYAN}" "${frames[$i]}" "${COLOR_RESET}" "${message}"
-    i=$(((i + 1) % ${#frames[@]}))
+    printf "\r  %s%s%s %s" "${COLOR_CYAN}" "${SPINNER_FRAMES[$i]}" "${COLOR_RESET}" "${message}"
+    i=$(((i + 1) % ${#SPINNER_FRAMES[@]}))
     sleep 0.08
   done
 }
@@ -126,9 +151,9 @@ with_spinner() {
   _stop_spinner
 
   if [[ ${status} -eq 0 ]]; then
-    printf "\r  %s✓%s %s\n" "${COLOR_GREEN}" "${COLOR_RESET}" "${message}"
+    _status_line "${COLOR_GREEN}" "${MARK_OK}" "${message}"
   else
-    printf "\r  %s✗%s %s\n" "${COLOR_RED}" "${COLOR_RESET}" "${message}"
+    _status_line "${COLOR_RED}" "${MARK_FAIL}" "${message}"
     note "Últimas líneas del log (${LOG_FILE}):"
     tail -n 30 "${LOG_FILE}" >&2 || true
     return "${status}"
@@ -169,17 +194,23 @@ run_as_root() {
 
 make_temp_dir() {
   local name="$1"
-  if [[ ${EUID} -eq 0 && "${INSTALL_USER}" != "root" ]]; then
-    runuser -u "${INSTALL_USER}" -- mktemp -d "/tmp/${SCRIPT_NAME}-${name}-${INSTALL_USER}.XXXXXX"
-  else
-    mktemp -d "/tmp/${SCRIPT_NAME}-${name}-${INSTALL_USER}.XXXXXX"
-  fi
+  run_as_install_user mktemp -d "/tmp/${SCRIPT_NAME}-${name}-${INSTALL_USER}.XXXXXX"
 }
 
 chown_install_user() {
   [[ ${EUID} -eq 0 ]] || return 0
   chown -R "${INSTALL_USER}:${INSTALL_USER}" "$@"
 }
+
+# --- Ayudantes comunes -----------------------------------------------------
+# Sello de tiempo para los respaldos (.bak.AAAAMMDD-HHMMSS).
+timestamp() { date +%Y%m%d-%H%M%S; }
+
+# ¿Existe la unit de systemd (para poder omitirla si no está)?
+service_exists() { systemctl list-unit-files "$1" 2>/dev/null | grep -q "$1"; }
+
+# ¿Pertenece <usuario> al <grupo>?
+user_in_group() { id -nG "$1" 2>/dev/null | tr ' ' '\n' | grep -qx "$2"; }
 
 # ---------------------------------------------------------------------------
 # Cache de paquetes instalados (#8): una sola consulta a pacman.
@@ -229,7 +260,7 @@ install_group() {
 
   note "${label}: ${#missing[@]} paquete(s) pendiente(s)"
   for pkg in "${missing[@]}"; do
-    printf "    %s•%s %s\n" "${COLOR_BLUE}" "${COLOR_RESET}" "${pkg}"
+    printf "    %s%s%s %s\n" "${COLOR_BLUE}" "${MARK_BULLET}" "${COLOR_RESET}" "${pkg}"
   done
 
   with_spinner "Descargando e instalando ${label}" \
@@ -276,7 +307,7 @@ configure_ddc_permissions() {
     with_spinner "Creando grupo i2c" run_as_root groupadd i2c
   fi
 
-  if id -nG "${INSTALL_USER}" | tr ' ' '\n' | grep -qx i2c; then
+  if user_in_group "${INSTALL_USER}" i2c; then
     ok "${INSTALL_USER} ya pertenece al grupo i2c"
   else
     with_spinner "Añadiendo ${INSTALL_USER} al grupo i2c" \
@@ -549,9 +580,8 @@ copy_tree_contents() {
   done < <(cd "${src}" && find . -type f -print0)
 
   if [[ ${#conflicts[@]} -gt 0 ]]; then
-    local stamp backup
-    stamp="$(date +%Y%m%d-%H%M%S)"
-    backup="${dst}.bak.${stamp}"
+    local backup
+    backup="${dst}.bak.$(timestamp)"
     mkdir -p "${backup}"
     local c
     for c in "${conflicts[@]}"; do
@@ -585,7 +615,7 @@ install_home_file() {
 
   if [[ -e "${dst}" ]]; then
     local backup
-    backup="${dst}.bak.$(date +%Y%m%d-%H%M%S)"
+    backup="${dst}.bak.$(timestamp)"
     mv -- "${dst}" "${backup}"
     warn "Respaldado ${dst} en ${backup}"
   fi
@@ -648,7 +678,7 @@ enable_services() {
   local services=(systemd-resolved.service NetworkManager.service bluetooth.service rtkit-daemon.service power-profiles-daemon.service upower.service systemd-homed.service)
   local service
   for service in "${services[@]}"; do
-    if ! systemctl list-unit-files "${service}" 2>/dev/null | grep -q "${service}"; then
+    if ! service_exists "${service}"; then
       note "${service} no está disponible; se omite"
       continue
     fi
@@ -662,7 +692,7 @@ enable_services() {
 }
 
 configure_systemd_resolved_dns() {
-  if ! systemctl list-unit-files systemd-resolved.service 2>/dev/null | grep -q systemd-resolved.service; then
+  if ! service_exists systemd-resolved.service; then
     note "systemd-resolved.service no está disponible; se omite DNS con systemd-resolved"
     return 0
   fi
@@ -700,12 +730,8 @@ post_install() {
   local lang_env=()
   [[ -n "${system_lang}" ]] && lang_env=("LANG=${system_lang}")
 
-  if [[ ${EUID} -eq 0 && "${INSTALL_USER}" != "root" ]]; then
-    with_spinner "Actualizando carpetas XDG de ${INSTALL_USER}" \
-      runuser -u "${INSTALL_USER}" -- env -u LC_ALL "${lang_env[@]}" xdg-user-dirs-update
-  else
-    with_spinner "Actualizando carpetas XDG del usuario" env -u LC_ALL "${lang_env[@]}" xdg-user-dirs-update
-  fi
+  with_spinner "Actualizando carpetas XDG de ${INSTALL_USER}" \
+    run_as_install_user env -u LC_ALL "${lang_env[@]}" xdg-user-dirs-update
 }
 
 # ---------------------------------------------------------------------------
@@ -771,7 +797,7 @@ EOF
 configure_greetd_session() {
   local cfg=/etc/greetd/config.toml
   if [[ -f "${cfg}" ]]; then
-    run_as_root cp -a "${cfg}" "${cfg}.bak.$(date +%Y%m%d-%H%M%S)"
+    run_as_root cp -a "${cfg}" "${cfg}.bak.$(timestamp)"
   fi
   run_as_root tee "${cfg}" >/dev/null <<EOF
 [terminal]
@@ -820,7 +846,7 @@ prepare_greeter_runtime() {
   fi
   run_as_root mkdir -p /var/lib/greeter
   run_as_root chown greeter:greeter /var/lib/greeter
-  if id -nG greeter | tr ' ' '\n' | grep -qx video; then
+  if user_in_group greeter video; then
     ok "greeter ya pertenece al grupo video"
   else
     with_spinner "Añadiendo greeter al grupo video" \
