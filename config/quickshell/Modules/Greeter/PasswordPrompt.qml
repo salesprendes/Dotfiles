@@ -187,6 +187,20 @@ Item {
                     enabled: !GreeterState.busy && GreeterState.selectedUser !== ""
                     echoMode: GreeterState.masked ? TextInput.Password : TextInput.Normal
                     selectByMouse: false
+                    // Tab cicla la sesión (Hyprland ↔ otras) sin ratón; aquí no
+                    // hay más campos entre los que saltar, así que se reutiliza
+                    // para el selector de sesión (Shift+Tab va hacia atrás).
+                    Keys.onTabPressed:     if (!GreeterState.busy) GreeterState.cycleSession(1)
+                    Keys.onBacktabPressed: if (!GreeterState.busy) GreeterState.cycleSession(-1)
+                    // ESC, en orden: cierra el desplegable de sesiones → borra
+                    // lo tecleado → vuelve al selector de usuarios (solo si hay
+                    // más de uno, como el botón atrás).
+                    Keys.onEscapePressed: {
+                        if (GreeterState.busy) return
+                        if (sessionSel.open) { sessionSel.open = false; return }
+                        if (text.length > 0) { text = ""; GreeterState.error = ""; return }
+                        if (GreeterState.users.length > 1) GreeterState.backToUsers()
+                    }
                     onAccepted: { GreeterState.submit(text); text = "" }
                 }
             }
@@ -234,6 +248,7 @@ Item {
 
         // Selector de sesión (solo si hay más de una).
         SessionPicker {
+            id: sessionSel
             anchors.horizontalCenter: parent.horizontalCenter
             onRequestFocus: if (pw.primary) pwInput.forceActiveFocus()
         }

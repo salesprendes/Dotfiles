@@ -25,7 +25,9 @@ PanelWindow {
     property string ns: "qs-popout"
     property bool alignLeft: false        // ancla la tarjeta a la izquierda
     property bool alignCenter: false      // centra la tarjeta horizontalmente
-    property bool keyboardExclusive: false // captura teclado (lanzador)
+    // Conservada por compatibilidad (lanzador/portapapeles la activan), pero
+    // ya no cambia nada: todo popout abierto captura el teclado en exclusiva.
+    property bool keyboardExclusive: false
     property bool scrollable: false
     property real openProgress: 0
     readonly property string animationStyle: Settings.panelAnimationStyle
@@ -74,13 +76,15 @@ PanelWindow {
 
     WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.namespace: ns
-    WlrLayershell.keyboardFocus: shown
-        ? (keyboardExclusive ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.OnDemand)
-        : WlrKeyboardFocus.None
+    // Exclusive (no OnDemand) también para los paneles sin buscador: Hyprland
+    // solo da teclado a una capa OnDemand si se hace CLIC en ella, así que
+    // ESC nunca llegaba. El popout ya es modal de facto (cubre la pantalla y
+    // el clic fuera cierra), por lo que tomar el teclado mientras está
+    // abierto no quita nada y hace que ESC cierre siempre.
+    WlrLayershell.keyboardFocus: shown ? WlrKeyboardFocus.Exclusive
+                                       : WlrKeyboardFocus.None
 
     anchors { top: true; bottom: true; left: true; right: true }
-
-    Keys.onEscapePressed: Globals.closeAll()
 
     onShownChanged: {
         if (shown)
@@ -140,6 +144,13 @@ PanelWindow {
         border.color: Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.5)
         clip: true
         antialiasing: true
+        // ESC cierra el panel. Va en la tarjeta (Item) y no en la ventana:
+        // Keys solo funciona sobre Items, así que colgado del PanelWindow
+        // nunca recibía la tecla. Con focus la tarjeta captura ESC cuando
+        // nada más tiene el foco, y si un hijo lo tiene (buscador del
+        // lanzador/portapapeles) el evento no consumido burbujea hasta aquí.
+        focus: true
+        Keys.onEscapePressed: Globals.closeAll()
         opacity: win.directionalMotion ? 1 : win.openProgress
         scale: win.panelScale
         transformOrigin: Item.Top

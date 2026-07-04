@@ -1,4 +1,4 @@
-//  PASO 1 · Selector de usuario (teclado ↑/↓/Enter + ratón).
+//  PASO 1 · Selector de usuario (teclado ↑/↓/Tab/Enter + ratón).
 import QtQuick
 import Quickshell
 import qs.Modules.Greeter
@@ -12,6 +12,10 @@ FocusScope {
 
     Keys.onUpPressed:     hi = Math.max(0, hi - 1)
     Keys.onDownPressed:   hi = Math.min(GreeterState.users.length - 1, hi + 1)
+    // Tab cicla con vuelta (a diferencia de ↑/↓, que paran en los extremos).
+    Keys.onTabPressed:     if (GreeterState.users.length) hi = (hi + 1) % GreeterState.users.length
+    Keys.onBacktabPressed: if (GreeterState.users.length) hi = (hi - 1 + GreeterState.users.length) % GreeterState.users.length
+    Keys.onEscapePressed:  hi = GreeterState.preferredIndex
     Keys.onReturnPressed: if (GreeterState.users.length) GreeterState.pickUser(GreeterState.users[hi].name)
     Keys.onEnterPressed:  if (GreeterState.users.length) GreeterState.pickUser(GreeterState.users[hi].name)
 
