@@ -64,9 +64,9 @@ Singleton {
             "fg": "#cacccc", "fgDim": "#a5aeb4", "fgMuted": "#707070",
             "accent": "#798186", "accent2": "#cacccc", "cyan": "#a5aeb4", "green": "#9fa5a9", "yellow": "#c9c2b4",
             "orange": "#cbc2be", "red": "#de6145", "magenta": "#aeaeae",
-            "lightBg": "#d8dbde", "lightBgAlt": "#ccd0d3", "lightSurface": "#bdc3c7", "lightSurfaceHi": "#aeb5ba",
-            "lightOverlay": "#828a8f", "lightFg": "#101315", "lightFgDim": "#2b3338", "lightFgMuted": "#4c5358",
-            "lightAccent": "#455055", "lightAccent2": "#586065",
+            "lightBg": "#cccfd2", "lightBgAlt": "#c0c4c8", "lightSurface": "#b3b9be", "lightSurfaceHi": "#a5acb2",
+            "lightOverlay": "#778086", "lightFg": "#101315", "lightFgDim": "#2b3338", "lightFgMuted": "#4c5358",
+            "lightAccent": "#375259", "lightAccent2": "#48545a",
             "lightCyan": "#4f636a", "lightGreen": "#56655b", "lightYellow": "#877a52", "lightOrange": "#946a52", "lightRed": "#bb4628", "lightMagenta": "#6c646a",
             "hyprInactive": "#1e1e1e", "hyprShadow": "#1a1a1a"
         },
@@ -76,9 +76,9 @@ Singleton {
             "fg": "#c0caf5", "fgDim": "#a9b1d6", "fgMuted": "#565f89",
             "accent": "#7aa2f7", "accent2": "#bb9af7", "cyan": "#7dcfff", "green": "#9ece6a", "yellow": "#e0af68",
             "orange": "#ff9e64", "red": "#f7768e", "magenta": "#bb9af7",
-            "lightBg": "#d3d5dc", "lightBgAlt": "#c7c9d1", "lightSurface": "#bbbfd0", "lightSurfaceHi": "#aab0c8",
-            "lightOverlay": "#8b91b3", "lightFg": "#3760bf", "lightFgDim": "#6172b0", "lightFgMuted": "#767ea8",
-            "lightAccent": "#2e7de9", "lightAccent2": "#9854f1",
+            "lightBg": "#c8cbd4", "lightBgAlt": "#bcbfc9", "lightSurface": "#aeb3c4", "lightSurfaceHi": "#9ea5bd",
+            "lightOverlay": "#7e85a6", "lightFg": "#3760bf", "lightFgDim": "#6172b0", "lightFgMuted": "#767ea8",
+            "lightAccent": "#2668d1", "lightAccent2": "#8641e0",
             "lightCyan": "#007197", "lightGreen": "#587539", "lightYellow": "#8c6c3e", "lightOrange": "#b15c00", "lightRed": "#f52a65", "lightMagenta": "#9854f1",
             "hyprInactive": "#565f89", "hyprShadow": "#16161e"
         },
@@ -88,9 +88,9 @@ Singleton {
             "fg": "#dcd7ba", "fgDim": "#c8c093", "fgMuted": "#938aa9",
             "accent": "#7e9cd8", "accent2": "#dcd7ba", "cyan": "#7aa89f", "green": "#98bb6c", "yellow": "#e6c384",
             "orange": "#ffa066", "red": "#e46876", "magenta": "#957fb8",
-            "lightBg": "#dcd6ad", "lightBgAlt": "#d0c79f", "lightSurface": "#c2b78c", "lightSurfaceHi": "#b3a878",
-            "lightOverlay": "#79786f", "lightFg": "#545464", "lightFgDim": "#5e5e69", "lightFgMuted": "#76756c",
-            "lightAccent": "#4d699b", "lightAccent2": "#b35b79",
+            "lightBg": "#d0ca9f", "lightBgAlt": "#c4bb90", "lightSurface": "#b6ab80", "lightSurfaceHi": "#a89d6d",
+            "lightOverlay": "#6f6e64", "lightFg": "#545464", "lightFgDim": "#5e5e69", "lightFgMuted": "#76756c",
+            "lightAccent": "#3d5b8f", "lightAccent2": "#a24a68",
             "lightCyan": "#597b75", "lightGreen": "#6f894e", "lightYellow": "#836f4e", "lightOrange": "#cc6d00", "lightRed": "#c84053", "lightMagenta": "#624c83",
             "hyprInactive": "#54546d", "hyprShadow": "#16161d"
         },
@@ -100,9 +100,9 @@ Singleton {
             "fg": "#cdd6f4", "fgDim": "#bac2de", "fgMuted": "#9399b2",
             "accent": "#89b4fa", "accent2": "#cba6f7", "cyan": "#89dceb", "green": "#a6e3a1", "yellow": "#f9e2af",
             "orange": "#fab387", "red": "#f38ba8", "magenta": "#f5c2e7",
-            "lightBg": "#d7dbe5", "lightBgAlt": "#cbd0db", "lightSurface": "#b9bfcc", "lightSurfaceHi": "#a8aebf",
-            "lightOverlay": "#7c8095", "lightFg": "#4c4f69", "lightFgDim": "#50536c", "lightFgMuted": "#6c6f86",
-            "lightAccent": "#1e66f5", "lightAccent2": "#8839ef",
+            "lightBg": "#cbcfdb", "lightBgAlt": "#bfc4d1", "lightSurface": "#adb3c2", "lightSurfaceHi": "#9ba2b5",
+            "lightOverlay": "#71748b", "lightFg": "#4c4f69", "lightFgDim": "#50536c", "lightFgMuted": "#6c6f86",
+            "lightAccent": "#1a5ae0", "lightAccent2": "#7a2fe0",
             "lightCyan": "#179299", "lightGreen": "#40a02b", "lightYellow": "#df8e1d", "lightOrange": "#fe640b", "lightRed": "#d20f39", "lightMagenta": "#ea76cb",
             "hyprInactive": "#45475a", "hyprShadow": "#11111b"
         },
@@ -112,9 +112,9 @@ Singleton {
             "fg": "#fafcfb", "fgDim": "#e2dddc", "fgMuted": "#8a8588",
             "accent": "#8a8588", "accent2": "#e2dddc", "cyan": "#9aa7aa", "green": "#a5b09b", "yellow": "#d8c8a8",
             "orange": "#c99a75", "red": "#d66f5d", "magenta": "#bca8b8",
-            "lightBg": "#dbd4d2", "lightBgAlt": "#cfc6c3", "lightSurface": "#c1b6b3", "lightSurfaceHi": "#b3a8a5",
-            "lightOverlay": "#787276", "lightFg": "#241e21", "lightFgDim": "#4c4347", "lightFgMuted": "#645a5d",
-            "lightAccent": "#595255", "lightAccent2": "#6b6467",
+            "lightBg": "#cfc7c5", "lightBgAlt": "#c3bab7", "lightSurface": "#b5aaa7", "lightSurfaceHi": "#a79c99",
+            "lightOverlay": "#6e686c", "lightFg": "#241e21", "lightFgDim": "#4c4347", "lightFgMuted": "#645a5d",
+            "lightAccent": "#4a3e42", "lightAccent2": "#574f52",
             "lightCyan": "#4f6669", "lightGreen": "#5f6b54", "lightYellow": "#8a7344", "lightOrange": "#a05f3a", "lightRed": "#b8462f", "lightMagenta": "#7a6470",
             "hyprInactive": "#584e51", "hyprShadow": "#161214"
         }
@@ -458,8 +458,12 @@ Singleton {
                   cardBg: p.surface, popBg: p.surface, popFg: p.fg, dlgBg: p.bgAlt,
                   border: p.overlay }
         } else {
+            // 'view' (listas/entradas de Nautilus, campos de texto) es el
+            // "papel": el más claro, pero NO blanco puro (deslumbra). Se deriva
+            // del fondo del tema, un punto más claro y con su tinte sutil.
+            const softView = colorHex(Qt.lighter(p.lightBg, 1.09))
             c = { accentBg: (p.lightAccent || accent), accentFg: "#ffffff",
-                  winBg: p.lightBg, winFg: p.lightFg, viewBg: "#ffffff", viewFg: p.lightFg,
+                  winBg: p.lightBg, winFg: p.lightFg, viewBg: softView, viewFg: p.lightFg,
                   headBg: p.lightBgAlt, headFg: p.lightFg, sideBg: p.lightBg, sideFg: (p.lightFgDim || p.lightFg),
                   cardBg: p.lightSurface, popBg: p.lightSurface, popFg: p.lightFg, dlgBg: p.lightBg,
                   border: (p.lightOverlay || p.lightSurface) }

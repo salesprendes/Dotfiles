@@ -15,6 +15,10 @@ DOTFILES_REPO="${DOTFILES_REPO:-https://github.com/salesprendes/Dotfiles.git}"
 PACMAN="${PACMAN:-pacman}"
 SUDO="${SUDO:-sudo}"
 INSTALL_USER="${SUDO_USER:-${USER:-}}"
+WIRELESS_REGDOM_CONF=/etc/conf.d/wireless-regdom
+NETWORKMANAGER_RESOLVED_CONF=/etc/NetworkManager/conf.d/10-dns-systemd-resolved.conf
+RESOLV_CONF=/etc/resolv.conf
+SYSTEMD_RESOLVED_STUB_RESOLV_CONF=../run/systemd/resolve/stub-resolv.conf
 
 # --- Asegurar una locale UTF-8 para que los acentos se vean bien (#10) -----
 if ! locale 2>/dev/null | grep -qi 'utf-?8'; then
@@ -299,6 +303,218 @@ install_amd_stack() {
 }
 
 # ---------------------------------------------------------------------------
+# Dominio regulatorio Wi-Fi
+# ---------------------------------------------------------------------------
+normalize_regdom() {
+  local code="${1:-}"
+  code="${code%%#*}"
+  code="${code//[[:space:]]/}"
+  code="${code//\"/}"
+  code="${code//\'/}"
+  code="${code^^}"
+
+  [[ "${code}" =~ ^([A-Z]{2}|00)$ ]] || return 1
+  printf '%s\n' "${code}"
+}
+
+wireless_regdom_in_db() {
+  local code
+  code="$(normalize_regdom "${1:-}")" || return 1
+  [[ -r "${WIRELESS_REGDOM_CONF}" ]] || return 1
+
+  grep -Eq "^[[:space:]]*#?[[:space:]]*WIRELESS_REGDOM=[\"']?${code}[\"']?([[:space:]]*(#.*)?)?$" \
+    "${WIRELESS_REGDOM_CONF}"
+}
+
+active_wireless_regdom() {
+  [[ -r "${WIRELESS_REGDOM_CONF}" ]] || return 1
+
+  local key value code
+  while IFS='=' read -r key value; do
+    key="${key//[[:space:]]/}"
+    [[ "${key}" == "WIRELESS_REGDOM" ]] || continue
+    code="$(normalize_regdom "${value}")" || continue
+    printf '%s\n' "${code}"
+    return 0
+  done < "${WIRELESS_REGDOM_CONF}"
+
+  return 1
+}
+
+regdom_from_locale_value() {
+  local value="${1:-}" code
+  value="${value//\"/}"
+  value="${value//\'/}"
+  value="${value%%.*}"
+  value="${value%%@*}"
+
+  [[ "${value}" =~ _([A-Za-z]{2})$ ]] || return 1
+  code="$(normalize_regdom "${BASH_REMATCH[1]}")" || return 1
+  wireless_regdom_in_db "${code}" || return 1
+  printf '%s\n' "${code}"
+}
+
+detect_wireless_regdom_from_locale() {
+  local key file value code
+  local keys=(LC_ADDRESS LC_IDENTIFICATION LC_TIME LANG)
+  local files=(/etc/locale.conf /etc/default/locale)
+
+  for key in "${keys[@]}"; do
+    for file in "${files[@]}"; do
+      [[ -r "${file}" ]] || continue
+      value="$(sed -n "s/^${key}=//p" "${file}" | tail -n1)"
+      [[ -n "${value}" ]] || continue
+      code="$(regdom_from_locale_value "${value}")" || continue
+      printf '%s\n' "${code}"
+      return 0
+    done
+  done
+
+  return 1
+}
+
+system_timezone() {
+  local target tz
+  target="$(readlink -f /etc/localtime 2>/dev/null || true)"
+  if [[ "${target}" == /usr/share/zoneinfo/* ]]; then
+    tz="${target#/usr/share/zoneinfo/}"
+    tz="${tz#posix/}"
+    tz="${tz#right/}"
+    [[ -n "${tz}" ]] && printf '%s\n' "${tz}" && return 0
+  fi
+
+  if command -v timedatectl >/dev/null 2>&1; then
+    tz="$(timedatectl show -P Timezone 2>/dev/null || true)"
+    [[ -n "${tz}" ]] && printf '%s\n' "${tz}" && return 0
+  fi
+
+  return 1
+}
+
+detect_wireless_regdom_from_timezone() {
+  local tz tab countries _coords zone _comments code
+  tz="$(system_timezone)" || return 1
+
+  for tab in /usr/share/zoneinfo/zone1970.tab /usr/share/zoneinfo/zone.tab; do
+    [[ -r "${tab}" ]] || continue
+    while IFS=$'\t' read -r countries _coords zone _comments; do
+      [[ -n "${countries}" && "${countries}" != \#* ]] || continue
+      [[ "${zone}" == "${tz}" ]] || continue
+      code="$(normalize_regdom "${countries%%,*}")" || continue
+      wireless_regdom_in_db "${code}" || continue
+      printf '%s\n' "${code}"
+      return 0
+    done < "${tab}"
+  done
+
+  return 1
+}
+
+detect_wireless_regdom() {
+  local code
+
+  if [[ -n "${WIRELESS_REGDOM:-}" ]]; then
+    code="$(normalize_regdom "${WIRELESS_REGDOM}")" \
+      && wireless_regdom_in_db "${code}" \
+      && printf '%s\n' "${code}" \
+      && return 0
+  fi
+
+  code="$(active_wireless_regdom 2>/dev/null || true)"
+  if [[ -n "${code}" ]] && wireless_regdom_in_db "${code}"; then
+    printf '%s\n' "${code}"
+    return 0
+  fi
+
+  code="$(detect_wireless_regdom_from_locale 2>/dev/null || true)"
+  if [[ -n "${code}" ]]; then
+    printf '%s\n' "${code}"
+    return 0
+  fi
+
+  code="$(detect_wireless_regdom_from_timezone 2>/dev/null || true)"
+  if [[ -n "${code}" ]]; then
+    printf '%s\n' "${code}"
+    return 0
+  fi
+
+  return 1
+}
+
+write_wireless_regdom_config() {
+  local regdom="$1" tmp
+  tmp="$(mktemp "/tmp/${SCRIPT_NAME}-regdom.XXXXXX")"
+
+  awk -v regdom="${regdom}" '
+    BEGIN {
+      target = "WIRELESS_REGDOM=\"" regdom "\""
+      wrote = 0
+    }
+    /^[[:space:]]*#?[[:space:]]*WIRELESS_REGDOM=/ {
+      if ($0 ~ "^[[:space:]]*#?[[:space:]]*WIRELESS_REGDOM=\"" regdom "\"([[:space:]]*(#.*)?)?$") {
+        if (!wrote) {
+          print target
+          wrote = 1
+        } else {
+          print $0
+        }
+        next
+      }
+      if ($0 ~ "^[[:space:]]*WIRELESS_REGDOM=") {
+        print "#" $0
+        next
+      }
+    }
+    { print }
+    END {
+      if (!wrote) {
+        print target
+      }
+    }
+  ' "${WIRELESS_REGDOM_CONF}" > "${tmp}"
+
+  if cmp -s "${tmp}" "${WIRELESS_REGDOM_CONF}"; then
+    ok "Dominio regulatorio Wi-Fi ya configurado (${regdom})"
+  else
+    with_spinner "Configurando dominio regulatorio Wi-Fi (${regdom})" \
+      run_as_root install -m 644 "${tmp}" "${WIRELESS_REGDOM_CONF}"
+  fi
+
+  rm -f "${tmp}"
+}
+
+apply_wireless_regdom_now() {
+  local regdom="$1"
+  if ! command -v iw >/dev/null 2>&1; then
+    warn "iw no está instalado; el dominio Wi-Fi se aplicará al cargar cfg80211."
+    return 0
+  fi
+
+  if run_as_root iw reg set "${regdom}" >"${LOG_FILE:?}" 2>&1; then
+    ok "Dominio regulatorio Wi-Fi aplicado en caliente (${regdom})"
+  else
+    warn "Dominio regulatorio Wi-Fi guardado (${regdom}), pero no se pudo aplicar en caliente."
+    warn "Se aplicará al cargar cfg80211 o tras reiniciar."
+  fi
+}
+
+configure_wireless_regdom() {
+  if [[ ! -f "${WIRELESS_REGDOM_CONF}" ]]; then
+    warn "${WIRELESS_REGDOM_CONF} no existe; se omite el dominio regulatorio Wi-Fi."
+    return 0
+  fi
+
+  local regdom
+  if ! regdom="$(detect_wireless_regdom)"; then
+    warn "No se pudo detectar el país para Wi-Fi; edita ${WIRELESS_REGDOM_CONF} manualmente."
+    return 0
+  fi
+
+  write_wireless_regdom_config "${regdom}"
+  apply_wireless_regdom_now "${regdom}"
+}
+
+# ---------------------------------------------------------------------------
 # Dotfiles
 # ---------------------------------------------------------------------------
 script_dir() {
@@ -429,7 +645,7 @@ install_dotfiles() {
 # Servicios (#1)
 # ---------------------------------------------------------------------------
 enable_services() {
-  local services=(NetworkManager.service bluetooth.service rtkit-daemon.service power-profiles-daemon.service)
+  local services=(systemd-resolved.service NetworkManager.service bluetooth.service rtkit-daemon.service power-profiles-daemon.service upower.service systemd-homed.service)
   local service
   for service in "${services[@]}"; do
     if ! systemctl list-unit-files "${service}" 2>/dev/null | grep -q "${service}"; then
@@ -443,6 +659,38 @@ enable_services() {
     with_spinner "Habilitando ${service}" \
       run_as_root systemctl enable --now "${service}"
   done
+}
+
+configure_systemd_resolved_dns() {
+  if ! systemctl list-unit-files systemd-resolved.service 2>/dev/null | grep -q systemd-resolved.service; then
+    note "systemd-resolved.service no está disponible; se omite DNS con systemd-resolved"
+    return 0
+  fi
+
+  install_root_file "${NETWORKMANAGER_RESOLVED_CONF}" 644 \
+    "DNS de NetworkManager con systemd-resolved" <<'NMDNSEOF'
+[main]
+dns=systemd-resolved
+NMDNSEOF
+
+  if [[ "$(readlink "${RESOLV_CONF}" 2>/dev/null || true)" == "${SYSTEMD_RESOLVED_STUB_RESOLV_CONF}" ]]; then
+    ok "${RESOLV_CONF} ya apunta a systemd-resolved"
+  else
+    with_spinner "Apuntando ${RESOLV_CONF} a systemd-resolved" \
+      run_as_root ln -sfn "${SYSTEMD_RESOLVED_STUB_RESOLV_CONF}" "${RESOLV_CONF}"
+  fi
+
+  if ! systemctl is-active --quiet systemd-resolved.service 2>/dev/null; then
+    with_spinner "Arrancando systemd-resolved.service" \
+      run_as_root systemctl start systemd-resolved.service
+  fi
+
+  if systemctl is-active --quiet NetworkManager.service 2>/dev/null; then
+    with_spinner "Reiniciando NetworkManager para aplicar DNS" \
+      run_as_root systemctl restart NetworkManager.service
+  else
+    ok "NetworkManager aplicará DNS con systemd-resolved al iniciar"
+  fi
 }
 
 post_install() {
@@ -815,9 +1063,11 @@ main() {
   load_installed_cache
   sync_databases
   install_group "paquetes base" "${BASE_PACKAGES[@]}"
+  configure_wireless_regdom
   install_brightness_stack
   install_amd_stack
   enable_services
+  configure_systemd_resolved_dns
   post_install
   install_dotfiles
   setup_greetd

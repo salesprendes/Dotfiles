@@ -31,6 +31,9 @@ FloatingWindow {
     readonly property color settingsHover: Qt.rgba(Theme.surfaceHi.r, Theme.surfaceHi.g, Theme.surfaceHi.b, 0.74)
     readonly property color settingsLine: Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.18)
     readonly property color settingsBorder: Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.28)
+    // Fondo tintado de los distintivos (badges) de icono. En modo claro sube
+    // el alfa para que el acento se lea sobre superficies claras.
+    readonly property color accentSoft: Theme.withAlpha(Theme.accent, Theme.isDark ? 0.16 : 0.24)
 
     // ¿Es un portátil? (para mostrar/ocultar la opción de batería)
     readonly property bool hasBattery: UPower.displayDevice?.isLaptopBattery ?? false
@@ -107,12 +110,22 @@ FloatingWindow {
             { key: "notif",    glyph: "󰂚", label: I18n.tr("Notifications") }
         ] }
     ]
-    readonly property string catLabel: {
+    // Índice plano key → { label, glyph, group }. Se construye UNA vez
+    // (se recalcula solo si cambian los grupos: idioma o terminales). Las
+    // props de la categoría activa son ya búsquedas O(1), sin bucles anidados.
+    readonly property var itemIndex: {
+        const idx = ({})
         for (let g = 0; g < groups.length; g++)
-            for (let i = 0; i < groups[g].items.length; i++)
-                if (groups[g].items[i].key === cat) return groups[g].items[i].label
-        return ""
+            for (let i = 0; i < groups[g].items.length; i++) {
+                const it = groups[g].items[i]
+                idx[it.key] = { label: it.label, glyph: it.glyph, group: groups[g].label }
+            }
+        return idx
     }
+    readonly property var activeItem: itemIndex[cat] || ({ label: "", glyph: "󰒓", group: "" })
+    readonly property string catLabel:      activeItem.label
+    readonly property string catGroupLabel: activeItem.group
+    readonly property string catGlyph:      activeItem.glyph
 
     // ── Disposición general ──────────────────────────────────
     RowLayout {
@@ -132,17 +145,43 @@ FloatingWindow {
 
                 RowLayout {
                     Layout.fillWidth: true
-                    Layout.bottomMargin: Theme.space6
-                    spacing: Theme.space8
-                    Text {
-                        text: "󰒓"; color: Theme.accent
-                        font.family: Theme.fontFamily; font.pixelSize: Theme.iconSize + 4
+                    spacing: Theme.space10
+                    Rectangle {
+                        implicitWidth: Theme.controlL
+                        implicitHeight: Theme.controlL
+                        radius: Theme.pillRadius
+                        color: cfg.accentSoft
+                        Text {
+                            anchors.centerIn: parent
+                            text: "󰒓"; color: Theme.accent
+                            font.family: Theme.fontFamily; font.pixelSize: Theme.iconSize + 4
+                        }
                     }
-                    Text {
-                        text: I18n.tr("Settings"); color: Theme.fg
-                        font.family: Theme.fontFamily; font.pixelSize: Theme.fontSize + 3
-                        font.bold: true
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 0
+                        Text {
+                            Layout.fillWidth: true
+                            text: I18n.tr("Settings"); color: Theme.fg
+                            font.family: Theme.fontFamily; font.pixelSize: Theme.fontSize + 3
+                            font.bold: true; elide: Text.ElideRight
+                        }
+                        Text {
+                            Layout.fillWidth: true
+                            text: "Quickshell"; color: Theme.fgMuted
+                            font.family: Theme.fontFamily; font.pixelSize: Theme.fontSize - 4
+                            font.letterSpacing: Theme.dp(1); elide: Text.ElideRight
+                        }
                     }
+                }
+
+                // Separador cabecera → navegación.
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.topMargin: Theme.space4
+                    Layout.bottomMargin: Theme.space4
+                    implicitHeight: Theme.hairline
+                    color: cfg.settingsLine
                 }
 
                 // Grupos desplegables (desplazable si no caben).
@@ -213,29 +252,51 @@ FloatingWindow {
                 Layout.fillWidth: true
                 Layout.margins: Theme.space18
                 Layout.bottomMargin: Theme.space8
-                Text {
-                    Layout.fillWidth: true
-                    text: cfg.catLabel
-                    color: Theme.fg
-                    font.family: Theme.fontFamily; font.pixelSize: Theme.fontSize + 6
-                    font.bold: true
-                }
+                spacing: Theme.space12
+
                 Rectangle {
-                    implicitWidth: Theme.controlM; implicitHeight: Theme.controlM
-                    radius: width / 2
-                    color: closeMa.containsMouse ? Theme.red : cfg.settingsControl
-                    Behavior on color { ColorAnimation { duration: Theme.animFast } }
+                    Layout.alignment: Qt.AlignVCenter
+                    implicitWidth: Theme.controlL
+                    implicitHeight: Theme.controlL
+                    radius: Theme.pillRadius
+                    color: cfg.accentSoft
                     Text {
-                        anchors.centerIn: parent; text: "󰅖"
-                        color: closeMa.containsMouse ? Theme.bg : Theme.fgDim
-                        font.family: Theme.fontFamily; font.pixelSize: Theme.iconSize
+                        anchors.centerIn: parent
+                        text: cfg.catGlyph; color: Theme.accent
+                        font.family: Theme.fontFamily; font.pixelSize: Theme.iconSize + 4
                     }
-                    MouseArea {
-                        id: closeMa
-                        anchors.fill: parent; hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: Globals.settingsOpen = false
+                }
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    Layout.alignment: Qt.AlignVCenter
+                    spacing: Theme.space2
+                    Text {
+                        Layout.fillWidth: true
+                        text: cfg.catGroupLabel
+                        color: Theme.accent
+                        font.family: Theme.fontFamily; font.pixelSize: Theme.fontSize - 4
+                        font.bold: true
+                        font.capitalization: Font.AllUppercase
+                        font.letterSpacing: Theme.dp(1.5)
+                        elide: Text.ElideRight
                     }
+                    Text {
+                        Layout.fillWidth: true
+                        text: cfg.catLabel
+                        color: Theme.fg
+                        font.family: Theme.fontFamily; font.pixelSize: Theme.fontSize + 6
+                        font.bold: true
+                        elide: Text.ElideRight
+                    }
+                }
+
+                IconButton {
+                    Layout.alignment: Qt.AlignVCenter
+                    icon: "󰅖"
+                    baseColor: cfg.settingsControl
+                    hoverColor: Theme.red
+                    onClicked: Globals.settingsOpen = false
                 }
             }
 
@@ -449,216 +510,154 @@ FloatingWindow {
                     visible: opacity > 0.01
                     Behavior on opacity { NumberAnimation { duration: Theme.animNormal } }
 
-                    Rectangle {
-                        Layout.fillWidth: true
-                        implicitHeight: motionBox.implicitHeight + Theme.space16 * 2
-                        radius: Theme.barRadius
-                        color: cfg.settingsCard
-                        border.width: Theme.hairline
-                        border.color: cfg.settingsBorder
+                    SettingsCard {
+                        title: I18n.tr("Animations and motion"); glyph: "󰓞"
 
-                        ColumnLayout {
-                            id: motionBox
-                            anchors.fill: parent
-                            anchors.margins: Theme.space16
-                            spacing: Theme.space12
+                        SegRow {
+                            label: I18n.tr("Animation Style")
+                            options: [
+                                { text: "Material", value: "material" },
+                                { text: "Fluent", value: "fluent" },
+                                { text: "Dynamic", value: "dynamic" }
+                            ]
+                            current: Settings.panelAnimationStyle
+                            onPicked: (v) => Settings.panelAnimationStyle = v
+                        }
 
-                            RowLayout {
-                                Layout.fillWidth: true
-                                spacing: Theme.space8
-                                Text {
-                                    text: "󰓞"
-                                    color: Theme.accent
-                                    font.family: Theme.fontFamily
-                                    font.pixelSize: Theme.iconSize + 2
-                                }
-                                Text {
-                                    Layout.fillWidth: true
-                                    text: I18n.tr("Animations and motion")
-                                    color: Theme.fg
-                                    font.family: Theme.fontFamily
-                                    font.pixelSize: Theme.fontSize + 1
-                                    font.bold: true
-                                }
+                        Text {
+                            Layout.fillWidth: true
+                            text: {
+                                if (Settings.panelAnimationStyle === "fluent")
+                                    return I18n.tr("Fluent: clean entrance with smooth deceleration and quick close.")
+                                if (Settings.panelAnimationStyle === "dynamic")
+                                    return I18n.tr("Dynamic: elastic entrance with visible bounce and quick close.")
+                                return I18n.tr("Material: expressive entrance with soft scale and short displacement.")
                             }
+                            color: Theme.fgMuted
+                            font.family: Theme.fontFamily
+                            font.pixelSize: Theme.fontSize - 3
+                            wrapMode: Text.WordWrap
+                        }
 
-                            SegRow {
-                                label: I18n.tr("Animation Style")
-                                options: [
-                                    { text: "Material", value: "material" },
-                                    { text: "Fluent", value: "fluent" },
-                                    { text: "Dynamic", value: "dynamic" }
-                                ]
-                                current: Settings.panelAnimationStyle
-                                onPicked: (v) => Settings.panelAnimationStyle = v
-                            }
+                        SegRow {
+                            label: I18n.tr("Animation Speed")
+                            options: [
+                                { text: I18n.tr("None"), value: 0 },
+                                { text: I18n.tr("Short"), value: 1 },
+                                { text: I18n.tr("Medium"), value: 2 },
+                                { text: I18n.tr("Long"), value: 3 },
+                                { text: I18n.tr("Custom"), value: 4 }
+                            ]
+                            current: Settings.animationSpeed
+                            onPicked: (v) => Settings.animationSpeed = v
+                        }
 
-                            Text {
-                                Layout.fillWidth: true
-                                text: {
-                                    if (Settings.panelAnimationStyle === "fluent")
-                                        return I18n.tr("Fluent: clean entrance with smooth deceleration and quick close.")
-                                    if (Settings.panelAnimationStyle === "dynamic")
-                                        return I18n.tr("Dynamic: elastic entrance with visible bounce and quick close.")
-                                    return I18n.tr("Material: expressive entrance with soft scale and short displacement.")
-                                }
-                                color: Theme.fgMuted
-                                font.family: Theme.fontFamily
-                                font.pixelSize: Theme.fontSize - 3
-                                wrapMode: Text.WordWrap
+                        Text {
+                            Layout.fillWidth: true
+                            text: {
+                                if (Settings.animationSpeed === 0)
+                                    return I18n.tr("None: panels change instantly, with no transition.")
+                                if (Settings.animationSpeed === 1)
+                                    return I18n.tr("Short: fast rhythm, with light opening and agile closing.")
+                                if (Settings.animationSpeed === 3)
+                                    return I18n.tr("Long: slower rhythm, with a more visible effect.")
+                                if (Settings.animationSpeed === 4)
+                                    return I18n.tr("Custom: custom duration applied at 500 ms.")
+                                return I18n.tr("Medium: balanced speed for panels and controls.")
                             }
+                            color: Theme.fgMuted
+                            font.family: Theme.fontFamily
+                            font.pixelSize: Theme.fontSize - 3
+                            wrapMode: Text.WordWrap
+                        }
 
-                            SegRow {
-                                label: I18n.tr("Animation Speed")
-                                options: [
-                                    { text: I18n.tr("None"), value: 0 },
-                                    { text: I18n.tr("Short"), value: 1 },
-                                    { text: I18n.tr("Medium"), value: 2 },
-                                    { text: I18n.tr("Long"), value: 3 },
-                                    { text: I18n.tr("Custom"), value: 4 }
-                                ]
-                                current: Settings.animationSpeed
-                                onPicked: (v) => Settings.animationSpeed = v
-                            }
+                        Rectangle {
+                            Layout.fillWidth: true
+                            implicitHeight: Theme.hairline
+                            color: Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.32)
+                        }
 
-                            Text {
-                                Layout.fillWidth: true
-                                text: {
-                                    if (Settings.animationSpeed === 0)
-                                        return I18n.tr("None: panels change instantly, with no transition.")
-                                    if (Settings.animationSpeed === 1)
-                                        return I18n.tr("Short: fast rhythm, with light opening and agile closing.")
-                                    if (Settings.animationSpeed === 3)
-                                        return I18n.tr("Long: slower rhythm, with a more visible effect.")
-                                    if (Settings.animationSpeed === 4)
-                                        return I18n.tr("Custom: custom duration applied at 500 ms.")
-                                    return I18n.tr("Medium: balanced speed for panels and controls.")
-                                }
-                                color: Theme.fgMuted
-                                font.family: Theme.fontFamily
-                                font.pixelSize: Theme.fontSize - 3
-                                wrapMode: Text.WordWrap
-                            }
+                        SegRow {
+                            label: I18n.tr("Panel motion")
+                            options: [
+                                { text: I18n.tr("Standard"), value: "standard" },
+                                { text: I18n.tr("Directional"), value: "directional" },
+                                { text: I18n.tr("Depth"), value: "depth" }
+                            ]
+                            current: Settings.panelMotionEffect
+                            onPicked: (v) => Settings.panelMotionEffect = v
+                        }
 
-                            Rectangle {
-                                Layout.fillWidth: true
-                                implicitHeight: Theme.hairline
-                                color: Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.32)
+                        Text {
+                            Layout.fillWidth: true
+                            text: {
+                                if (Settings.panelMotionEffect === "directional")
+                                    return I18n.tr("Directional: wide full-size slide, without scaling.")
+                                if (Settings.panelMotionEffect === "depth")
+                                    return I18n.tr("Depth: deep scale and medium displacement with approach effect.")
+                                return I18n.tr("Standard: short displacement with subtle scale and Material feel.")
                             }
-
-                            SegRow {
-                                label: I18n.tr("Panel motion")
-                                options: [
-                                    { text: I18n.tr("Standard"), value: "standard" },
-                                    { text: I18n.tr("Directional"), value: "directional" },
-                                    { text: I18n.tr("Depth"), value: "depth" }
-                                ]
-                                current: Settings.panelMotionEffect
-                                onPicked: (v) => Settings.panelMotionEffect = v
-                            }
-
-                            Text {
-                                Layout.fillWidth: true
-                                text: {
-                                    if (Settings.panelMotionEffect === "directional")
-                                        return I18n.tr("Directional: wide full-size slide, without scaling.")
-                                    if (Settings.panelMotionEffect === "depth")
-                                        return I18n.tr("Depth: deep scale and medium displacement with approach effect.")
-                                    return I18n.tr("Standard: short displacement with subtle scale and Material feel.")
-                                }
-                                color: Theme.fgMuted
-                                font.family: Theme.fontFamily
-                                font.pixelSize: Theme.fontSize - 3
-                                wrapMode: Text.WordWrap
-                            }
+                            color: Theme.fgMuted
+                            font.family: Theme.fontFamily
+                            font.pixelSize: Theme.fontSize - 3
+                            wrapMode: Text.WordWrap
                         }
                     }
 
-                    Rectangle {
-                        Layout.fillWidth: true
-                        implicitHeight: typeBox.implicitHeight + Theme.space16 * 2
-                        radius: Theme.barRadius
-                        color: cfg.settingsCard
-                        border.width: Theme.hairline
-                        border.color: cfg.settingsBorder
+                    SettingsCard {
+                        title: I18n.tr("Typography"); glyph: "󰛖"
 
-                        ColumnLayout {
-                            id: typeBox
-                            anchors.fill: parent
-                            anchors.margins: Theme.space16
-                            spacing: Theme.space12
+                        Rectangle {
+                            Layout.fillWidth: true
+                            implicitHeight: Theme.tileL
+                            radius: Theme.pillRadius
+                            color: cfg.settingsControl
+                            border.width: Theme.hairline
+                            border.color: cfg.settingsBorder
 
-                            RowLayout {
-                                Layout.fillWidth: true
-                                spacing: Theme.space8
+                            ColumnLayout {
+                                anchors.centerIn: parent
+                                spacing: Theme.space2
                                 Text {
-                                    text: "󰛖"
-                                    color: Theme.accent
-                                    font.family: Theme.fontFamily
-                                    font.pixelSize: Theme.iconSize + 2
-                                }
-                                Text {
-                                    Layout.fillWidth: true
-                                    text: I18n.tr("Typography")
+                                    Layout.alignment: Qt.AlignHCenter
+                                    text: "AaBbCc 0123  󰋩 󰒓 󰂚"
                                     color: Theme.fg
-                                    font.family: Theme.fontFamily
-                                    font.pixelSize: Theme.fontSize + 1
-                                    font.bold: true
+                                    font.family: Settings.fontFamily
+                                    font.pixelSize: Theme.fontSize + 8
+                                }
+                                Text {
+                                    Layout.alignment: Qt.AlignHCenter
+                                    text: "mono: /proc/cpuinfo  0x7aa2f7"
+                                    color: Theme.fgMuted
+                                    font.family: Settings.monoFontFamily
+                                    font.pixelSize: Theme.fontSize - 2
                                 }
                             }
+                        }
 
-                            Rectangle {
-                                Layout.fillWidth: true
-                                implicitHeight: Theme.tileL
-                                radius: Theme.pillRadius
-                                color: cfg.settingsControl
-                                border.width: Theme.hairline
-                                border.color: cfg.settingsBorder
+                        DropdownRow {
+                            label: I18n.tr("Normal Font")
+                            options: Fonts.list.map(f => ({ text: f, value: f, font: f }))
+                            current: Settings.fontFamily
+                            detailText: I18n.tr("%1 fonts").arg(Fonts.list.length)
+                            maxVisibleItems: 6
+                            onPicked: (font) => Settings.fontFamily = font
+                        }
 
-                                ColumnLayout {
-                                    anchors.centerIn: parent
-                                    spacing: Theme.space2
-                                    Text {
-                                        Layout.alignment: Qt.AlignHCenter
-                                        text: "AaBbCc 0123  󰋩 󰒓 󰂚"
-                                        color: Theme.fg
-                                        font.family: Settings.fontFamily
-                                        font.pixelSize: Theme.fontSize + 8
-                                    }
-                                    Text {
-                                        Layout.alignment: Qt.AlignHCenter
-                                        text: "mono: /proc/cpuinfo  0x7aa2f7"
-                                        color: Theme.fgMuted
-                                        font.family: Settings.monoFontFamily
-                                        font.pixelSize: Theme.fontSize - 2
-                                    }
-                                }
-                            }
+                        DropdownRow {
+                            label: I18n.tr("Monospace Font")
+                            options: Fonts.monoList.map(f => ({ text: f, value: f, font: f }))
+                            current: Settings.monoFontFamily
+                            detailText: I18n.tr("%1 fonts").arg(Fonts.monoList.length)
+                            maxVisibleItems: 6
+                            onPicked: (font) => Settings.monoFontFamily = font
+                        }
 
-                            DropdownRow {
-                                label: I18n.tr("Normal Font")
-                                options: Fonts.list.map(f => ({ text: f, value: f, font: f }))
-                                current: Settings.fontFamily
-                                detailText: I18n.tr("%1 fonts").arg(Fonts.list.length)
-                                maxVisibleItems: 6
-                                onPicked: (font) => Settings.fontFamily = font
-                            }
-
-                            DropdownRow {
-                                label: I18n.tr("Monospace Font")
-                                options: Fonts.monoList.map(f => ({ text: f, value: f, font: f }))
-                                current: Settings.monoFontFamily
-                                detailText: I18n.tr("%1 fonts").arg(Fonts.monoList.length)
-                                maxVisibleItems: 6
-                                onPicked: (font) => Settings.monoFontFamily = font
-                            }
-
-                            SliderRow {
-                                label: I18n.tr("Letter scale"); glyph: "󰗊"
-                                from: 0.8; to: 1.3; value: Settings.fontScale
-                                valueText: I18n.tr("%1% · effective %2%").arg(Math.round(Settings.fontScale * 100)).arg(Math.round(Theme.scale * Settings.fontScale * 100))
-                                onMoved: (v) => Settings.fontScale = Math.round(v * 20) / 20
-                            }
+                        SliderRow {
+                            label: I18n.tr("Letter scale"); glyph: "󰗊"
+                            from: 0.8; to: 1.3; value: Settings.fontScale
+                            valueText: I18n.tr("%1% · effective %2%").arg(Math.round(Settings.fontScale * 100)).arg(Math.round(Theme.scale * Settings.fontScale * 100))
+                            onMoved: (v) => Settings.fontScale = Math.round(v * 20) / 20
                         }
                     }
 
@@ -803,9 +802,10 @@ FloatingWindow {
                         current: Settings.weatherRefreshMin
                         onPicked: (v) => Settings.weatherRefreshMin = v
                     }
-                    TextRow {
+                    TextField {
+                        Layout.fillWidth: true
                         label: I18n.tr("Location"); placeholder: I18n.tr("Automatic (by IP)")
-                        text: Settings.weatherLocation
+                        value: Settings.weatherLocation
                         onEdited: (t) => Settings.weatherLocation = t
                     }
                     Text {
@@ -1263,22 +1263,6 @@ FloatingWindow {
     }
 
     // ═════════ COMPONENTES REUTILIZABLES ═════════════════════
-    component SubHeader: ColumnLayout {
-        id: sh
-        property string text: ""
-        Layout.fillWidth: true
-        Layout.topMargin: Theme.space6
-        spacing: Theme.space4
-        Text {
-            text: sh.text; color: Theme.fgDim
-            font.family: Theme.fontFamily; font.pixelSize: Theme.fontSize - 2; font.bold: true
-        }
-        Rectangle {
-            Layout.fillWidth: true; implicitHeight: Theme.hairline
-            color: cfg.settingsLine
-        }
-    }
-
     // Grupo desplegable de la barra lateral.
     component NavGroup: ColumnLayout {
         id: grp
@@ -1369,6 +1353,18 @@ FloatingWindow {
                             opacity: subMa.containsMouse && !parent.sel ? 1 : 0
                             Behavior on opacity { NumberAnimation { duration: 90; easing.type: Easing.OutQuad } }
                         }
+                        // Barra indicadora "estás aquí" (accent).
+                        Rectangle {
+                            anchors.verticalCenter: parent.verticalCenter
+                            anchors.left: parent.left
+                            anchors.leftMargin: Theme.space4
+                            width: Theme.space2
+                            height: parent.height * 0.46
+                            radius: width / 2
+                            color: Theme.accent
+                            opacity: parent.sel ? 1 : 0
+                            Behavior on opacity { NumberAnimation { duration: Theme.animNormal } }
+                        }
                         RowLayout {
                             anchors.fill: parent
                             anchors.leftMargin: Theme.space18 + Theme.space2
@@ -1454,14 +1450,21 @@ FloatingWindow {
 
             RowLayout {
                 Layout.fillWidth: true
-                spacing: Theme.space8
+                spacing: Theme.space10
                 visible: cardRoot.title !== ""
-                Text {
-                    text: cardRoot.glyph
+                Rectangle {
                     visible: cardRoot.glyph !== ""
-                    color: Theme.accent
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.iconSize + 2
+                    implicitWidth: Theme.controlM
+                    implicitHeight: Theme.controlM
+                    radius: Theme.pillRadius
+                    color: cfg.accentSoft
+                    Text {
+                        anchors.centerIn: parent
+                        text: cardRoot.glyph
+                        color: Theme.accent
+                        font.family: Theme.fontFamily
+                        font.pixelSize: Theme.iconSize
+                    }
                 }
                 Text {
                     Layout.fillWidth: true
@@ -1471,6 +1474,15 @@ FloatingWindow {
                     font.pixelSize: Theme.fontSize + 1
                     font.bold: true
                 }
+            }
+
+            // Filete bajo la cabecera: separa el título de los controles.
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.topMargin: -Theme.space4
+                visible: cardRoot.title !== ""
+                implicitHeight: Theme.hairline
+                color: Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.22)
             }
         }
     }
@@ -1665,50 +1677,6 @@ FloatingWindow {
                         cursorShape: Qt.PointingHandCursor
                         onClicked: cr.picked(modelData)
                     }
-                }
-            }
-        }
-    }
-
-    component TextRow: ColumnLayout {
-        id: tr
-        property string label: ""
-        property string placeholder: ""
-        property string text: ""
-        signal edited(string t)
-        Layout.fillWidth: true
-        spacing: Theme.space6
-        Text {
-            text: tr.label; color: Theme.fg
-            font.family: Theme.fontFamily; font.pixelSize: Theme.fontSize
-        }
-        Rectangle {
-            Layout.fillWidth: true
-            implicitHeight: Theme.rowM
-            radius: Theme.pillRadius
-            color: cfg.settingsControl
-            border.width: Theme.hairline
-            border.color: ti.activeFocus ? Theme.accent
-                         : cfg.settingsBorder
-            Behavior on border.color { ColorAnimation { duration: Theme.animFast } }
-            TextInput {
-                id: ti
-                anchors.fill: parent
-                anchors.leftMargin: Theme.space12
-                anchors.rightMargin: Theme.space12
-                verticalAlignment: TextInput.AlignVCenter
-                clip: true
-                text: tr.text
-                color: Theme.fg
-                font.family: Theme.fontFamily; font.pixelSize: Theme.fontSize
-                selectionColor: Theme.accent
-                onEditingFinished: tr.edited(text)
-                Text {
-                    anchors.verticalCenter: parent.verticalCenter
-                    visible: ti.text === ""
-                    text: tr.placeholder
-                    color: Theme.fgMuted
-                    font: ti.font
                 }
             }
         }
