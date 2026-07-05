@@ -32,6 +32,16 @@ Singleton {
     readonly property bool available: Greetd.available
     signal failed()
 
+    // Red de seguridad: si ya hay un usuario seleccionado (p.ej. la auto-
+    // selección cuando solo existe UNA cuenta) pero greetd todavía no estaba
+    // disponible, pickUser() se saltó createSession() y el campo de contraseña
+    // quedaría "muerto" (submit() se descarta por no estar Authenticating). Al
+    // quedar disponible, se crea aquí la sesión PAM que faltó.
+    onAvailableChanged: {
+        if (available && selectedUser !== "" && Greetd.state === GreetdState.Inactive)
+            Greetd.createSession(selectedUser)
+    }
+
     // ── Memoria (último login) ────────────────────────────────
     property string lastUser: ""
     property string _wantSession: ""
@@ -181,13 +191,17 @@ Singleton {
         revealSecret = false
         selectedUser = ""
     }
+    // Devuelve true solo si el envío se cursó (hay sesión PAM esperando). Así
+    // quien llama sabe si debe limpiar el campo o conservar lo tecleado.
     function submit(text) {
-        if (busy) return
+        if (busy) return false
         if (Greetd.state === GreetdState.Authenticating) {
             busy = true
             error = ""
             Greetd.respond(text)
+            return true
         }
+        return false
     }
 
     // ── Helpers puros (antes en GreetdEnv.js) ─────────────────

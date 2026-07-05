@@ -21,6 +21,9 @@ Popout {
     property bool freezeListHeight: false
     property real frozenListHeight: 0
     property real emptyBodyHeight: 76
+    // Con "No molestar" activo mostramos el símbolo DND en grande, que necesita
+    // más alto que el mensaje normal de "Sin notificaciones".
+    readonly property real emptyStateHeight: Globals.dnd ? 132 : emptyBodyHeight
     property real bodyHeight: emptyBodyHeight
     property var groups: []
 
@@ -96,7 +99,7 @@ Popout {
             return
 
         bodyHeight = NotifService.count > 0 ? Math.max(emptyBodyHeight, Math.min(500, groupList.contentHeight))
-                                            : emptyBodyHeight
+                                            : emptyStateHeight
     }
 
     function clearAnimated() {
@@ -126,6 +129,13 @@ Popout {
             if (nc.clearing)
                 clearDoneAnim.restart()
         }
+    }
+
+    // Al alternar "No molestar" con el panel vacío, reajusta el alto para dar
+    // sitio (o quitarlo) al símbolo DND grande; el cambio se anima solo.
+    Connections {
+        target: Globals
+        function onDndChanged() { nc.refreshBodyHeight() }
     }
 
     SequentialAnimation {
@@ -158,7 +168,7 @@ Popout {
                 nc.showingClearedState = true
                 NotifService.clearAll()
                 nc.freezeListHeight = false
-                nc.bodyHeight = nc.emptyBodyHeight
+                nc.bodyHeight = nc.emptyStateHeight
             }
         }
     }
@@ -304,9 +314,10 @@ Popout {
         Layout.preferredHeight: nc.bodyHeight
         clip: true
 
+        // Vacío normal: "Sin notificaciones" (solo si NO está "No molestar").
         Text {
             anchors.centerIn: parent
-            visible: (NotifService.count === 0 || nc.showingClearedState) && nc.emptyMessageReady
+            visible: (NotifService.count === 0 || nc.showingClearedState) && nc.emptyMessageReady && !Globals.dnd
             opacity: visible ? 1 : 0
             horizontalAlignment: Text.AlignHCenter
             text: "󰂜\n" + I18n.tr("No notifications")
@@ -316,6 +327,33 @@ Popout {
             lineHeight: 1.35
 
             Behavior on opacity { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
+        }
+
+        // Vacío con "No molestar": símbolo DND en grande en vez del texto.
+        ColumnLayout {
+            anchors.centerIn: parent
+            width: parent.width
+            visible: (NotifService.count === 0 || nc.showingClearedState) && nc.emptyMessageReady && Globals.dnd
+            opacity: visible ? 1 : 0
+            spacing: Theme.space6
+
+            Behavior on opacity { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
+
+            Text {
+                Layout.alignment: Qt.AlignHCenter
+                text: "󰂛"
+                color: Theme.fgMuted
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.dp(56)
+            }
+            Text {
+                Layout.alignment: Qt.AlignHCenter
+                text: I18n.tr("Do not disturb")
+                color: Theme.fgMuted
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontSize - 1
+                font.bold: true
+            }
         }
 
         ListView {

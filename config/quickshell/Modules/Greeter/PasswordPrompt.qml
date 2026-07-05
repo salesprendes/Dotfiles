@@ -200,7 +200,9 @@ Item {
                         if (text.length > 0) { text = ""; GreeterState.error = ""; return }
                         if (GreeterState.users.length > 1) GreeterState.backToUsers()
                     }
-                    onAccepted: { GreeterState.submit(text); text = "" }
+                    // Solo se limpia si el envío se cursó; si se descartó (aún
+                    // sin sesión PAM lista), se conserva para reintentar.
+                    onAccepted: { if (GreeterState.submit(text)) text = "" }
                 }
             }
         }

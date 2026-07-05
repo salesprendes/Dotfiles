@@ -212,7 +212,10 @@ Popout {
             implicitHeight: Theme.dp(44)
             radius: Theme.pillRadius
             color: "transparent"
-            readonly property bool selected: ListView.isCurrentItem
+            // Selección = única fuente de verdad (selectedIndex). El ratón la
+            // mueve en onEntered y el teclado en moveSelection, así hover y
+            // teclado comparten UN solo resaltado (sin animación doble).
+            readonly property bool selected: appRow.index === launcher.selectedIndex
 
             // Resaltado de hover/selección como capa aparte que anima su
             // OPACIDAD (no el color): nunca se interpola hacia el negro de
@@ -225,7 +228,7 @@ Popout {
                 color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.16)
                 border.width: Math.max(1, Theme.hairline)
                 border.color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.5)
-                opacity: rowMa.containsMouse || appRow.selected ? 1 : 0
+                opacity: appRow.selected ? 1 : 0
                 Behavior on opacity { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutQuad } }
             }
 
@@ -373,8 +376,8 @@ Popout {
                 Repeater {
                     model: [
                         { ic: "󰍁", label: I18n.tr("Lock"),      action: "lock",     col: Theme.accent },
-                        { ic: "󰤄", label: I18n.tr("Suspend"),   action: "suspend",  col: Theme.yellow },
-                        { ic: "󰜉", label: I18n.tr("Restart"),   action: "reboot",   col: Theme.orange },
+                        { ic: "󰤄", label: I18n.tr("Suspend"),   action: "suspend",  col: Theme.accent },
+                        { ic: "󰜉", label: I18n.tr("Restart"),   action: "reboot",   col: Theme.accent },
                         { ic: "󰐥", label: I18n.tr("Shut down"), action: "poweroff", col: Theme.red }
                     ]
                     delegate: Rectangle {

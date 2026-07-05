@@ -26,6 +26,7 @@ Singleton {
     property int _ddcBus: -1
     property int _ddcMax: 100
     property int _pending: -1           // valor DDC pendiente (debounce)
+    property int _pendingPct: -1        // % backlight pendiente (throttle)
 
     // ── Detección del método + lectura inicial ───────────────
     //  Optimizada: el nº de bus i2c del monitor se CACHEA en disco. En el
@@ -103,7 +104,10 @@ Singleton {
         p = Math.max(1, Math.min(100, Math.round(p)))
         bright.percent = p   // feedback inmediato en la UI
         if (bright.method === "backlight") {
-            Quickshell.execDetached(["brightnessctl", "-c", "backlight", "set", p + "%"])
+            // Throttle: aplica el primero al instante y luego como mucho uno
+            // cada 40 ms mientras se arrastra, en vez de lanzar un brightnessctl
+            // por cada pixel de movimiento (menos fork+exec, menos picos de CPU).
+            bright._applyBacklight(p)
         } else if (bright.method === "ddc") {
             // DDC/CI es lento (~100-300 ms): debounce para no saturar el bus
             // i2c mientras se arrastra el slider. Solo se escribe el último valor.
@@ -122,6 +126,34 @@ Singleton {
                 Quickshell.execDetached(["ddcutil", "--bus", String(bright._ddcBus),
                                          "--noverify", "setvcp", "10", String(bright._pending)])
                 bright._pending = -1
+            }
+        }
+    }
+
+    // ── Throttle del path backlight (borde inicial + final) ──────
+    //  El primer valor se aplica al instante; mientras la ventana de 40 ms
+    //  esté abierta, los siguientes solo guardan el último, que se escribe al
+    //  cerrarse. Así se pasa de ~1 proceso por pixel a ~25/s como máximo, sin
+    //  perder el valor final ni la respuesta inmediata.
+    function _applyBacklight(p) {
+        if (blWrite.running) {
+            bright._pendingPct = p
+        } else {
+            Quickshell.execDetached(["brightnessctl", "-c", "backlight", "set", p + "%"])
+            bright._pendingPct = -1
+            blWrite.start()
+        }
+    }
+    Timer {
+        id: blWrite
+        interval: 40
+        repeat: false
+        onTriggered: {
+            if (bright._pendingPct >= 0) {
+                Quickshell.execDetached(["brightnessctl", "-c", "backlight", "set",
+                                         bright._pendingPct + "%"])
+                bright._pendingPct = -1
+                blWrite.start()   // reabre la ventana por si siguen llegando
             }
         }
     }

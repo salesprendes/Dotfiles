@@ -225,18 +225,25 @@ PanelWindow {
                 }
             }
 
+            // Pausa el auto-cierre mientras el ratón está sobre el popup. Va
+            // DEBAJO de la tarjeta (z:-1) para NO robar el hover a los botones
+            // internos (la X se pone roja gracias a su propio MouseArea); el
+            // cuerpo vacío de la tarjeta le pasa el hover por transparencia.
             MouseArea {
                 id: hov
                 anchors.fill: parent
                 hoverEnabled: true
                 acceptedButtons: Qt.NoButton
+                z: -1
             }
 
             Timer {
                 id: autoDismiss
                 interval: Math.max(1000, Settings.notifTimeout * 1000)
                 repeat: false
-                running: !hov.containsMouse
+                // Pausa sobre el cuerpo (hov) y también sobre la propia X, cuyo
+                // hover consume su MouseArea y no llegaría a hov.
+                running: !hov.containsMouse && !card.closeHovered
                 onTriggered: popups.removeKey(row.key)
             }
         }

@@ -163,24 +163,34 @@ Rectangle {
 
             Rectangle {
                 id: closeButton
-                property bool hovered: closeMa.containsMouse
+                // 'dismissing' se activa al pulsar: así el rojo es solo efecto de
+                // hover y se desvanece al cerrar, en vez de quedarse fijo mientras
+                // la notificación reproduce su animación de salida.
+                property bool dismissing: false
+                property bool hovered: closeMa.containsMouse && !dismissing
                 Layout.alignment: Qt.AlignTop
                 implicitWidth: Theme.controlS
                 implicitHeight: Theme.controlS
                 radius: height / 2
-                // Apagado = rojo con alfa 0 (no "transparent", que es negro
-                // con alfa 0 y ensuciaba el fundido de salida).
-                color: Qt.rgba(Theme.red.r, Theme.red.g, Theme.red.b, closeButton.hovered ? 0.18 : 0)
-                Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+                // Al pasar el ratón se rellena de rojo (afordancia de descartar).
+                // Apagado = rojo con alfa 0 (no "transparent", que es negro con
+                // alfa 0 y ensuciaba el fundido de salida).
+                color: closeButton.hovered
+                    ? Theme.red
+                    : Qt.rgba(Theme.red.r, Theme.red.g, Theme.red.b, 0)
+                // Fundido siempre fluido: nunca baja de ~140 ms aunque las
+                // animaciones globales estén en "Ninguna".
+                Behavior on color { ColorAnimation { duration: Math.max(Theme.animFast, 140); easing.type: Easing.OutCubic } }
 
                 Text {
                     anchors.centerIn: parent
                     text: "󰅖"
-                    color: closeButton.hovered ? Theme.red : Theme.fgMuted
+                    // Sobre el relleno rojo, el icono usa el color de fondo para
+                    // contrastar; en reposo, gris tenue. Funde junto al fondo.
+                    color: closeButton.hovered ? Theme.bg : Theme.fgMuted
                     font.family: Theme.fontFamily
                     font.pixelSize: Theme.iconSize - 1
-                    // Funde junto al fondo; antes cambiaba de golpe.
-                    Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+                    Behavior on color { ColorAnimation { duration: Math.max(Theme.animFast, 140); easing.type: Easing.OutCubic } }
                 }
 
                 MouseArea {
@@ -188,7 +198,7 @@ Rectangle {
                     anchors.fill: parent
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
-                    onClicked: item.dismiss()
+                    onClicked: { closeButton.dismissing = true; item.dismiss() }
                 }
             }
         }

@@ -1,7 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
 import Quickshell
-import Quickshell.Hyprland
 import Quickshell.Services.Pipewire
 import qs.Components
 import qs.Config
@@ -40,11 +39,9 @@ Popout {
 
     function runPowerAction(action) {
         Globals.closeAll()
-        if (action === "exit") {
-            // El config de Hyprland usa parser Lua: cada dispatch se evalúa como
-            // `hl.dispatch(<arg>)`. Por eso "exit" pelado falla (`hl.dispatch(exit)`
-            // → variable inexistente); hay que pasar el dispatcher nativo válido.
-            Hyprland.dispatch("hl.dsp.exit()")
+        if (action === "suspend") {
+            // Reposo del sistema (suspend-to-idle / s2idle).
+            Quickshell.execDetached(["systemctl", "suspend"])
         } else if (action === "lock") {
             // Pausa breve para que el popout termine de cerrarse y SUELTE el
             // teclado antes de que hyprlock tome el foco (si no, la pantalla
@@ -109,8 +106,8 @@ Popout {
         Repeater {
             model: [
                 { ic: "󰍁", action: "lock", col: Theme.accent },
-                { ic: "󰍃", action: "exit", col: Theme.yellow },
-                { ic: "󰜉", action: "reboot",  col: Theme.orange },
+                { ic: "󰤄", action: "suspend", col: Theme.accent },
+                { ic: "󰜉", action: "reboot",  col: Theme.accent },
                 { ic: "󰐥", action: "poweroff", col: Theme.red }
             ]
             delegate: Item {

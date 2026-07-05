@@ -11,6 +11,14 @@ RowLayout {
     property color trackColor: Theme.surface
     signal moved(real v)
 
+    // Mientras se arrastra, el relleno y el agarre siguen al puntero al
+    // instante con un valor local (dragValue), sin esperar el "eco" del
+    // backend (PipeWire / brillo), que llega con retardo y hacía que la barra
+    // no siguiera del todo. Al soltar se vuelve al valor real ya asentado.
+    property bool dragging: false
+    property real dragValue: 0
+    readonly property real shownValue: dragging ? dragValue : value
+
     activeFocusOnTab: enabled
     spacing: Theme.spacing + Theme.space2
 
@@ -48,13 +56,13 @@ RowLayout {
 
         Rectangle {
             id: fill
-            width: Math.max(height, root.value * parent.width)
+            width: Math.max(height, root.shownValue * parent.width)
             height: parent.height
             radius: parent.radius
             color: root.accent
-            // Suavizado global del relleno (token compartido Theme.animFast:
-            // 0 = sin animación si el usuario lo desactiva en ajustes).
-            Behavior on width { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+            // Suaviza los cambios externos/teclado, pero NO mientras se arrastra
+            // (ahí sigue al dedo al instante). Theme.animFast 0 = sin animación.
+            Behavior on width { enabled: !root.dragging; NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
         }
 
         Rectangle {
@@ -66,10 +74,11 @@ RowLayout {
             border.width: Math.max(2, Theme.dp(3))
             border.color: root.accent
             y: (parent.height - height) / 2
-            x: Math.min(parent.width - width, Math.max(0, root.value * parent.width - width / 2))
-            // Glide del agarre + leve crecida táctil al arrastrar.
+            x: Math.min(parent.width - width, Math.max(0, root.shownValue * parent.width - width / 2))
+            // Glide del agarre + leve crecida táctil al arrastrar. El glide en X
+            // se apaga mientras se arrastra para que siga al puntero 1:1.
             scale: ma.pressed || root.activeFocus ? 1.18 : 1.0
-            Behavior on x { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+            Behavior on x { enabled: !root.dragging; NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
             Behavior on scale { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
         }
 
@@ -80,11 +89,17 @@ RowLayout {
             preventStealing: true
             cursorShape: Qt.PointingHandCursor
             function update(mx) {
-                const v = Math.max(0, Math.min(1, mx / track.width))
+                // El MouseArea sobresale del track (margins negativos), así que
+                // hay que mapear a coordenadas del track para no descuadrar.
+                const x = mapToItem(track, mx, 0).x
+                const v = Math.max(0, Math.min(1, x / track.width))
+                root.dragValue = v
                 root.moved(v)
             }
-            onPressed: (m) => update(m.x)
+            onPressed: (m) => { root.dragging = true; update(m.x) }
             onPositionChanged: (m) => { if (pressed) update(m.x) }
+            onReleased: root.dragging = false
+            onCanceled: root.dragging = false
         }
     }
 }
