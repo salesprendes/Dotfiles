@@ -4,6 +4,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import Quickshell.Hyprland
+import qs.Config
 
 // ─────────────────────────────────────────────────────────────
 //  Servicio de pantallas. LEE los monitores de forma reactiva desde
@@ -20,6 +21,13 @@ Singleton {
     readonly property var monitors: Hyprland.monitors?.values ?? []
 
     function refresh() { Hyprland.refreshMonitors() }
+
+    // Tras el resume, los monitores pueden re-enumerarse (DPMS/hotplug): re-lee
+    // el estado live desde Hyprland para que la UI de Pantallas quede al día.
+    Connections {
+        target: Resume
+        function onResumed() { root.refresh() }
+    }
 
     // Último 'spec' aplicado por monitor (para persistir lo aplicado, no el
     // estado live —que se actualiza con retardo tras el `eval`).

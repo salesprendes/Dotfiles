@@ -27,6 +27,25 @@ Singleton {
     property real   barOpacity: 0.78    // opacidad del fondo de la barra
     property real   popupOpacity: 0.85
     property real   widgetOpacity: 0.55
+
+    // Opacidades PROPIAS del tema Liquid Glass, independientes de las de arriba
+    // para no pisar las de otros temas al cambiar. Translúcidas pero legibles:
+    // con el blur del compositor detrás, ~0.45 se lee como cristal esmerilado
+    // nítido (antes 0.36/0.18/0.14 quedaban demasiado transparentes).
+    property real   glassBarOpacity: 0.45
+    property real   glassPopupOpacity: 0.45
+    property real   glassWidgetOpacity: 0.35
+
+    // Opacidad "efectiva" según el tema activo. Tanto Theme como los sliders de
+    // Ajustes usan ESTAS: así el mismo control edita/refleja la opacidad del
+    // tema en uso (glass o no) sin mezclar valores entre temas.
+    readonly property bool _isGlass: themeName === "liquid-glass"
+    readonly property real effBarOpacity:    _isGlass ? glassBarOpacity    : barOpacity
+    readonly property real effPopupOpacity:  _isGlass ? glassPopupOpacity  : popupOpacity
+    readonly property real effWidgetOpacity: _isGlass ? glassWidgetOpacity : widgetOpacity
+    function setBarOpacity(v)    { if (_isGlass) glassBarOpacity = v;    else barOpacity = v }
+    function setPopupOpacity(v)  { if (_isGlass) glassPopupOpacity = v;  else popupOpacity = v }
+    function setWidgetOpacity(v) { if (_isGlass) glassWidgetOpacity = v; else widgetOpacity = v }
     property real   cornerScale: 1.0    // multiplicador del redondeo
     property real   barScale: 1.0       // multiplicador de la altura de barra
     property string fontFamily: "JetBrainsMono Nerd Font"
@@ -106,17 +125,29 @@ Singleton {
             "lightCyan": "#179299", "lightGreen": "#40a02b", "lightYellow": "#df8e1d", "lightOrange": "#fe640b", "lightRed": "#d20f39", "lightMagenta": "#ea76cb",
             "hyprInactive": "#45475a", "hyprShadow": "#11111b"
         },
-        "last-horizon": {
-            "label": "Last Horizon",
-            "bg": "#0c0b0c", "bgAlt": "#181416", "surface": "#241e21", "surfaceHi": "#332a2e", "overlay": "#584e51",
-            "fg": "#fafcfb", "fgDim": "#e2dddc", "fgMuted": "#8a8588",
-            "accent": "#8a8588", "accent2": "#e2dddc", "cyan": "#9aa7aa", "green": "#a5b09b", "yellow": "#d8c8a8",
-            "orange": "#c99a75", "red": "#d66f5d", "magenta": "#bca8b8",
-            "lightBg": "#cfc7c5", "lightBgAlt": "#c3bab7", "lightSurface": "#b5aaa7", "lightSurfaceHi": "#a79c99",
-            "lightOverlay": "#6e686c", "lightFg": "#241e21", "lightFgDim": "#4c4347", "lightFgMuted": "#645a5d",
-            "lightAccent": "#4a3e42", "lightAccent2": "#574f52",
-            "lightCyan": "#4f6669", "lightGreen": "#5f6b54", "lightYellow": "#8a7344", "lightOrange": "#a05f3a", "lightRed": "#b8462f", "lightMagenta": "#7a6470",
-            "hyprInactive": "#584e51", "hyprShadow": "#161214"
+        // Cristal líquido estilo macOS. Es ADAPTATIVO: en modo oscuro da un
+        // cristal ahumado (fondo frío casi negro, texto claro) y en claro un
+        // cristal luminoso (casi blanco translúcido, texto oscuro). La
+        // translucidez REAL la aplica Theme (alphas de 'glass'); aquí solo van
+        // los colores base. 'overlay' se deja BRILLANTE a propósito: los bordes
+        // (withAlpha(overlay, …)) se convierten así en el filo de luz esmerilado.
+        // Acentos = colores de sistema de macOS. El blur del compositor lo activa
+        // shell.qml (hl.layer_rule) mientras este tema esté seleccionado.
+        "liquid-glass": {
+            "label": "Liquid Glass",
+            // Tonos neutros: bg = surfaceContainer (#1e2023), surface =
+            // surfaceContainerHigh (#292b2f), overlay = 'outline' (borde de luz
+            // sutil). Los alphas de translucidez viven en
+            // Theme (0.36/0.18/0.14). Acentos = colores de sistema de macOS.
+            "bg": "#1e2023", "bgAlt": "#16181a", "surface": "#292b2f", "surfaceHi": "#34373b", "overlay": "#8b9198",
+            "fg": "#e3e3e7", "fgDim": "#c3c6cc", "fgMuted": "#8b9198",
+            "accent": "#0a84ff", "accent2": "#64d2ff", "cyan": "#64d2ff", "green": "#30d158", "yellow": "#ffd60a",
+            "orange": "#ff9f0a", "red": "#ff453a", "magenta": "#bf5af2",
+            "lightBg": "#eceef3", "lightBgAlt": "#e3e5ec", "lightSurface": "#dadde6", "lightSurfaceHi": "#cccfdb",
+            "lightOverlay": "#b9bec9", "lightFg": "#1a1c1f", "lightFgDim": "#282c33", "lightFgMuted": "#33373e",
+            "lightAccent": "#007aff", "lightAccent2": "#0a84ff",
+            "lightCyan": "#0071a4", "lightGreen": "#248a3d", "lightYellow": "#a1670a", "lightOrange": "#c93400", "lightRed": "#d70015", "lightMagenta": "#a63ec0",
+            "hyprInactive": "#3a3f47", "hyprShadow": "#000000"
         }
     })
 
@@ -125,7 +156,7 @@ Singleton {
         { text: "Tokyo Night", value: "tokyo" },
         { text: "Kanagawa", value: "kanagawa" },
         { text: "Catppuccin", value: "catppuccin" },
-        { text: "Last Horizon", value: "last-horizon" }
+        { text: "Liquid Glass", value: "liquid-glass" }
     ]
     // Acento "theme": en modo claro usa la variante lightAccent (más oscura,
     // para que contraste sobre fondo claro); en oscuro, el accent normal.
@@ -206,12 +237,19 @@ Singleton {
     property var    wallpaperDirs: [home + "/.config/wallpapers"]
     property string wallpaperCurrent: ""  // último fondo aplicado (ruta absoluta)
 
+    // ── Captura de pantalla / grabación ──────────────────────
+    //  Sub-objeto con TODOS los ajustes del servicio ScreenCapture, unificados
+    //  aquí para tener una única fuente de verdad (settings.json). El servicio
+    //  los sanea con sus propios rangos/enums al aplicarlos; aquí solo validamos
+    //  que sea un objeto JSON para no corromper el archivo.
+    property var screenCapture: ({})
+
     // ── Persistencia ─────────────────────────────────────────
     property bool _loaded: false
 
     readonly property var _keys: ["themeName", "accentName", "accentColor", "darkMode",
         "uiScale", "animScale", "animationSpeed", "customAnimationDuration", "barOpacity",
-        "popupOpacity", "widgetOpacity",
+        "popupOpacity", "widgetOpacity", "glassBarOpacity", "glassPopupOpacity", "glassWidgetOpacity",
         "cornerScale", "barScale", "fontFamily", "monoFontFamily", "fontScale",
         "fontAntialias", "fontHinting", "fontHintstyle", "fontRgba", "fontLcdfilter", "fontEmbeddedbitmap",
         "panelAnimationStyle", "panelMotionEffect", "language",
@@ -221,7 +259,8 @@ Singleton {
         "notifPopupsEnabled", "notifTimeout", "notifMaxVisible", "notifPosition", "mutedNotificationApps",
         "wallpaperTransition", "wallpaperTransitionDuration", "wallpaperCurrent",
         "terminalApp", "terminalFont", "terminalFontSize", "terminalOpacity", "terminalPadding",
-        "terminalCursorShape", "terminalCursorBlink", "terminalLineHeight", "terminalTabStyle", "terminalLigatures"]
+        "terminalCursorShape", "terminalCursorBlink", "terminalLineHeight", "terminalTabStyle", "terminalLigatures",
+        "screenCapture"]
 
     // ── Saneamiento de valores cargados ─────────────────────
     //  Rangos numéricos (se recortan a [min,max]) y conjuntos de valores
@@ -229,7 +268,9 @@ Singleton {
     readonly property var _numBounds: ({
         "uiScale": [0.5, 2.0], "animScale": [0.0, 3.0], "animationSpeed": [0, 4],
         "customAnimationDuration": [50, 3000], "barOpacity": [0.0, 1.0],
-        "popupOpacity": [0.0, 1.0], "widgetOpacity": [0.0, 1.0], "cornerScale": [0.0, 2.0],
+        "popupOpacity": [0.0, 1.0], "widgetOpacity": [0.0, 1.0],
+        "glassBarOpacity": [0.0, 1.0], "glassPopupOpacity": [0.0, 1.0], "glassWidgetOpacity": [0.0, 1.0],
+        "cornerScale": [0.0, 2.0],
         "barScale": [0.5, 2.0], "fontScale": [0.5, 2.0], "weatherRefreshMin": [1, 1440],
         "notifTimeout": [1, 120], "notifMaxVisible": [1, 20],
         "wallpaperTransitionDuration": [0.1, 5.0]
@@ -261,6 +302,9 @@ Singleton {
             if (!Array.isArray(val)) return undefined
             return val.every(x => typeof x === "string") ? val : undefined
         }
+        // screenCapture: objeto JSON (el saneo fino lo hace el servicio).
+        if (k === "screenCapture")
+            return (val && typeof val === "object" && !Array.isArray(val)) ? val : undefined
         // Numéricos con rango: número finito recortado (y entero si procede).
         if (_numBounds[k] !== undefined) {
             if (typeof val !== "number" || !isFinite(val)) return undefined
@@ -316,6 +360,7 @@ Singleton {
         themeName = "solitude"; accentName = "theme"; accentColor = resolvedAccent
         darkMode = true; uiScale = 1.0; animScale = 1.0; animationSpeed = 2; customAnimationDuration = 500; barOpacity = 0.78
         popupOpacity = 0.85; widgetOpacity = 0.55
+        glassBarOpacity = 0.45; glassPopupOpacity = 0.45; glassWidgetOpacity = 0.35
         cornerScale = 1.0; barScale = 1.0; fontFamily = "JetBrainsMono Nerd Font"
         monoFontFamily = "JetBrainsMono Nerd Font"; fontScale = 1.0
         fontAntialias = true; fontHinting = true; fontHintstyle = "hintslight"
@@ -333,6 +378,7 @@ Singleton {
         terminalApp = "kitty"; terminalFont = ""; terminalFontSize = 11.5; terminalOpacity = 0.80
         terminalPadding = 12; terminalCursorShape = "beam"; terminalCursorBlink = true
         terminalLineHeight = 2; terminalTabStyle = "powerline"; terminalLigatures = true
+        screenCapture = ({})
     }
 
     function colorHex(c) {
@@ -346,6 +392,15 @@ Singleton {
 
     function stripHex(c) {
         return colorHex(c).replace("#", "")
+    }
+
+    // "#rrggbb" (+ alfa 0..1) → "rgba(r, g, b, a)" para CSS de GTK.
+    function rgbaCss(c, a) {
+        const h = stripHex(c)
+        const r = parseInt(h.substring(0, 2), 16)
+        const g = parseInt(h.substring(2, 4), 16)
+        const b = parseInt(h.substring(4, 6), 16)
+        return "rgba(" + r + ", " + g + ", " + b + ", " + a.toFixed(2) + ")"
     }
 
     function accentFor(name) {
@@ -458,16 +513,25 @@ Singleton {
                   cardBg: p.surface, popBg: p.surface, popFg: p.fg, dlgBg: p.bgAlt,
                   border: p.overlay }
         } else {
-            // 'view' (listas/entradas de Nautilus, campos de texto) es el
-            // "papel": el más claro, pero NO blanco puro (deslumbra). Se deriva
-            // del fondo del tema, un punto más claro y con su tinte sutil.
-            const softView = colorHex(Qt.lighter(p.lightBg, 1.09))
+            // 'view' (listas/entradas de Nautilus, campos de texto): antes se
+            // aclaraba un punto sobre el fondo y "deslumbraba" en claro. Ahora se
+            // iguala al color de la barra (headerbar = lightBgAlt), más apagado,
+            // para un blanco que no brilla de más.
             c = { accentBg: (p.lightAccent || accent), accentFg: "#ffffff",
-                  winBg: p.lightBg, winFg: p.lightFg, viewBg: softView, viewFg: p.lightFg,
+                  winBg: p.lightBg, winFg: p.lightFg, viewBg: p.lightBgAlt, viewFg: p.lightFg,
                   headBg: p.lightBgAlt, headFg: p.lightFg, sideBg: p.lightBg, sideFg: (p.lightFgDim || p.lightFg),
                   cardBg: p.lightSurface, popBg: p.lightSurface, popFg: p.lightFg, dlgBg: p.lightBg,
                   border: (p.lightOverlay || p.lightSurface) }
         }
+        // Transparencias: SOLO en Liquid Glass, y de forma MÍNIMA — únicamente el
+        // fondo de la VENTANA (deslizador de panel) y del HEADERBAR (deslizador de
+        // barra) reciben alfa. Las zonas de contenido (vista/listas/entradas),
+        // sidebars, tarjetas, popovers y diálogos quedan OPACAS para no perder
+        // legibilidad. Textos, acento y bordes también opacos. Fuera de Glass,
+        // A() devuelve el hex tal cual (comportamiento anterior).
+        const glass = _isGlass
+        function A(hex, a) { return glass ? rgbaCss(hex, a) : hex }
+        const aWin = effPopupOpacity, aBar = effBarOpacity
         // Colores con nombre de libadwaita (GTK4 / Nautilus).
         let out = [
             "/* Generado por Quickshell Settings — no editar a mano.",
@@ -475,27 +539,44 @@ Singleton {
             "@define-color accent_color "       + c.accentBg + ";",
             "@define-color accent_bg_color "    + c.accentBg + ";",
             "@define-color accent_fg_color "    + c.accentFg + ";",
-            "@define-color window_bg_color "    + c.winBg + ";",
+            "@define-color window_bg_color "    + A(c.winBg, aWin) + ";",
             "@define-color window_fg_color "    + c.winFg + ";",
             "@define-color view_bg_color "      + c.viewBg + ";",
             "@define-color view_fg_color "      + c.viewFg + ";",
-            "@define-color headerbar_bg_color " + c.headBg + ";",
+            "@define-color headerbar_bg_color " + A(c.headBg, aBar) + ";",
             "@define-color headerbar_fg_color " + c.headFg + ";",
             // backdrop = color cuando la ventana NO está enfocada (si no se
             // define, libadwaita usa un gris por defecto que no pega).
-            "@define-color headerbar_backdrop_color " + c.headBg + ";",
-            "@define-color sidebar_bg_color "   + c.sideBg + ";",
+            "@define-color headerbar_backdrop_color " + A(c.headBg, aBar) + ";",
+            // Sidebar TOTALMENTE transparente (alfa 0): así hereda el fondo
+            // translúcido de la ventana en lugar de apilar su propio tinte
+            // encima (que la dejaría más opaca). libadwaita usa estos colores
+            // con nombre para pintar el panel lateral, así que basta con esto.
+            "@define-color sidebar_bg_color "   + A(c.sideBg, 0) + ";",
             "@define-color sidebar_fg_color "   + c.sideFg + ";",
-            "@define-color sidebar_backdrop_color " + c.sideBg + ";",
-            "@define-color secondary_sidebar_bg_color " + c.sideBg + ";",
-            "@define-color secondary_sidebar_backdrop_color " + c.sideBg + ";",
+            "@define-color sidebar_backdrop_color " + A(c.sideBg, 0) + ";",
+            "@define-color secondary_sidebar_bg_color " + A(c.sideBg, 0) + ";",
+            "@define-color secondary_sidebar_backdrop_color " + A(c.sideBg, 0) + ";",
             "@define-color card_bg_color "      + c.cardBg + ";",
             "@define-color popover_bg_color "   + c.popBg + ";",
             "@define-color popover_fg_color "   + c.popFg + ";",
             "@define-color dialog_bg_color "    + c.dlgBg + ";"
         ]
+        // NOTA: no añadimos reglas CSS explícitas (window/headerbar/sidebar).
+        // libadwaita 1.9 ya pinta cada zona UNA sola vez a partir de estos
+        // @define-color (vía sus variables --window-bg-color, --sidebar-bg-color,
+        // etc.). Forzarlas a mano pintaba una capa extra sobre la sidebar y la
+        // dejaba con un tono distinto al del contenido. Con solo los colores con
+        // nombre —y la sidebar a alfa 0 para que muestre el mismo fondo de la
+        // ventana— todo el cristal queda uniforme.
         // GTK3 (Nemo y apps GTK3): añade los nombres heredados del tema, para
         // que también se adapten sin depender solo de libadwaita.
+        //
+        // IMPORTANTE: aquí NO se aplica alfa. Chromium/Brave (y otras apps GTK3)
+        // leen estos theme_*_color para pintar su marco y PESTAÑAS, y no hacen
+        // cristal: un color translúcido les rompe el render. El efecto glass se
+        // queda solo en GTK4/libadwaita (Nautilus). Por eso los fondos van
+        // opacos (c.winBg tal cual, no A(...)).
         if (forGtk3) {
             out = out.concat([
                 "@define-color theme_bg_color "           + c.winBg + ";",
@@ -520,20 +601,19 @@ Singleton {
     // se llama con false para no reiniciar nada.
     property bool _gtkPendingRefresh: false
     function applyGtkTheme(refresh) {
+        // El refresco se dispara en gtk4CssFile.onSaved, así que la marca se pone
+        // ANTES de escribir. Los CSS se vuelcan con FileView (sin shell).
+        _gtkPendingRefresh = (refresh === true)
+        gtk4CssFile.setText(gtkColorCss(false))
+        gtk3CssFile.setText(gtkColorCss(true))
+        // Process solo para lo que no es un archivo: asegurar carpetas (por si
+        // no existen) y conmutar el modo claro/oscuro de las apps GTK.
         const g4 = home + "/.config/gtk-4.0"
         const g3 = home + "/.config/gtk-3.0"
-        // base64 evita cualquier problema de comillas al pasar el CSS por shell.
-        const b4 = Qt.btoa(gtkColorCss(false))
-        const b3 = Qt.btoa(gtkColorCss(true))
         const mode = darkMode ? "prefer-dark" : "prefer-light"
-        // Un único comando, robusto aunque no exista nada: crea las carpetas,
-        // escribe ambos gtk.css y conmuta el modo claro/oscuro.
         gtkApply.command = ["sh", "-c",
-            "mkdir -p '" + g4 + "' '" + g3 + "' && "
-            + "printf %s '" + b4 + "' | base64 -d > '" + g4 + "/gtk.css' && "
-            + "printf %s '" + b3 + "' | base64 -d > '" + g3 + "/gtk.css' && "
+            "mkdir -p '" + g4 + "' '" + g3 + "' ; "
             + "gsettings set org.gnome.desktop.interface color-scheme '" + mode + "' || true"]
-        _gtkPendingRefresh = (refresh === true)
         if (!gtkApply.running)
             gtkApply.running = true
     }
@@ -574,11 +654,31 @@ Singleton {
             ''
         ].join("\n")
     }
+    // Traduce los ajustes de render del panel Tipografía a las claves de
+    // gsettings que leen las apps GTK (GTK4/libadwaita las toma de aquí, no de
+    // fontconfig). Así el subpíxel/hinting elegido SÍ llega a GTK. No tocamos
+    // font-name: la fuente de UI de GTK se deja como esté (p. ej. Adwaita Sans).
+    function gtkFontRenderCmds() {
+        // antialiasing: sin AA → none; con AA y orden subpíxel → rgba; si no → grayscale.
+        const aa = !fontAntialias ? "none" : (fontRgba !== "none" ? "rgba" : "grayscale")
+        // hinting: apagado → none; si no, mapea el hintstyle de fontconfig.
+        const hintMap = { "hintnone": "none", "hintslight": "slight",
+                          "hintmedium": "medium", "hintfull": "full" }
+        const hint = !fontHinting ? "none" : (hintMap[fontHintstyle] || "slight")
+        // orden subpíxel: solo valores válidos de gsettings; 'none' → rgb (neutro).
+        const order = (fontRgba === "bgr" || fontRgba === "vrgb" || fontRgba === "vbgr")
+                        ? fontRgba : "rgb"
+        const g = "gsettings set org.gnome.desktop.interface "
+        return g + "font-antialiasing '" + aa + "'; "
+             + g + "font-hinting '" + hint + "'; "
+             + g + "font-rgba-order '" + order + "'"
+    }
     function applyFontsConf() {
+        fontsConfFile.setText(fontsConfXml())
+        // Process solo para asegurar la carpeta y aplicar el render en gsettings.
         const dir = home + "/.config/fontconfig"
-        const b = Qt.btoa(fontsConfXml())
         fontsApply.command = ["sh", "-c",
-            "mkdir -p '" + dir + "' && printf %s '" + b + "' | base64 -d > '" + dir + "/fonts.conf'"]
+            "mkdir -p '" + dir + "' ; " + gtkFontRenderCmds() + " || true"]
         if (!fontsApply.running)
             fontsApply.running = true
     }
@@ -595,9 +695,12 @@ Singleton {
     onAnimScaleChanged: scheduleSave()
     onAnimationSpeedChanged: scheduleSave()
     onCustomAnimationDurationChanged: scheduleSave()
-    onBarOpacityChanged: scheduleSave()
-    onPopupOpacityChanged: scheduleSave()
-    onWidgetOpacityChanged: scheduleSave()
+    onBarOpacityChanged: { scheduleSave(); scheduleGtkSync() }
+    onPopupOpacityChanged: { scheduleSave(); scheduleGtkSync() }
+    onWidgetOpacityChanged: { scheduleSave(); scheduleGtkSync() }
+    onGlassBarOpacityChanged: { scheduleSave(); scheduleGtkSync() }
+    onGlassPopupOpacityChanged: { scheduleSave(); scheduleGtkSync() }
+    onGlassWidgetOpacityChanged: { scheduleSave(); scheduleGtkSync() }
     onCornerScaleChanged: scheduleSave()
     onBarScaleChanged: scheduleSave()
     onFontFamilyChanged: { scheduleSave(); scheduleFontSync() }
@@ -643,6 +746,7 @@ Singleton {
     onTerminalLineHeightChanged: scheduleSave()
     onTerminalTabStyleChanged: scheduleSave()
     onTerminalLigaturesChanged: scheduleSave()
+    onScreenCaptureChanged: scheduleSave()
 
     Timer {
         id: saveTimer
@@ -664,6 +768,40 @@ Singleton {
         blockLoading: true
         printErrors: false
         atomicWrites: true
+    }
+
+    // gtk.css (GTK4/libadwaita y GTK3) + fonts.conf: se escriben con FileView
+    // (setText vuelca el string directo al archivo; sin base64 ni paso por
+    // shell, que era el único motivo del antiguo _b64/printf|base64 -d).
+    FileView {
+        id: gtk4CssFile
+        path: s.home + "/.config/gtk-4.0/gtk.css"
+        atomicWrites: true
+        printErrors: false
+    }
+    // Al guardar el CSS de GTK4 tras un cambio del usuario, refresca las apps GTK
+    // abiertas (reinicio de Nautilus). Nautilus lee GTK4, así que basta este.
+    Connections {
+        target: gtk4CssFile
+        function onSaved() {
+            if (s._gtkPendingRefresh) {
+                s._gtkPendingRefresh = false
+                if (!nautilusRefresh.running)
+                    nautilusRefresh.running = true
+            }
+        }
+    }
+    FileView {
+        id: gtk3CssFile
+        path: s.home + "/.config/gtk-3.0/gtk.css"
+        atomicWrites: true
+        printErrors: false
+    }
+    FileView {
+        id: fontsConfFile
+        path: s.home + "/.config/fontconfig/fonts.conf"
+        atomicWrites: true
+        printErrors: false
     }
 
     Timer {
@@ -697,17 +835,10 @@ Singleton {
         onTriggered: s.applyGtkTheme(true)
     }
 
+    // Solo asegura carpetas y conmuta el modo claro/oscuro (gsettings). La
+    // escritura de los CSS y el refresco de Nautilus van por los FileView.
     Process {
         id: gtkApply
-        // Al terminar de escribir el CSS, si fue un cambio del usuario,
-        // refresca las apps GTK abiertas (reinicio de Nautilus).
-        onRunningChanged: {
-            if (!running && s._gtkPendingRefresh) {
-                s._gtkPendingRefresh = false
-                if (!nautilusRefresh.running)
-                    nautilusRefresh.running = true
-            }
-        }
     }
 
     // Reinicia Nautilus reabriendo la(s) misma(s) carpeta(s): detecta sus
@@ -771,3 +902,4 @@ Singleton {
         applyFontsConf()       // genera ~/.config/fontconfig/fonts.conf (render + fuente)
     }
 }
+

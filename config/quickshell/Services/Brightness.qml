@@ -56,6 +56,15 @@ Singleton {
         }
     }
 
+    // Tras el resume, un monitor DDC/CI puede re-enumerarse (cambia el bus i2c
+    // cacheado y el control dejaría de funcionar) o el backlight puede haber
+    // cambiado de valor: re-lanzar la detección re-cachea el bus y re-lee el
+    // brillo actual, auto-reparándose. Solo si ya había un método disponible.
+    Connections {
+        target: Resume
+        function onResumed() { if (bright.method !== "none") detect.running = true }
+    }
+
     function _applyDetect(line) {
         const f = line.split(/\s+/)
         if (f.length < 3 || f[0] === "none") {

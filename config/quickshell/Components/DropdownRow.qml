@@ -23,6 +23,19 @@ ColumnLayout {
     property int keyboardIndex: -1
     signal picked(var v)
 
+    // Grupo exclusivo opcional: si varios DropdownRow comparten el mismo objeto
+    // en 'group' (con una propiedad 'openItem'), solo uno permanece abierto a la
+    // vez — al abrir uno, los demás del grupo se cierran automáticamente.
+    property QtObject group: null
+    Connections {
+        target: root.group
+        enabled: root.group !== null
+        function onOpenItemChanged() {
+            if (root.open && root.group.openItem !== root)
+                root.open = false
+        }
+    }
+
     // Colores derivados de Theme (sobreescribibles). Equivalen a los tokens
     // settings* que usaba el inline original.
     property color controlColor: Qt.rgba(Theme.surface.r, Theme.surface.g, Theme.surface.b, 0.86)
@@ -99,7 +112,12 @@ ColumnLayout {
             Globals.closeAll()
     }
 
-    onOpenChanged: if (open) syncKeyboardIndex()
+    onOpenChanged: {
+        if (open) {
+            syncKeyboardIndex()
+            if (group) group.openItem = root   // reclama el grupo → cierra los demás
+        }
+    }
 
     Text {
         text: root.label

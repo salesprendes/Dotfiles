@@ -1,11 +1,23 @@
 ### ~/.config/starship.toml
-### Tema minimalista de una sola línea · estilo Tokyo Night · Nerd Font
+### Prompt de una línea · estilo Tokyo Night · Nerd Font
+###   Línea: usuario@host (solo SSH) · ruta · git · lenguajes · jobs · duración · ❯
+###   Derecha: hora. Los módulos de lenguaje/estado solo aparecen en contexto,
+###            así que a diario el prompt se ve minimalista (ruta · git · ❯).
 
-# Espacio en blanco antes de cada prompt, para que respire
+# Línea en blanco antes de cada prompt, para que respire.
 add_newline = true
 
-# Todo en UNA línea: ruta · git · duración · símbolo
-format = "$directory$git_branch$git_status$cmd_duration$character"
+format = """
+$username$hostname\
+$directory\
+$git_branch$git_status$git_state\
+$nodejs$python$rust$golang$lua$java$php\
+$jobs\
+$cmd_duration\
+$character"""
+
+# Reloj alineado a la derecha de la primera línea.
+right_format = "$time"
 
 # Paleta -------------------------------------------------------------------
 palette = "tokyonight"
@@ -16,16 +28,30 @@ blue   = "#7aa2f7"
 cyan   = "#7dcfff"
 green  = "#9ece6a"
 yellow = "#e0af68"
+orange = "#ff9e64"
 red    = "#f7768e"
 purple = "#bb9af7"
 gray   = "#565f89"
 
-# Directorio ---------------------------------------------------------------
+# Usuario @ host (solo en SSH o como root; en local normal no molesta) ------
+[username]
+style_user = "fg:orange bold"
+style_root = "fg:red bold"
+format = "[$user]($style)"
+show_always = false
+
+[hostname]
+ssh_only = true
+style = "fg:orange bold"
+format = "[@$hostname]($style) "
+trim_at = "."
+
+# Directorio (ruta completa, como la tenías) -------------------------------
 [directory]
 style = "fg:cyan bold"
 format = "[$path]($style)[$read_only]($read_only_style) "
-truncation_length = 0       # 0 = sin recortar: muestra la ruta completa
-truncate_to_repo = false    # no colapsar a la raíz del repositorio git
+truncation_length = 0        # 0 = sin recortar: muestra la ruta completa
+truncate_to_repo = false     # no colapsar a la raíz del repositorio git
 truncation_symbol = "…/"
 home_symbol = "~"
 read_only = " 󰌾"
@@ -33,8 +59,8 @@ read_only_style = "fg:red"
 
 # Git ----------------------------------------------------------------------
 [git_branch]
-symbol = " "
-style = "fg:purple"
+symbol = " "
+style = "fg:purple bold"
 format = "[$symbol$branch]($style) "
 
 [git_status]
@@ -51,14 +77,78 @@ staged     = "+${count} "
 renamed    = "»${count} "
 deleted    = "✘${count} "
 
-# Duración del último comando (solo si tardó > 2s) -------------------------
+# Estado de git durante operaciones (rebase, merge, cherry-pick…) -----------
+[git_state]
+style = "fg:orange bold"
+format = '\([$state( $progress_current/$progress_total)]($style)\) '
+
+# Chips de lenguaje: solo se muestran en proyectos que los usan -------------
+[nodejs]
+symbol = " "
+style = "fg:green"
+format = "[$symbol($version )]($style)"
+detect_extensions = []
+
+[python]
+symbol = " "
+style = "fg:yellow"
+format = "[$symbol($version )]($style)"
+# Solo en proyectos reales (pyproject.toml, requirements.txt, setup.py, Pipfile,
+# .python-version, tox.ini, __init__.py). Sin esto, un .py suelto ya lo activaba.
+detect_extensions = []
+
+[rust]
+symbol = " "
+style = "fg:orange"
+format = "[$symbol($version )]($style)"
+detect_extensions = []
+
+[golang]
+symbol = " "
+style = "fg:cyan"
+format = "[$symbol($version )]($style)"
+detect_extensions = []
+
+[lua]
+symbol = " "
+style = "fg:blue"
+format = "[$symbol($version )]($style)"
+detect_extensions = []
+
+[java]
+symbol = " "
+style = "fg:red"
+format = "[$symbol($version )]($style)"
+detect_extensions = []
+
+[php]
+symbol = " "
+style = "fg:purple"
+format = "[$symbol($version )]($style)"
+detect_extensions = []
+
+# Trabajos en segundo plano (Ctrl+Z) ---------------------------------------
+[jobs]
+symbol = "󰑮 "
+style = "fg:blue bold"
+format = "[$symbol$number]($style) "
+number_threshold = 1
+
+# Duración del último comando (solo si tardó > 2 s) ------------------------
 [cmd_duration]
 min_time = 2000
 style = "fg:gray"
 format = "[󱎫 $duration]($style) "
 
+# Hora (a la derecha) ------------------------------------------------------
+[time]
+disabled = false
+time_format = "%H:%M"
+style = "fg:gray"
+format = "[󰅐 $time]($style)"
+
 # Símbolo de entrada -------------------------------------------------------
 [character]
 success_symbol = "[❯](bold green)"
 error_symbol = "[❯](bold red)"
-vimcmd_symbol = "[❮](bold blue)"
+vimcmd_symbol = "[❮](bold purple)"

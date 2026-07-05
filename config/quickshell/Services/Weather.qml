@@ -71,6 +71,13 @@ Singleton {
         onTriggered: root.refresh()
     }
 
+    // Tras el resume, los datos pueden llevar horas obsoletos (el temporizador de
+    // 30 min no corre mientras se duerme): re-consulta al despertar.
+    Connections {
+        target: Resume
+        function onResumed() { if (root.enabled) root.refresh() }
+    }
+
     // Comando automático: ciudad + coordenadas de ipinfo.io y clima
     // por coordenadas. Si ipinfo falla, recurre a wttr.in por IP.
     readonly property string autoCmd:

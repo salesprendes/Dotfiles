@@ -9,7 +9,7 @@ import qs.Config
 import qs.Services
 
 // ─────────────────────────────────────────────────────────────
-//  Panel Resumen. Rejilla compacta (estilo dashboard de DMS):
+//  Panel Resumen. Rejilla compacta tipo dashboard:
 //  fila superior con clima y sistema (distro + equipo + tiempo
 //  activo en píldora); fila central con reloj vertical,
 //  calendario y anillos CPU/RAM (datos que SysMon ya sondea para
@@ -221,7 +221,7 @@ Popout {
                                 font.bold: true
                                 elide: Text.ElideRight
                             }
-                            // Píldora de tiempo activo (verde, como en DMS).
+                            // Píldora de tiempo activo (verde).
                             Rectangle {
                                 implicitWidth: upRow.implicitWidth + Theme.space12
                                 implicitHeight: Theme.dp(20)
@@ -335,7 +335,7 @@ Popout {
                             StatRing {
                                 Layout.alignment: Qt.AlignHCenter
                                 value: SysMon.cpu / 100
-                                tint: SysMon.color(SysMon.cpu)
+                                tint: Theme.accent
                                 glyph: "󰻠"
                             }
                             Text {
@@ -351,7 +351,7 @@ Popout {
                             StatRing {
                                 Layout.alignment: Qt.AlignHCenter
                                 value: SysMon.memPercent / 100
-                                tint: SysMon.color(SysMon.memPercent)
+                                tint: Theme.accent
                                 glyph: "󰍛"
                             }
                             Text {
@@ -367,7 +367,7 @@ Popout {
                             StatRing {
                                 Layout.alignment: Qt.AlignHCenter
                                 value: SysMon.diskPercent / 100
-                                tint: SysMon.color(SysMon.diskPercent)
+                                tint: Theme.accent
                                 glyph: "󰋊"
                             }
                             Text {
@@ -797,7 +797,7 @@ Popout {
         Text {
             anchors.centerIn: parent
             text: sr.glyph
-            color: sr.tint
+            color: Theme.accent
             font.family: Theme.fontFamily
             font.pixelSize: Theme.iconSize + 6.5
         }

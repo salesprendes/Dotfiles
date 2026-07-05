@@ -154,4 +154,48 @@ Singleton {
     }
 
     function toggleWifi() { Networking.wifiEnabled = !Networking.wifiEnabled }
+
+    // ── Reactivación del WiFi tras suspensión ────────────────
+    //  Al despertar de suspend, algunos drivers/NetworkManager dejan el WiFi
+    //  sin reconectar: queda un soft-block de rfkill, o el dispositivo pasa a
+    //  'disconnected' sin relanzar la autoconexión. shell.qml reenvía aquí la
+    //  señal PrepareForSleep de logind: al dormir recordamos si el WiFi estaba
+    //  activo; al despertar, si lo estaba, forzamos su reactivación de forma
+    //  idempotente y SIN privilegios (nmcli/rfkill del usuario de la sesión,
+    //  autorizados por polkit). Si el usuario tenía el WiFi apagado, se respeta.
+    property bool _wifiWasOn: false
+
+    Connections {
+        target: Resume
+        function onAboutToSleep() { net._wifiWasOn = net.wifiEnabled }  // estado antes de dormir
+        // Solo en el primer pulso: la propia resumeProc ya reintenta (espera,
+        // comprueba conexión y, si sigue caída, reinicia la radio). Reaccionar a
+        // cada pulso solo reprogramaría el temporizador una y otra vez.
+        function onResumed() {
+            if (net._wifiWasOn && Resume.recoveryPulse === 1) resumeTimer.restart()
+        }
+    }
+
+    // Espera a que el dispositivo reaparezca tras el resume antes de actuar (el
+    // kernel/driver tarda un instante en reinicializar la radio).
+    Timer {
+        id: resumeTimer
+        interval: 2000
+        onTriggered: resumeProc.running = true
+    }
+
+    // Recuperación: quita el soft-block y enciende la radio; da un margen para
+    // que NetworkManager reconecte solo y, si sigue sin haber WiFi conectado,
+    // reinicia la radio (off→on) para relanzar la autoconexión. Todo condicional
+    // e idempotente: si ya está conectado, no toca nada.
+    Process {
+        id: resumeProc
+        command: ["sh", "-c",
+            "rfkill unblock wifi 2>/dev/null; " +
+            "nmcli radio wifi on 2>/dev/null; " +
+            "sleep 5; " +
+            "nmcli -t -f TYPE,STATE device status 2>/dev/null | grep -q '^wifi:connected' && exit 0; " +
+            "nmcli radio wifi off 2>/dev/null; sleep 2; nmcli radio wifi on 2>/dev/null"]
+        onExited: net.refreshPrimary()
+    }
 }

@@ -12,9 +12,53 @@ import Quickshell.Io
 import qs.Background
 import qs.Bar
 import qs.Config
+import qs.Modules.Carousel
 import qs.Panels
+import qs.Services
 
 ShellRoot {
+    id: shell
+
+    readonly property int startupScreenCount: Math.max(1, Quickshell.screens.length)
+    property int startupBackdropReadyCount: 0
+    property int startupBarReadyCount: 0
+    property bool startupCarouselReady: false
+    property bool startupWallpaperScanSeen: Wallpaper.scanning
+    property bool startupWallpaperReady: false
+
+    readonly property real startupLoadProgress: Math.min(1,
+        0.08
+        + (Settings._loaded ? 0.16 : 0)
+        + (startupWallpaperReady ? 0.18 : 0)
+        + Math.min(1, startupBackdropReadyCount / startupScreenCount) * 0.22
+        + (startupCarouselReady ? 0.08 : 0)
+        + Math.min(1, startupBarReadyCount / startupScreenCount) * 0.28)
+    readonly property bool startupLoadReady: startupLoadProgress >= 0.995
+
+    function updateStartupWallpaperReady() {
+        if (Wallpaper.scanning) {
+            startupWallpaperScanSeen = true
+            startupWallpaperReady = false
+            return
+        }
+        if (startupWallpaperScanSeen || Wallpaper.list.length > 0)
+            startupWallpaperReady = true
+    }
+
+    Connections {
+        target: Wallpaper
+        function onScanningChanged() { shell.updateStartupWallpaperReady() }
+        function onListChanged() { shell.updateStartupWallpaperReady() }
+        function onCurrentChanged() { shell.updateStartupWallpaperReady() }
+    }
+
+    Timer {
+        interval: 80
+        running: true
+        repeat: false
+        onTriggered: shell.updateStartupWallpaperReady()
+    }
+
     // Control por IPC / atajos de teclado:
     //   qs ipc call panel controlcenter | notifications | clipboard | dnd | close
     IpcHandler {
@@ -25,6 +69,8 @@ ShellRoot {
         function launcher(): void { Globals.toggleLauncher() }
         function clipboard(): void { Globals.toggleClipboard() }
         function dashboard(): void { Globals.toggleDashboard() }
+        function capture(): void { ScreenCapture.openToolbar(false) }
+        function record(): void { ScreenCapture.openToolbar(true) }
         function settings(): void { Globals.toggleSettings() }
         function dnd(): void { Globals.dnd = !Globals.dnd }
         function caffeine(): void { Globals.caffeine = !Globals.caffeine }
@@ -47,6 +93,13 @@ ShellRoot {
             onRead: (line) => {
                 if (line.indexOf("Session.Lock") !== -1)
                     Globals.closeAll()
+                // Suspensión/reanudación: por este mismo bus logind emite
+                // Manager.PrepareForSleep(true) antes de dormir y (false) al
+                // despertar. Lo reenviamos al coordinador central Resume, al que
+                // se suscriben los servicios que necesitan recuperarse tras el
+                // resume (WiFi, clima, brillo, monitor de sistema, pantallas…).
+                else if (line.indexOf("PrepareForSleep") !== -1)
+                    Resume.notify(line.indexOf("true") !== -1)
             }
         }
         // Si el monitor muere (reinicio de dbus, etc.) se relanza tras una
@@ -59,11 +112,48 @@ ShellRoot {
         onTriggered: lockMonitor.running = true
     }
 
+    // ── Tema "Liquid Glass": blur del compositor en las capas del shell ──────
+    //  Mientras el tema "liquid-glass" esté activo se pide a Hyprland (parser
+    //  Lua → `hyprctl eval`, igual que Displays con los monitores) que aplique
+    //  blur a los namespaces del shell. `ignore_alpha` enmascara el blur SOLO a
+    //  la parte translúcida (barra/tarjeta); el resto de la ventana, que es
+    //  transparente, NO se esmerila (si no, un popout a pantalla completa
+    //  frostearía toda la pantalla). Al salir del tema se revierte (blur=false).
+    //  Reversible, en vivo y sin editar los .lua de Hyprland; se re-aplica al
+    //  arrancar por si el tema ya venía seleccionado. Se excluyen a propósito
+    //  wallpaper/splash/carrusel.
+    readonly property var glassLayers: [
+        "quickshell", "qs-popout", "qs-launcher", "qs-notifcenter", "qs-clipboard",
+        "qs-controlcenter", "qs-sysmon", "qs-dashboard", "qs-popups", "qs-osd-volume",
+        "qs-ipconfig", "qs-wifiprompt", "qs-recording-pill", "qs-screen-capture"
+    ]
+    function applyGlassBlur() {
+        const on = Settings.themeName === "liquid-glass"
+        const lua = shell.glassLayers.map(n =>
+            'hl.layer_rule({ name = "qs-glass-' + n + '", match = { namespace = "' + n
+            + '" }, blur = ' + on + ', ignore_alpha = 0.1 })'
+        ).join("; ")
+        Quickshell.execDetached(["hyprctl", "eval", lua])
+    }
+    Component.onCompleted: applyGlassBlur()
+    Connections {
+        target: Settings
+        function onThemeNameChanged() { shell.applyGlassBlur() }
+    }
+
     // Fondo de pantalla: una ventana por monitor en la capa Background,
     // con la transición de imagen gestionada desde QML.
     Variants {
         model: Quickshell.screens
-        delegate: Backdrop {}
+        delegate: Backdrop {
+            Component.onCompleted: shell.startupBackdropReadyCount++
+        }
+    }
+
+    // Plugin autocontenido: carrusel para elegir fondo (Super+W → IPC
+    // "carousel"). No modifica ningún componente; solo se instancia aquí.
+    WallpaperCarousel {
+        Component.onCompleted: shell.startupCarouselReady = true
     }
 
     // Splash breve al entrar en la sesión; oculta el salto visual entre TTY
@@ -79,6 +169,8 @@ ShellRoot {
             active: true
             StartupSplash {
                 modelData: splashL.modelData
+                loadProgress: shell.startupLoadProgress
+                ready: shell.startupLoadReady
                 onFinished: splashL.active = false
             }
         }
@@ -87,7 +179,9 @@ ShellRoot {
     // Una instancia de Bar por pantalla conectada.
     Variants {
         model: Quickshell.screens
-        delegate: Bar {}
+        delegate: Bar {
+            Component.onCompleted: shell.startupBarReadyCount++
+        }
     }
 
     // Paneles emergentes (uno por pantalla; su visibilidad la controla
@@ -162,6 +256,14 @@ ShellRoot {
             onActiveChanged: if (active) loaded = true
             Dashboard { modelData: dashL.modelData }
         }
+    }
+    LazyLoader {
+        active: Globals.screenCaptureOpen || ScreenCapture.isRecording
+        ScreenCaptureToolbar {}
+    }
+    Variants {
+        model: Quickshell.screens
+        delegate: RecordingPill {}
     }
     // Ventana de ajustes: una sola ventana real (toplevel de Hyprland).
     // Carga perezosa: no se construye (937 líneas) hasta el primer

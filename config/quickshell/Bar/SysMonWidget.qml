@@ -12,7 +12,7 @@ Pill {
 
     Text {
         text: "󰻠"   // cpu
-        color: SysMon.color(SysMon.cpu)
+        color: Theme.accent
         font.family: Theme.fontFamily
         font.pixelSize: Theme.iconSize
     }
@@ -25,7 +25,7 @@ Pill {
     Rectangle { implicitWidth: Theme.hairline; implicitHeight: Theme.dp(14); color: Theme.overlay }
     Text {
         text: "󰍛"   // ram
-        color: SysMon.color(SysMon.memPercent)
+        color: Theme.accent
         font.family: Theme.fontFamily
         font.pixelSize: Theme.iconSize
     }

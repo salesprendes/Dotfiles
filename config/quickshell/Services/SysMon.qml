@@ -88,6 +88,20 @@ Singleton {
         onTriggered: s.refreshStats(false)
     }
 
+    // Tras el resume: recalibra la base de CPU (los contadores de /proc/stat dan
+    // un salto raro al cruzar el suspend → evita un pico falso) y refresca ya.
+    Connections {
+        target: Resume
+        // Solo el primer pulso: /proc está disponible de inmediato al despertar,
+        // no necesita reintentos como la red o el brillo.
+        function onResumed() {
+            if (Resume.recoveryPulse !== 1) return
+            s._prevTotal = 0
+            s._prevIdle = 0
+            s.refreshStats(Globals.sysMonOpen)
+        }
+    }
+
     Connections {
         target: Globals
         function onSysMonOpenChanged() {
@@ -293,10 +307,6 @@ Singleton {
         if (d > 0) out += d + "d "
         if (d > 0 || h > 0) out += h + "h "
         return out + m + "m"
-    }
-
-    function color(pct) {
-        return pct >= 85 ? Theme.red : pct >= 60 ? Theme.yellow : Theme.green
     }
 
     // Logo de la distribución mediante glifos Nerd Font.

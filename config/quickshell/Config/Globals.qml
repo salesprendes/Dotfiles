@@ -9,7 +9,7 @@ import Quickshell
 Singleton {
     id: g
 
-    // "", "control", "notif", "sysmon", "launcher", "clipboard", "dashboard"
+    // "", "control", "notif", "sysmon", "launcher", "clipboard", "dashboard", "capture"
     property string openPanel: ""
 
     // La ventana de Ajustes es independiente (es una ventana real de
@@ -29,6 +29,7 @@ Singleton {
     readonly property bool launcherOpen:       openPanel === "launcher"
     readonly property bool clipboardOpen:      openPanel === "clipboard"
     readonly property bool dashboardOpen:      openPanel === "dashboard"
+    readonly property bool screenCaptureOpen:  openPanel === "capture"
 
     function toggle(p)            { openPanel = (openPanel === p) ? "" : p }
     function toggleControlCenter() { toggle("control") }
@@ -37,6 +38,7 @@ Singleton {
     function toggleLauncher()      { toggle("launcher") }
     function toggleClipboard()     { toggle("clipboard") }
     function toggleDashboard()     { toggle("dashboard") }
+    function toggleScreenCapture()  { toggle("capture") }
     // Si está cerrada, ábrela. Si ya está abierta, deja que la propia ventana
     // decida: cerrarla (si está en este workspace) o traerla al actual.
     signal settingsResummon()

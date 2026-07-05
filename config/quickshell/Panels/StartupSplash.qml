@@ -11,6 +11,10 @@ PanelWindow {
 
     property bool shown: true
     property bool mapped: true
+    property real loadProgress: 0
+    property real displayedProgress: 0
+    property bool ready: false
+    property bool minHoldDone: false
 
     // Se emite cuando el splash ha terminado (ya invisible). El cargador
     // perezoso de shell.qml lo escucha para liberar la ventana y su árbol
@@ -32,16 +36,59 @@ PanelWindow {
         right: true
     }
 
-    Component.onCompleted: holdTimer.start()
+    function _clampProgress(value) {
+        return Math.max(0, Math.min(1, Number(value) || 0))
+    }
+
+    function advanceTo(value) {
+        const next = Math.max(displayedProgress, _clampProgress(value))
+        if (next > displayedProgress)
+            displayedProgress = next
+    }
+
+    function finishIfReady(force) {
+        if (!shown || (!minHoldDone && !force))
+            return
+        if (force || ready || displayedProgress >= 0.995) {
+            advanceTo(1)
+            shown = false
+            unmapTimer.restart()
+        }
+    }
+
+    onLoadProgressChanged: {
+        advanceTo(loadProgress)
+        finishIfReady(false)
+    }
+
+    onReadyChanged: {
+        if (ready)
+            advanceTo(1)
+        finishIfReady(false)
+    }
+
+    Component.onCompleted: {
+        advanceTo(loadProgress)
+        minHoldTimer.start()
+        maxHoldTimer.start()
+        finishIfReady(false)
+    }
 
     Timer {
-        id: holdTimer
-        interval: 2200
+        id: minHoldTimer
+        interval: 650
         repeat: false
         onTriggered: {
-            splash.shown = false
-            unmapTimer.start()
+            splash.minHoldDone = true
+            splash.finishIfReady(false)
         }
+    }
+
+    Timer {
+        id: maxHoldTimer
+        interval: 3600
+        repeat: false
+        onTriggered: splash.finishIfReady(true)
     }
 
     Timer {
@@ -56,8 +103,13 @@ PanelWindow {
 
     Rectangle {
         anchors.fill: parent
-        color: Theme.bg
-        opacity: splash.shown ? 0.96 : 0
+        // Fondo del splash: en modo claro usa el MISMO color que la barra
+        // (Theme.barBg); en liquid-glass ese barBg ya incorpora la transparencia
+        // del cristal, así que la aplica sola. En oscuro no-cristal se mantiene
+        // el fondo casi opaco de antes.
+        color: (Theme.glass || !Theme.isDark) ? Theme.barBg
+                                              : Theme.withAlpha(Theme.bg, 0.96)
+        opacity: splash.shown ? 1 : 0
         Behavior on opacity {
             NumberAnimation { duration: 500; easing.type: Easing.InOutCubic }
         }
@@ -216,28 +268,55 @@ PanelWindow {
             verticalAlignment: Text.AlignVCenter
         }
 
-        Rectangle {
-            id: accentLine
+        Item {
+            id: progressTrack
             anchors {
                 horizontalCenter: parent.horizontalCenter
                 top: logoText.bottom
                 topMargin: Theme.dp(10)
             }
             width: wordmark.width * 0.46
-            height: Math.max(2, Theme.dp(4))
-            radius: height / 2
-            color: Theme.accent
-            transformOrigin: Item.Left
-            scale: splash.shown ? 1 : 0
+            height: Math.max(3, Theme.dp(5))
             opacity: splash.shown ? 0.94 : 0
+            clip: true
 
-            SequentialAnimation on scale {
-                running: splash.mapped
-                loops: Animation.Infinite
-                NumberAnimation { from: 0.72; to: 1; duration: 620; easing.type: Easing.OutCubic }
-                PauseAnimation { duration: 840 }
-                NumberAnimation { from: 1; to: 0.72; duration: 520; easing.type: Easing.InOutCubic }
-                PauseAnimation { duration: 220 }
+            Rectangle {
+                anchors.fill: parent
+                radius: height / 2
+                color: Theme.withAlpha(Theme.overlay, 0.28)
+            }
+
+            Rectangle {
+                id: progressFill
+                anchors {
+                    left: parent.left
+                    top: parent.top
+                    bottom: parent.bottom
+                }
+                width: Math.max(height, parent.width * splash.displayedProgress)
+                radius: height / 2
+                color: Theme.accent
+
+                Behavior on width {
+                    NumberAnimation { duration: 260; easing.type: Easing.OutCubic }
+                }
+            }
+
+            Rectangle {
+                width: progressTrack.width * 0.24
+                height: progressTrack.height
+                radius: height / 2
+                color: Theme.withAlpha(Theme.fg, 0.28)
+                opacity: splash.ready ? 0 : 0.65
+                x: progressFill.width - width * 0.35
+                visible: progressFill.width > height && splash.shown
+
+                Behavior on x {
+                    NumberAnimation { duration: 260; easing.type: Easing.OutCubic }
+                }
+                Behavior on opacity {
+                    NumberAnimation { duration: 180; easing.type: Easing.OutCubic }
+                }
             }
         }
 

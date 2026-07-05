@@ -155,9 +155,6 @@ Rectangle {
                 // de las ligaduras y a veces el fundido de salida corría
                 // igual, dejando varias filas marcadas al mover rápido.
                 color: hovered ? Theme.surfaceHi : rowOff
-                readonly property color cpuCol: modelData.cpu > 80 ? Theme.red
-                                              : modelData.cpu > 50 ? Theme.yellow
-                                              : Theme.fgDim
 
                 RowLayout {
                     z: 1
@@ -168,7 +165,7 @@ Rectangle {
 
                     Text {
                         text: SysMon.processIcon(row.modelData.name)
-                        color: row.cpuCol
+                        color: Theme.accent
                         font.family: Theme.fontFamily
                         font.pixelSize: Theme.iconSize
                         opacity: 0.9
@@ -185,7 +182,7 @@ Rectangle {
 
                     Text {
                         text: row.modelData.cpu.toFixed(1) + "%"
-                        color: SysMon.color(row.modelData.cpu)
+                        color: Theme.accent
                         font.family: Theme.monoFontFamily
                         font.pixelSize: Theme.fontSize - 2
                         Layout.preferredWidth: 52

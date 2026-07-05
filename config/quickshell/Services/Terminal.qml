@@ -87,6 +87,11 @@ Singleton {
     function kittyConf() {
         const blink = Settings.terminalCursorBlink ? "0.5" : "0"
         const lig = Settings.terminalLigatures ? "never" : "always"
+        // Con el tema Liquid Glass, kitty se vuelve translúcido para que Hyprland
+        // (que ya tiene el blur activo) lo muestre esmerilado, a juego con los
+        // paneles del shell. El resto de temas usan la opacidad de Ajustes →
+        // Terminal. 0.60 es translúcido pero deja el texto bien legible.
+        const op = Settings.themeName === "liquid-glass" ? 0.60 : Settings.terminalOpacity
         return [
             "# Generado por Quickshell (Ajustes → Terminal). No editar a mano.",
             "font_family        " + root.font(),
@@ -101,7 +106,7 @@ Singleton {
             "hide_window_decorations     yes",
             "confirm_os_window_close     0",
             "placement_strategy          center",
-            "background_opacity          " + Settings.terminalOpacity.toFixed(2),
+            "background_opacity          " + op.toFixed(2),
             "dynamic_background_opacity  yes",
             "cursor_shape                " + Settings.terminalCursorShape,
             "cursor_blink_interval       " + blink,

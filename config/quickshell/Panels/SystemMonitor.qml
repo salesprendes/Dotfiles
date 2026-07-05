@@ -226,7 +226,7 @@ Popout {
                             spacing: Theme.space8
                             Text {
                                 text: "󰻠"
-                                color: SysMon.color(SysMon.cpu)
+                                color: Theme.accent
                                 font.family: Theme.fontFamily
                                 font.pixelSize: Theme.iconSize + 3
                                 Layout.preferredWidth: 22
@@ -241,7 +241,7 @@ Popout {
                             }
                             Text {
                                 text: Math.round(SysMon.cpu) + "%"
-                                color: SysMon.color(SysMon.cpu)
+                                color: Theme.accent
                                 font.family: Theme.fontFamily
                                 font.pixelSize: Theme.fontSize + 4
                                 font.bold: true
@@ -259,7 +259,7 @@ Popout {
                                 height: parent.height
                                 radius: parent.radius
                                 width: parent.width * Math.min(1, SysMon.cpu / 100)
-                                color: SysMon.color(SysMon.cpu)
+                                color: Theme.accent
                                 Behavior on width { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
                             }
                         }
@@ -294,7 +294,7 @@ Popout {
                             spacing: Theme.space8
                             Text {
                                 text: "󰍛"
-                                color: SysMon.color(SysMon.memPercent)
+                                color: Theme.accent
                                 font.family: Theme.fontFamily
                                 font.pixelSize: Theme.iconSize + 3
                                 Layout.preferredWidth: 22
@@ -310,7 +310,7 @@ Popout {
                             }
                             Text {
                                 text: Math.round(SysMon.memPercent) + "%"
-                                color: SysMon.color(SysMon.memPercent)
+                                color: Theme.accent
                                 font.family: Theme.fontFamily
                                 font.pixelSize: Theme.fontSize + 4
                                 font.bold: true
@@ -328,7 +328,7 @@ Popout {
                                 height: parent.height
                                 radius: parent.radius
                                 width: parent.width * Math.min(1, SysMon.memPercent / 100)
-                                color: SysMon.color(SysMon.memPercent)
+                                color: Theme.accent
                                 Behavior on width { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
                             }
                         }

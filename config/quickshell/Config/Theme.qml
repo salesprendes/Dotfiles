@@ -17,6 +17,12 @@ Singleton {
 
     readonly property var palette: Settings.currentPalette
 
+    // Tema "Liquid Glass" activo: las superficies se vuelven bastante más
+    // translúcidas para que el blur del compositor (que activa shell.qml con
+    // hl.layer_rule) se lea como cristal esmerilado. Con otros temas, cero
+    // cambios: se respetan las opacidades del usuario.
+    readonly property bool glass: Settings.themeName === "liquid-glass"
+
     // ── Paleta base ──────────────────────────────────────────
     readonly property color bg:        isDark ? palette.bg        : palette.lightBg
     readonly property color bgAlt:     isDark ? palette.bgAlt     : palette.lightBgAlt
@@ -47,11 +53,20 @@ Singleton {
         return Qt.rgba(c.r, c.g, c.b, a)
     }
 
-    readonly property color barBg:      withAlpha(bg, Settings.barOpacity)
-    readonly property color popupBg:    withAlpha(bg, Settings.popupOpacity)
-    // Superficie anidada dentro de un popup (chips/filas sobre la tarjeta).
-    readonly property color popupSurface: withAlpha(surface, Math.min(1, Settings.popupOpacity + 0.05))
-    readonly property color pillBg:     withAlpha(surface, Settings.widgetOpacity)
+    // Opacidades EFECTIVAS: en Liquid Glass usan glass*Opacity; en el resto, las
+    // normales (ver Settings.eff*). Así los sliders de Ajustes editan y reflejan
+    // la opacidad del tema activo. El blur del compositor detrás convierte estas
+    // superficies translúcidas en cristal esmerilado.
+    readonly property color barBg:      withAlpha(bg, Settings.effBarOpacity)
+    readonly property color popupBg:    withAlpha(bg, Settings.effPopupOpacity)
+    // Superficie anidada dentro de un popup (chips/módulos sobre la tarjeta): un
+    // pelín más opaca que la tarjeta para que los módulos se lean bien.
+    readonly property color popupSurface: withAlpha(surface, Math.min(1, Settings.effPopupOpacity + 0.05))
+    readonly property color pillBg:     withAlpha(surface, Settings.effWidgetOpacity)
+    // Borde de los paneles (filo de luz). En cristal se afina a un outline
+    // sutil; en el resto de temas mantiene el valor previo (overlay@0.5)
+    // para no alterar nada.
+    readonly property color panelBorder: withAlpha(overlay, glass ? 0.22 : 0.5)
     readonly property color focusRing:  withAlpha(accent, 0.92)
     readonly property color focusBg:    withAlpha(accent, 0.14)
 

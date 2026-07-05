@@ -339,7 +339,32 @@ Popout {
             sourceComponent: (Power.available && cc.expanded === "power") ? powerComp : null
         }
 
-        // Fila 4 · No molestar + Modo oscuro (media fila, como en el grid original).
+        // Fila 4 · Captura + grabacion.
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: Theme.space10
+            ControlTile {
+                Layout.fillWidth: true
+                icon: "󰄀"
+                title: "Captura"
+                subtitle: ScreenCapture.modeLabel()
+                active: Globals.screenCaptureOpen && !ScreenCapture.videoMode
+                accent: Theme.cyan
+                onToggled: ScreenCapture.openToolbar(false)
+            }
+            ControlTile {
+                Layout.fillWidth: true
+                icon: ScreenCapture.isRecording ? "󰑊" : "󰻂"
+                title: "Grabar"
+                subtitle: ScreenCapture.isRecording ? ScreenCapture.formatElapsed(ScreenCapture.recordingElapsed)
+                                                    : "Pantalla"
+                active: ScreenCapture.isRecording || (Globals.screenCaptureOpen && ScreenCapture.videoMode)
+                accent: ScreenCapture.isRecording ? Theme.red : Theme.accent
+                onToggled: ScreenCapture.openToolbar(true)
+            }
+        }
+
+        // Fila 5 · No molestar + Modo oscuro (media fila, como en el grid original).
         RowLayout {
             Layout.fillWidth: true
             spacing: Theme.space10

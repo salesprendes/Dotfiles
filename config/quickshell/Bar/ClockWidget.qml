@@ -42,10 +42,10 @@ Pill {
     }
     Text {
         visible: Settings.clockShowDate
-        // Nombres de día/mes según el idioma de la app (en/es/ca), no el locale C.
         text: clock.date.toLocaleDateString(I18n.locale(), "ddd dd MMM")
-        color: Theme.fgMuted
+        color: Theme.fg
         font.family: Theme.fontFamily
         font.pixelSize: Theme.fontSize
+        font.bold: true
     }
 }

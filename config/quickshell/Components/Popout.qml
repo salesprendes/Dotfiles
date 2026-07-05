@@ -141,7 +141,7 @@ PanelWindow {
         radius: Theme.barRadius + 2
         color: Theme.popupBg
         border.width: Theme.hairline
-        border.color: Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.5)
+        border.color: Theme.panelBorder
         clip: true
         antialiasing: true
         // ESC cierra el panel. Va en la tarjeta (Item) y no en la ventana:

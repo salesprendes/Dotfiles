@@ -25,7 +25,10 @@ FloatingWindow {
 
     visible: Globals.settingsOpen
 
-    readonly property color settingsBase: Theme.bgAlt
+    // Fondo translúcido como el resto de paneles (Popout usa Theme.popupBg): en
+    // liquid-glass se vuelve cristal esmerilado con el blur del compositor, en
+    // vez de una losa opaca clara que "brilla" en modo claro.
+    readonly property color settingsBase: Theme.popupBg
     readonly property color settingsCard: Qt.rgba(Theme.surface.r, Theme.surface.g, Theme.surface.b, 0.72)
     readonly property color settingsControl: Qt.rgba(Theme.surface.r, Theme.surface.g, Theme.surface.b, 0.86)
     readonly property color settingsHover: Qt.rgba(Theme.surfaceHi.r, Theme.surfaceHi.g, Theme.surfaceHi.b, 0.74)
@@ -322,14 +325,9 @@ FloatingWindow {
                     :                            themeCol
 
                 // ════ TEMA ════
-                ColumnLayout {
+                CatPage {
                     id: themeCol
-                    anchors { left: parent.left; right: parent.right; top: parent.top
-                              leftMargin: Theme.space18; rightMargin: Theme.space18; topMargin: Theme.space18 }
-                    spacing: Theme.space12
-                    opacity: cfg.cat === "theme" ? 1 : 0
-                    visible: opacity > 0.01
-                    Behavior on opacity { NumberAnimation { duration: Theme.animNormal } }
+                    key: "theme"
 
                     SettingsCard {
                         title: I18n.tr("Language"); glyph: "󰗊"
@@ -428,13 +426,9 @@ FloatingWindow {
 
                     SettingsCard {
                         title: I18n.tr("Size and scale"); glyph: "󰍉"
-                        Text {
-                            Layout.fillWidth: true
+                        Hint {
                             text: I18n.tr("Auto by resolution · ×%1%. Controls multiply on top (100% = neutral).")
                                 .arg(Math.round(Theme.densityScale * 100))
-                            color: Theme.fgMuted
-                            font.family: Theme.fontFamily; font.pixelSize: Theme.fontSize - 3
-                            wrapMode: Text.WordWrap
                         }
                         SliderRow {
                             label: I18n.tr("Interface scale"); glyph: "󰍉"
@@ -479,36 +473,35 @@ FloatingWindow {
 
                     SettingsCard {
                         title: I18n.tr("Transparency"); glyph: "󰠦"
+                        // Editan la opacidad EFECTIVA del tema activo: con Liquid
+                        // Glass ajustan glass*Opacity (y reflejan su valor); con el
+                        // resto de temas, las opacidades normales. Un mismo control
+                        // para cada tema, sin mezclar valores.
                         SliderRow {
                             label: I18n.tr("Bar opacity"); glyph: "󰠦"
-                            from: 0.3; to: 1.0; value: Settings.barOpacity
-                            valueText: Math.round(Settings.barOpacity * 100) + "%"
-                            onMoved: (v) => Settings.barOpacity = Math.round(v * 100) / 100
+                            from: 0.2; to: 1.0; value: Settings.effBarOpacity
+                            valueText: Math.round(Settings.effBarOpacity * 100) + "%"
+                            onMoved: (v) => Settings.setBarOpacity(Math.round(v * 100) / 100)
                         }
                         SliderRow {
                             label: I18n.tr("Panel opacity"); glyph: "󱂬"
-                            from: 0.3; to: 1.0; value: Settings.popupOpacity
-                            valueText: Math.round(Settings.popupOpacity * 100) + "%"
-                            onMoved: (v) => Settings.popupOpacity = Math.round(v * 100) / 100
+                            from: 0.2; to: 1.0; value: Settings.effPopupOpacity
+                            valueText: Math.round(Settings.effPopupOpacity * 100) + "%"
+                            onMoved: (v) => Settings.setPopupOpacity(Math.round(v * 100) / 100)
                         }
                         SliderRow {
                             label: I18n.tr("Widget opacity"); glyph: "󰍵"
-                            from: 0.3; to: 1.0; value: Settings.widgetOpacity
-                            valueText: Math.round(Settings.widgetOpacity * 100) + "%"
-                            onMoved: (v) => Settings.widgetOpacity = Math.round(v * 100) / 100
+                            from: 0.2; to: 1.0; value: Settings.effWidgetOpacity
+                            valueText: Math.round(Settings.effWidgetOpacity * 100) + "%"
+                            onMoved: (v) => Settings.setWidgetOpacity(Math.round(v * 100) / 100)
                         }
                     }
                 }
 
                 // ════ TIPOGRAFÍA ════
-                ColumnLayout {
+                CatPage {
                     id: fontCol
-                    anchors { left: parent.left; right: parent.right; top: parent.top
-                              leftMargin: Theme.space18; rightMargin: Theme.space18; topMargin: Theme.space18 }
-                    spacing: Theme.space12
-                    opacity: cfg.cat === "font" ? 1 : 0
-                    visible: opacity > 0.01
-                    Behavior on opacity { NumberAnimation { duration: Theme.animNormal } }
+                    key: "font"
 
                     SettingsCard {
                         title: I18n.tr("Animations and motion"); glyph: "󰓞"
@@ -524,8 +517,7 @@ FloatingWindow {
                             onPicked: (v) => Settings.panelAnimationStyle = v
                         }
 
-                        Text {
-                            Layout.fillWidth: true
+                        Hint {
                             text: {
                                 if (Settings.panelAnimationStyle === "fluent")
                                     return I18n.tr("Fluent: clean entrance with smooth deceleration and quick close.")
@@ -533,10 +525,6 @@ FloatingWindow {
                                     return I18n.tr("Dynamic: elastic entrance with visible bounce and quick close.")
                                 return I18n.tr("Material: expressive entrance with soft scale and short displacement.")
                             }
-                            color: Theme.fgMuted
-                            font.family: Theme.fontFamily
-                            font.pixelSize: Theme.fontSize - 3
-                            wrapMode: Text.WordWrap
                         }
 
                         SegRow {
@@ -552,8 +540,7 @@ FloatingWindow {
                             onPicked: (v) => Settings.animationSpeed = v
                         }
 
-                        Text {
-                            Layout.fillWidth: true
+                        Hint {
                             text: {
                                 if (Settings.animationSpeed === 0)
                                     return I18n.tr("None: panels change instantly, with no transition.")
@@ -565,10 +552,6 @@ FloatingWindow {
                                     return I18n.tr("Custom: custom duration applied at 500 ms.")
                                 return I18n.tr("Medium: balanced speed for panels and controls.")
                             }
-                            color: Theme.fgMuted
-                            font.family: Theme.fontFamily
-                            font.pixelSize: Theme.fontSize - 3
-                            wrapMode: Text.WordWrap
                         }
 
                         Rectangle {
@@ -588,8 +571,7 @@ FloatingWindow {
                             onPicked: (v) => Settings.panelMotionEffect = v
                         }
 
-                        Text {
-                            Layout.fillWidth: true
+                        Hint {
                             text: {
                                 if (Settings.panelMotionEffect === "directional")
                                     return I18n.tr("Directional: wide full-size slide, without scaling.")
@@ -597,10 +579,6 @@ FloatingWindow {
                                     return I18n.tr("Depth: deep scale and medium displacement with approach effect.")
                                 return I18n.tr("Standard: short displacement with subtle scale and Material feel.")
                             }
-                            color: Theme.fgMuted
-                            font.family: Theme.fontFamily
-                            font.pixelSize: Theme.fontSize - 3
-                            wrapMode: Text.WordWrap
                         }
                     }
 
@@ -715,26 +693,17 @@ FloatingWindow {
                             checked: Settings.fontEmbeddedbitmap
                             onToggled: Settings.fontEmbeddedbitmap = !Settings.fontEmbeddedbitmap
                         }
-                        Text {
-                            Layout.fillWidth: true
+                        Hint {
                             text: I18n.tr("Affects Brave, Discord and GTK/Qt apps. Reopen them to apply.")
-                            color: Theme.fgMuted
-                            font.family: Theme.fontFamily
-                            font.pixelSize: Theme.fontSize - 3
-                            wrapMode: Text.WordWrap
                         }
                     }
                 }
 
                 // ════ BARRA ════
-                ColumnLayout {
+                CatPage {
                     id: barCol
-                    anchors { left: parent.left; right: parent.right; top: parent.top
-                              leftMargin: Theme.space18; rightMargin: Theme.space18; topMargin: Theme.space18 }
+                    key: "bar"
                     spacing: Theme.space14
-                    opacity: cfg.cat === "bar" ? 1 : 0
-                    visible: opacity > 0.01
-                    Behavior on opacity { NumberAnimation { duration: Theme.animNormal } }
 
                     // Widgets globales de la barra englobados en una "caja".
                     SettingsCard {
@@ -760,14 +729,10 @@ FloatingWindow {
                 }
 
                 // ════ RELOJ ════
-                ColumnLayout {
+                CatPage {
                     id: clockCol
-                    anchors { left: parent.left; right: parent.right; top: parent.top
-                              leftMargin: Theme.space18; rightMargin: Theme.space18; topMargin: Theme.space18 }
+                    key: "clock"
                     spacing: Theme.space14
-                    opacity: cfg.cat === "clock" ? 1 : 0
-                    visible: opacity > 0.01
-                    Behavior on opacity { NumberAnimation { duration: Theme.animNormal } }
 
                     SwitchRow { label: I18n.tr("24-hour format"); desc: I18n.tr("Disabled uses AM/PM")
                         checked: Settings.clock24h; onToggled: Settings.clock24h = !Settings.clock24h }
@@ -778,14 +743,10 @@ FloatingWindow {
                 }
 
                 // ════ CLIMA ════
-                ColumnLayout {
+                CatPage {
                     id: weatherCol
-                    anchors { left: parent.left; right: parent.right; top: parent.top
-                              leftMargin: Theme.space18; rightMargin: Theme.space18; topMargin: Theme.space18 }
+                    key: "weather"
                     spacing: Theme.space14
-                    opacity: cfg.cat === "weather" ? 1 : 0
-                    visible: opacity > 0.01
-                    Behavior on opacity { NumberAnimation { duration: Theme.animNormal } }
 
                     SwitchRow { label: I18n.tr("Enable weather"); checked: Settings.weatherEnabled
                         onToggled: Settings.weatherEnabled = !Settings.weatherEnabled }
@@ -808,24 +769,16 @@ FloatingWindow {
                         value: Settings.weatherLocation
                         onEdited: (t) => Settings.weatherLocation = t
                     }
-                    Text {
-                        Layout.fillWidth: true
+                    Hint {
                         text: I18n.tr("Empty = automatic detection. Enter a city to pin it.")
-                        color: Theme.fgMuted
-                        font.family: Theme.fontFamily; font.pixelSize: Theme.fontSize - 3
-                        wrapMode: Text.WordWrap
                     }
                 }
 
                 // ════ NOTIFICACIONES ════
-                ColumnLayout {
+                CatPage {
                     id: notifCol
-                    anchors { left: parent.left; right: parent.right; top: parent.top
-                              leftMargin: Theme.space18; rightMargin: Theme.space18; topMargin: Theme.space18 }
+                    key: "notif"
                     spacing: Theme.space14
-                    opacity: cfg.cat === "notif" ? 1 : 0
-                    visible: opacity > 0.01
-                    Behavior on opacity { NumberAnimation { duration: Theme.animNormal } }
 
                     SwitchRow { label: I18n.tr("Show popups"); desc: I18n.tr("Popup alerts when notifications arrive")
                         checked: Settings.notifPopupsEnabled
@@ -855,14 +808,10 @@ FloatingWindow {
                 }
 
                 // ════ FONDOS ════
-                ColumnLayout {
+                CatPage {
                     id: wpCol
-                    anchors { left: parent.left; right: parent.right; top: parent.top
-                              leftMargin: Theme.space18; rightMargin: Theme.space18; topMargin: Theme.space18 }
+                    key: "wallpaper"
                     spacing: Theme.space14
-                    opacity: cfg.cat === "wallpaper" ? 1 : 0
-                    visible: opacity > 0.01
-                    Behavior on opacity { NumberAnimation { duration: Theme.animNormal } }
 
                     SegRow {
                         label: I18n.tr("Transition")
@@ -881,14 +830,9 @@ FloatingWindow {
                 }
 
                 // ════ PANTALLAS ════
-                ColumnLayout {
+                CatPage {
                     id: displaysCol
-                    anchors { left: parent.left; right: parent.right; top: parent.top
-                              leftMargin: Theme.space18; rightMargin: Theme.space18; topMargin: Theme.space18 }
-                    spacing: Theme.space12
-                    opacity: cfg.cat === "displays" ? 1 : 0
-                    visible: opacity > 0.01
-                    Behavior on opacity { NumberAnimation { duration: Theme.animNormal } }
+                    key: "displays"
 
                     // Orden / alineación (con 2+ monitores).
                     SettingsCard {
@@ -917,14 +861,9 @@ FloatingWindow {
                 }
 
                 // ════ RED ════
-                ColumnLayout {
+                CatPage {
                     id: netCol
-                    anchors { left: parent.left; right: parent.right; top: parent.top
-                              leftMargin: Theme.space18; rightMargin: Theme.space18; topMargin: Theme.space18 }
-                    spacing: Theme.space12
-                    opacity: cfg.cat === "network" ? 1 : 0
-                    visible: opacity > 0.01
-                    Behavior on opacity { NumberAnimation { duration: Theme.animNormal } }
+                    key: "network"
 
                     // Interfaz/adaptador (estilo Windows): WiFi + selección
                     // de interfaz cuyos parámetros IP se editan abajo.
@@ -1156,14 +1095,9 @@ FloatingWindow {
                 }
 
                 // ════ TERMINAL ════
-                ColumnLayout {
+                CatPage {
                     id: termCol
-                    anchors { left: parent.left; right: parent.right; top: parent.top
-                              leftMargin: Theme.space18; rightMargin: Theme.space18; topMargin: Theme.space18 }
-                    spacing: Theme.space12
-                    opacity: cfg.cat === "terminal" ? 1 : 0
-                    visible: opacity > 0.01
-                    Behavior on opacity { NumberAnimation { duration: Theme.animNormal } }
+                    key: "terminal"
 
                     // Selección de terminal (detectados en el sistema).
                     SettingsCard {
@@ -1174,21 +1108,13 @@ FloatingWindow {
                             current: Settings.terminalApp
                             onPicked: (v) => Settings.terminalApp = v
                         }
-                        Text {
-                            Layout.fillWidth: true
+                        Hint {
                             visible: Terminal.available.length === 0
                             text: I18n.tr("No terminals detected.")
-                            color: Theme.fgMuted
-                            font.family: Theme.fontFamily; font.pixelSize: Theme.fontSize - 3
-                            wrapMode: Text.WordWrap
                         }
-                        Text {
-                            Layout.fillWidth: true
+                        Hint {
                             visible: Terminal.available.length > 0 && !Terminal.canConfigure(Settings.terminalApp)
                             text: I18n.tr("Auto-config not available for this terminal yet.")
-                            color: Theme.fgMuted
-                            font.family: Theme.fontFamily; font.pixelSize: Theme.fontSize - 3
-                            wrapMode: Text.WordWrap
                         }
                     }
 
@@ -1263,6 +1189,30 @@ FloatingWindow {
     }
 
     // ═════════ COMPONENTES REUTILIZABLES ═════════════════════
+    // Página de una categoría: envoltorio común de cada sección (anclajes al
+    // Flickable + animación de entrada/salida por opacidad). El contenido va
+    // dentro; 'key' la enlaza con la categoría activa. 'spacing' se puede
+    // sobreescribir (por defecto space12).
+    component CatPage: ColumnLayout {
+        property string key: ""
+        anchors { left: parent.left; right: parent.right; top: parent.top
+                  leftMargin: Theme.space18; rightMargin: Theme.space18; topMargin: Theme.space18 }
+        spacing: Theme.space12
+        opacity: cfg.cat === key ? 1 : 0
+        visible: opacity > 0.01
+        Behavior on opacity { NumberAnimation { duration: Theme.animNormal } }
+    }
+
+    // Texto de ayuda/descripción bajo un control: apagado, a lo ancho y con
+    // ajuste de línea. Uso: Hint { text: "…" } (o con visible: …).
+    component Hint: Text {
+        Layout.fillWidth: true
+        color: Theme.fgMuted
+        font.family: Theme.fontFamily
+        font.pixelSize: Theme.fontSize - 3
+        wrapMode: Text.WordWrap
+    }
+
     // Grupo desplegable de la barra lateral.
     component NavGroup: ColumnLayout {
         id: grp
@@ -1888,12 +1838,8 @@ FloatingWindow {
         RowLayout {
             Layout.fillWidth: true
             spacing: Theme.space8
-            Text {
-                Layout.fillWidth: true
+            Hint {
                 text: I18n.tr("Drag monitors to arrange them")
-                color: Theme.fgMuted
-                font.family: Theme.fontFamily; font.pixelSize: Theme.fontSize - 3
-                wrapMode: Text.WordWrap
             }
             TextButton {
                 text: I18n.tr("Apply layout")
