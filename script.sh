@@ -716,7 +716,7 @@ NMDNSEOF
   fi
 
   if systemctl is-active --quiet NetworkManager.service 2>/dev/null; then
-    with_spinner "Reiniciando NetworkManager para aplicar DNS" \
+    with_spinner "Aplicando DNS en NetworkManager" \
       run_as_root systemctl restart NetworkManager.service
   else
     ok "NetworkManager aplicará DNS con systemd-resolved al iniciar"
@@ -1076,10 +1076,10 @@ main() {
   install_brightness_stack
   install_amd_stack
   enable_services
-  configure_systemd_resolved_dns
   post_install
   install_dotfiles
   setup_greetd
+  configure_systemd_resolved_dns
   install_sleep_hook
   apply_system_tweaks
   set_default_shell
