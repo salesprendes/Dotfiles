@@ -1034,26 +1034,9 @@ fi
 FUSEEOF
 }
 
-# systemd espera 90 s a cada servicio colgado al apagar; con 5 s el
-# apagado es casi instantáneo (mismos valores que usa Omarchy).
-configure_fast_shutdown() {
-  install_root_file /etc/systemd/system.conf.d/10-faster-shutdown.conf 644 \
-    "apagado rápido (sistema)" <<'SHUTEOF'
-[Manager]
-DefaultTimeoutStopSec=5s
-SHUTEOF
-  install_root_file /etc/systemd/system/user@.service.d/faster-shutdown.conf 644 \
-    "apagado rápido (sesión de usuario)" <<'USEREOF'
-[Service]
-TimeoutStopSec=5s
-USEREOF
-  run_as_root systemctl daemon-reload
-}
-
 apply_system_tweaks() {
   disable_usb_autosuspend
   install_fuse_sleep_hook
-  configure_fast_shutdown
 }
 
 # ---------------------------------------------------------------------------
