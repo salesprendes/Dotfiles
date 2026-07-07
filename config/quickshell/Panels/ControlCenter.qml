@@ -162,6 +162,10 @@ Popout {
                     from: 0; to: 1; duration: btn.holdDuration
                     onFinished: {
                         cc.runPowerAction(btn.modelData.action)
+                        // Resetea el anillo: el panel solo se oculta (no se
+                        // destruye), así que sin esto reaparecería relleno la
+                        // próxima vez que se abra el centro rápido.
+                        btn.holdProgress = 0
                     }
                 }
                 // Retrocede suavemente si se suelta antes de completar.

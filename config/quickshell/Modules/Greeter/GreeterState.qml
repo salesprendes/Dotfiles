@@ -23,7 +23,7 @@ Singleton {
         (sessionIndex >= 0 && sessionIndex < sessions.length) ? sessions[sessionIndex] : null
 
     // ── Estado de autenticación ───────────────────────────────
-    property string prompt: "Contraseña"
+    property string prompt: I18n.tr("Contraseña", "Password")
     property string error:  ""
     property bool   secret: true
     property bool   busy:   false
@@ -32,14 +32,38 @@ Singleton {
     readonly property bool available: Greetd.available
     signal failed()
 
-    // Red de seguridad: si ya hay un usuario seleccionado (p.ej. la auto-
-    // selección cuando solo existe UNA cuenta) pero greetd todavía no estaba
-    // disponible, pickUser() se saltó createSession() y el campo de contraseña
-    // quedaría "muerto" (submit() se descarta por no estar Authenticating). Al
-    // quedar disponible, se crea aquí la sesión PAM que faltó.
+    // Máquina de estados de autenticación. El reintento se conduce por
+    // Greetd.onStateChanged (igual que el greeter de DankMaterialShell): al
+    // fallar NO se recrea la sesión, se cancela y se espera a que el estado
+    // caiga a Inactive; la sesión nueva se abre SOLO cuando greetd está libre
+    // (createSession jamás cae sobre una sesión viva). Así se evitan las
+    // carreras que producían "unable to send message: Connection refused" y el
+    // descuadre de estado de Quickshell tras un fallo.
+    property bool   canRespond: false     // hay una pregunta de PAM esperando respuesta
+    property string _pwBuffer: ""         // clave aceptada, pendiente de enviar
+    property bool   _submitPending: false // el usuario pidió enviar; se hará al llegar el prompt
+    property bool   _leaving: false       // login correcto en curso (arrancando sesión)
+
+    // Diseño 100% guiado por eventos (sin temporizadores): cada vez que se pone
+    // busy=true es en respuesta a una acción que greetd SIEMPRE contesta
+    // (authMessage, authFailure, readyToLaunch o error), y cada una de esas
+    // señales vuelve a bajar busy. No hay esperas por tiempo ni sondeos.
+    //
+    // 'available' hace de red de seguridad por eventos en lugar del antiguo
+    // watchdog por tiempo: si greetd cae (socket cerrado), Quickshell pone
+    // available=false y aquí se recupera el control. Un cuelgue de PAM que NO
+    // cierra el socket no tiene evento asociado, pero no se da en un greeter
+    // solo-contraseña (PAM responde al momento).
     onAvailableChanged: {
-        if (available && selectedUser !== "" && Greetd.state === GreetdState.Inactive)
-            Greetd.createSession(selectedUser)
+        if (available) {
+            // (Re)disponible: si hay usuario elegido y greetd libre, abre sesión.
+            if (selectedUser !== "" && Greetd.state === GreetdState.Inactive)
+                Greetd.createSession(selectedUser)
+        } else if (!_leaving) {
+            // greetd desapareció y no estábamos entrando: no dejes "Cargando".
+            _resetAuth()
+            error = I18n.tr("greetd no disponible", "greetd unavailable")
+        }
     }
 
     // ── Memoria (último login) ────────────────────────────────
@@ -143,65 +167,170 @@ Singleton {
             "greetd-state", Config.statePath, JSON.stringify(obj)])
     }
 
-    // ── Puente con greetd (PAM) ───────────────────────────────
+    // ── Puente con greetd (PAM) · máquina de estados ──────────
     Connections {
         target: Greetd
+
+        // Pregunta / mensaje de PAM.
         function onAuthMessage(message, error, responseRequired, echoResponse) {
-            root.error = ""
             root.secret = !echoResponse
             root.prompt = (message && message.trim() !== "")
                           ? message.replace(/:\s*$/, "")
-                          : (echoResponse ? "Usuario" : "Contraseña")
-            if (!responseRequired && error) root.error = message
-            root.busy = false
+                          : (echoResponse ? I18n.tr("Usuario", "Username")
+                                          : I18n.tr("Contraseña", "Password"))
+            root.canRespond = responseRequired
+            // Mensaje informativo (no pide respuesta): Quickshell responde solo
+            // con cadena vacía y la conversación PAM avanza. No se toca nada más.
+            if (!responseRequired) return
+            // Pregunta real: si el usuario ya pidió enviar, se manda ahora la
+            // clave guardada; si no, se espera a que escriba.
+            if (root._submitPending) {
+                root._sendResponse()
+            } else {
+                root.busy = false
+            }
         }
-        function onAuthFailure(message) {
-            root.busy = false
-            root.revealSecret = false
-            root.error = (message && message.trim() !== "") ? message : "Autenticación fallida"
-            root.failed()
-            // Reabre la sesión PAM del MISMO usuario para reintentar.
-            if (root.selectedUser !== "")
-                Greetd.createSession(root.selectedUser)
+
+        // Única señal que dispara la reapertura: cuando greetd termina de
+        // desmontar (estado Inactive) y hay un envío pendiente, se abre una
+        // sesión nueva EN EL SIGUIENTE ciclo (no encadenada al cancel).
+        function onStateChanged() {
+            if (Greetd.state !== GreetdState.Inactive) return
+            root.canRespond = false
+            if (root._submitPending && root.selectedUser !== "" && Greetd.available) {
+                Qt.callLater(root._startSession)
+            } else if (!root._submitPending) {
+                root.busy = false
+            }
         }
+
         function onReadyToLaunch() {
+            root.canRespond = false
+            root._submitPending = false
+            root._pwBuffer = ""
+            root._leaving = true      // login correcto: silencia la red de 'available'
             root.busy = true
             root._saveState()
             const exec = root.currentSession ? root.currentSession.exec : Config.defaultSession
             Greetd.launch(_launchArgv(root.selectedUserShell, exec), [], true)
         }
-        function onError(err) { root.busy = false; root.error = err }
+
+        // Fallo de autenticación "limpio" (greetd manda auth_error).
+        function onAuthFailure(message) {
+            root._failAttempt(message, false)
+        }
+
+        // greetd nunca enseña su jerga interna. El fallo de contraseña puede
+        // llegar como auth_error o —por la carrera del worker de PAM ya muerto—
+        // como un error de transporte; ambos son, de cara al usuario,
+        // "contraseña incorrecta". Otros errores muestran un aviso genérico.
+        function onError(err) {
+            const transient = /unable to send message|connection refused|broken pipe/i.test(err || "")
+            // Eco del cancel de un fallo ya mostrado: se ignora (no re-agita ni
+            // repinta). Si el fallo llega directamente como error de transporte,
+            // 'busy' aún está activo y sí se procesa.
+            if (transient && !root.busy && !root.canRespond
+                    && Greetd.state === GreetdState.Inactive && root.error !== "")
+                return
+            root._failAttempt("", !transient)
+        }
     }
 
     // ── Acciones ──────────────────────────────────────────────
     function pickUser(name) {
         if (busy || !name) return
+        _resetAuth()
         error = ""
         revealSecret = false
         selectedUser = name
         selectedUserShell = ""
         for (let i = 0; i < users.length; i++)
             if (users[i].name === name) { selectedUserShell = users[i].shell || ""; break }
-        if (Greetd.available) Greetd.createSession(name)
+        _startSession()
     }
+
     function backToUsers() {
         if (busy) return
-        if (Greetd.available) Greetd.cancelSession()
+        _resetAuth()
         error = ""
         revealSecret = false
-        selectedUser = ""
+        selectedUser = ""     // impide que onStateChanged reabra una sesión
+        if (Greetd.available && Greetd.state !== GreetdState.Inactive)
+            Greetd.cancelSession()
     }
-    // Devuelve true solo si el envío se cursó (hay sesión PAM esperando). Así
-    // quien llama sabe si debe limpiar el campo o conservar lo tecleado.
+
+    // Acepta la contraseña. Devuelve true si se toma (el campo puede limpiarse):
+    // se envía ya si hay una pregunta esperando, o se guarda y se manda en
+    // cuanto la sesión (re)abierta presente el prompt. Se guía por 'canRespond',
+    // no por Greetd.state (que puede quedar descuadrado tras un fallo).
     function submit(text) {
-        if (busy) return false
-        if (Greetd.state === GreetdState.Authenticating) {
-            busy = true
-            error = ""
-            Greetd.respond(text)
-            return true
+        if (busy || selectedUser === "" || !Greetd.available) return false
+        error = ""
+        _pwBuffer = text
+        _submitPending = true
+        busy = true
+        if (canRespond)
+            _sendResponse()                              // hay prompt → envía ya
+        else if (Greetd.state === GreetdState.Inactive)
+            _startSession()                              // abre sesión → el prompt disparará el envío
+        // Si greetd sigue desmontando, onStateChanged(Inactive) abrirá la sesión
+        // y el prompt enviará la clave. Nada más que hacer aquí.
+        return true
+    }
+
+    // ── Internos de la máquina de estados ─────────────────────
+
+    // Crea la sesión PAM SOLO si greetd está libre. Si aún no lo está, no fuerza
+    // nada: onStateChanged/onAvailableChanged la abrirán al liberarse.
+    function _startSession() {
+        if (!Greetd.available || selectedUser === "") return
+        if (Greetd.state !== GreetdState.Inactive) return
+        Greetd.createSession(selectedUser)
+    }
+
+    // Envía la clave guardada como respuesta a la pregunta de PAM en curso.
+    function _sendResponse() {
+        if (!canRespond) return
+        busy = true
+        canRespond = false
+        _submitPending = false
+        const pw = _pwBuffer
+        _pwBuffer = ""
+        Greetd.respond(pw)
+    }
+
+    // Punto único de "intento fallido". Muestra un aviso claro, limpia lo
+    // sensible y CANCELA la sesión (no la recrea aquí): al caer a Inactive, el
+    // siguiente envío del usuario abrirá una nueva. 'isError' = error genérico
+    // en vez de contraseña incorrecta.
+    function _failAttempt(message, isError) {
+        _resetAuth()
+        revealSecret = false
+        if (isError) {
+            error = I18n.tr("Error de autenticación, inténtalo de nuevo",
+                            "Authentication error, please try again")
+        } else {
+            // Caso habitual (PAM manda texto genérico o vacío) → aviso claro. Si
+            // da un motivo concreto (cuenta caducada, bloqueada…) se respeta.
+            const raw = (message || "").trim()
+            const generic = raw === "" ||
+                /authentication\s+(failure|error)|auth(entication)?\s+failed|incorrect|failed/i.test(raw)
+            const wrong = I18n.tr("Contraseña incorrecta", "Incorrect password")
+            error = (secret && generic) ? wrong
+                  : (raw !== "" ? raw : wrong)
         }
-        return false
+        failed()
+        if (Greetd.available && Greetd.state !== GreetdState.Inactive)
+            Greetd.cancelSession()
+    }
+
+    // Limpia el estado transitorio de autenticación (no toca selectedUser).
+    function _resetAuth() {
+        busy = false
+        canRespond = false
+        _submitPending = false
+        _pwBuffer = ""
+        _leaving = false
     }
 
     // ── Helpers puros (antes en GreetdEnv.js) ─────────────────
@@ -282,6 +411,7 @@ Singleton {
                       exec: Config.defaultSession }]
         if (Config.showSessionPicker) sessionScan.running = true
         if (!Greetd.available)
-            error = "greetd no disponible (ejecuta bajo greetd)"
+            error = I18n.tr("greetd no disponible (ejecuta bajo greetd)",
+                            "greetd unavailable (run under greetd)")
     }
 }

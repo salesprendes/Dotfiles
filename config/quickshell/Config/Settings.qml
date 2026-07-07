@@ -502,8 +502,15 @@ Singleton {
     //  real claro↔oscuro lo da gsettings color-scheme. Reescribe en cada
     //  cambio de tema/acento/darkMode (igual que la sync de Hyprland).
     function gtkColorCss(forGtk3) {
-        const p = currentPalette
-        const accent = colorHex(resolvedAccent)
+        // En Liquid Glass, las apps GTK (Nautilus) toman los colores de
+        // 'solitude' y OPACOS: se ven mejor que el cristal casi-blanco de
+        // libadwaita y evitan sus problemas de translucidez. El efecto cristal
+        // se queda en el shell (paneles), no en las apps. El acento sigue al
+        // usuario; si es "theme", usa el acento propio de solitude.
+        const soli = themePresets.solitude
+        const p = _isGlass ? soli : currentPalette
+        const soliAccent = darkMode ? soli.accent : (soli.lightAccent || soli.accent)
+        const accent = colorHex(_isGlass && accentName === "theme" ? soliAccent : resolvedAccent)
         let c
         if (darkMode) {
             // Fondo casi-negro del propio tema ("negro adaptado").
@@ -529,7 +536,9 @@ Singleton {
         // sidebars, tarjetas, popovers y diálogos quedan OPACAS para no perder
         // legibilidad. Textos, acento y bordes también opacos. Fuera de Glass,
         // A() devuelve el hex tal cual (comportamiento anterior).
-        const glass = _isGlass
+        // GTK siempre opaco: el 'glass' translúcido no se aplica a las apps
+        // (ver arriba), solo a los paneles del shell.
+        const glass = false
         function A(hex, a) { return glass ? rgbaCss(hex, a) : hex }
         const aWin = effPopupOpacity, aBar = effBarOpacity
         // Colores con nombre de libadwaita (GTK4 / Nautilus).
@@ -548,15 +557,14 @@ Singleton {
             // backdrop = color cuando la ventana NO está enfocada (si no se
             // define, libadwaita usa un gris por defecto que no pega).
             "@define-color headerbar_backdrop_color " + A(c.headBg, aBar) + ";",
-            // Sidebar TOTALMENTE transparente (alfa 0): así hereda el fondo
-            // translúcido de la ventana en lugar de apilar su propio tinte
-            // encima (que la dejaría más opaca). libadwaita usa estos colores
-            // con nombre para pintar el panel lateral, así que basta con esto.
-            "@define-color sidebar_bg_color "   + A(c.sideBg, 0) + ";",
+            // Sidebar ("Carpeta personal", "Papelera"…) con su color propio
+            // (sideBg). En Liquid Glass, como la paleta es la de solitude, queda
+            // igual que la sidebar de solitude.
+            "@define-color sidebar_bg_color "   + c.sideBg + ";",
             "@define-color sidebar_fg_color "   + c.sideFg + ";",
-            "@define-color sidebar_backdrop_color " + A(c.sideBg, 0) + ";",
-            "@define-color secondary_sidebar_bg_color " + A(c.sideBg, 0) + ";",
-            "@define-color secondary_sidebar_backdrop_color " + A(c.sideBg, 0) + ";",
+            "@define-color sidebar_backdrop_color " + c.sideBg + ";",
+            "@define-color secondary_sidebar_bg_color " + c.sideBg + ";",
+            "@define-color secondary_sidebar_backdrop_color " + c.sideBg + ";",
             "@define-color card_bg_color "      + c.cardBg + ";",
             "@define-color popover_bg_color "   + c.popBg + ";",
             "@define-color popover_fg_color "   + c.popFg + ";",

@@ -29,15 +29,16 @@ Scope {
     property int _lastMoveAt: 0
     property int _lastKeyboardMoveAt: 0
     property bool _fastNavigation: false
+    property bool _instantSync: false     // recolocar la vista SIN animación (evita el "gran salto")
 
     readonly property var    items:   Wallpaper.list
     readonly property int    count:   items.length
     readonly property string curPath: (count > 0 && selectedIndex >= 0 && selectedIndex < count) ? items[selectedIndex] : ""
     readonly property string curName: curPath === "" ? "" : String(curPath).split("/").pop()
     readonly property bool   loading: open && count === 0 && (_awaitingRefreshSync || Wallpaper.scanning)
-    readonly property int    previewDelay: _fastNavigation ? 70 : 180
-    readonly property int    carouselMoveMs: _fastNavigation ? 105 : 260
-    readonly property int    cardAnimMs: _fastNavigation ? 120 : 260
+    readonly property int    previewDelay: _fastNavigation ? 55 : 150
+    readonly property int    carouselMoveMs: _fastNavigation ? 85 : 240
+    readonly property int    cardAnimMs: _fastNavigation ? 90 : 230
 
     signal forceViewSync()
 
@@ -89,6 +90,7 @@ Scope {
         const next = (index + count) % count
         previewTimer.stop()
         _suppressPreview = !preview
+        _instantSync = !preview        // programático (sin preview) → recoloca instantáneo
         selectedIndex = next
         _suppressPreview = false
         forceViewSync()
@@ -298,13 +300,13 @@ Scope {
 
                 model: plugin.items
                 pathItemCount: Math.max(1, Math.min(plugin.count, Math.ceil(width / Math.max(1, cardW)) + 4))
-                cacheItemCount: plugin._fastNavigation ? 10 : 6
+                cacheItemCount: plugin._fastNavigation ? 12 : 8
                 interactive: false
                 snapMode: PathView.SnapToItem
                 highlightRangeMode: PathView.StrictlyEnforceRange
                 preferredHighlightBegin: 0.5
                 preferredHighlightEnd: 0.5
-                highlightMoveDuration: plugin.carouselMoveMs
+                highlightMoveDuration: plugin._instantSync ? 0 : plugin.carouselMoveMs
                 movementDirection: PathView.Shortest
 
                 readonly property real cardW: Math.max(Theme.dp(220), Math.min(Theme.dp(300), width * 0.24))
@@ -326,10 +328,27 @@ Scope {
                         plugin._selectIndex(currentIndex, true)
                     }
                 }
+                onCountChanged: {
+                    // El modelo se pobló/reordenó: recoloca la vista en el índice
+                    // seleccionado sin animación (evita el "gran salto" al abrir).
+                    if (count > 0 && currentIndex !== plugin.selectedIndex) {
+                        plugin._instantSync = true
+                        view.syncToPluginIndex()
+                    }
+                }
                 Connections {
                     target: plugin
                     function onSelectedIndexChanged() { view.syncToPluginIndex() }
                     function onForceViewSync() { view.syncToPluginIndex() }
+                    // Al abrir, la ventana pasa a visible y la vista se dispone:
+                    // recoloca en el índice actual SIN animación una vez lista
+                    // (aplazado a que el layout tenga geometría real).
+                    function onOpenChanged() {
+                        if (plugin.open) {
+                            plugin._instantSync = true
+                            Qt.callLater(view.syncToPluginIndex)
+                        }
+                    }
                 }
 
                 // Camino horizontal con tarjetas compactas tipo wallpaperCarousel.
@@ -364,8 +383,10 @@ Scope {
                     z: aZ
                     scale: aScale
                     opacity: aOpac
-                    Behavior on scale   { NumberAnimation { duration: plugin.cardAnimMs; easing.type: Easing.OutBack } }
-                    Behavior on opacity { NumberAnimation { duration: plugin.cardAnimMs } }
+                    // Al moverse rápido, easing sin rebote (OutQuad) para que sea
+                    // fluido; en reposo, un OutBack con un puntito de vida.
+                    Behavior on scale   { NumberAnimation { duration: plugin.cardAnimMs; easing.type: plugin._fastNavigation ? Easing.OutQuad : Easing.OutBack } }
+                    Behavior on opacity { NumberAnimation { duration: plugin.cardAnimMs; easing.type: Easing.OutQuad } }
 
                     Item {
                         id: skewedCard

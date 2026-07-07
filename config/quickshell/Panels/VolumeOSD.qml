@@ -84,7 +84,7 @@ PanelWindow {
                      : osd.volume < 34 ? "󰕿"
                      : osd.volume < 67 ? "󰖀"
                      : "󰕾"
-                color: osd.muted ? Theme.fgMuted : Theme.green
+                color: osd.muted ? Theme.fgMuted : Theme.accent
                 font.family: Theme.fontFamily
                 font.pixelSize: Theme.iconSize + 6
                 Layout.preferredWidth: Theme.controlS
@@ -100,7 +100,7 @@ PanelWindow {
                     height: parent.height
                     radius: parent.radius
                     width: parent.width * Math.min(1, (osd.muted ? 0 : osd.volume) / 100)
-                    color: osd.muted ? Theme.fgMuted : Theme.green
+                    color: osd.muted ? Theme.fgMuted : Theme.accent
                     Behavior on width { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
                 }
             }
