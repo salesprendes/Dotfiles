@@ -1,4 +1,4 @@
--- ── Animaciones ─────────────────────────────────────────────
+-- Animaciones
 -- https://wiki.hypr.land/Configuring/Advanced-and-Cool/Animations/
 
 -- Curvas bezier
@@ -11,11 +11,10 @@ hl.curve("quick",          { type = "bezier", points = { {0.15, 0},    {0.1, 1} 
 -- Muelle (spring) suave
 hl.curve("easy", { type = "spring", mass = 1, stiffness = 71.2633, dampening = 15.8273644 })
 
--- Muelle más firme para mover/redimensionar: sigue al ratón de cerca
--- (rigidez alta) y asienta sin rebote (amortiguación alta).
+-- Muelle firme para mover/redimensionar: sigue al ratón de cerca y asienta sin rebote.
 hl.curve("glide", { type = "spring", mass = 1, stiffness = 110, dampening = 20 })
 
--- Curvas de ventana: apertura con deceleración suave y cierre sin corte lineal.
+-- Curvas de ventana: abre con deceleración suave, cierra sin corte lineal.
 -- El popin parte cerca del tamaño final para que se note fluido, no elástico.
 hl.curve("smoothOpen",  { type = "bezier", points = { {0.16, 1},    {0.30, 1}    } })
 hl.curve("smoothClose", { type = "bezier", points = { {0.40, 0},    {0.20, 1}    } })
@@ -23,25 +22,23 @@ hl.curve("smoothFade",  { type = "bezier", points = { {0.25, 0.46}, {0.45, 0.94}
 
 hl.animation({ leaf = "global",        enabled = true,  speed = 10,   bezier = "default" })
 hl.animation({ leaf = "border",        enabled = true,  speed = 5.39, bezier = "easeOutQuint" })
--- Borde con gradiente acento que ROTA en bucle (eye-candy). Redibuja el
--- borde continuamente → enciéndelo solo con corriente; déjalo off en batería.
+-- Gradiente de borde que rota en bucle. Redibuja constante: enciéndelo solo con corriente, off en batería.
 hl.animation({ leaf = "borderangle",   enabled = false, speed = 30,   bezier = "linear", style = "loop" })
 hl.animation({ leaf = "windows",       enabled = true,  speed = 5.2,  spring = "easy" })
 hl.animation({ leaf = "windowsIn",     enabled = true,  speed = 5.8,  bezier = "smoothOpen",   style = "popin 86%" })
 hl.animation({ leaf = "windowsOut",    enabled = true,  speed = 4.2,  bezier = "smoothClose",  style = "popin 88%" })
--- Mover/arrastrar/redimensionar (lo que animan animate_manual_resizes y
+-- Mover/arrastrar/redimensionar (animate_manual_resizes y
 -- animate_mouse_windowdragging): muelle firme que sigue al ratón sin rebote.
 hl.animation({ leaf = "windowsMove",   enabled = true,  speed = 5.5,  spring = "glide" })
 hl.animation({ leaf = "fadeIn",        enabled = true,  speed = 3.8,  bezier = "smoothFade" })
 hl.animation({ leaf = "fadeOut",       enabled = true,  speed = 3.2,  bezier = "smoothClose" })
 hl.animation({ leaf = "fade",          enabled = true,  speed = 4.0,  bezier = "smoothFade" })
--- Fundidos de foco: la opacidad/atenuado/sombra de la ventana que pierde o
--- gana el foco transiciona suave en vez de saltar (dim_inactive e
--- inactive_opacity están activos en looknfeel).
+-- Fundidos de foco: opacidad/atenuado/sombra transicionan suave en vez de saltar
+-- (dim_inactive e inactive_opacity están activos en looknfeel).
 hl.animation({ leaf = "fadeSwitch",    enabled = true,  speed = 3.2,  bezier = "smoothFade" })
 hl.animation({ leaf = "fadeDim",       enabled = true,  speed = 3.2,  bezier = "smoothFade" })
 hl.animation({ leaf = "fadeShadow",    enabled = true,  speed = 3.2,  bezier = "smoothFade" })
--- Menús y tooltips nativos de Wayland aparecen con fundido, no de golpe.
+-- Menús y tooltips nativos de Wayland con fundido, no de golpe.
 hl.animation({ leaf = "fadePopups",    enabled = true,  speed = 4.5,  bezier = "smoothFade" })
 -- Apagado/encendido de pantalla (DPMS) con fundido.
 hl.animation({ leaf = "fadeDpms",      enabled = true,  speed = 3.0,  bezier = "smoothFade" })
@@ -53,8 +50,7 @@ hl.animation({ leaf = "fadeLayersOut", enabled = true,  speed = 1.39, bezier = "
 hl.animation({ leaf = "workspaces",    enabled = true,  speed = 1.94, bezier = "almostLinear", style = "fade" })
 hl.animation({ leaf = "workspacesIn",  enabled = true,  speed = 1.21, bezier = "almostLinear", style = "fade" })
 hl.animation({ leaf = "workspacesOut", enabled = true,  speed = 1.94, bezier = "almostLinear", style = "fade" })
--- Workspace especial (scratchpad): entra deslizando desde arriba con
--- fundido, en vez de aparecer de golpe como el resto de workspaces.
+-- Workspace especial (scratchpad): entra deslizando desde arriba con fundido.
 hl.animation({ leaf = "specialWorkspace",    enabled = true, speed = 4.5, bezier = "easeOutQuint", style = "slidefadevert 15%" })
 hl.animation({ leaf = "specialWorkspaceIn",  enabled = true, speed = 4.5, bezier = "easeOutQuint", style = "slidefadevert 15%" })
 hl.animation({ leaf = "specialWorkspaceOut", enabled = true, speed = 3.8, bezier = "smoothClose", style = "slidefadevert 15%" })

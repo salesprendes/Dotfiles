@@ -6,13 +6,10 @@ import qs.Components
 import qs.Config
 import qs.Services
 
-// ─────────────────────────────────────────────────────────────
-//  Ajustes IP rápidos desde el engranaje del centro rápido. Comparte
-//  la MISMA lógica que Ajustes → Red (servicio NetConfig): al abrirse
-//  autoselecciona la interfaz ACTIVA (la conectada; ethernet si hay
-//  varias) y edita su IPv4. No muestra selector de interfaz. "Aplicar"
-//  delega en NetConfig.apply() (que preserva IPv6/MAC/MTU actuales).
-// ─────────────────────────────────────────────────────────────
+// Ajustes IP rápidos desde el engranaje del centro rápido. Usa NetConfig,
+// la misma lógica que Ajustes > Red: al abrir autoselecciona la interfaz
+// activa (la conectada; ethernet si hay varias) y edita su IPv4. Sin selector
+// de interfaz. Aplicar delega en NetConfig.apply(), que preserva IPv6/MAC/MTU.
 PanelWindow {
     id: modal
 
@@ -30,12 +27,14 @@ PanelWindow {
 
     anchors { top: true; bottom: true; left: true; right: true }
 
-    onVisibleChanged: {
-        if (visible) {
-            NetConfig.error = ""
-            NetConfig.refreshAll()
-            NetConfig.selectActive()
-        }
+    // Cargado bajo demanda (LazyLoader en shell.qml): puede nacer ya visible
+    // y entonces onVisibleChanged no se dispara, de ahí el onCompleted.
+    Component.onCompleted: if (visible) _init()
+    onVisibleChanged: if (visible) _init()
+    function _init() {
+        NetConfig.error = ""
+        NetConfig.refreshAll()
+        NetConfig.selectActive()
     }
 
     // Cierra al aplicar con éxito; si falla, NetConfig.error se muestra.
@@ -44,7 +43,7 @@ PanelWindow {
         function onApplyDone(ok) { if (ok && modal.visible) Net.closeIpConfig() }
     }
 
-    // ── Fondo oscuro: click cancela ──────────────────────────
+    // Fondo oscuro: click cancela.
     Rectangle {
         anchors.fill: parent
         color: Qt.rgba(0, 0, 0, 0.45)
@@ -53,7 +52,7 @@ PanelWindow {
         MouseArea { anchors.fill: parent; onClicked: Net.closeIpConfig() }
     }
 
-    // ── Tarjeta ──────────────────────────────────────────────
+    // Tarjeta.
     Rectangle {
         anchors.centerIn: parent
         width: Theme.panelWidth(screen, 380, 320, 0.88)
@@ -210,7 +209,7 @@ PanelWindow {
         }
     }
 
-    // ── Componente: botón de método (Auto/Manual) ────────────
+    // Botón de método (Auto/Manual).
     component MethodBtn: Rectangle {
         property string label: ""
         property bool on: false

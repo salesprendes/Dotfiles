@@ -9,10 +9,12 @@ import qs.Config
 Singleton {
     id: clip
 
-    property bool cliphistAvailable: false
-    property bool wlCopyAvailable: false
-    property bool wlPasteAvailable: false
+    // Detección centralizada en Deps (reactivo: se re-evalúa al terminar).
+    readonly property bool cliphistAvailable: Deps.has("cliphist")
+    readonly property bool wlCopyAvailable: Deps.has("wl-copy")
+    readonly property bool wlPasteAvailable: Deps.has("wl-paste")
     readonly property bool available: cliphistAvailable && wlCopyAvailable && wlPasteAvailable
+    property bool _watcherStarted: false
     property bool loading: false
     property string search: ""
     property string status: ""
@@ -27,10 +29,6 @@ Singleton {
         if (!cliphistAvailable) missing.push("cliphist")
         if (!wlCopyAvailable || !wlPasteAvailable) missing.push("wl-clipboard")
         return missing.join(", ")
-    }
-
-    function shellQuote(s) {
-        return "'" + String(s).replace(/'/g, "'\\''") + "'"
     }
 
     function _preview(raw) {
@@ -91,11 +89,25 @@ Singleton {
         listProc.running = true
     }
 
-    // Recuento sin cargar el historial (para el badge con el panel cerrado).
-    function refreshCount() {
-        if (!available || countProc.running)
+    // Arranca el vigilante una sola vez, cuando Deps termina la detección.
+    // Cubre ambos órdenes: Deps ya listo al crearse este singleton, o la
+    // señal loaded() llegando después.
+    function _startWatcher() {
+        if (!available) {
+            status = I18n.tr("Missing %1").arg(missingTools)
             return
-        countProc.running = true
+        }
+        if (_watcherStarted)
+            return
+        _watcherStarted = true
+        status = ""
+        watcher.running = true
+    }
+
+    Component.onCompleted: if (Deps.ready) _startWatcher()
+    Connections {
+        target: Deps
+        function onLoaded() { clip._startWatcher() }
     }
 
     function copy(entry) {
@@ -103,7 +115,7 @@ Singleton {
             return
         Quickshell.execDetached([
             "sh", "-c",
-            "printf '%s\\n' " + shellQuote(entry.raw) + " | cliphist decode | wl-copy"
+            "printf '%s\\n' " + Utils.shellQuote(entry.raw) + " | cliphist decode | wl-copy"
         ])
         status = I18n.tr("Copied to clipboard")
         Globals.closeAll()
@@ -114,7 +126,7 @@ Singleton {
             return
         Quickshell.execDetached([
             "sh", "-c",
-            "printf '%s\\n' " + shellQuote(entry.raw) + " | cliphist delete"
+            "printf '%s\\n' " + Utils.shellQuote(entry.raw) + " | cliphist delete"
         ])
         status = I18n.tr("Entry deleted")
         refreshLater.restart()
@@ -130,49 +142,32 @@ Singleton {
         count = 0
     }
 
-    Process {
-        id: deps
-        running: true
-        command: ["sh", "-c",
-            "printf 'cliphist='; command -v cliphist >/dev/null 2>&1 && echo yes || echo no; " +
-            "printf 'wl-copy='; command -v wl-copy >/dev/null 2>&1 && echo yes || echo no; " +
-            "printf 'wl-paste='; command -v wl-paste >/dev/null 2>&1 && echo yes || echo no"]
-        stdout: StdioCollector {
-            onStreamFinished: {
-                const lines = (this.text || "").trim().split("\n")
-                for (let i = 0; i < lines.length; i++) {
-                    const parts = lines[i].split("=")
-                    if (parts[0] === "cliphist") clip.cliphistAvailable = parts[1] === "yes"
-                    else if (parts[0] === "wl-copy") clip.wlCopyAvailable = parts[1] === "yes"
-                    else if (parts[0] === "wl-paste") clip.wlPasteAvailable = parts[1] === "yes"
-                }
-                if (clip.available) {
-                    clip.status = ""
-                    watcher.running = true
-                    clip.refreshCount()
-                } else {
-                    clip.status = I18n.tr("Missing %1").arg(clip.missingTools)
-                }
-            }
-        }
-    }
-
-    // Vigila el portapapeles: en cada copia/corte real, almacena con
-    // cliphist y emite una marca por stdout. Así el refresco es dirigido
-    // por eventos (solo cuando de verdad cambia el portapapeles), sin
-    // sondeo en reposo: el número del badge se mantiene al día aunque el
-    // panel esté cerrado, y la lista se actualiza si está abierto.
+    // Vigila el portapapeles: en cada copia/corte real almacena con cliphist
+    // y emite el recuento por stdout (un solo proceso). También emite un
+    // recuento inicial para el badge al arrancar. Con el panel abierto recarga
+    // además la lista completa.
     Process {
         id: watcher
         running: false
         command: ["sh", "-c",
-            "command -v wl-paste >/dev/null 2>&1 && command -v cliphist >/dev/null 2>&1 && " +
-            "wl-paste --watch sh -c 'cliphist store; echo .'"]
+            "cliphist list 2>/dev/null | wc -l; " +
+            "exec wl-paste --watch sh -c 'cliphist store; cliphist list 2>/dev/null | wc -l'"]
         stdout: SplitParser {
-            // Con el panel abierto se recarga la lista; cerrado, solo el
-            // recuento del badge (sin cargar el historial en memoria).
-            onRead: Globals.clipboardOpen ? clip.refresh() : clip.refreshCount()
+            onRead: line => {
+                const n = parseInt(line)
+                if (!isNaN(n))
+                    clip.count = n
+                if (Globals.clipboardOpen)
+                    clip.refresh()
+            }
         }
+        // Si el vigilante muere (p. ej. reinicio del compositor) se relanza a los 2 s.
+        onExited: if (clip.available) watcherRestart.restart()
+    }
+    Timer {
+        id: watcherRestart
+        interval: 2000
+        onTriggered: if (clip.available && !watcher.running) watcher.running = true
     }
 
     Process {
@@ -184,15 +179,6 @@ Singleton {
         }
         onExited: {
             clip.loading = false
-        }
-    }
-
-    Process {
-        id: countProc
-        running: false
-        command: ["sh", "-c", "cliphist list 2>/dev/null | wc -l"]
-        stdout: StdioCollector {
-            onStreamFinished: clip.count = parseInt(this.text) || 0
         }
     }
 

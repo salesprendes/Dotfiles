@@ -1,9 +1,6 @@
-//  ╔══════════════════════════════════════════════════════════╗
-//  ║   Greeter — raíz del login. Una superficie por monitor.    ║
-//  ║   Todo el estado vive en el singleton GreeterState (que se ║
-//  ║   instancia solo al cargar este componente, no con la barra║
-//  ║   normal: los singletons de Quickshell son perezosos).     ║
-//  ╚══════════════════════════════════════════════════════════╝
+// Raíz del login. Una superficie por monitor; el estado vive en el singleton
+// GreeterState, que solo se instancia al cargar esto (los singletons de
+// Quickshell son perezosos).
 import Quickshell
 import qs.Modules.Greeter
 

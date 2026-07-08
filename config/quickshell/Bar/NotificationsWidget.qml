@@ -4,8 +4,8 @@ import qs.Components
 import qs.Config
 import qs.Services
 
-// Campana con contador. Click → centro de notificaciones ·
-// click derecho → alternar "No molestar".
+// Campana con contador. Click abre el centro de notificaciones,
+// click derecho alterna "No molestar".
 Pill {
     id: root
     interactive: true
@@ -24,19 +24,10 @@ Pill {
             font.pixelSize: Theme.iconSize
         }
 
-        Rectangle {
-            visible: NotifService.count > 0
+        CountBadge {
+            count: NotifService.count
+            badgeColor: Theme.red
             anchors { right: parent.right; top: parent.top; rightMargin: -Theme.space4; topMargin: -Theme.space4 }
-            width: Theme.dp(14); height: Theme.dp(14); radius: height / 2
-            color: Theme.red
-            Text {
-                anchors.centerIn: parent
-                text: NotifService.count > 9 ? "9+" : NotifService.count
-                color: Theme.bg
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.sp(9)
-                font.bold: true
-            }
         }
     }
 }

@@ -49,14 +49,13 @@ Rectangle {
         anchors.rightMargin: Theme.space12
         spacing: Theme.space10
 
-        // ── Botón del icono (on/off) ─────────────────────────────
+        // Botón del icono (on/off)
         Rectangle {
             id: iconTile
             implicitWidth: Theme.controlL
             implicitHeight: Theme.controlL
             radius: Theme.pillRadius
-            // Activo: tinte suave de acento (para que el icono de acento se
-            // vea encima). Inactivo: superficie neutra.
+            // Activo: tinte suave de acento. Inactivo: superficie neutra.
             color: root.active
                    ? Qt.rgba(root.accent.r, root.accent.g, root.accent.b, iconMa.containsMouse ? 0.30 : 0.22)
                    : (iconMa.containsMouse ? Theme.surfaceHi
@@ -70,8 +69,7 @@ Rectangle {
             Text {
                 anchors.centerIn: parent
                 text: root.icon
-                // Activo: color de acento (resaltado).
-                // Inactivo: atenuado, para que se vea "apagado".
+                // Activo: acento. Inactivo: atenuado (se ve "apagado").
                 color: root.active ? root.accent : Theme.fgDim
                 font.family: Theme.fontFamily
                 font.pixelSize: Theme.iconSize + 2
@@ -88,7 +86,7 @@ Rectangle {
             }
         }
 
-        // ── Texto del cuerpo (neutro siempre) ────────────────────
+        // Texto del cuerpo (siempre neutro)
         ColumnLayout {
             Layout.fillWidth: true
             spacing: Theme.space2

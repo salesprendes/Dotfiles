@@ -1,4 +1,4 @@
--- ── Aspecto general (Look & Feel) ───────────────────────────
+-- Aspecto general (look & feel)
 -- https://wiki.hypr.land/Configuring/Basics/Variables/
 
 local theme = require("conf.theme")
@@ -41,33 +41,32 @@ hl.config({
 
         shadow = {
             enabled      = true,
-            -- range 6 (antes 10) y render_power 2 (antes 3): la sombra se
-            -- redibuja al mover ventanas; reducirla baja ese coste de GPU
-            -- (gratis en batería) sin un cambio visual apreciable.
+            -- Sombra pequeña: se redibuja al mover ventanas, así que un range y
+            -- render_power bajos ahorran GPU (y batería) sin cambio visual apreciable.
             range        = 6,
             render_power = 2,
             color        = theme.shadow,
         },
 
-        -- Blur contenido, al estilo Omarchy: suficiente para paneles translúcidos
-        -- sin convertir los popups en masas borrosas.
+        -- Blur del contenido: suficiente para paneles translúcidos sin convertir
+        -- los popups en masas borrosas.
         blur = {
             enabled     = true,
-            size        = 3,
-            -- 1 pase (antes 2): el blur es lo que más cuesta en la APU;
-            -- bajar a 1 casi lo divide a la mitad sin diferencia visible.
+            -- Radio pequeño: el blur es lo que más cuesta en la APU (780M); bajarlo
+            -- ahorra sin cambio visible y el esmerilado se mantiene en todas las capas.
+            size        = 2,
+            -- Un solo pase: con dos el blur casi dobla su coste en la APU y no se nota.
             passes      = 1,
             new_optimizations = true,
             vibrancy    = 0.08,
             brightness  = 0.60,
             contrast    = 0.75,
             popups      = true,
-            -- Sube el umbral: el blur ignora los márgenes semitransparentes
-            -- de la sombra de los menús (Brave/Chromium) → sombra suave en vez
-            -- del recuadro gris borroso. Antes 0.2 (demasiado bajo).
+            -- Umbral alto: el blur ignora los márgenes semitransparentes de la sombra
+            -- de los menús (Brave/Chromium), así sale sombra suave y no un recuadro gris.
             popups_ignorealpha = 0.6,
             xray        = true,   -- el blur solo muestrea el fondo, no las
-                                  -- ventanas detrás → más barato en la 780M
+                                  -- ventanas detrás: más barato en la 780M
         },
     },
 
@@ -131,19 +130,17 @@ hl.config({
         force_default_wallpaper = 0,     -- sin mascota anime
         disable_hyprland_logo   = true,
 
-        -- Primer frame del compositor del color del tema (#101315) en vez de
-        -- negro puro: la transición greeter → Hyprland → splash de quickshell
-        -- se percibe continua, sin salto de color al iniciar sesión.
+        -- Primer frame del compositor con el color del tema (#101315) en vez de
+        -- negro puro, para que el arranque de sesión no dé un salto de color.
         background_color = "rgb(101315)",
 
-        -- Arrastrar/redimensionar con animación → sensación más fluida.
+        -- Arrastrar/redimensionar con animación, se siente más fluido.
         animate_manual_resizes      = true,
         animate_mouse_windowdragging = true,
 
-        -- VRR (FreeSync) solo en pantalla completa: sincroniza el refresco
-        -- del monitor con lo que dibuja Hyprland → sin micro-tirones en
-        -- juegos/vídeo. Modo 2 (y no 1) para evitar el parpadeo que la iGPU
-        -- puede dar al aplicar VRR en el escritorio/navegador.
+        -- VRR (FreeSync) solo en pantalla completa: sincroniza el refresco del
+        -- monitor con Hyprland y quita micro-tirones en juegos/vídeo. Modo 2 y no 1
+        -- para evitar el parpadeo que da la iGPU al aplicar VRR en el escritorio.
         vrr = 2,
     },
 })
@@ -157,14 +154,13 @@ hl.config({
 })
 
 -- Render: scanout directo en pantalla completa (vídeo/juegos saltan el
--- compositor → menos GPU/consumo en la APU). 1 = activado.
+-- compositor, menos GPU y consumo en la APU). 1 = activado.
 hl.config({
     render = {
         direct_scanout = 1,
 
-        -- Planificación de render nueva: triple búfer solo cuando hace
-        -- falta. La wiki lo describe como "mejora los FPS en equipos
-        -- modestos": si un frame llega justo, no se pierde el vsync entero.
+        -- Planificación de render nueva: triple búfer solo cuando hace falta, así
+        -- un frame que llega justo no pierde el vsync entero (mejora FPS en equipos modestos).
         new_render_scheduling = true,
     },
 })

@@ -37,23 +37,6 @@ Popout {
     readonly property bool micMuted: mic?.muted ?? true
     readonly property int micPercent: Math.round((mic?.volume ?? 0) * 100)
 
-    function runPowerAction(action) {
-        Globals.closeAll()
-        if (action === "suspend") {
-            // Reposo del sistema (suspend-to-idle / s2idle).
-            Quickshell.execDetached(["systemctl", "suspend"])
-        } else if (action === "lock") {
-            // Pausa breve para que el popout termine de cerrarse y SUELTE el
-            // teclado antes de que hyprlock tome el foco (si no, la pantalla
-            // de contraseña aparece con el panel aún encima → se "bugea").
-            Quickshell.execDetached(["sh", "-c", "sleep 0.25; command -v hyprlock >/dev/null && hyprlock || loginctl lock-session"])
-        } else if (action === "reboot") {
-            Quickshell.execDetached(["systemctl", "reboot"])
-        } else if (action === "poweroff") {
-            Quickshell.execDetached(["systemctl", "poweroff"])
-        }
-    }
-
     Rectangle {
         Layout.fillWidth: true
         implicitHeight: Theme.dp(64)
@@ -133,27 +116,17 @@ Popout {
                     }
                 }
 
-                // Anillo que se rellena alrededor del botón mientras se mantiene.
-                Canvas {
-                    id: ring
+                // Anillo que se rellena mientras se mantiene pulsado.
+                StatRing {
                     anchors.fill: parent
-                    anchors.margins: -2
+                    anchors.margins: -Theme.dp(2.5)
                     visible: btn.holdProgress > 0
-                    onPaint: {
-                        var ctx = getContext("2d")
-                        ctx.reset()
-                        var cx = width / 2, cy = height / 2
-                        var r = width / 2 - 2
-                        ctx.beginPath()
-                        ctx.arc(cx, cy, r, -Math.PI / 2,
-                                -Math.PI / 2 + btn.holdProgress * 2 * Math.PI)
-                        ctx.lineWidth = 2.5
-                        ctx.lineCap = "round"
-                        ctx.strokeStyle = btn.modelData.col
-                        ctx.stroke()
-                    }
+                    value: btn.holdProgress
+                    animated: false        // el progreso ya viene animado (hold)
+                    tint: btn.modelData.col
+                    trackColor: "transparent"
+                    ringWidth: Theme.dp(2.5)
                 }
-                onHoldProgressChanged: ring.requestPaint()
 
                 // Avanza el progreso mientras se pulsa; al terminar, ejecuta.
                 NumberAnimation {
@@ -161,7 +134,7 @@ Popout {
                     target: btn; property: "holdProgress"
                     from: 0; to: 1; duration: btn.holdDuration
                     onFinished: {
-                        cc.runPowerAction(btn.modelData.action)
+                        Globals.runPowerAction(btn.modelData.action)
                         // Resetea el anillo: el panel solo se oculta (no se
                         // destruye), así que sin esto reaparecería relleno la
                         // próxima vez que se abra el centro rápido.
@@ -232,10 +205,8 @@ Popout {
             ControlTile {
                 Layout.fillWidth: true
                 icon: Net.icon
-                // Display inteligente: si hay cable, el tile representa la
-                // conexión ETHERNET (prioritaria; convive con el wifi, que se
-                // gestiona en el desplegable). Si no, la WiFi: SSID + cobertura,
-                // o el estado cuando no hay red.
+                // Con cable, el tile muestra Ethernet (prioritaria; el wifi va
+                // en el desplegable). Si no, wifi: SSID + cobertura, o el estado.
                 title: Net.primaryEthernet ? "Ethernet"
                      : Net.ssid !== "" ? Net.ssid : "WiFi"
                 subtitle: Net.primaryEthernet ? I18n.tr("Connected")
@@ -368,7 +339,7 @@ Popout {
             }
         }
 
-        // Fila 5 · No molestar + Modo oscuro (media fila, como en el grid original).
+        // Fila 5 · No molestar + Modo oscuro.
         RowLayout {
             Layout.fillWidth: true
             spacing: Theme.space10

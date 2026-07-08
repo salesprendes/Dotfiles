@@ -1,14 +1,8 @@
 pragma ComponentBehavior: Bound
-//  ╔══════════════════════════════════════════════════════════╗
-//  ║   Wallpaper Carousel — plugin autocontenido                ║
-//  ║   Carrusel 3D (coverflow) para elegir fondo de pantalla.   ║
-//  ║   · No modifica ningún componente del tema: se instancia    ║
-//  ║     con una línea en shell.qml y registra su PROPIO IPC.    ║
-//  ║   · Aplica el fondo llamando a tu servicio Wallpaper.apply  ║
-//  ║     (cambio EN VIVO con tu transición de Backdrop).         ║
-//  ║   · Se abre/cierra con:  qs ipc call carousel toggle        ║
-//  ║     (atado en Hyprland a Super+W).                          ║
-//  ╚══════════════════════════════════════════════════════════╝
+// Carrusel coverflow para elegir el fondo. Plugin autocontenido: se instancia
+// con una línea en shell.qml y registra su propio IPC. Aplica el fondo con
+// Wallpaper.apply (cambio en vivo vía Backdrop). Se abre/cierra con
+// `qs ipc call carousel toggle` (Super+W en Hyprland).
 import QtQuick
 import Quickshell
 import Quickshell.Wayland
@@ -118,7 +112,7 @@ Scope {
         return false
     }
 
-    // ── API interna ──────────────────────────────────────────
+    // API interna
     function setOpen(v) {
         if (v === open) return
         if (v) {
@@ -175,10 +169,10 @@ Scope {
         open = false
     }
 
-    // Vista previa en vivo: al navegar, muestra el fondo resaltado SIN
-    // persistir (solo Wallpaper.current → tu Backdrop hace la transición).
-    // Con un pequeño retardo para no encadenar transiciones al desplazarse
-    // rápido. Se confirma con Enter/clic; Esc restaura el fondo previo.
+    // Vista previa en vivo: al navegar muestra el fondo resaltado sin persistir
+    // (solo Wallpaper.current, Backdrop hace la transición). Con un pequeño
+    // retardo para no encadenar transiciones al desplazarse rápido. Se confirma
+    // con Enter/clic; Esc restaura el fondo previo.
     onSelectedIndexChanged: if (open && !_suppressPreview) previewTimer.restart()
     Timer {
         id: previewTimer
@@ -212,7 +206,7 @@ Scope {
         }
     }
 
-    // ── IPC propio del plugin (no toca el IpcHandler del shell) ─
+    // IPC propio del plugin (no toca el IpcHandler del shell)
     IpcHandler {
         target: "carousel"
         function toggle(): void { plugin.setOpen(!plugin.open) }
@@ -228,7 +222,7 @@ Scope {
         function onOpenPanelChanged() { if (Globals.openPanel !== "") plugin.setOpen(false) }
     }
 
-    // ── Ventana overlay (pantalla principal) ─────────────────
+    // Ventana overlay (pantalla principal)
     PanelWindow {
         id: win
         screen: Quickshell.screens.length > 0 ? Quickshell.screens[0] : null
@@ -290,7 +284,7 @@ Scope {
                 font.bold: true
             }
 
-            // ── Carrusel coverflow ───────────────────────────
+            // Carrusel coverflow
             PathView {
                 id: view
                 anchors.fill: parent
@@ -311,6 +305,9 @@ Scope {
 
                 readonly property real cardW: Math.max(Theme.dp(220), Math.min(Theme.dp(300), width * 0.24))
                 readonly property real cardH: cardW * 1.4
+                // Escala del monitor: las texturas se decodifican a píxeles
+                // FÍSICOS; con el tamaño lógico se veían borrosas en escala >1.
+                readonly property real dpr: (win.screen && win.screen.devicePixelRatio) ? win.screen.devicePixelRatio : 1
                 readonly property real skewFactor: -0.26
 
                 function syncToPluginIndex() {
@@ -351,7 +348,7 @@ Scope {
                     }
                 }
 
-                // Camino horizontal con tarjetas compactas tipo wallpaperCarousel.
+                // Camino horizontal con tarjetas compactas.
                 path: Path {
                     startX: 0
                     startY: view.height / 2
@@ -454,7 +451,7 @@ Scope {
                                 width: parent.width + (parent.height * Math.abs(view.skewFactor)) + Theme.dp(50)
                                 height: parent.height
                                 source: plugin._imageUrl(card.modelData)
-                                sourceSize: Qt.size(view.cardW, view.cardH)
+                                sourceSize: Qt.size(Math.ceil(view.cardW * view.dpr), Math.ceil(view.cardH * view.dpr))
                                 fillMode: Image.PreserveAspectCrop
                                 asynchronous: true
                                 cache: true
@@ -479,7 +476,7 @@ Scope {
                 }
             }
 
-            // ── Carga inicial ────────────────────────────────
+            // Carga inicial
             Column {
                 anchors.centerIn: parent
                 spacing: Theme.space10
@@ -530,7 +527,7 @@ Scope {
                 }
             }
 
-            // ── Estado vacío ─────────────────────────────────
+            // Estado vacío
             Column {
                 anchors.centerIn: parent
                 spacing: Theme.space8
@@ -551,7 +548,7 @@ Scope {
                 }
             }
 
-            // ── Pie: nombre + contador + ayuda ───────────────
+            // Pie: nombre + contador + ayuda
             Column {
                 anchors.horizontalCenter: parent.horizontalCenter
                 anchors.bottom: parent.bottom

@@ -2,36 +2,22 @@ pragma Singleton
 
 import QtQuick
 import Quickshell
-import Quickshell.Io
 import Quickshell.Services.UPower
 import qs.Config
 
-// ─────────────────────────────────────────────────────────────
-//  Servicio de perfiles de energía. Envuelve el singleton nativo
-//  PowerProfiles (Quickshell.Services.UPower), que escribe a
-//  power-profiles-daemon por D-Bus. Expone perfil actual, icono,
-//  nombre traducido y funciones para fijar/ciclar perfil, de modo
-//  que la UI solo necesita importar qs.Services.
-// ─────────────────────────────────────────────────────────────
+// Perfiles de energía. Envuelve el singleton nativo PowerProfiles
+// (Quickshell.Services.UPower), que escribe a power-profiles-daemon por D-Bus.
+// Expone perfil actual, icono, nombre traducido y funciones para fijar/ciclar,
+// así la UI solo necesita importar qs.Services.
 Singleton {
     id: power
 
     // ¿Está instalado power-profiles-daemon? Si no, la UI (pill de la barra y
     // tile/selector del Centro de control) se oculta por completo. El singleton
-    // nativo PowerProfiles no expone disponibilidad, así que la detectamos con
-    // rutas estables del paquete (mismo patrón que Brightness.available).
-    property bool available: false
-
-    Process {
-        running: true
-        command: ["sh", "-c",
-            "(test -e /usr/share/dbus-1/system-services/net.hadess.PowerProfiles.service " +
-            "|| test -e /usr/lib/systemd/system/power-profiles-daemon.service " +
-            "|| command -v powerprofilesctl >/dev/null) && echo yes || true"]
-        stdout: StdioCollector {
-            onStreamFinished: power.available = (this.text || "").indexOf("yes") !== -1
-        }
-    }
+    // nativo PowerProfiles no expone disponibilidad, así que la detectamos por
+    // el CLI que acompaña al daemon (powerprofilesctl, también con tuned-ppd),
+    // vía Deps: binding reactivo, sin proceso de detección propio.
+    readonly property bool available: Deps.has("powerprofilesctl")
 
     // Perfil activo. Se mantiene como var para no forzar conversiones del enum
     // de QuickShell a int, que pueden romper el estado visual.

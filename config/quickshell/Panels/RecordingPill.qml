@@ -26,11 +26,10 @@ PanelWindow {
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
     anchors { top: true; bottom: true; left: true; right: true }
 
-    // Solo la píldora captura el ratón; el resto de la ventana (a pantalla
-    // completa) deja pasar los clics a las apps de debajo. Sin esta máscara, la
-    // capa Overlay interceptaba TODA la pantalla y no se podía seleccionar nada
-    // mientras se grababa. La región sigue a la píldora aunque se mueva o cambie
-    // de tamaño (usa su geometría, incluidas x/y).
+    // Solo la píldora captura el ratón; el resto de la ventana deja pasar los
+    // clics a las apps de debajo. Sin la máscara, la capa Overlay se traga toda
+    // la pantalla y no puedes seleccionar nada mientras grabas. La región sigue
+    // a la píldora al moverse o cambiar de tamaño (usa su geometría, x/y incl.).
     mask: Region { item: pill }
 
     function clamp(value, minValue, maxValue) {

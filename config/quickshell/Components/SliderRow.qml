@@ -2,16 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import qs.Config
 
-// Fila de slider con etiqueta + valor (estilo Ajustes). Mapea un rango
-// [from, to] sobre la base reutilizable `Slider` (0..1). Antes era inline en
-// Settings.qml; extraído a Components para reutilizarlo y reducir código.
-//
-// Uso:
-//   SliderRow {
-//       label: "..."; glyph: "..."; valueText: "..."
-//       from: 0.8; to: 1.3; value: Settings.uiScale
-//       onMoved: (v) => Settings.uiScale = v
-//   }
+// Fila de slider con etiqueta + valor. Mapea un rango [from, to] sobre Slider (0..1).
 ColumnLayout {
     id: slr
     property string label: ""
@@ -20,7 +11,7 @@ ColumnLayout {
     property real from: 0
     property real to: 1
     property real value: 0
-    // Color de la pista (por defecto = el antiguo cfg.settingsControl).
+    // Color de la pista.
     property color trackColor: Qt.rgba(Theme.surface.r, Theme.surface.g, Theme.surface.b, 0.86)
     signal moved(real v)
 

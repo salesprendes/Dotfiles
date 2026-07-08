@@ -2,10 +2,9 @@ import QtQuick
 import QtQuick.Layouts
 import qs.Config
 
-// Contenedor "pill" reutilizable. El contenido va a un RowLayout
-// interno (centrado), cuyo ancho intrínseco dimensiona la pastilla
-// → sin binding loops. Trae interacción integrada (click, click
-// derecho, rueda) expuesta como señales.
+// Contenedor "pill" reutilizable. El contenido va a un RowLayout interno centrado,
+// cuyo ancho intrínseco dimensiona la pastilla (sin binding loops).
+// Click, click derecho y rueda expuestos como señales.
 Rectangle {
     id: pill
 

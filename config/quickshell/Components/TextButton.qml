@@ -1,12 +1,8 @@
 import QtQuick
 import qs.Config
 
-// ─────────────────────────────────────────────────────────────
-//  Botón con texto en forma de píldora. Unifica los botones que
-//  antes se recreaban inline en los modales (Cancel / Connect /
-//  Apply…). 'primary' = relleno de acento (acción principal);
-//  si no, superficie neutra. Respeta 'enabled' (atenúa y bloquea).
-// ─────────────────────────────────────────────────────────────
+// Botón con texto en forma de píldora. 'primary' = relleno de acento (acción principal),
+// si no superficie neutra. Respeta 'enabled' (atenúa y bloquea).
 Rectangle {
     id: btn
 

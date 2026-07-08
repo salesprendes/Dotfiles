@@ -150,10 +150,8 @@ Rectangle {
                 // transición solo cambia la opacidad, sin pasar por tonos grises.
                 readonly property color rowOff: Qt.rgba(Theme.surfaceHi.r, Theme.surfaceHi.g, Theme.surfaceHi.b, 0)
                 readonly property bool hovered: processList.hoveredIndex === row.index
-                // Resalte instantáneo, sin Behavior: el truco de animar "solo
-                // al entrar" con enabled dependía del orden de actualización
-                // de las ligaduras y a veces el fundido de salida corría
-                // igual, dejando varias filas marcadas al mover rápido.
+                // Resalte instantáneo, sin Behavior: animar solo la entrada
+                // dejaba varias filas marcadas al mover el ratón rápido.
                 color: hovered ? Theme.surfaceHi : rowOff
 
                 RowLayout {

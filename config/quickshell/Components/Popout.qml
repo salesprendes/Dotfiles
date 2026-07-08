@@ -1,15 +1,13 @@
 import QtQuick
 import QtQuick.Layouts
 import Quickshell
+import Quickshell.Hyprland
 import Quickshell.Wayland
 import qs.Config
 
-// ─────────────────────────────────────────────────────────────
-//  Ventana base para popouts anclados bajo la barra.
-//  exclusionMode=Ignore evita que la zona exclusiva de la barra
-//  la empuje hacia abajo → la tarjeta queda justo bajo la barra.
-//  El contenido se añade a un ColumnLayout (Popout { ...filas... }).
-// ─────────────────────────────────────────────────────────────
+// Ventana base para popouts anclados bajo la barra. exclusionMode=Ignore evita que
+// la zona exclusiva de la barra la empuje hacia abajo, así la tarjeta queda justo
+// bajo la barra. El contenido va a un ColumnLayout.
 PanelWindow {
     id: win
 
@@ -25,9 +23,6 @@ PanelWindow {
     property string ns: "qs-popout"
     property bool alignLeft: false        // ancla la tarjeta a la izquierda
     property bool alignCenter: false      // centra la tarjeta horizontalmente
-    // Conservada por compatibilidad (lanzador/portapapeles la activan), pero
-    // ya no cambia nada: todo popout abierto captura el teclado en exclusiva.
-    property bool keyboardExclusive: false
     property bool scrollable: false
     property real openProgress: 0
     readonly property string animationStyle: Settings.panelAnimationStyle
@@ -67,35 +62,47 @@ PanelWindow {
                                           : emphasizedExitCurve
     default property alias content: col.data
 
-    visible: shown || openProgress > 0
+    // Solo en el monitor con foco.
+    // El popout existe por pantalla (Variants), pero solo se mapea la superficie del
+    // monitor que tenía el foco AL ABRIR (fijado en onShownChanged, no en vivo: mover
+    // el ratón a otro monitor con el panel abierto no lo teletransporta). Sin Hyprland
+    // (focusedMonitor null) cae al fallback: visible en todos.
+    property string openedOnMonitor: ""
+    readonly property bool showsHere: openedOnMonitor === "" || !screen
+                                      || screen.name === openedOnMonitor
+
+    visible: (shown && showsHere) || openProgress > 0
     color: "transparent"
-    // Ignore (no 'exclusiveZone: 0', que forzaría Normal y empujaría
-    // la ventana bajo la barra). Así cubre desde y=0 y la tarjeta
-    // queda anclada justo bajo la barra.
+    // Ignore (no 'exclusiveZone: 0', que forzaría Normal y empujaría la ventana bajo
+    // la barra). Así cubre desde y=0 y la tarjeta queda anclada justo bajo la barra.
     exclusionMode: ExclusionMode.Ignore
 
     WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.namespace: ns
-    // Exclusive (no OnDemand) también para los paneles sin buscador: Hyprland
-    // solo da teclado a una capa OnDemand si se hace CLIC en ella, así que
-    // ESC nunca llegaba. El popout ya es modal de facto (cubre la pantalla y
-    // el clic fuera cierra), por lo que tomar el teclado mientras está
-    // abierto no quita nada y hace que ESC cierre siempre.
-    WlrLayershell.keyboardFocus: shown ? WlrKeyboardFocus.Exclusive
-                                       : WlrKeyboardFocus.None
+    // Exclusive (no OnDemand) incluso en paneles sin buscador: Hyprland solo da teclado
+    // a una capa OnDemand si se hace CLIC en ella, así que ESC nunca llegaba. El popout
+    // ya es modal de facto (clic fuera cierra); tomar el teclado no quita nada y ESC cierra siempre.
+    WlrLayershell.keyboardFocus: (shown && showsHere) ? WlrKeyboardFocus.Exclusive
+                                                      : WlrKeyboardFocus.None
 
     anchors { top: true; bottom: true; left: true; right: true }
 
     onShownChanged: {
-        if (shown)
-            openAnim.restart()
-        else
-            closeAnim.restart()
+        if (shown) {
+            openedOnMonitor = Hyprland.focusedMonitor?.name ?? ""
+            if (showsHere)
+                openAnim.restart()
+        } else {
+            closeAnim.restart()   // no-op si nunca se abrió aquí (progress ya es 0)
+        }
     }
 
     Component.onCompleted: {
-        if (shown)
-            openAnim.restart()
+        if (shown) {
+            openedOnMonitor = Hyprland.focusedMonitor?.name ?? ""
+            if (showsHere)
+                openAnim.restart()
+        }
     }
 
     NumberAnimation {
@@ -144,25 +151,21 @@ PanelWindow {
         border.color: Theme.panelBorder
         clip: true
         antialiasing: true
-        // ESC cierra el panel. Va en la tarjeta (Item) y no en la ventana:
-        // Keys solo funciona sobre Items, así que colgado del PanelWindow
-        // nunca recibía la tecla. Con focus la tarjeta captura ESC cuando
-        // nada más tiene el foco, y si un hijo lo tiene (buscador del
-        // lanzador/portapapeles) el evento no consumido burbujea hasta aquí.
+        // ESC cierra el panel. Va en la tarjeta (Item), no en la ventana: Keys solo
+        // funciona sobre Items, colgado del PanelWindow nunca recibía la tecla. Con focus
+        // la tarjeta captura ESC; si un hijo tiene el foco (buscador), el evento no
+        // consumido burbujea hasta aquí.
         focus: true
         Keys.onEscapePressed: Globals.closeAll()
         opacity: win.directionalMotion ? 1 : win.openProgress
         scale: win.panelScale
         transformOrigin: Item.Top
 
-        // Renderiza la tarjeta a una textura (FBO) durante toda su vida
-        // visible y escala ESA textura, en vez de re-rasterizar el borde
-        // fino (hairline) y las esquinas redondeadas en cada frame del
-        // escalado → elimina el parpadeo de las líneas del contorno. Se
-        // mantiene activa toda la vida visible (no se conmuta a mitad de la
-        // animación) para que los paneles altos/pesados no tengan ningún
-        // frame de transición al asignar el FBO. En reposo scale=1 y la
-        // geometría es entera, así que la textura se muestrea 1:1 → nítido.
+        // Renderiza la tarjeta a una textura (FBO) mientras es visible y escala esa
+        // textura, en vez de re-rasterizar el hairline y las esquinas redondeadas en
+        // cada frame del escalado (eso hacía parpadear el contorno). Activa toda la vida
+        // visible, sin conmutar a mitad de animación. En reposo scale=1 y geometría
+        // entera: muestreo 1:1, nítido.
         layer.enabled: win.visible
         layer.smooth: true
 
@@ -174,11 +177,10 @@ PanelWindow {
             enabled: win.openProgress > 0.92
         }
 
-        // Contenedor desplazable. Cuando 'scrollable' está activo y el
-        // contenido supera la altura de la tarjeta (topada en cardMaxHeight),
-        // se desplaza en vez de recortarse → lo de abajo nunca desaparece.
-        // Para los paneles que no lo activan se comporta igual que antes
-        // (no interactivo): su scroll interno propio sigue funcionando.
+        // Contenedor desplazable. Con 'scrollable' activo y contenido más alto que la
+        // tarjeta (topada en cardMaxHeight), desplaza en vez de recortar: lo de abajo
+        // nunca desaparece. Sin 'scrollable' queda no interactivo y el scroll interno
+        // propio del panel sigue funcionando.
         Flickable {
             id: flick
             anchors.fill: parent

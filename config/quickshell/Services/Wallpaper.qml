@@ -5,13 +5,9 @@ import Quickshell
 import Quickshell.Io
 import qs.Config
 
-// ─────────────────────────────────────────────────────────────
-//  Servicio de fondos de pantalla.
-//  Escanea una o varias carpetas en busca de imágenes y expone la
-//  ruta del fondo actual. Background/Backdrop.qml renderiza la imagen y sus
-//  transiciones; 'apply()' solo cambia 'current';
-//  la ventana de fondo se encarga de la transición.
-// ─────────────────────────────────────────────────────────────
+// Fondos de pantalla: escanea una o varias carpetas y expone la ruta del
+// fondo actual. Backdrop.qml renderiza la imagen y sus transiciones; apply()
+// solo cambia current y la ventana de fondo hace el fundido.
 Singleton {
     id: root
 
@@ -26,10 +22,17 @@ Singleton {
     property var    list: []     // rutas absolutas de imágenes encontradas
     property string current: ""  // fondo aplicado actualmente
     property bool   scanning: false
-
-    function shellQuote(s) { return "'" + String(s).replace(/'/g, "'\\''") + "'" }
+    property double _lastScan: 0 // ms epoch del último escaneo completado
 
     function refresh() { scanProc.running = true }
+
+    // Re-escanea solo si el último escaneo completado es más viejo que
+    // maxAgeMs (o si aún no hay lista). Evita que cada apertura del Dashboard
+    // resetee el GridView y re-pida todas las miniaturas.
+    function refreshIfStale(maxAgeMs) {
+        if (list.length === 0 || _lastScan === 0 || Date.now() - _lastScan > maxAgeMs)
+            refresh()
+    }
 
     // Cambia el fondo: basta con fijar 'current'; Backdrop.qml hace el fundido.
     // Persiste la ruta en Settings para conservarla entre reinicios/recargas.
@@ -68,7 +71,7 @@ Singleton {
     Process {
         id: scanProc
         command: ["sh", "-c",
-            "for d in " + root.searchDirs.map(root.shellQuote).join(" ") + "; do "
+            "for d in " + root.searchDirs.map(Utils.shellQuote).join(" ") + "; do "
             + "[ -d \"$d\" ] && find -L \"$d\" -maxdepth 2 -type f "
             + "\\( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' "
             + "-o -iname '*.webp' -o -iname '*.gif' \\); done | sort -u"]
@@ -76,6 +79,7 @@ Singleton {
         stdout: StdioCollector {
             onStreamFinished: {
                 root.list = text.split("\n").filter(l => l.trim() !== "")
+                root._lastScan = Date.now()
                 root._applyDefaultIfNeeded()
             }
         }

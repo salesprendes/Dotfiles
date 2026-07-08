@@ -5,9 +5,8 @@ import qs.Components
 import qs.Config
 import qs.Services
 
-// Detalle WiFi unificado en una caja: cabecera con estado + interruptor,
-// y lista de redes con la conectada resaltada por color y borde.
-// Escanea solo mientras está visible. Click conecta/desconecta.
+// WiFi: cabecera con estado + interruptor y lista de redes, la conectada
+// resaltada. Escanea solo mientras está visible. Click conecta/desconecta.
 ColumnLayout {
     id: root
     width: parent ? parent.width : implicitWidth
@@ -25,7 +24,7 @@ ColumnLayout {
         return arr
     }
 
-    // ── Caja única ───────────────────────────────────────────
+    // Caja única.
     Rectangle {
         Layout.fillWidth: true
         implicitHeight: body.implicitHeight + Theme.space16 * 2

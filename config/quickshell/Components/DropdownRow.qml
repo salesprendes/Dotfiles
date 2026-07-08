@@ -2,16 +2,8 @@ import QtQuick
 import QtQuick.Layouts
 import qs.Config
 
-// Desplegable reutilizable (etiqueta + selector con panel animado). Antes era
-// un componente inline de Ajustes; extraído a Components para compartirlo entre
-// vistas. La animación usa altura + opacidad al abrir y hover por opacidad para
-// evitar artefactos de fondo.
-//
-// Uso:
-//   DropdownRow {
-//       label: "..."; options: [{ text, value }, …]; current: value
-//       onPicked: (v) => { ... }
-//   }
+// Desplegable reutilizable (etiqueta + selector con panel animado).
+// La animación va por altura + opacidad (no scale) para evitar artefactos de fondo.
 ColumnLayout {
     id: root
     property string label: ""
@@ -23,9 +15,8 @@ ColumnLayout {
     property int keyboardIndex: -1
     signal picked(var v)
 
-    // Grupo exclusivo opcional: si varios DropdownRow comparten el mismo objeto
-    // en 'group' (con una propiedad 'openItem'), solo uno permanece abierto a la
-    // vez — al abrir uno, los demás del grupo se cierran automáticamente.
+    // Grupo exclusivo opcional: si varios DropdownRow comparten el objeto 'group'
+    // (con propiedad 'openItem'), solo uno queda abierto; abrir uno cierra los demás.
     property QtObject group: null
     Connections {
         target: root.group
@@ -36,8 +27,7 @@ ColumnLayout {
         }
     }
 
-    // Colores derivados de Theme (sobreescribibles). Equivalen a los tokens
-    // settings* que usaba el inline original.
+    // Colores derivados de Theme (sobreescribibles).
     property color controlColor: Qt.rgba(Theme.surface.r, Theme.surface.g, Theme.surface.b, 0.86)
     property color borderColor:  Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.28)
     property color cardColor:    Qt.rgba(Theme.surface.r, Theme.surface.g, Theme.surface.b, 0.72)
@@ -115,7 +105,7 @@ ColumnLayout {
     onOpenChanged: {
         if (open) {
             syncKeyboardIndex()
-            if (group) group.openItem = root   // reclama el grupo → cierra los demás
+            if (group) group.openItem = root   // reclama el grupo, cierra los demás
         }
     }
 
@@ -197,7 +187,7 @@ ColumnLayout {
         readonly property int panelHeight: Math.min(
             Math.max(1, root.maxVisibleItems) * optionHeight + Theme.space4 * 2,
             optionList.contentHeight + Theme.space4 * 2)
-        // Solo altura + opacidad, sin scale/desplazamiento (que causaban "salto").
+        // Solo altura + opacidad; scale/desplazamiento causaban "salto".
         implicitHeight: root.open ? panelHeight : 0
         Behavior on implicitHeight { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
         opacity: root.open ? 1 : 0
@@ -233,9 +223,9 @@ ColumnLayout {
                     width: ListView.view.width
                     height: dropdownClip.optionHeight
                     radius: Theme.pillRadius - Theme.space2
-                    // El color base solo va entre acento-tinte y "transparent";
-                    // el hover es una capa aparte que anima su OPACIDAD (así no
-                    // se interpola hacia el negro de "transparent").
+                    // El color base solo va de acento-tinte a "transparent"; el hover
+                    // es una capa aparte que anima su opacidad (si no, se interpola
+                    // hacia el negro de "transparent").
                     color: sel ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.18)
                                : focused ? Theme.focusBg : "transparent"
                     Behavior on color { ColorAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }

@@ -72,7 +72,7 @@ ColumnLayout {
         title: I18n.tr("Audio Devices")
         icon: "󰕾"
 
-        // Dispositivos de salida (source).
+        // Dispositivos de salida.
         ColumnLayout {
             Layout.fillWidth: true
             spacing: Theme.space6
@@ -95,7 +95,7 @@ ColumnLayout {
             }
         }
 
-        // Sub-cabecera "Playback" dentro de la misma tarjeta.
+        // Sub-cabecera Playback, misma tarjeta.
         RowLayout {
             Layout.fillWidth: true
             Layout.topMargin: Theme.space4
@@ -245,8 +245,7 @@ ColumnLayout {
         property color accent: Theme.accent
 
         Layout.fillWidth: true
-        // La altura sigue al contenido (cabecera + slider) para que nada se
-        // solape ni el slider se salga por abajo.
+        // Altura pegada al contenido para que el slider no se salga por abajo.
         implicitHeight: streamCol.implicitHeight + Theme.space10 * 2
         radius: Theme.pillRadius
         color: Qt.rgba(Theme.surface.r, Theme.surface.g, Theme.surface.b, 0.36)
@@ -265,8 +264,7 @@ ColumnLayout {
                 Layout.fillWidth: true
                 spacing: Theme.space8
 
-                // El icono actúa como botón de silencio (compacto, sin fila
-                // de etiqueta extra: el % ya va a la derecha).
+                // El icono hace de botón de silencio; el % ya va a la derecha.
                 Rectangle {
                     implicitWidth: Theme.controlM
                     implicitHeight: Theme.controlM

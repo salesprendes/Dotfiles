@@ -1,10 +1,7 @@
 //@ pragma UseQApplication
-//  ╔══════════════════════════════════════════════════════════╗
-//  ║   Quickshell · Tema "Storm"                                ║
-//  ║   Punto de entrada — una barra por cada monitor.           ║
-//  ╚══════════════════════════════════════════════════════════╝
-//  UseQApplication: necesario para los menús nativos del tray
-//  (SystemTray → modelData.display()).
+// Punto de entrada del shell: una barra por monitor.
+// UseQApplication hace falta para los menús nativos del tray
+// (SystemTray → modelData.display()).
 
 import QtQuick
 import Quickshell
@@ -77,14 +74,12 @@ ShellRoot {
         function close(): void { Globals.closeAll() }
     }
 
-    // ── Cierre automático al bloquear la sesión ──────────────────
-    //  Escucha la señal 'Lock' de logind (la emite `loginctl lock-session`,
-    //  que es lo que usa hypridle al inactivarse/suspender). Así Quickshell
-    //  cierra sus paneles por sí mismo, sin depender de que el lock_cmd
-    //  ejecute `qs ipc` — pase como pase el bloqueo, los popouts se cierran.
-    //  Usa `gdbus monitor` (suscripción normal de cliente, permitida sin
-    //  privilegios) — NO `dbus-monitor --system`, que requiere ser root.
-    //  Cada señal sale como: ".../session/_X: org.freedesktop.login1.Session.Lock ()"
+    // Cierre automático al bloquear la sesión. Escucha la señal 'Lock' de
+    // logind (la emite `loginctl lock-session`, que es lo que usa hypridle al
+    // inactivarse/suspender), así los paneles se cierran solos sin depender de
+    // que el lock_cmd ejecute `qs ipc`. Usa `gdbus monitor` (suscripción de
+    // cliente, sin privilegios), no `dbus-monitor --system` que requiere root.
+    // Cada señal sale como: ".../session/_X: org.freedesktop.login1.Session.Lock ()"
     Process {
         id: lockMonitor
         running: true
@@ -102,8 +97,7 @@ ShellRoot {
                     Resume.notify(line.indexOf("true") !== -1)
             }
         }
-        // Si el monitor muere (reinicio de dbus, etc.) se relanza tras una
-        // pausa. Por evento: antes un timer sondeaba cada 3 s para siempre.
+        // Si el monitor muere (reinicio de dbus, etc.) se relanza tras una pausa.
         onExited: lockRestart.restart()
     }
     Timer {
@@ -112,16 +106,13 @@ ShellRoot {
         onTriggered: lockMonitor.running = true
     }
 
-    // ── Tema "Liquid Glass": blur del compositor en las capas del shell ──────
-    //  Mientras el tema "liquid-glass" esté activo se pide a Hyprland (parser
-    //  Lua → `hyprctl eval`, igual que Displays con los monitores) que aplique
-    //  blur a los namespaces del shell. `ignore_alpha` enmascara el blur SOLO a
-    //  la parte translúcida (barra/tarjeta); el resto de la ventana, que es
-    //  transparente, NO se esmerila (si no, un popout a pantalla completa
-    //  frostearía toda la pantalla). Al salir del tema se revierte (blur=false).
-    //  Reversible, en vivo y sin editar los .lua de Hyprland; se re-aplica al
-    //  arrancar por si el tema ya venía seleccionado. Se excluyen a propósito
-    //  wallpaper/splash/carrusel.
+    // Tema "Liquid Glass": pide a Hyprland (parser Lua → `hyprctl eval`) que
+    // aplique blur a los namespaces del shell mientras el tema esté activo.
+    // `ignore_alpha` limita el blur a la parte translúcida (barra/tarjeta); el
+    // resto de la ventana es transparente y no se esmerila, si no un popout a
+    // pantalla completa frostearía toda la pantalla. Al salir se revierte
+    // (blur=false). Se re-aplica al arrancar por si el tema ya venía puesto. Se
+    // excluyen a propósito wallpaper/splash/carrusel.
     readonly property var glassLayers: [
         "quickshell", "qs-popout", "qs-launcher", "qs-notifcenter", "qs-clipboard",
         "qs-controlcenter", "qs-sysmon", "qs-dashboard", "qs-popups", "qs-osd-volume",
@@ -129,11 +120,24 @@ ShellRoot {
     ]
     function applyGlassBlur() {
         const on = Settings.themeName === "liquid-glass"
+        // qs-popups lleva además xray: sin él, la caché del blur de Hyprland
+        // se realimenta con el fotograma anterior de la propia capa y, al
+        // reacomodarse la pila de popups (escena estática tras no_anim), la
+        // tarjeta restante se veía con el texto duplicado/emborronado durante
+        // segundos. Con xray el blur muestrea solo lo que hay detrás.
         const lua = shell.glassLayers.map(n =>
             'hl.layer_rule({ name = "qs-glass-' + n + '", match = { namespace = "' + n
-            + '" }, blur = ' + on + ', ignore_alpha = 0.1 })'
+            + '" }, blur = ' + on + ', ignore_alpha = 0.1'
+            + (n === "qs-popups" ? ', xray = true' : '') + ' })'
         ).join("; ")
-        Quickshell.execDetached(["hyprctl", "eval", lua])
+        // Los popups de notificación animan su entrada/salida DESDE QML;
+        // sin esta regla Hyprland superpone además su animación de layers
+        // (fade al mapear/desmapear y el redimensionado de la capa), lo que
+        // producía una entrada doble "forzada" y una franja gris residual
+        // al desvanecer la instantánea del último búfer tras cerrar.
+        const noanim = '; hl.layer_rule({ name = "qs-noanim-popups", match = '
+            + '{ namespace = "qs-popups" }, no_anim = true })'
+        Quickshell.execDetached(["hyprctl", "eval", lua + noanim])
     }
     Component.onCompleted: applyGlassBlur()
     Connections {
@@ -156,11 +160,10 @@ ShellRoot {
         Component.onCompleted: shell.startupCarouselReady = true
     }
 
-    // Splash breve al entrar en la sesión; oculta el salto visual entre TTY
-    // y escritorio mientras terminan de aparecer la barra y el fondo.
-    //
-    // Solo se usa una vez al arrancar: tras la animación se libera (active=false)
-    // para no dejar una ventana por monitor residente el resto de la sesión.
+    // Splash breve al entrar en la sesión; tapa el salto visual entre TTY y
+    // escritorio mientras aparecen la barra y el fondo. Se usa solo al arrancar:
+    // tras la animación se libera (active=false) para no dejar una ventana por
+    // monitor residente toda la sesión.
     Variants {
         model: Quickshell.screens
         delegate: LazyLoader {
@@ -184,22 +187,23 @@ ShellRoot {
         }
     }
 
-    // Paneles emergentes (uno por pantalla; su visibilidad la controla
-    // el singleton Globals desde los widgets de la barra).
-    //
-    // Carga perezosa con "latch": no se construyen al arrancar, solo la
-    // primera vez que se abren, y luego permanecen cargados para conservar
-    // las animaciones de apertura (si se destruyeran al cerrar, cada
-    // apertura nacería con shown=true y no animaría).
+    // Paneles emergentes (uno por pantalla; Globals controla su visibilidad
+    // desde los widgets de la barra). Carga perezosa sin latch: se construyen
+    // al abrir (Popout anima al nacer vía Component.onCompleted) y se liberan al
+    // terminar la animación de cierre; `closing` mantiene el loader activo
+    // mientras la ventana siga visible (openProgress > 0), así el cierre anima
+    // completo antes de destruir.
     Variants {
         model: Quickshell.screens
         delegate: LazyLoader {
             id: ccL
             required property var modelData
-            property bool loaded: false
-            active: Globals.controlCenterOpen || loaded
-            onActiveChanged: if (active) loaded = true
-            ControlCenter { modelData: ccL.modelData }
+            property bool closing: false
+            activeAsync: Globals.controlCenterOpen || closing
+            ControlCenter {
+                modelData: ccL.modelData
+                onVisibleChanged: ccL.closing = visible
+            }
         }
     }
     Variants {
@@ -207,10 +211,12 @@ ShellRoot {
         delegate: LazyLoader {
             id: ncL
             required property var modelData
-            property bool loaded: false
-            active: Globals.notifCenterOpen || loaded
-            onActiveChanged: if (active) loaded = true
-            NotificationCenter { modelData: ncL.modelData }
+            property bool closing: false
+            activeAsync: Globals.notifCenterOpen || closing
+            NotificationCenter {
+                modelData: ncL.modelData
+                onVisibleChanged: ncL.closing = visible
+            }
         }
     }
     Variants {
@@ -218,10 +224,12 @@ ShellRoot {
         delegate: LazyLoader {
             id: smL
             required property var modelData
-            property bool loaded: false
-            activeAsync: Globals.sysMonOpen || loaded
-            onActiveChanged: if (active) loaded = true
-            SystemMonitor { modelData: smL.modelData }
+            property bool closing: false
+            activeAsync: Globals.sysMonOpen || closing
+            SystemMonitor {
+                modelData: smL.modelData
+                onVisibleChanged: smL.closing = visible
+            }
         }
     }
     Variants {
@@ -229,10 +237,12 @@ ShellRoot {
         delegate: LazyLoader {
             id: alL
             required property var modelData
-            property bool loaded: false
-            activeAsync: Globals.launcherOpen || loaded
-            onActiveChanged: if (active) loaded = true
-            AppLauncher { modelData: alL.modelData }
+            property bool closing: false
+            activeAsync: Globals.launcherOpen || closing
+            AppLauncher {
+                modelData: alL.modelData
+                onVisibleChanged: alL.closing = visible
+            }
         }
     }
     Variants {
@@ -240,10 +250,12 @@ ShellRoot {
         delegate: LazyLoader {
             id: clipL
             required property var modelData
-            property bool loaded: false
-            active: Globals.clipboardOpen || loaded
-            onActiveChanged: if (active) loaded = true
-            ClipboardPanel { modelData: clipL.modelData }
+            property bool closing: false
+            activeAsync: Globals.clipboardOpen || closing
+            ClipboardPanel {
+                modelData: clipL.modelData
+                onVisibleChanged: clipL.closing = visible
+            }
         }
     }
     Variants {
@@ -251,34 +263,60 @@ ShellRoot {
         delegate: LazyLoader {
             id: dashL
             required property var modelData
-            property bool loaded: false
-            active: Globals.dashboardOpen || loaded
-            onActiveChanged: if (active) loaded = true
-            Dashboard { modelData: dashL.modelData }
+            property bool closing: false
+            activeAsync: Globals.dashboardOpen || closing
+            Dashboard {
+                modelData: dashL.modelData
+                onVisibleChanged: dashL.closing = visible
+            }
         }
     }
+    // La toolbar se libera al cerrarse (patrón `closing`, como los paneles): la
+    // píldora basta para controlar la grabación y ScreenCapture (singleton)
+    // conserva el estado. Si se reabre mientras graba, se reconstruye al momento.
     LazyLoader {
-        active: Globals.screenCaptureOpen || ScreenCapture.isRecording
-        ScreenCaptureToolbar {}
+        id: sctL
+        property bool closing: false
+        activeAsync: Globals.screenCaptureOpen || closing
+        ScreenCaptureToolbar {
+            onVisibleChanged: sctL.closing = visible
+        }
     }
+    // La píldora de grabación solo existe mientras se graba.
     Variants {
         model: Quickshell.screens
-        delegate: RecordingPill {}
+        delegate: LazyLoader {
+            id: pillL
+            required property var modelData
+            active: ScreenCapture.isRecording
+            RecordingPill { modelData: pillL.modelData }
+        }
     }
-    // Ventana de ajustes: una sola ventana real (toplevel de Hyprland).
-    // Carga perezosa: no se construye (937 líneas) hasta el primer
-    // uso, y se libera al cerrarla.
+    // Ventana de ajustes: una sola ventana real (toplevel de Hyprland). Carga
+    // perezosa: no se construye hasta el primer uso y se libera al cerrarla.
     LazyLoader {
         active: Globals.settingsOpen
         Settings {}
     }
+    // Modales de red: casos raros, se construyen solo al abrirse y se liberan al
+    // cerrar.
     Variants {
         model: Quickshell.screens
-        delegate: WifiPasswordModal {}
+        delegate: LazyLoader {
+            id: wifiL
+            required property var modelData
+            active: Net.promptNetwork !== null
+            WifiPasswordModal { modelData: wifiL.modelData }
+        }
     }
     Variants {
         model: Quickshell.screens
-        delegate: IpSettingsModal {}
+        delegate: LazyLoader {
+            id: ipL
+            required property var modelData
+            active: Net.ipConfigOpen
+            IpSettingsModal { modelData: ipL.modelData }
+        }
     }
     Variants {
         model: Quickshell.screens

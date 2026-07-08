@@ -4,10 +4,9 @@ import qs.Components
 import qs.Config
 import qs.Services
 
-// Detalle Bluetooth unificado en una caja: cabecera con estado + interruptor,
-// y lista de dispositivos con el conectado resaltado por color y borde.
-// Click conecta/desconecta. Debajo del nombre: % de batería si
-// está disponible; si no, "conectado".
+// Bluetooth: cabecera con estado + interruptor y lista de dispositivos, el
+// conectado resaltado. Click conecta/desconecta. Debajo del nombre va la
+// batería si hay dato, si no "conectado".
 ColumnLayout {
     id: root
     width: parent ? parent.width : implicitWidth
@@ -22,7 +21,7 @@ ColumnLayout {
         return arr
     }
 
-    // ── Caja única ───────────────────────────────────────────
+    // Caja única.
     Rectangle {
         Layout.fillWidth: true
         implicitHeight: body.implicitHeight + Theme.space16 * 2
@@ -147,8 +146,8 @@ ColumnLayout {
                     font.bold: br.conn
                     elide: Text.ElideRight
                 }
-                // Debajo: % de batería; si no está disponible → "conectado"
-                // (o "emparejado" para los no conectados pero recordados).
+                // Batería si hay dato; si no "conectado", o "emparejado"
+                // para los recordados que no están conectados.
                 Text {
                     Layout.fillWidth: true
                     visible: br.batAvail || br.conn || br.paired

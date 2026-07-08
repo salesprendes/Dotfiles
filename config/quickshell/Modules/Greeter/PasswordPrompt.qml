@@ -23,6 +23,20 @@ Item {
         pwInput.forceActiveFocus()
     }
 
+    // Caret que parpadea. Reutilizado en modo oculto (junto a los puntos) y
+    // visible (cursorDelegate del TextInput): misma animación, distinta altura.
+    component BlinkCaret: Rectangle {
+        width: Theme.dp(2)
+        radius: width / 2
+        color: Theme.accent
+        SequentialAnimation on opacity {
+            running: visible
+            loops: Animation.Infinite
+            NumberAnimation { to: 0.15; duration: 480; easing.type: Easing.InOutQuad }
+            NumberAnimation { to: 1;    duration: 480; easing.type: Easing.InOutQuad }
+        }
+    }
+
     Column {
         id: pwCol
         width: parent.width
@@ -110,7 +124,7 @@ Item {
                              : revealMa.containsMouse ? Theme.fg : Theme.fgMuted
                         font.family: Theme.font
                         font.pixelSize: Theme.sp(15)
-                        // El color del icono ya no salta: transiciona suave.
+                        // El color del icono transiciona suave, sin saltos.
                         Behavior on color { ColorAnimation { duration: 170; easing.type: Easing.OutCubic } }
                         transform: Scale {
                             id: eyeScale
@@ -184,19 +198,10 @@ Item {
                                 antialiasing: true
                             }
                         }
-                        Rectangle {
-                            id: caret
+                        BlinkCaret {
                             anchors.verticalCenter: parent.verticalCenter
-                            width: Theme.dp(2); height: Theme.dp(18)
-                            radius: width / 2
-                            color: Theme.accent
+                            height: Theme.dp(18)
                             visible: pwInput.activeFocus && !GreeterState.busy
-                            SequentialAnimation on opacity {
-                                running: caret.visible
-                                loops: Animation.Infinite
-                                NumberAnimation { to: 0.15; duration: 480; easing.type: Easing.InOutQuad }
-                                NumberAnimation { to: 1;    duration: 480; easing.type: Easing.InOutQuad }
-                            }
                         }
                     }
                     TextInput {
@@ -210,19 +215,10 @@ Item {
                         // propio el cursor nativo nunca se dibuja: nada en modo
                         // oculto (ya está el caret de los puntos) y un caret a
                         // juego cuando la contraseña es visible.
-                        cursorDelegate: Rectangle {
+                        cursorDelegate: BlinkCaret {
+                            height: pwInput.cursorRectangle.height
                             visible: !GreeterState.masked && pwInput.activeFocus
                                      && !GreeterState.busy
-                            width: Theme.dp(2)
-                            height: pwInput.cursorRectangle.height
-                            radius: width / 2
-                            color: Theme.accent
-                            SequentialAnimation on opacity {
-                                running: visible
-                                loops: Animation.Infinite
-                                NumberAnimation { to: 0.15; duration: 480; easing.type: Easing.InOutQuad }
-                                NumberAnimation { to: 1;    duration: 480; easing.type: Easing.InOutQuad }
-                            }
                         }
                         font.family: Theme.font
                         font.pixelSize: Theme.sp(15)
@@ -231,11 +227,11 @@ Item {
                         echoMode: GreeterState.masked ? TextInput.Password : TextInput.Normal
                         selectByMouse: false
                         // Tab recorre los controles con la cadena de foco de Qt:
-                        // contraseña → botón entrar → selector de sesión → botones
-                        // de energía → y vuelve aquí (Shift+Tab, al revés).
+                        // contraseña, botón entrar, selector de sesión, botones de
+                        // energía y vuelve aquí (Shift+Tab, al revés).
                         activeFocusOnTab: true
                         // ESC, en orden: cierra el desplegable de sesiones (si se
-                        // abrió con el ratón) → borra lo tecleado → vuelve al
+                        // abrió con el ratón), borra lo tecleado, y vuelve al
                         // selector de usuarios (solo si hay más de uno).
                         Keys.onEscapePressed: {
                             if (GreeterState.busy) return
@@ -248,11 +244,11 @@ Item {
                 }
             }
 
-            // Botón Enter — estilo macOS: círculo con flecha →. En reposo, un
-            // contorno sutil sobre relleno translúcido; al poder enviar, se
-            // rellena de acento (se aclara al pasar el ratón, se oscurece al
-            // pulsar). Es enfocable con Tab: al recibir foco muestra un anillo
-            // y se activa con Enter o Espacio.
+            // Botón Enter: círculo con flecha. En reposo, contorno sutil sobre
+            // relleno translúcido; al poder enviar, se rellena de acento (se
+            // aclara al pasar el ratón, se oscurece al pulsar). Enfocable con
+            // Tab: al recibir foco muestra un anillo y se activa con Enter o
+            // Espacio.
             Rectangle {
                 id: enterBtn
                 width: Theme.dp(46); height: Theme.dp(46)
@@ -262,8 +258,9 @@ Item {
                                       && GreeterState.selectedUser !== ""
 
                 // Entra en la cadena de foco de Tab (tras el campo de contraseña)
-                // y se activa por teclado igual que un botón nativo.
-                activeFocusOnTab: true
+                // y se activa por teclado igual que un botón nativo. Fuera de la
+                // cadena mientras no está disponible (sin texto): Tab lo salta.
+                activeFocusOnTab: enterBtn.active
                 Keys.onReturnPressed: if (active) pw._sendPassword()
                 Keys.onEnterPressed:  if (active) pw._sendPassword()
                 Keys.onSpacePressed:  if (active) pw._sendPassword()
@@ -278,7 +275,7 @@ Item {
                 scale: enterMa.pressed && active ? 0.94 : 1
                 Behavior on scale { NumberAnimation { duration: 90; easing.type: Easing.OutQuad } }
 
-                // Anillo de foco (estilo macOS) al llegar con Tab.
+                // Anillo de foco al llegar con Tab.
                 Rectangle {
                     anchors.fill: parent
                     anchors.margins: -Theme.dp(3)
@@ -291,7 +288,7 @@ Item {
 
                 Text {
                     anchors.centerIn: parent
-                    text: "󰁔"                          // flecha → (estilo macOS)
+                    text: "󰁔"                          // flecha →
                     color: enterBtn.active ? Theme.bg : Theme.fgMuted
                     font.family: Theme.font
                     font.pixelSize: Theme.sp(18)

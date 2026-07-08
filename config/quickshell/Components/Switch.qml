@@ -1,14 +1,9 @@
 import QtQuick
 import qs.Config
 
-// ─────────────────────────────────────────────────────────────
-//  Interruptor on/off reutilizable (pista + bolita deslizante).
-//  Unifica el toggle que antes se recreaba a mano en WifiDetail,
-//  BluetoothDetail y el SwitchRow de Ajustes.
-//    · onColor       acento de la pista encendida (BT usa accent2).
-//    · offColor      color de la pista apagada.
-//    · offBorderColor borde cuando está apagado.
-// ─────────────────────────────────────────────────────────────
+// Interruptor on/off reutilizable (pista + bolita deslizante).
+// onColor: acento de la pista encendida (BT usa accent2). offColor: pista apagada.
+// offBorderColor: borde cuando está apagado.
 Rectangle {
     id: sw
 

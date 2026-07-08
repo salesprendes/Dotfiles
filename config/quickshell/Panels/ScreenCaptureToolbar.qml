@@ -75,15 +75,11 @@ PanelWindow {
             anchors.horizontalCenter: parent.horizontalCenter
             anchors.top: parent.top
             anchors.topMargin: Theme.barHeight + Theme.dp(34)
-            // El ancho se adapta al contenido de la barra; al abrir ajustes
-            // crece hasta un ancho cómodo para el panel.
-            // Ancho CONSTANTE (no depende de si el panel está abierto). Animar
-            // el ancho de un Layout (stack es ColumnLayout) hace que el motor de
-            // layouts pelee con la animación cada fotograma → la barra "tiembla".
-            // Al dejarlo fijo, el contenedor nunca cambia de tamaño y el panel se
-            // despliega solo con alto + opacidad + deslizamiento (sobre un Item,
-            // que sí es seguro animar). Con el panel cerrado, este ancho extra es
-            // transparente —solo se ve la barra, centrada—, así que no hay salto.
+            // Ancho constante: animar el ancho de un Layout hace que el motor de
+            // layouts pelee con la animación cada frame y la barra tiemble. Fijo,
+            // solo se animan alto + opacidad + deslizamiento (sobre un Item). Con
+            // el panel cerrado el ancho extra es transparente, así que solo se ve
+            // la barra centrada y no hay salto.
             width: Math.min(win.availWidth, Math.max(toolbar.implicitWidth, win.settingsWidth))
             spacing: Theme.space10
 
@@ -161,10 +157,8 @@ PanelWindow {
                                 : 0
                 opacity: win.settingsExpanded ? 1 : 0
                 clip: true
-                // Alto y opacidad comparten curva y duración (Theme.animNormal,
-                // que deriva de la velocidad elegida en Ajustes) → apertura y
-                // cierre fluidos y sincronizados. Antes la opacidad iba en
-                // animFast lineal y el contenido "parpadeaba" antes de tiempo.
+                // Alto y opacidad comparten curva y duración (Theme.animNormal),
+                // así apertura y cierre van sincronizados.
                 Behavior on implicitHeight { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
                 Behavior on opacity { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
 
@@ -178,9 +172,8 @@ PanelWindow {
                     // al abrir (acoplado a la opacidad ya animada, sin timers).
                     transform: Translate { y: (1 - settingsClip.opacity) * -Theme.dp(10) }
 
-                    // Absorbe los clics que caigan dentro del panel pero fuera de
-                    // una opción, para que un clic accidental NO cierre los ajustes
-                    // (antes el clic atravesaba y llegaba al fondo, que cierra).
+                    // Absorbe los clics dentro del panel pero fuera de una opción,
+                    // para que uno accidental no atraviese al fondo y cierre.
                     MouseArea { anchors.fill: parent; onClicked: {} }
 
                     Flickable {
@@ -194,12 +187,9 @@ PanelWindow {
 
                         ColumnLayout {
                             id: settingsContent
-                            // Ancho FIJO al valor final (no el del Flickable, que
-                            // se anima). Así el contenido no se re-ajusta durante
-                            // la animación de ancho y su altura no oscila: sin ese
-                            // desacople, alto y ancho se realimentaban y la barra
-                            // "temblaba" al abrir/cerrar. Mientras crece la caja,
-                            // el contenido queda recortado → revelado limpio.
+                            // Ancho fijo al valor final (no el del Flickable, que se
+                            // anima): si no, alto y ancho se realimentan y tiembla.
+                            // Mientras crece la caja, el contenido queda recortado.
                             width: Math.max(1, win.settingsWidth - Theme.space16 * 2)
                             spacing: Theme.space14
 
@@ -480,8 +470,7 @@ PanelWindow {
                                 : "transparent"
         border.width: activeFocus ? Theme.focusWidth : (active ? Theme.hairline : 0)
         border.color: activeFocus ? Theme.focusRing : Theme.withAlpha(tint, 0.55)
-        // Resalte fluido: fundido de color/borde con curva suave y un leve
-        // escalado al pasar el ratón (antes el cambio era lineal y "duro").
+        // Resalte fluido: fundido de color/borde y leve escalado al pasar el ratón.
         scale: hovered && !active ? 1.08 : 1.0
         Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
         Behavior on border.color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }

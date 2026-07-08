@@ -26,6 +26,14 @@ Popout {
     readonly property real emptyStateHeight: Globals.dnd ? 132 : emptyBodyHeight
     property real bodyHeight: emptyBodyHeight
     property var groups: []
+    // Con el panel oculto no reconstruimos la lista: marcamos "sucio" y se
+    // reconstruye una sola vez al abrir. Ahorra destruir/crear delegados
+    // por cada notificación que llega o se descarta en segundo plano.
+    property bool _dirty: false
+    // Estado de expansión por grupo (clave = título/app del grupo). Vive en
+    // la raíz para sobrevivir a los reseteos de modelo: al reasignar
+    // `groups`, los delegados se recrean pero releen este mapa.
+    property var _expandedGroups: ({})
 
     Behavior on bodyHeight { NumberAnimation { duration: 240; easing.type: Easing.OutCubic } }
 
@@ -68,6 +76,27 @@ Popout {
         }
 
         groups = out
+
+        // Poda claves de expansión de grupos que ya no existen.
+        let changed = false
+        const pruned = {}
+        for (const k in _expandedGroups) {
+            if (byApp[k])
+                pruned[k] = true
+            else
+                changed = true
+        }
+        if (changed)
+            _expandedGroups = pruned
+    }
+
+    function setExpanded(key, v) {
+        const m = Object.assign({}, _expandedGroups)
+        if (v)
+            m[key] = true
+        else
+            delete m[key]
+        _expandedGroups = m
     }
 
     function dismissGroup(group) {
@@ -121,6 +150,10 @@ Popout {
     Connections {
         target: NotifService
         function onCountChanged() {
+            if (!nc.shown) {
+                nc._dirty = true
+                return
+            }
             nc.rebuildGroups()
             nc.refreshBodyHeight()
         }
@@ -188,7 +221,10 @@ Popout {
     }
 
     onShownChanged: if (shown) {
-        rebuildGroups()
+        if (_dirty) {
+            _dirty = false
+            rebuildGroups()
+        }
         refreshBodyHeight()
     }
     Component.onCompleted: {
@@ -236,7 +272,7 @@ Popout {
                     font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSize - 2
                     font.bold: true
-                    // Funde junto al fondo; antes cambiaba de golpe.
+                    // Funde junto al fondo.
                     Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
                 }
             }
@@ -291,7 +327,7 @@ Popout {
                         color: unmuteMa.containsMouse ? Theme.red : Theme.fgMuted
                         font.family: Theme.fontFamily
                         font.pixelSize: Theme.iconSize - 5
-                        // Funde junto al fondo del chip; antes saltaba de golpe.
+                        // Funde junto al fondo del chip.
                         Behavior on color { ColorAnimation { duration: 140; easing.type: Easing.OutCubic } }
                     }
                 }
@@ -372,7 +408,9 @@ Popout {
             delegate: Item {
                 id: groupDelegate
                 required property var modelData
-                property bool expanded: false
+                // Lee el mapa de la raíz: sobrevive a los reseteos de modelo
+                // (los delegados se recrean pero la clave persiste).
+                property bool expanded: nc._expandedGroups[modelData.title] === true
                 property bool closing: false
                 onExpandedChanged: Qt.callLater(nc.refreshBodyHeight)
                 readonly property var group: modelData
@@ -450,6 +488,7 @@ Popout {
                                         anchors.margins: Theme.dp(5)
                                         visible: groupDelegate.appIcon !== ""
                                         source: groupDelegate.appIcon
+                                        sourceSize: Qt.size(Theme.dp(34) * 2, Theme.dp(34) * 2)
                                         fillMode: Image.PreserveAspectFit
                                         smooth: true
                                         asynchronous: true
@@ -473,6 +512,15 @@ Popout {
                                     font.pixelSize: Theme.fontSize
                                     font.bold: true
                                     elide: Text.ElideRight
+                                }
+
+                                // Hora de la notificación más reciente del grupo;
+                                // se refresca con nowTick con el centro abierto.
+                                Text {
+                                    text: NotifService.timeText(groupDelegate.latest)
+                                    color: Theme.fgMuted
+                                    font.family: Theme.fontFamily
+                                    font.pixelSize: Theme.fontSize - 3
                                 }
 
                                 // Botón unificado: muestra el total del grupo
@@ -531,7 +579,7 @@ Popout {
                                         anchors.fill: parent
                                         hoverEnabled: true
                                         cursorShape: countExpandButton.canExpand ? Qt.PointingHandCursor : Qt.ArrowCursor
-                                        onClicked: if (countExpandButton.canExpand) groupDelegate.expanded = !groupDelegate.expanded
+                                        onClicked: if (countExpandButton.canExpand) nc.setExpanded(groupDelegate.group.title, !groupDelegate.expanded)
                                     }
                                 }
 
@@ -602,6 +650,18 @@ Popout {
                                             elide: Text.ElideRight
                                             wrapMode: groupDelegate.expanded ? Text.WordWrap : Text.NoWrap
                                             textFormat: Text.PlainText
+                                        }
+
+                                        // Hora individual, solo con el grupo
+                                        // desplegado (colapsado ya la enseña
+                                        // la cabecera con la más reciente).
+                                        Text {
+                                            visible: groupDelegate.expanded
+                                            Layout.alignment: Qt.AlignTop
+                                            text: NotifService.timeText(modelData)
+                                            color: Theme.fgMuted
+                                            font.family: Theme.fontFamily
+                                            font.pixelSize: Theme.fontSize - 3
                                         }
                                     }
                                 }

@@ -1,4 +1,4 @@
--- ── Reglas de ventana ───────────────────────────────────────
+-- Reglas de ventana
 -- https://wiki.hypr.land/Configuring/Window-Rules/
 
 -- Ignorar peticiones de maximizar de todas las apps.
@@ -9,7 +9,7 @@ local suppressMaximizeRule = hl.window_rule({
     suppress_event = "maximize",
 })
 
--- Arreglar problemas de arrastre con XWayland.
+-- Arregla el arrastre con XWayland.
 hl.window_rule({
     name  = "fix-xwayland-drags",
     match = {
@@ -32,8 +32,7 @@ hl.window_rule({
     float = true,
 })
 
--- Diálogo de autenticación de polkit: mantenerlo como popup centrado, con el
--- borde/acento global que Quickshell escribe en conf/theme.lua.
+-- Diálogo de polkit: popup centrado, con el borde/acento global de conf/theme.lua.
 hl.window_rule({
     name  = "polkit-auth-dialog",
     match = { class = "^(hyprpolkitagent)$" },

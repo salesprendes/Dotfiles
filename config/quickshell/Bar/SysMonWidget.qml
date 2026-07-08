@@ -4,7 +4,7 @@ import qs.Components
 import qs.Config
 import qs.Services
 
-// Indicador de CPU y RAM en la barra. Click → monitor de sistema.
+// CPU y RAM. Click abre el monitor de sistema.
 Pill {
     id: root
     interactive: true

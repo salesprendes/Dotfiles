@@ -9,7 +9,6 @@ Popout {
     ns: "qs-clipboard"
     cardWidth: 420
     cardMinWidth: 320
-    keyboardExclusive: true
     shown: Globals.clipboardOpen
     property bool clearing: false
     property bool emptyMessageReady: true
@@ -86,7 +85,14 @@ Popout {
     Timer {
         id: focusTimer
         interval: 60
-        onTriggered: searchInput.forceActiveFocus()
+        onTriggered: searchInput.input.forceActiveFocus()
+    }
+
+    // Debounce del filtrado: agrupa la ráfaga de teclas antes de filtrar.
+    Timer {
+        id: searchDebounce
+        interval: 80
+        onTriggered: Clipboard.search = searchInput.text
     }
 
     SequentialAnimation {
@@ -185,61 +191,24 @@ Popout {
         }
     }
 
-    Rectangle {
+    SearchField {
+        id: searchInput
         Layout.fillWidth: true
-        implicitHeight: Theme.rowM
-        radius: Theme.pillRadius
-        color: Theme.surface
-        border.width: Theme.hairline
-        border.color: searchInput.activeFocus ? Theme.accent
-                     : Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.4)
-        Behavior on border.color { ColorAnimation { duration: Theme.animFast } }
+        showClear: false
+        input.focus: true
+        placeholder: I18n.tr("Search history...")
+        onTextChanged: searchDebounce.restart()
+        // ESC no se maneja aquí: burbujea hasta la tarjeta, que cierra.
+        onAccepted: panel.copySelected()
+        onDownPressed: panel.moveSelection(1)
+        onUpPressed: panel.moveSelection(-1)
 
-        RowLayout {
-            anchors.fill: parent
-            anchors.leftMargin: Theme.space12
-            anchors.rightMargin: Theme.space12
-            spacing: Theme.space8
-
-            Text {
-                text: "󰍉"
-                color: Theme.fgMuted
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.iconSize
-            }
-
-            TextInput {
-                id: searchInput
-                Layout.fillWidth: true
-                clip: true
-                color: Theme.fg
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontSize + 1
-                selectionColor: Theme.accent
-                verticalAlignment: TextInput.AlignVCenter
-                focus: true
-                onTextChanged: Clipboard.search = text
-                Keys.onEscapePressed: Globals.closeAll()
-                Keys.onReturnPressed: panel.copySelected()
-                Keys.onEnterPressed: panel.copySelected()
-                Keys.onDownPressed: panel.moveSelection(1)
-                Keys.onUpPressed: panel.moveSelection(-1)
-
-                Text {
-                    anchors.verticalCenter: parent.verticalCenter
-                    visible: searchInput.text === ""
-                    text: I18n.tr("Search history...")
-                    color: Theme.fgMuted
-                    font: searchInput.font
-                }
-            }
-
-            Text {
-                text: Clipboard.filteredEntries.length
-                color: Theme.fgMuted
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontSize - 2
-            }
+        // Contador de resultados en el lado derecho del campo.
+        Text {
+            text: Clipboard.filteredEntries.length
+            color: Theme.fgMuted
+            font.family: Theme.fontFamily
+            font.pixelSize: Theme.fontSize - 2
         }
     }
 
@@ -290,6 +259,8 @@ Popout {
             enabled: !panel.clearing
             clip: true
             spacing: Theme.space4
+            reuseItems: true
+            cacheBuffer: 320
             model: Clipboard.filteredEntries
             boundsBehavior: Flickable.StopAtBounds
             currentIndex: panel.selectedIndex
@@ -326,9 +297,16 @@ Popout {
 
                 property bool deleting: false
 
-                // Salida rápida: desliza+desvanece y, en cuanto termina (no antes,
-                // para no ver el "pop"), elimina la entrada. La pausa se liga a
-                // animFast para respetar la velocidad de animación del usuario.
+                // Con reuseItems, un delegate reciclado podría heredar el
+                // estado 'deleting' de la fila anterior: se resetea al reusar.
+                ListView.onReused: {
+                    deleteAnim.stop()
+                    deleting = false
+                }
+
+                // Salida: desliza+desvanece y borra la entrada al terminar (no
+                // antes, o se ve el "pop"). La pausa va ligada a animFast para
+                // respetar la velocidad de animación del usuario.
                 SequentialAnimation {
                     id: deleteAnim
                     ScriptAction { script: row.deleting = true }

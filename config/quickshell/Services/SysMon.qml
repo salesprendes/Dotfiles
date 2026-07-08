@@ -5,11 +5,9 @@ import Quickshell
 import Quickshell.Io
 import qs.Config
 
-// ─────────────────────────────────────────────────────────────
-//  Monitor de sistema. Lee /proc con FileView (sin subprocesos) y usa
-//  `ps` solo para la lista de procesos con el panel abierto.
-//  CPU, RAM, procesos + información del sistema operativo y logo.
-// ─────────────────────────────────────────────────────────────
+// Monitor de sistema: CPU, RAM, procesos, info del SO y logo. Lee /proc con
+// FileView (sin subprocesos) y usa `ps` solo para la lista de procesos con el
+// panel abierto.
 Singleton {
     id: s
 
@@ -43,14 +41,13 @@ Singleton {
     property real _prevTotal: 0
     property real _prevIdle: 0
 
-    // ── Recogida periódica ───────────────────────────────────
-    //  CPU/RAM/carga/uptime se releen de /proc con FileView (QML puro,
-    //  cero subprocesos). Solo la lista de procesos necesita `ps`, y esta
-    //  solo se recoge mientras el panel SystemMonitor está abierto.
+    // Recogida periódica. CPU/RAM/carga/uptime se releen de /proc con FileView
+    // (QML puro, sin subprocesos). Solo la lista de procesos necesita `ps`, y
+    // solo mientras el panel SystemMonitor está abierto. Carga asíncrona (sin
+    // blockLoading): onLoaded salta al terminar cada reload() sin bloquear la GUI.
     FileView {
         id: statFile
         path: "/proc/stat"
-        blockLoading: true
         printErrors: false
         watchChanges: false
         onLoaded: s._parseStat(statFile.text())
@@ -58,7 +55,6 @@ Singleton {
     FileView {
         id: memFile
         path: "/proc/meminfo"
-        blockLoading: true
         printErrors: false
         watchChanges: false
         onLoaded: s._parseMem(memFile.text())
@@ -66,7 +62,6 @@ Singleton {
     FileView {
         id: loadFile
         path: "/proc/loadavg"
-        blockLoading: true
         printErrors: false
         watchChanges: false
         onLoaded: s._parseLoad(loadFile.text())
@@ -74,22 +69,25 @@ Singleton {
     FileView {
         id: upFile
         path: "/proc/uptime"
-        blockLoading: true
         printErrors: false
         watchChanges: false
         onLoaded: s._parseUptime(upFile.text())
     }
 
+    // Sondeo solo cuando alguien muestra los datos: widget de la barra
+    // (cpu/ram), panel SystemMonitor, Dashboard (anillos) o Control Center
+    // (uptime). triggeredOnStart: al abrir cualquiera refresca al momento.
     Timer {
         interval: 5000
-        running: true
+        running: Settings.showSysmon || Globals.sysMonOpen
+                 || Globals.dashboardOpen || Globals.controlCenterOpen
         repeat: true
         triggeredOnStart: true
         onTriggered: s.refreshStats(false)
     }
 
     // Tras el resume: recalibra la base de CPU (los contadores de /proc/stat dan
-    // un salto raro al cruzar el suspend → evita un pico falso) y refresca ya.
+    // un salto raro al cruzar el suspend, evita un pico falso) y refresca ya.
     Connections {
         target: Resume
         // Solo el primer pulso: /proc está disponible de inmediato al despertar,
@@ -145,8 +143,7 @@ Singleton {
         onTriggered: s.refreshStats(true)
     }
 
-    // Refresco periódico de la lista de procesos SOLO con el panel abierto;
-    // antes corría siempre y barría todos los procesos del sistema cada 20 s.
+    // Refresco periódico de la lista de procesos solo con el panel abierto.
     Timer {
         interval: 20000
         running: Globals.sysMonOpen
@@ -200,7 +197,7 @@ Singleton {
         killer.running = true
     }
 
-    // ── Información estática del SO (una vez) ─────────────────
+    // Información estática del SO (una vez)
     Process {
         id: info
         running: true

@@ -142,6 +142,8 @@ Singleton {
             "%1 min ago": "hace %1 min",
             "%1 h ago": "hace %1 h",
             "%1 d ago": "hace %1 d",
+            "%1 wk ago": "hace %1 sem",
+            "%1 mo ago": "hace %1 mes",
             "Clear": "Limpiar",
             "No notifications": "Sin notificaciones",
             "Search history...": "Buscar historial...",
@@ -392,6 +394,8 @@ Singleton {
             "%1 min ago": "fa %1 min",
             "%1 h ago": "fa %1 h",
             "%1 d ago": "fa %1 d",
+            "%1 wk ago": "fa %1 setm",
+            "%1 mo ago": "fa %1 mes",
             "Clear": "Neteja",
             "No notifications": "Sense notificacions",
             "Search history...": "Cerca a l'historial...",
@@ -531,7 +535,7 @@ Singleton {
         })
     })
 
-    function tr(term, context) {
+    function tr(term) {
         const lang = language || "es"
         if (lang === "en")
             return term
@@ -543,27 +547,20 @@ Singleton {
         return Qt.locale(language || "es")
     }
 
+    // Nombres de mes por idioma, hoisted para no reconstruir el mapa
+    // en cada llamada a monthName().
+    readonly property var _monthNames: ({
+        "en": ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"],
+        "es": ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"],
+        "ca": ["gener", "febrer", "març", "abril", "maig", "juny", "juliol", "agost", "setembre", "octubre", "novembre", "desembre"]
+    })
+
     function monthName(index, capitalized) {
-        const names = {
-            "en": ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"],
-            "es": ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"],
-            "ca": ["gener", "febrer", "març", "abril", "maig", "juny", "juliol", "agost", "setembre", "octubre", "novembre", "desembre"]
-        }
-        const list = names[language] || names.es
+        const list = _monthNames[language] || _monthNames.es
         let value = list[Math.max(0, Math.min(11, index))] || ""
         if (capitalized && value.length > 0)
             value = value.charAt(0).toUpperCase() + value.slice(1)
         return value
-    }
-
-    function dayName(index) {
-        const names = {
-            "en": ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
-            "es": ["domingo", "lunes", "martes", "miercoles", "jueves", "viernes", "sabado"],
-            "ca": ["diumenge", "dilluns", "dimarts", "dimecres", "dijous", "divendres", "dissabte"]
-        }
-        const list = names[language] || names.es
-        return list[Math.max(0, Math.min(6, index))] || ""
     }
 
     function weekdayInitialsMondayFirst() {

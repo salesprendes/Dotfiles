@@ -4,19 +4,23 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 
-// ─────────────────────────────────────────────────────────────
-//  Lista de familias tipográficas instaladas (vía fc-list).
-//  Prioriza monoespaciadas y "Nerd Font" (las que llevan iconos),
-//  que son las adecuadas para la barra/paneles.
-// ─────────────────────────────────────────────────────────────
+// Familias tipográficas instaladas (vía fc-list). Prioriza monoespaciadas y
+// Nerd Font (las que llevan iconos), que van bien para barra/paneles.
 Singleton {
     id: root
 
     property var list: []
     property var monoList: []
+    property bool _loaded: false
 
-    Component.onCompleted: proc.running = true
-    function refresh() { proc.running = true }
+    // Carga perezosa: fc-list solo se ejecuta al entrar en una página de
+    // ajustes que lo necesite. Con force se re-escanea aunque ya esté cargado.
+    function refresh(force) {
+        if (_loaded && !force)
+            return
+        _loaded = true
+        proc.running = true
+    }
 
     Process {
         id: proc

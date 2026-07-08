@@ -1,4 +1,4 @@
--- ── Entrada (teclado, ratón, touchpad, gestos) ──────────────
+-- Entrada: teclado, ratón, touchpad, gestos
 -- https://wiki.hypr.land/Configuring/Variables/#input
 
 hl.config({
@@ -11,7 +11,7 @@ hl.config({
 
         follow_mouse = 1,
 
-        sensitivity = 0, -- -1.0 a 1.0, 0 = sin modificar.
+        sensitivity = 0, -- -1.0 a 1.0, 0 = sin tocar
 
         touchpad = {
             natural_scroll = false,
@@ -26,7 +26,7 @@ hl.gesture({
     action    = "workspace",
 })
 
--- Ejemplo de configuración por dispositivo.
+-- Config por dispositivo (ejemplo).
 hl.device({
     name        = "epic-mouse-v1",
     sensitivity = -0.5,

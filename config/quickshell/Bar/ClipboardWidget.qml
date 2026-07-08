@@ -23,19 +23,10 @@ Pill {
             font.pixelSize: Theme.iconSize
         }
 
-        Rectangle {
-            visible: Clipboard.count > 0
-            anchors { right: parent.right; top: parent.top; rightMargin: -Theme.dp(5); topMargin: -Theme.dp(5) }
-            width: Theme.dp(14); height: Theme.dp(14); radius: height / 2
-            color: Theme.accent
-            Text {
-                anchors.centerIn: parent
-                text: Clipboard.count > 9 ? "9+" : Clipboard.count
-                color: Theme.bg
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.sp(9)
-                font.bold: true
-            }
+        CountBadge {
+            count: Clipboard.count
+            badgeColor: Theme.accent
+            anchors { right: parent.right; top: parent.top; rightMargin: -Theme.space4; topMargin: -Theme.space4 }
         }
     }
 }

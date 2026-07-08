@@ -5,10 +5,8 @@ import Quickshell
 import Quickshell.Bluetooth
 import qs.Config
 
-// ─────────────────────────────────────────────────────────────
-//  Servicio Bluetooth. Envuelve Quickshell.Bluetooth y expone
-//  estado del adaptador y dispositivos conectados.
-// ─────────────────────────────────────────────────────────────
+// Bluetooth: envuelve Quickshell.Bluetooth y expone estado del adaptador y
+// dispositivos conectados.
 Singleton {
     id: bt
 
@@ -45,17 +43,15 @@ Singleton {
         if (adapter) adapter.enabled = !adapter.enabled
     }
 
-    // ── Recuperación tras suspensión ─────────────────────────
-    //  Quickshell.Bluetooth NO expone un re-sync manual (a diferencia del
-    //  GetManagedObjects nativo de Noctalia), así que no podemos reconstruir su
-    //  modelo desde fuera. Pero el fallo REAL e impactante es que el adaptador
-    //  despierte apagado o con soft-block de rfkill (BlueZ no siempre lo
-    //  restaura). Al reactivarlo, BlueZ emite PropertiesChanged y reconecta los
-    //  dispositivos de confianza: señales que Quickshell SÍ capta → su modelo se
-    //  re-sincroniza solo. Corre en cada pulso de recuperación (reintento a
-    //  ~0.7/3.2/7.7 s, por si el controlador tarda en volver, como hace Noctalia
-    //  a los ~2 s). Idempotente: si ya está encendido, no hace nada. Si el BT
-    //  estaba apagado antes de dormir, se respeta y no se toca.
+    // Recuperación tras suspensión. Quickshell.Bluetooth no expone un re-sync
+    // manual, así que no podemos reconstruir su modelo desde fuera. El fallo
+    // real es que el adaptador despierte apagado o con soft-block de rfkill
+    // (BlueZ no siempre lo restaura). Al reactivarlo, BlueZ emite
+    // PropertiesChanged y reconecta los dispositivos de confianza: señales que
+    // Quickshell sí capta, así que su modelo se re-sincroniza solo. Corre en
+    // cada pulso de recuperación (reintento a ~0.7/3.2/7.7 s, por si el
+    // controlador tarda en volver). Idempotente: si ya está encendido no hace
+    // nada; si el BT estaba apagado antes de dormir, se respeta.
     property bool _wasOn: false
     Connections {
         target: Resume

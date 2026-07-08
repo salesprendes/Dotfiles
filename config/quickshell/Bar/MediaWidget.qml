@@ -24,11 +24,22 @@ Pill {
 
     visible: hasMedia
 
-    // Ecualizador: 4 barras que rebotan al sonar; planas al pausar.
+    // Ecualizador: 4 barras que rebotan al sonar, planas al pausar.
+    // Uso un Timer a ~7 pasos/s en vez de animaciones a 60 fps para no
+    // tener la escena repintando sin parar mientras suena música.
     Item {
+        id: eq
         Layout.alignment: Qt.AlignVCenter
         implicitWidth: Theme.dp(16)
         implicitHeight: Theme.iconSize
+
+        property int tick: 0
+        Timer {
+            interval: 140
+            running: root.playing
+            repeat: true
+            onTriggered: eq.tick++
+        }
 
         Row {
             anchors.centerIn: parent
@@ -44,22 +55,20 @@ Pill {
                     anchors.verticalCenter: parent.verticalCenter
                     readonly property real maxH: Theme.iconSize
                     readonly property real minH: Theme.dp(3)
-                    height: root.playing ? animH : minH
-                    property real animH: minH
+                    // Dos senos desfasados por barra: movimiento que no se ve
+                    // periódico, sin gastar Math.random en cada tick.
+                    readonly property real level: 0.5
+                        + 0.3 * Math.sin((eq.tick + bar.index * 1.7) * 0.9)
+                        + 0.2 * Math.sin((eq.tick * 1.31 + bar.index * 2.3))
+                    height: root.playing ? minH + (maxH - minH) * Math.max(0, Math.min(1, level)) : minH
                     Behavior on color { ColorAnimation { duration: Theme.animFast } }
                     Behavior on height { enabled: !root.playing; NumberAnimation { duration: Theme.animFast } }
-                    SequentialAnimation on animH {
-                        running: root.playing
-                        loops: Animation.Infinite
-                        NumberAnimation { to: bar.maxH; duration: 260 + bar.index * 70; easing.type: Easing.InOutSine }
-                        NumberAnimation { to: bar.minH; duration: 300 + bar.index * 55; easing.type: Easing.InOutSine }
-                    }
                 }
             }
         }
     }
 
-    // Botón de icono interno reutilizable.
+    // Botón de icono reutilizable.
     component CtrlButton: Item {
         id: cbtn
         property string glyph: ""
@@ -111,7 +120,7 @@ Pill {
         color: Theme.overlay
     }
 
-    // Título (solo informativo, sin abrir nada).
+    // Título, solo informativo.
     Text {
         Layout.alignment: Qt.AlignVCenter
         Layout.maximumWidth: Theme.dp(170)

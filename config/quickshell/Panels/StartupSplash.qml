@@ -103,10 +103,9 @@ PanelWindow {
 
     Rectangle {
         anchors.fill: parent
-        // Fondo del splash: en modo claro usa el MISMO color que la barra
-        // (Theme.barBg); en liquid-glass ese barBg ya incorpora la transparencia
-        // del cristal, así que la aplica sola. En oscuro no-cristal se mantiene
-        // el fondo casi opaco de antes.
+        // Fondo del splash: en modo claro usa el mismo color que la barra
+        // (Theme.barBg); con cristal ese barBg ya trae la transparencia, así
+        // que la aplica sola. En oscuro no-cristal, fondo casi opaco.
         color: (Theme.glass || !Theme.isDark) ? Theme.barBg
                                               : Theme.withAlpha(Theme.bg, 0.96)
         opacity: splash.shown ? 1 : 0

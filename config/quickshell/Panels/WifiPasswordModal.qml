@@ -29,11 +29,13 @@ PanelWindow {
 
     anchors { top: true; bottom: true; left: true; right: true }
 
-    onVisibleChanged: {
-        if (visible) {
-            pw = ""; err = ""; connecting = false
-            focusTimer.restart()
-        }
+    // Cargado bajo demanda (LazyLoader en shell.qml): puede nacer ya visible
+    // y entonces onVisibleChanged no se dispara, de ahí el onCompleted.
+    Component.onCompleted: if (visible) _init()
+    onVisibleChanged: if (visible) _init()
+    function _init() {
+        pw = ""; err = ""; connecting = false
+        focusTimer.restart()
     }
     Timer { id: focusTimer; interval: 60; onTriggered: pwField.forceFocus() }
 

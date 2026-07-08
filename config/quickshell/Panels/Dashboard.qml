@@ -1,6 +1,5 @@
 import QtQuick
 import QtQuick.Layouts
-import QtQuick.Shapes
 import Quickshell
 import Quickshell.Services.Mpris
 import Quickshell.Widgets
@@ -8,13 +7,8 @@ import qs.Components
 import qs.Config
 import qs.Services
 
-// ─────────────────────────────────────────────────────────────
-//  Panel Resumen. Rejilla compacta tipo dashboard:
-//  fila superior con clima y sistema (distro + equipo + tiempo
-//  activo en píldora); fila central con reloj vertical,
-//  calendario y anillos CPU/RAM (datos que SysMon ya sondea para
-//  la barra); mini-reproductor abajo solo si hay reproducción.
-// ─────────────────────────────────────────────────────────────
+// Panel resumen: clima + sistema arriba, reloj/calendario/anillos en el
+// centro y mini-reproductor abajo (solo si hay reproducción).
 Popout {
     id: dash
     ns: "qs-dashboard"
@@ -28,11 +22,12 @@ Popout {
     readonly property int activeIndex: tabKeys.indexOf(tab)
     readonly property int tabAnim: 260   // duración unificada del cambio de pestaña
 
-    SystemClock { id: clock; precision: SystemClock.Seconds }
+    // Con el panel oculto basta precisión de minuto (sin tick por segundo).
+    SystemClock { id: clock; precision: dash.shown ? SystemClock.Seconds : SystemClock.Minutes }
     readonly property string timeFormat: (Settings.clock24h ? "HH:mm" : "hh:mm")
         + (Settings.clockShowSeconds ? ":ss" : "") + (Settings.clock24h ? "" : " AP")
 
-    // ── Selección del reproductor activo ─────────────────────
+    // Selección del reproductor activo
     readonly property var players: Mpris.players?.values ?? []
     readonly property var player: {
         if (players.length === 0) return null
@@ -50,6 +45,9 @@ Popout {
     }
     Connections {
         target: dash.player
+        // Solo con el panel a la vista: si no, cada avance de posición MPRIS
+        // re-evaluaba las barras de progreso de un panel oculto (por monitor).
+        enabled: dash.shown
         ignoreUnknownSignals: true
         function onPositionChanged() { dash.displayPos = dash.player?.position ?? 0 }
         function onTrackTitleChanged() { dash.displayPos = 0 }
@@ -65,11 +63,15 @@ Popout {
 
     onShownChanged: if (shown) {
         tab = "overview"
-        Wallpaper.refresh()
+        displayPos = player?.position ?? 0   // ponte al día (Connections inactivo en oculto)
+        // Solo re-escanea las carpetas de fondos si el último escaneo es viejo:
+        // refresh() en cada apertura reseteaba el GridView (modelo = array
+        // plano) y re-pedía todas las miniaturas.
+        Wallpaper.refreshIfStale(5 * 60 * 1000)
         Weather.refresh()
     }
 
-    // ── Barra de pestañas ────────────────────────────────────
+    // Barra de pestañas
     Rectangle {
         id: tabBar
         Layout.fillWidth: true
@@ -102,7 +104,7 @@ Popout {
         }
     }
 
-    // ── Contenedor de páginas (crossfade + deslizamiento) ────
+    // Contenedor de páginas (crossfade + deslizamiento)
     Item {
         id: pages
         Layout.fillWidth: true
@@ -118,7 +120,7 @@ Popout {
         // Desplazamiento horizontal según la posición de la pestaña.
         readonly property int slide: Theme.dp(18)
 
-        // ═════════ PÁGINA: RESUMEN ═══════════════════════════
+        // Página: resumen
         ColumnLayout {
             id: overviewPage
             anchors { left: parent.left; right: parent.right; top: parent.top }
@@ -131,7 +133,7 @@ Popout {
             }
             Behavior on opacity { NumberAnimation { duration: dash.tabAnim; easing.type: Easing.OutCubic } }
 
-            // ── Fila 1: clima + sistema ──
+            // Fila 1: clima + sistema
             RowLayout {
                 Layout.fillWidth: true
                 spacing: Theme.space8
@@ -150,8 +152,7 @@ Popout {
                         anchors.rightMargin: Theme.space12
                         spacing: Theme.space10
 
-                        // Icono protagonista, como en la referencia: grande,
-                        // casi a la altura de la tarjeta.
+                        // Icono grande, casi a la altura de la tarjeta.
                         Text {
                             text: Weather.icon
                             color: Theme.yellow
@@ -253,7 +254,7 @@ Popout {
                 }
             }
 
-            // ── Fila 2: reloj vertical + calendario + anillos ──
+            // Fila 2: reloj vertical + calendario + anillos
             RowLayout {
                 Layout.fillWidth: true
                 spacing: Theme.space8
@@ -337,6 +338,7 @@ Popout {
                                 value: SysMon.cpu / 100
                                 tint: Theme.accent
                                 glyph: "󰻠"
+                                animated: dash.shown
                             }
                             Text {
                                 Layout.alignment: Qt.AlignHCenter
@@ -353,6 +355,7 @@ Popout {
                                 value: SysMon.memPercent / 100
                                 tint: Theme.accent
                                 glyph: "󰍛"
+                                animated: dash.shown
                             }
                             Text {
                                 Layout.alignment: Qt.AlignHCenter
@@ -369,6 +372,7 @@ Popout {
                                 value: SysMon.diskPercent / 100
                                 tint: Theme.accent
                                 glyph: "󰋊"
+                                animated: dash.shown
                             }
                             Text {
                                 Layout.alignment: Qt.AlignHCenter
@@ -382,7 +386,7 @@ Popout {
                 }
             }
 
-            // ── Mini-reproductor con línea de progreso ──
+            // Mini-reproductor con línea de progreso
             OverviewCard {
                 visible: dash.hasMedia
                 implicitHeight: miniCol.implicitHeight + Theme.space12 * 2
@@ -465,7 +469,7 @@ Popout {
 
         }
 
-        // ═════════ PÁGINA: MÚSICA ════════════════════════════
+        // Página: música
         ColumnLayout {
             id: musicPage
             anchors { left: parent.left; right: parent.right; top: parent.top }
@@ -538,7 +542,9 @@ Popout {
                     radius: Theme.space12; color: Theme.bgAlt; clip: true
                     Image {
                         anchors.fill: parent
-                        source: dash.player?.trackArtUrl ?? ""
+                        // Atado a shown: visible:false no evita la decodificación,
+                        // y así no re-decodifica 440dp² por canción con el panel cerrado.
+                        source: dash.shown ? (dash.player?.trackArtUrl ?? "") : ""
                         visible: status === Image.Ready
                         fillMode: Image.PreserveAspectCrop
                         sourceSize.width: Theme.dp(440); sourceSize.height: Theme.dp(440)
@@ -634,7 +640,7 @@ Popout {
             }
         }
 
-        // ═════════ PÁGINA: FONDOS ════════════════════════════
+        // Página: fondos
         ColumnLayout {
             id: wallpaperPage
             anchors { left: parent.left; right: parent.right; top: parent.top }
@@ -699,6 +705,7 @@ Popout {
                 implicitHeight: Math.min(Theme.dp(320), contentHeight)
                 cellWidth: Math.floor(width / 3)
                 cellHeight: Math.floor(cellWidth * 0.66)
+                cacheBuffer: cellHeight * 2
                 clip: true
                 model: Wallpaper.list
                 boundsBehavior: Flickable.StopAtBounds
@@ -745,7 +752,7 @@ Popout {
         }
     }
 
-    // ── Componentes reutilizables ────────────────────────────
+    // Componentes reutilizables
 
     // Tarjeta tonal del resumen (superficie suave, radio amplio).
     component OverviewCard: Rectangle {
@@ -754,53 +761,6 @@ Popout {
         color: Qt.rgba(Theme.surface.r, Theme.surface.g, Theme.surface.b, 0.42)
         border.width: Theme.hairline
         border.color: Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.3)
-    }
-
-    // Anillo de progreso con glifo central (pulso del sistema).
-    component StatRing: Item {
-        id: sr
-        property real value: 0
-        property color tint: Theme.accent
-        property string glyph: ""
-        implicitWidth: Theme.dp(50)
-        implicitHeight: Theme.dp(50)
-
-        Shape {
-            anchors.fill: parent
-            preferredRendererType: Shape.CurveRenderer
-
-            ShapePath {
-                strokeColor: Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.4)
-                fillColor: "transparent"
-                strokeWidth: Theme.dp(4)
-                capStyle: ShapePath.RoundCap
-                PathAngleArc {
-                    centerX: sr.width / 2; centerY: sr.height / 2
-                    radiusX: sr.width / 2 - Theme.dp(2.5); radiusY: radiusX
-                    startAngle: -90; sweepAngle: 360
-                }
-            }
-            ShapePath {
-                strokeColor: sr.tint
-                fillColor: "transparent"
-                strokeWidth: Theme.dp(4)
-                capStyle: ShapePath.RoundCap
-                PathAngleArc {
-                    centerX: sr.width / 2; centerY: sr.height / 2
-                    radiusX: sr.width / 2 - Theme.dp(2.5); radiusY: radiusX
-                    startAngle: -90
-                    sweepAngle: 360 * Math.max(0.02, Math.min(1, sr.value))
-                    Behavior on sweepAngle { NumberAnimation { duration: 600; easing.type: Easing.OutCubic } }
-                }
-            }
-        }
-        Text {
-            anchors.centerIn: parent
-            text: sr.glyph
-            color: Theme.accent
-            font.family: Theme.fontFamily
-            font.pixelSize: Theme.iconSize + 6.5
-        }
     }
 
     component TabBtn: Item {

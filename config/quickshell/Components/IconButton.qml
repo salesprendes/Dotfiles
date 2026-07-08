@@ -1,11 +1,8 @@
 import QtQuick
 import qs.Config
 
-// ─────────────────────────────────────────────────────────────
-//  Botón redondo con glifo (Nerd Font) y resaltado al pasar el
-//  ratón. Unifica el patrón repetido por cabeceras de paneles.
-//  Personalizable: color base/hover del fondo y del icono.
-// ─────────────────────────────────────────────────────────────
+// Botón redondo con glifo (Nerd Font) y resaltado al pasar el ratón.
+// Color base/hover del fondo y del icono personalizables.
 Rectangle {
     id: btn
 
@@ -24,15 +21,13 @@ Rectangle {
     implicitWidth: diameter
     implicitHeight: diameter
     radius: height / 2
-    // Si el fondo base es transparente, funde hacia el tono del hover con
-    // alfa 0: "transparent" es negro con alfa 0 y el fundido de salida
-    // pasaba por una sombra oscura.
+    // Si el fondo base es transparente, funde hacia el hover con alfa 0:
+    // "transparent" es negro con alfa 0 y el fundido pasaba por una sombra oscura.
     color: hovered ? hoverColor
          : (baseColor.a === 0 ? Qt.rgba(hoverColor.r, hoverColor.g, hoverColor.b, 0) : baseColor)
     border.width: activeFocus ? Theme.focusWidth : 0
     border.color: Theme.focusRing
     Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
-    Behavior on border.color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
 
     Keys.onReturnPressed: btn.clicked()
     Keys.onEnterPressed: btn.clicked()
@@ -45,7 +40,7 @@ Rectangle {
         color: btn.hovered ? btn.hoverIconColor : btn.iconColor
         font.family: Theme.fontFamily
         font.pixelSize: btn.iconPixelSize
-        // El glifo funde a la vez que el fondo; antes saltaba de golpe.
+        // El glifo funde a la vez que el fondo.
         Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
     }
 

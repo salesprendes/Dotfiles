@@ -3,15 +3,15 @@ import QtQuick.Layouts
 import qs.Config
 import qs.Services
 
-// Selector de perfil de energía unificado en una caja: cabecera con estado
-// y lista de perfiles con el activo resaltado por color y borde.
-// Click fija el perfil (escribe a power-profiles-daemon vía el servicio Power).
+// Selector de perfil de energía: cabecera con estado y lista de perfiles, el
+// activo resaltado. Click fija el perfil (lo escribe a power-profiles-daemon
+// vía Power).
 ColumnLayout {
     id: root
     width: parent ? parent.width : implicitWidth
     spacing: Theme.space10
 
-    // ── Caja única ───────────────────────────────────────────
+    // Caja única.
     Rectangle {
         Layout.fillWidth: true
         implicitHeight: body.implicitHeight + Theme.space16 * 2
@@ -105,7 +105,7 @@ ColumnLayout {
                 font.bold: pr.active
                 elide: Text.ElideRight
             }
-            // "activo" + check cuando es el perfil en uso.
+            // Etiqueta "activo" + check en el perfil en uso.
             Text {
                 visible: pr.active
                 text: I18n.tr("Active")

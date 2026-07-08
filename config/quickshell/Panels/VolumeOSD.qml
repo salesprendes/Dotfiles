@@ -57,7 +57,7 @@ PanelWindow {
         function onMutedChanged()  { osd.reveal() }
     }
 
-    // ── Tarjeta ──────────────────────────────────────────────
+    // Tarjeta
     Rectangle {
         anchors.fill: parent
         radius: Theme.barRadius

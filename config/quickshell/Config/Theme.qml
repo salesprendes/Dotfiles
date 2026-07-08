@@ -4,15 +4,13 @@ import QtQuick
 import Quickshell
 import qs.Config
 
-// ─────────────────────────────────────────────────────────────
-//  Tema "Solitude": paleta global, radios, espaciado y escala visual.
-//  Singleton global: usa Theme.<prop> desde cualquier componente.
-// ─────────────────────────────────────────────────────────────
+// Tema "Solitude": paleta global, radios, espaciado y escala visual.
+// Usa Theme.<prop> desde cualquier componente.
 Singleton {
     id: theme
 
-    //  Conmutado por Settings.darkMode desde el Centro de control.
-    //  Todo lo demás deriva de estos colores para cambiar en bloque.
+    // Conmutado por Settings.darkMode desde el Centro de control.
+    // Todo lo demás deriva de estos colores para cambiar en bloque.
     readonly property bool isDark: Settings.darkMode
 
     readonly property var palette: Settings.currentPalette
@@ -23,7 +21,7 @@ Singleton {
     // cambios: se respetan las opacidades del usuario.
     readonly property bool glass: Settings.themeName === "liquid-glass"
 
-    // ── Paleta base ──────────────────────────────────────────
+    // Paleta base
     readonly property color bg:        isDark ? palette.bg        : palette.lightBg
     readonly property color bgAlt:     isDark ? palette.bgAlt     : palette.lightBgAlt
     readonly property color surface:   isDark ? palette.surface   : palette.lightSurface
@@ -34,7 +32,7 @@ Singleton {
     readonly property color fgDim:     isDark ? palette.fgDim     : palette.lightFgDim
     readonly property color fgMuted:   isDark ? palette.fgMuted   : palette.lightFgMuted
 
-    // ── Acentos ──────────────────────────────────────────────
+    // Acentos
     readonly property color accent:    Settings.resolvedAccent
     // En modo claro usa la variante oscura del acento secundario (si existe)
     // para que iconos como el de Bluetooth contrasten sobre fondo claro.
@@ -59,9 +57,6 @@ Singleton {
     // superficies translúcidas en cristal esmerilado.
     readonly property color barBg:      withAlpha(bg, Settings.effBarOpacity)
     readonly property color popupBg:    withAlpha(bg, Settings.effPopupOpacity)
-    // Superficie anidada dentro de un popup (chips/módulos sobre la tarjeta): un
-    // pelín más opaca que la tarjeta para que los módulos se lean bien.
-    readonly property color popupSurface: withAlpha(surface, Math.min(1, Settings.effPopupOpacity + 0.05))
     readonly property color pillBg:     withAlpha(surface, Settings.effWidgetOpacity)
     // Borde de los paneles (filo de luz). En cristal se afina a un outline
     // sutil; en el resto de temas mantiene el valor previo (overlay@0.5)
@@ -70,12 +65,11 @@ Singleton {
     readonly property color focusRing:  withAlpha(accent, 0.92)
     readonly property color focusBg:    withAlpha(accent, 0.14)
 
-    //  densityScale se deriva AUTOMÁTICAMENTE de la resolución del
-    //  monitor mayor conectado (lado corto/vertical relativo a 1080p).
-    //  uiScale y fontScale del usuario MULTIPLICAN encima (1.0 = neutro):
-    //     escala_final = densityScale × uiScale
-    //  Curva (lado corto):  1080p→~1.00 · 1440p→~1.15 · 2160p(4K)→~1.45
-    property real uiScale: Settings.uiScale
+    // densityScale se deriva de la resolución del monitor mayor (lado corto
+    // relativo a 1080p). uiScale del usuario multiplica encima (1.0 = neutro):
+    // escala = densityScale × uiScale.
+    // Lado corto: 1080p→~1.00 · 1440p→~1.15 · 4K→~1.45
+    readonly property real uiScale: Settings.uiScale
     readonly property real densityScale: autoDensity()
     readonly property real scale: clamp(uiScale * densityScale, 0.7, 1.9)
 
@@ -110,17 +104,6 @@ Singleton {
         return Math.max(minValue, Math.min(maxValue, value))
     }
 
-    // Densidad de UNA pantalla concreta × uiScale (misma curva que el
-    // auto global). Hoy el escalado es global; esto queda disponible por
-    // si se quiere escalado per-pantalla real en el futuro.
-    function screenScale(screen) {
-        if (!screen)
-            return scale
-        const shortSide = Math.min(screen.width || 1920, screen.height || 1080)
-        const density = clamp(1.0 + (shortSide / 1080 - 1) * 0.45, 0.85, 1.6)
-        return clamp(uiScale * density, 0.7, 1.9)
-    }
-
     function panelWidth(screen, desired, minValue, maxRatio) {
         const sw = screen ? screen.width : 1920
         const margin = barMargin * 2
@@ -128,7 +111,7 @@ Singleton {
         return Math.max(dp(minValue || 300), Math.min(dp(desired), maxByRatio, sw - margin))
     }
 
-    // ── Geometría / espaciado (tokens derivados) ─────────────
+    // Geometría / espaciado (tokens derivados)
     readonly property int hairline: 1
     readonly property int focusWidth: Math.max(2, dp(2))
     readonly property int space2: dp(2)
@@ -165,7 +148,7 @@ Singleton {
     readonly property int   pad:         space10      // padding interno pill
     readonly property int   spacing:     space6       // entre items dentro de pill
 
-    // ── Tipografía ───────────────────────────────────────────
+    // Tipografía
     readonly property string fontFamily: Settings.fontFamily
     readonly property string monoFontFamily: Settings.monoFontFamily
     readonly property real   fontScale: Settings.fontScale

@@ -1,10 +1,7 @@
 pragma Singleton
-//  ╔══════════════════════════════════════════════════════════╗
-//  ║   I18n — textos del greeter. Castellano por defecto; si el ║
-//  ║   sistema NO está en castellano, en inglés. Autocontenido  ║
-//  ║   (el greeter corre aislado en /etc/greetd, sin el I18n     ║
-//  ║   global de la config principal).                          ║
-//  ╚══════════════════════════════════════════════════════════╝
+// Textos del greeter. Castellano por defecto; inglés si el sistema no está en
+// castellano. Autocontenido: el greeter corre aislado en /etc/greetd, sin el
+// I18n global.
 import QtQuick
 import Quickshell
 
@@ -23,4 +20,12 @@ Singleton {
 
     // Devuelve el texto en el idioma activo: castellano o, si no, inglés.
     function tr(es, en) { return spanish ? es : en }
+
+    // Locale y fecha larga en el idioma activo (reloj del greeter). Antes vivía
+    // en Theme fijada a es_ES; aquí sigue al idioma real detectado.
+    readonly property var locale: Qt.locale(spanish ? "es_ES" : "en_US")
+    function longDate(date) {
+        return date.toLocaleDateString(locale, spanish ? "dddd, d 'de' MMMM"
+                                                       : "dddd, MMMM d")
+    }
 }

@@ -10,15 +10,13 @@ Popout {
     cardWidth: 380
     cardMinWidth: 300
     alignLeft: true
-    keyboardExclusive: true
     shown: Globals.launcherOpen
 
     property string search: ""
     property var allEntries: []
     property var apps: []
     property int selectedIndex: 0
-    // Desplegable de acciones de sesión (pie) y etiqueta de la acción
-    // bajo el cursor, que se muestra en el lado izquierdo del pie.
+    // Acciones de sesión del pie + etiqueta de la que está bajo el cursor.
     property bool powerOpen: false
     property string hoverAction: ""
 
@@ -76,7 +74,7 @@ Popout {
     Timer {
         id: focusTimer
         interval: 60
-        onTriggered: searchInput.forceActiveFocus()
+        onTriggered: searchInput.input.forceActiveFocus()
     }
 
     function launch(entry) {
@@ -97,101 +95,28 @@ Popout {
         launch(apps[selectedIndex]?.entry)
     }
 
-    // Mismas órdenes que el centro de control. La pausa del bloqueo deja
-    // que el popout se cierre y SUELTE el teclado exclusivo antes de que
-    // hyprlock tome el foco (si no, la pantalla de contraseña se "bugea").
-    function runPowerAction(action) {
-        Globals.closeAll()
-        if (action === "lock")
-            Quickshell.execDetached(["sh", "-c", "sleep 0.25; command -v hyprlock >/dev/null && hyprlock || loginctl lock-session"])
-        else if (action === "suspend")
-            Quickshell.execDetached(["systemctl", "suspend"])
-        else if (action === "reboot")
-            Quickshell.execDetached(["systemctl", "reboot"])
-        else if (action === "poweroff")
-            Quickshell.execDetached(["systemctl", "poweroff"])
-    }
-
-    // ── Buscador ─────────────────────────────────────────────
-    Rectangle {
+    // Buscador
+    SearchField {
+        id: searchInput
         Layout.fillWidth: true
-        implicitHeight: Theme.rowM
-        radius: Theme.pillRadius
-        color: Theme.surface
-        border.width: Theme.hairline
-        border.color: searchInput.activeFocus ? Theme.accent
-                     : Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.4)
-        Behavior on border.color { ColorAnimation { duration: Theme.animFast } }
-
-        RowLayout {
-            anchors.fill: parent
-            anchors.leftMargin: Theme.space12
-            anchors.rightMargin: Theme.space12
-            spacing: Theme.space8
-
-            Text {
-                text: "󰍉"   // lupa
-                color: searchInput.activeFocus ? Theme.accent : Theme.fgMuted
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.iconSize
-                Behavior on color { ColorAnimation { duration: Theme.animFast } }
-            }
-            TextInput {
-                id: searchInput
-                Layout.fillWidth: true
-                clip: true
-                color: Theme.fg
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontSize + 1
-                selectionColor: Theme.accent
-                verticalAlignment: TextInput.AlignVCenter
-                focus: true
-                onTextChanged: launcher.search = text
-                // ESC pliega primero las acciones de sesión; si ya están
-                // plegadas, cierra el lanzador.
-                Keys.onEscapePressed: {
-                    if (launcher.powerOpen) launcher.powerOpen = false
-                    else Globals.closeAll()
-                }
-                Keys.onReturnPressed: launcher.launchSelected()
-                Keys.onEnterPressed: launcher.launchSelected()
-                Keys.onDownPressed: launcher.moveSelection(1)
-                Keys.onUpPressed: launcher.moveSelection(-1)
-
-                Text {
-                    anchors.verticalCenter: parent.verticalCenter
-                    visible: searchInput.text === ""
-                    text: I18n.tr("Search applications...")
-                    color: Theme.fgMuted
-                    font: searchInput.font
-                }
-            }
-            // Borrar la búsqueda de un click.
-            Rectangle {
-                visible: searchInput.text !== ""
-                implicitWidth: Theme.dp(22); implicitHeight: Theme.dp(22)
-                radius: width / 2
-                color: Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b,
-                               clearMa.containsMouse ? 0.5 : 0)
-                Text {
-                    anchors.centerIn: parent
-                    text: "󰅖"
-                    color: clearMa.containsMouse ? Theme.fg : Theme.fgMuted
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSize - 2
-                }
-                MouseArea {
-                    id: clearMa
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: searchInput.text = ""
-                }
+        accentIconOnFocus: true
+        input.focus: true
+        placeholder: I18n.tr("Search applications...")
+        onTextChanged: launcher.search = text
+        // ESC pliega primero las acciones de sesión; si ya están plegadas,
+        // el evento burbujea hasta la tarjeta, que cierra el lanzador.
+        onEscapePressed: (event) => {
+            if (launcher.powerOpen) {
+                launcher.powerOpen = false
+                event.accepted = true
             }
         }
+        onAccepted: launcher.launchSelected()
+        onDownPressed: launcher.moveSelection(1)
+        onUpPressed: launcher.moveSelection(-1)
     }
 
-    // ── Lista de aplicaciones ────────────────────────────────
+    // Lista de aplicaciones
     ListView {
         id: appList
         Layout.fillWidth: true
@@ -212,16 +137,13 @@ Popout {
             implicitHeight: Theme.dp(44)
             radius: Theme.pillRadius
             color: "transparent"
-            // Selección = única fuente de verdad (selectedIndex). El ratón la
-            // mueve en onEntered y el teclado en moveSelection, así hover y
-            // teclado comparten UN solo resaltado (sin animación doble).
+            // selectedIndex manda: ratón (onEntered) y teclado (moveSelection)
+            // comparten un único resaltado, sin animación doble.
             readonly property bool selected: appRow.index === launcher.selectedIndex
 
-            // Resaltado de hover/selección como capa aparte que anima su
-            // OPACIDAD (no el color): nunca se interpola hacia el negro de
-            // "transparent" → sin "parte negra" en la fila anterior. Usa tinte
-            // de acento + borde (mismo estilo "seleccionado" que WiFi/audio/
-            // desplegables) para que se vea bien también en modo claro.
+            // Capa de resalte que anima opacidad, no color: interpolar
+            // "transparent" pasaría por negro y dejaría un rastro en la fila.
+            // Tinte de acento + borde para que se vea también en modo claro.
             Rectangle {
                 anchors.fill: parent
                 radius: parent.radius
@@ -311,7 +233,7 @@ Popout {
         }
     }
 
-    // ── Sin resultados ───────────────────────────────────────
+    // Sin resultados
     ColumnLayout {
         visible: launcher.apps.length === 0
         Layout.fillWidth: true
@@ -335,7 +257,7 @@ Popout {
         }
     }
 
-    // ── Pie: contador + acciones de sesión desplegables ──────
+    // Pie: contador + acciones de sesión
     Rectangle {
         Layout.fillWidth: true
         implicitHeight: Math.max(1, Theme.hairline)
@@ -409,7 +331,7 @@ Popout {
                             cursorShape: Qt.PointingHandCursor
                             onEntered: launcher.hoverAction = pbtn.modelData.label
                             onExited: if (launcher.hoverAction === pbtn.modelData.label) launcher.hoverAction = ""
-                            onClicked: launcher.runPowerAction(pbtn.modelData.action)
+                            onClicked: Globals.runPowerAction(pbtn.modelData.action)
                         }
                     }
                 }

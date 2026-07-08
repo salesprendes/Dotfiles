@@ -2,17 +2,11 @@ import QtQuick
 import QtQuick.Layouts
 import qs.Config
 
-// ─────────────────────────────────────────────────────────────
-//  Campo de texto reutilizable. Unifica el campo de contraseña
-//  WiFi y los campos del modal de IP (casi idénticos).
-//    · label       etiqueta opcional encima (vacío = sin etiqueta).
-//    · leftIcon     glifo a la izquierda dentro del campo (opcional).
-//    · password     modo contraseña + botón ojo para mostrar/ocultar.
-//    · invalid      borde rojo (validación).
-//    · value        valor desde el estado (el padre es la fuente);
-//                   'edited(text)' sube los cambios; el campo se
-//                   re-sincroniza si 'value' cambia (prefill/reset).
-// ─────────────────────────────────────────────────────────────
+// Campo de texto reutilizable.
+// label: etiqueta opcional encima (vacío = sin etiqueta). leftIcon: glifo a la izquierda.
+// password: modo contraseña + botón ojo para mostrar/ocultar. invalid: borde rojo.
+// value: valor desde el estado (el padre es la fuente); 'edited(text)' sube los cambios
+// y el campo se re-sincroniza si 'value' cambia (prefill/reset).
 ColumnLayout {
     id: field
 
@@ -108,8 +102,8 @@ ColumnLayout {
         }
     }
 
-    // Re-sincroniza el input cuando 'value' cambia desde fuera (prefill/reset),
-    // incluso después de que el usuario haya editado (lo que rompería un binding).
+    // Re-sincroniza el input cuando 'value' cambia desde fuera (prefill/reset), incluso
+    // tras editar (un binding se rompería).
     Connections {
         target: field
         function onValueChanged() {

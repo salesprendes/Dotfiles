@@ -6,11 +6,8 @@ import Quickshell.Io
 import Quickshell.Networking
 import qs.Config
 
-// ─────────────────────────────────────────────────────────────
-//  Servicio de red. Envuelve Quickshell.Networking y expone una
-//  vista simple para barra/panel: estado wifi, ethernet, SSID
-//  activo, intensidad de señal e icono Nerd Font correspondiente.
-// ─────────────────────────────────────────────────────────────
+// Red: envuelve Quickshell.Networking y expone una vista simple para
+// barra/panel: estado wifi, ethernet, SSID activo, señal e icono Nerd Font.
 Singleton {
     id: net
 
@@ -43,17 +40,16 @@ Singleton {
     }
 
     readonly property string ssid: activeWifi?.name ?? ""
-    // signalStrength viene 0..1 → a 0..100.
+    // signalStrength viene 0..1, se pasa a 0..100.
     readonly property int signal: Math.round((activeWifi?.signalStrength ?? 0) * 100)
     readonly property bool online: ethernet || activeWifi !== null
 
-    // ── Conexión PRIORITARIA (ruta por defecto) ──────────────
-    //  La prioridad real la decide la tabla de rutas del kernel: la ruta por
-    //  defecto de menor 'metric' gana. Se lee /proc/net/route con FileView
-    //  (QML PURO, CERO subprocesos) y la interfaz resultante se mapea a su tipo
-    //  con Quickshell.Networking. Así, si hay cable pero el sistema enruta por
-    //  wifi (o al revés), el icono refleja lo REAL, no solo "hay cable".
-    //  Valores: "ethernet" | "wifi" | "none" | "" (sin resolver → respaldo).
+    // Conexión prioritaria (ruta por defecto). La prioridad real la decide la
+    // tabla de rutas del kernel: gana la ruta por defecto de menor metric. Se
+    // lee /proc/net/route con FileView (QML puro, sin subprocesos) y la interfaz
+    // se mapea a su tipo con Quickshell.Networking. Así, si hay cable pero el
+    // sistema enruta por wifi (o al revés), el icono refleja lo real.
+    // Valores: "ethernet" | "wifi" | "none" | "" (sin resolver = respaldo).
     property string primaryType: ""
 
     // ¿Es ethernet la conexión activa/prioritaria? Mientras no se haya resuelto
@@ -79,7 +75,6 @@ Singleton {
     FileView {
         id: routeFile
         path: "/proc/net/route"
-        blockLoading: true
         printErrors: false
         watchChanges: false
         onLoaded: net.computePrimary()
@@ -89,7 +84,7 @@ Singleton {
     // La ruta por defecto usa Destination "00000000"; gana la de menor Metric.
     function computePrimary() {
         const txt = routeFile.text()
-        if (!txt || txt.trim() === "") {              // ilegible → respaldo físico
+        if (!txt || txt.trim() === "") {              // ilegible, respaldo físico
             net.primaryType = ""
             return
         }
@@ -155,14 +150,13 @@ Singleton {
 
     function toggleWifi() { Networking.wifiEnabled = !Networking.wifiEnabled }
 
-    // ── Reactivación del WiFi tras suspensión ────────────────
-    //  Al despertar de suspend, algunos drivers/NetworkManager dejan el WiFi
-    //  sin reconectar: queda un soft-block de rfkill, o el dispositivo pasa a
-    //  'disconnected' sin relanzar la autoconexión. shell.qml reenvía aquí la
-    //  señal PrepareForSleep de logind: al dormir recordamos si el WiFi estaba
-    //  activo; al despertar, si lo estaba, forzamos su reactivación de forma
-    //  idempotente y SIN privilegios (nmcli/rfkill del usuario de la sesión,
-    //  autorizados por polkit). Si el usuario tenía el WiFi apagado, se respeta.
+    // Reactivación del WiFi tras suspensión. Al despertar, algunos drivers o
+    // NetworkManager dejan el WiFi sin reconectar: queda un soft-block de
+    // rfkill, o el dispositivo pasa a disconnected sin relanzar la autoconexión.
+    // shell.qml reenvía aquí la señal PrepareForSleep de logind: al dormir
+    // recordamos si estaba activo y, al despertar, si lo estaba, forzamos la
+    // reactivación de forma idempotente y sin privilegios (nmcli/rfkill del
+    // usuario, autorizados por polkit). Si el usuario lo tenía apagado, se respeta.
     property bool _wifiWasOn: false
 
     Connections {

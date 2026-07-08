@@ -3,9 +3,7 @@ pragma Singleton
 import QtQuick
 import Quickshell
 
-// ─────────────────────────────────────────────────────────────
-//  Estado global compartido. Un único panel abierto a la vez.
-// ─────────────────────────────────────────────────────────────
+// Estado global compartido. Un único panel abierto a la vez.
 Singleton {
     id: g
 
@@ -48,4 +46,20 @@ Singleton {
     }
     // Cierra solo los popups (la ventana de Ajustes es independiente).
     function closeAll()            { openPanel = "" }
+
+    // Acciones de sesión/energía compartidas (lanzador y centro de control).
+    // La pausa del bloqueo deja que el popout se cierre y SUELTE el teclado
+    // exclusivo antes de que hyprlock tome el foco (si no, la pantalla de
+    // contraseña aparece con el panel aún encima → se "bugea").
+    function runPowerAction(action) {
+        closeAll()
+        if (action === "lock")
+            Quickshell.execDetached(["sh", "-c", "sleep 0.25; command -v hyprlock >/dev/null && hyprlock || loginctl lock-session"])
+        else if (action === "suspend")
+            Quickshell.execDetached(["systemctl", "suspend"])
+        else if (action === "reboot")
+            Quickshell.execDetached(["systemctl", "reboot"])
+        else if (action === "poweroff")
+            Quickshell.execDetached(["systemctl", "poweroff"])
+    }
 }

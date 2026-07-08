@@ -1,8 +1,5 @@
 pragma Singleton
-//  ╔══════════════════════════════════════════════════════════╗
-//  ║   GreeterState — estado central + puente con greetd (PAM)  ║
-//  ║   Usuarios, sesiones, estado de autenticación y memoria.   ║
-//  ╚══════════════════════════════════════════════════════════╝
+// Estado central + puente con greetd (PAM): usuarios, sesiones, auth y memoria.
 import QtQuick
 import Quickshell
 import Quickshell.Io
@@ -11,18 +8,18 @@ import Quickshell.Services.Greetd
 Singleton {
     id: root
 
-    // ── Datos del sistema ─────────────────────────────────────
+    // Datos del sistema
     property var users: []                 // [{ name, full, shell }]
     property var sessions: []              // [{ id, name, exec }] (índice 0 = por defecto)
 
-    // ── Selección actual ──────────────────────────────────────
+    // Selección actual
     property string selectedUser: ""
     property string selectedUserShell: ""
     property int    sessionIndex: 0
     readonly property var currentSession:
         (sessionIndex >= 0 && sessionIndex < sessions.length) ? sessions[sessionIndex] : null
 
-    // ── Estado de autenticación ───────────────────────────────
+    // Estado de autenticación
     property string prompt: I18n.tr("Contraseña", "Password")
     property string error:  ""
     property bool   secret: true
@@ -32,27 +29,25 @@ Singleton {
     readonly property bool available: Greetd.available
     signal failed()
 
-    // Máquina de estados de autenticación. El reintento se conduce por
-    // Greetd.onStateChanged (igual que el greeter de DankMaterialShell): al
-    // fallar NO se recrea la sesión, se cancela y se espera a que el estado
-    // caiga a Inactive; la sesión nueva se abre SOLO cuando greetd está libre
-    // (createSession jamás cae sobre una sesión viva). Así se evitan las
-    // carreras que producían "unable to send message: Connection refused" y el
-    // descuadre de estado de Quickshell tras un fallo.
+    // Máquina de estados de auth. El reintento se conduce por
+    // Greetd.onStateChanged: al fallar NO se recrea la sesión, se cancela y se
+    // espera a que el estado caiga a Inactive; la nueva se abre SOLO con greetd
+    // libre (createSession jamás cae sobre una sesión viva). Evita las carreras
+    // del "unable to send message: Connection refused" y el descuadre de estado
+    // tras un fallo.
     property bool   canRespond: false     // hay una pregunta de PAM esperando respuesta
     property string _pwBuffer: ""         // clave aceptada, pendiente de enviar
     property bool   _submitPending: false // el usuario pidió enviar; se hará al llegar el prompt
     property bool   _leaving: false       // login correcto en curso (arrancando sesión)
+    property string _lastPamError: ""     // último PAM_ERROR_MSG (motivo real del fallo)
 
-    // Diseño 100% guiado por eventos (sin temporizadores): cada vez que se pone
-    // busy=true es en respuesta a una acción que greetd SIEMPRE contesta
-    // (authMessage, authFailure, readyToLaunch o error), y cada una de esas
-    // señales vuelve a bajar busy. No hay esperas por tiempo ni sondeos.
+    // Todo guiado por eventos (sin timers): cada vez que se pone busy=true es
+    // por una acción que greetd SIEMPRE contesta (authMessage, authFailure,
+    // readyToLaunch o error), y cada señal vuelve a bajar busy.
     //
-    // 'available' hace de red de seguridad por eventos en lugar del antiguo
-    // watchdog por tiempo: si greetd cae (socket cerrado), Quickshell pone
-    // available=false y aquí se recupera el control. Un cuelgue de PAM que NO
-    // cierra el socket no tiene evento asociado, pero no se da en un greeter
+    // 'available' es la red de seguridad: si greetd cae (socket cerrado),
+    // Quickshell pone available=false y aquí se recupera el control. Un cuelgue
+    // de PAM que NO cierra el socket no tiene evento, pero no pasa en un greeter
     // solo-contraseña (PAM responde al momento).
     onAvailableChanged: {
         if (available) {
@@ -66,7 +61,7 @@ Singleton {
         }
     }
 
-    // ── Memoria (último login) ────────────────────────────────
+    // Memoria (último login)
     property string lastUser: ""
     property string _wantSession: ""
     // Índice preferido para resaltar en el selector (último usuario).
@@ -76,7 +71,7 @@ Singleton {
         return 0
     }
 
-    // ── Lectura de usuarios (/etc/passwd, sin subproceso) ─────
+    // Lectura de usuarios (/etc/passwd, sin subproceso)
     FileView {
         id: passwdFile
         path: "/etc/passwd"
@@ -87,12 +82,12 @@ Singleton {
     function _loadUsers() {
         const out = _parsePasswd(passwdFile.text())
         root.users = out
-        // Con un único usuario no hay nada que elegir → salta a la clave.
+        // Con un único usuario no hay nada que elegir: directo a la clave.
         if (out.length === 1 && root.selectedUser === "")
             root.pickUser(out[0].name)
     }
 
-    // ── Lectura de sesiones (/usr/share/wayland-sessions) ─────
+    // Lectura de sesiones (/usr/share/wayland-sessions)
     Process {
         id: sessionScan
         running: false
@@ -139,7 +134,7 @@ Singleton {
         sessionIndex = (sessionIndex + delta + sessions.length) % sessions.length
     }
 
-    // ── Memoria: leer al arrancar / escribir al entrar ────────
+    // Memoria: leer al arrancar / escribir al entrar
     FileView {
         id: stateFile
         path: Config.statePath
@@ -154,7 +149,7 @@ Singleton {
             root.lastUser = j.user || ""
             root._wantSession = j.session || ""
             root._applyWantedSession()
-        } catch (e) { /* fichero ausente o corrupto → se ignora */ }
+        } catch (e) { /* fichero ausente o corrupto: se ignora */ }
     }
     function _saveState() {
         if (!Config.rememberLastUser) return
@@ -167,17 +162,22 @@ Singleton {
             "greetd-state", Config.statePath, JSON.stringify(obj)])
     }
 
-    // ── Puente con greetd (PAM) · máquina de estados ──────────
+    // Puente con greetd (PAM) · máquina de estados
     Connections {
         target: Greetd
 
         // Pregunta / mensaje de PAM.
         function onAuthMessage(message, error, responseRequired, echoResponse) {
+            // Mensaje de ERROR de PAM (PAM_ERROR_MSG): no es un prompt, es el
+            // motivo del fallo (p.ej. "Authentication failure", "Permission
+            // denied") y no pide respuesta. Se guarda para clasificar el aviso
+            // en _failAttempt y NO se pinta como etiqueta del campo.
+            if (error && !responseRequired) {
+                root._lastPamError = (message || "").trim()
+                return
+            }
             root.secret = !echoResponse
-            root.prompt = (message && message.trim() !== "")
-                          ? message.replace(/:\s*$/, "")
-                          : (echoResponse ? I18n.tr("Usuario", "Username")
-                                          : I18n.tr("Contraseña", "Password"))
+            root.prompt = _localizedPrompt(message, echoResponse)
             root.canRespond = responseRequired
             // Mensaje informativo (no pide respuesta): Quickshell responde solo
             // con cadena vacía y la conversación PAM avanza. No se toca nada más.
@@ -220,10 +220,10 @@ Singleton {
             root._failAttempt(message, false)
         }
 
-        // greetd nunca enseña su jerga interna. El fallo de contraseña puede
-        // llegar como auth_error o —por la carrera del worker de PAM ya muerto—
-        // como un error de transporte; ambos son, de cara al usuario,
-        // "contraseña incorrecta". Otros errores muestran un aviso genérico.
+        // greetd nunca enseña su jerga interna. El fallo de contraseña llega
+        // como auth_error o, por la carrera del worker de PAM ya muerto, como
+        // error de transporte; los dos son "contraseña incorrecta" de cara al
+        // usuario. El resto de errores muestran un aviso genérico.
         function onError(err) {
             const transient = /unable to send message|connection refused|broken pipe/i.test(err || "")
             // Eco del cancel de un fallo ya mostrado: se ignora (no re-agita ni
@@ -236,7 +236,7 @@ Singleton {
         }
     }
 
-    // ── Acciones ──────────────────────────────────────────────
+    // Acciones
     function pickUser(name) {
         if (busy || !name) return
         _resetAuth()
@@ -270,15 +270,15 @@ Singleton {
         _submitPending = true
         busy = true
         if (canRespond)
-            _sendResponse()                              // hay prompt → envía ya
+            _sendResponse()                              // hay prompt: envía ya
         else if (Greetd.state === GreetdState.Inactive)
-            _startSession()                              // abre sesión → el prompt disparará el envío
+            _startSession()                              // abre sesión: el prompt disparará el envío
         // Si greetd sigue desmontando, onStateChanged(Inactive) abrirá la sesión
         // y el prompt enviará la clave. Nada más que hacer aquí.
         return true
     }
 
-    // ── Internos de la máquina de estados ─────────────────────
+    // Internos de la máquina de estados
 
     // Crea la sesión PAM SOLO si greetd está libre. Si aún no lo está, no fuerza
     // nada: onStateChanged/onAvailableChanged la abrirán al liberarse.
@@ -294,6 +294,7 @@ Singleton {
         busy = true
         canRespond = false
         _submitPending = false
+        _lastPamError = ""            // motivo fresco por intento
         const pw = _pwBuffer
         _pwBuffer = ""
         Greetd.respond(pw)
@@ -304,24 +305,67 @@ Singleton {
     // siguiente envío del usuario abrirá una nueva. 'isError' = error genérico
     // en vez de contraseña incorrecta.
     function _failAttempt(message, isError) {
+        // OJO: 'message' (de authFailure) es jerga interna de greetd/PAM
+        // —"pam_authenticate: AUTH_ERR"—, NO texto para el usuario, así que no
+        // se muestra. El único motivo legible es un PAM_ERROR_MSG previo
+        // (_lastPamError, p.ej. "Account locked", "Password expired").
+        const pamReason = _lastPamError.trim()
+        _lastPamError = ""
         _resetAuth()
         revealSecret = false
         if (isError) {
             error = I18n.tr("Error de autenticación, inténtalo de nuevo",
                             "Authentication error, please try again")
         } else {
-            // Caso habitual (PAM manda texto genérico o vacío) → aviso claro. Si
-            // da un motivo concreto (cuenta caducada, bloqueada…) se respeta.
-            const raw = (message || "").trim()
-            const generic = raw === "" ||
-                /authentication\s+(failure|error)|auth(entication)?\s+failed|incorrect|failed/i.test(raw)
             const wrong = I18n.tr("Contraseña incorrecta", "Incorrect password")
-            error = (secret && generic) ? wrong
-                  : (raw !== "" ? raw : wrong)
+            // Motivo concreto conocido (bloqueada/caducada…): traducido y con
+            // PRIORIDAD, porque su texto de PAM suele traer "failed" (p.ej.
+            // "locked due to N failed logins") y si no lo confundiría el filtro
+            // genérico con un fallo normal.
+            const special = _localizedReason(pamReason)
+            // Fórmula genérica de "fallo de autenticación" → contraseña mal.
+            const generic = pamReason === "" ||
+                /authentication\s+(failure|error)|auth(entication)?\s+failed|incorrect|permission\s+denied|login\s+(incorrect|failed)|try\s+again/i.test(pamReason)
+            error = special !== "" ? special
+                  : (secret && generic) ? wrong
+                  : (pamReason !== "" ? pamReason : wrong)
         }
         failed()
         if (Greetd.available && Greetd.state !== GreetdState.Inactive)
             Greetd.cancelSession()
+    }
+
+    // Traduce los motivos de PAM más habituales al idioma activo. Devuelve ""
+    // si no reconoce el mensaje (entonces se muestra el texto original de PAM).
+    // PAM emite en inglés (locale C del usuario 'greeter'), de ahí las claves.
+    function _localizedReason(raw) {
+        const s = (raw || "").toLowerCase()
+        if (s.indexOf("locked") !== -1)
+            return I18n.tr("Cuenta bloqueada", "Account locked")
+        if (/password (has )?expired|expired.*password|change your password|new password required|password.*change/.test(s))
+            return I18n.tr("Contraseña caducada, debes cambiarla",
+                           "Password expired, you must change it")
+        if (/account (has )?expired|expired.*account/.test(s))
+            return I18n.tr("Cuenta caducada", "Account expired")
+        if (s.indexOf("disabled") !== -1)
+            return I18n.tr("Cuenta deshabilitada", "Account disabled")
+        return ""
+    }
+
+    // Localiza el prompt del campo. PAM manda su etiqueta en inglés ("Password:",
+    // "login:"); los prompts estándar se traducen al idioma activo y los no
+    // estándar (PIN, código 2FA…) se muestran tal cual los envía PAM.
+    function _localizedPrompt(message, echoResponse) {
+        const raw = (message || "").replace(/:\s*$/, "").trim()
+        const s = raw.toLowerCase()
+        if (raw === "")
+            return echoResponse ? I18n.tr("Usuario", "Username")
+                                : I18n.tr("Contraseña", "Password")
+        if (s.indexOf("password") !== -1)
+            return I18n.tr("Contraseña", "Password")
+        if (s === "login" || s.indexOf("username") !== -1 || s === "user name")
+            return I18n.tr("Usuario", "Username")
+        return raw
     }
 
     // Limpia el estado transitorio de autenticación (no toca selectedUser).
@@ -333,7 +377,7 @@ Singleton {
         _leaving = false
     }
 
-    // ── Helpers puros (antes en GreetdEnv.js) ─────────────────
+    // Helpers puros
 
     // /etc/passwd → [{ name, full, shell }]  (solo cuentas humanas)
     function _parsePasswd(txt) {

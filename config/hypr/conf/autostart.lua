@@ -1,6 +1,5 @@
--- ── Autostart ───────────────────────────────────────────────
+-- Autostart: procesos al iniciar Hyprland (barra, daemons, etc.).
 -- https://wiki.hypr.land/Configuring/Basics/Autostart/
--- Procesos a lanzar al iniciar Hyprland (barra, daemons, etc.).
 
 hl.on("hyprland.start", function()
     -- Barra / shell.

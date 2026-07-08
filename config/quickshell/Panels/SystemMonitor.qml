@@ -37,6 +37,7 @@ Popout {
             }
         } else {
             search = ""
+            searchInput.clear()   // limpia el texto del buscador al cerrar
             processRevealTimer.stop()
         }
     }
@@ -97,7 +98,7 @@ Popout {
         }
     }
 
-    // ── Cabecera: logo + info del SO ─────────────────────────
+    // Cabecera: logo + info del SO
     RowLayout {
         Layout.fillWidth: true
         spacing: Theme.space14
@@ -106,13 +107,14 @@ Popout {
             Layout.alignment: Qt.AlignVCenter
             implicitWidth: Theme.rowL; implicitHeight: Theme.rowL
 
-            // Distro con glifo Nerd Font → glifo. Si no, intenta el
-            // icono del tema (LOGO de os-release); si tampoco, Tux.
+            // Glifo Nerd Font del distro. Si no, el icono del tema
+            // (LOGO de os-release); si tampoco, Tux.
             Image {
                 anchors.fill: parent
                 anchors.margins: Theme.hairline
                 visible: !SysMon.hasGlyph && SysMon.distroLogoIcon !== ""
                 source: SysMon.distroLogoIcon
+                sourceSize: Qt.size(Theme.rowL * 2, Theme.rowL * 2)
                 fillMode: Image.PreserveAspectFit
                 smooth: true
                 asynchronous: true
@@ -162,7 +164,7 @@ Popout {
 
     Rectangle { Layout.fillWidth: true; implicitHeight: Theme.hairline; color: Theme.overlay; opacity: 0.4 }
 
-    // ── Recursos ─────────────────────────────────────────────
+    // Recursos
     Rectangle {
         Layout.fillWidth: true
         implicitHeight: Theme.dp(142)
@@ -260,7 +262,7 @@ Popout {
                                 radius: parent.radius
                                 width: parent.width * Math.min(1, SysMon.cpu / 100)
                                 color: Theme.accent
-                                Behavior on width { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
+                                Behavior on width { enabled: sm.shown; NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
                             }
                         }
 
@@ -329,7 +331,7 @@ Popout {
                                 radius: parent.radius
                                 width: parent.width * Math.min(1, SysMon.memPercent / 100)
                                 color: Theme.accent
-                                Behavior on width { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
+                                Behavior on width { enabled: sm.shown; NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
                             }
                         }
 
@@ -349,76 +351,20 @@ Popout {
 
     Rectangle { Layout.fillWidth: true; implicitHeight: Theme.hairline; color: Theme.overlay; opacity: 0.4 }
 
-    // ── Buscador ─────────────────────────────────────────────
-    Rectangle {
+    // Buscador
+    SearchField {
+        id: searchInput
         Layout.fillWidth: true
         implicitHeight: Theme.rowS
-        radius: Theme.pillRadius
-        color: Theme.surface
-        border.width: Theme.hairline
-        border.color: searchInput.activeFocus ? Theme.accent
-                     : Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.4)
-        Behavior on border.color { ColorAnimation { duration: Theme.animFast } }
-
-        RowLayout {
-            anchors.fill: parent
-            anchors.leftMargin: 10
-            anchors.rightMargin: 10
-            spacing: Theme.space8
-
-            Text {
-                text: "󰍉"   // lupa
-                color: Theme.fgMuted
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.iconSize
-            }
-            TextInput {
-                id: searchInput
-                Layout.fillWidth: true
-                clip: true
-                color: Theme.fg
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontSize
-                selectionColor: Theme.accent
-                verticalAlignment: TextInput.AlignVCenter
-                onTextChanged: sm.search = text
-
-                // Limpia el texto al cerrar el panel.
-                Connections {
-                    target: sm
-                    function onShownChanged() { if (!sm.shown) searchInput.text = "" }
-                }
-
-                Text {
-                    anchors.verticalCenter: parent.verticalCenter
-                    visible: searchInput.text === ""
-                    text: I18n.tr("Search process...")
-                    color: Theme.fgMuted
-                    font: searchInput.font
-                }
-            }
-            Text {
-                visible: searchInput.text !== ""
-                text: "󰅖"
-                color: Theme.fgMuted
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontSize
-                MouseArea {
-                    anchors.fill: parent
-                    anchors.margins: -4
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: searchInput.text = ""
-                }
-            }
-        }
+        textPixelSize: Theme.fontSize
+        placeholder: I18n.tr("Search process...")
+        onTextChanged: sm.search = text
     }
 
-    // ── Sección de procesos ──────────────────────────────────
-    //  Una sola celda para la carga y la lista: ambas superpuestas con
-    //  fundido cruzado. La tarjeta de carga reserva EXACTAMENTE la altura
-    //  de la lista cargada (misma fórmula que SystemProcessList con la
-    //  lista al tope de dp(280)), así el panel abre ya con su tamaño
-    //  definitivo y no salta cuando llegan los datos.
+    // Sección de procesos. Carga y lista superpuestas con fundido cruzado. La
+    // tarjeta de carga reserva la misma altura que la lista cargada (misma
+    // fórmula que SystemProcessList, tope dp(280)), así el panel no salta al
+    // llegar los datos.
     Item {
         Layout.fillWidth: true
         Layout.preferredHeight: sm.processViewReady && procLoader.item

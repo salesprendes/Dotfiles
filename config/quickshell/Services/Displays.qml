@@ -6,14 +6,10 @@ import Quickshell.Io
 import Quickshell.Hyprland
 import qs.Config
 
-// ─────────────────────────────────────────────────────────────
-//  Servicio de pantallas. LEE los monitores de forma reactiva desde
-//  Quickshell.Hyprland (sin subprocess) y los APLICA con
-//  `hyprctl eval 'hl.monitor{…}'`. Aplicar es lo único que necesita
-//  proceso (Quickshell solo expone dispatchers). Se usa `eval` + la
-//  API Lua porque `hyprctl keyword` NO funciona con el parser Lua de
-//  Hyprland. El cambio es en caliente; persistirlo es opcional.
-// ─────────────────────────────────────────────────────────────
+// Pantallas: lee los monitores reactivamente desde Quickshell.Hyprland (sin
+// subproceso) y los aplica con `hyprctl eval 'hl.monitor{…}'`. Se usa eval +
+// API Lua porque `hyprctl keyword` no funciona con el parser Lua de Hyprland.
+// El cambio es en caliente; persistirlo es opcional.
 Singleton {
     id: root
 
@@ -52,10 +48,10 @@ Singleton {
                   transform: i.transform, x: i.x, y: i.y, enabled: !i.disabled })
     }
 
-    // ── Persistencia ─────────────────────────────────────────
-    //  Escribe todos los monitores en ~/.config/hypr/conf/monitors.lua para
-    //  que sobreviva a reinicios. Usa lo APLICADO (_desired) y, para los no
-    //  editados, su estado actual. Lo llama apply() automáticamente.
+    // Persistencia: escribe todos los monitores en
+    // ~/.config/hypr/conf/monitors.lua para que sobrevivan a reinicios. Usa lo
+    // aplicado (_desired) y, para los no editados, su estado actual. Lo llama
+    // apply() automáticamente.
     function persistAll() {
         let body = "-- ── Monitores ──────────────────────────────────────────\n"
                  + "-- Generado por Quickshell (Ajustes → Pantallas).\n\n"

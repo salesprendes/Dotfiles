@@ -12,7 +12,7 @@ Rectangle {
     readonly property bool closeHovered: closeButton.hovered
 
     readonly property string img: resolveImage()
-    readonly property bool hasImagePayload: notif && notif.image
+    readonly property bool hasImagePayload: !!(notif && notif.image)
     readonly property string appName: notif && notif.appName ? notif.appName : "Sistema"
     readonly property string summary: notif && notif.summary ? notif.summary : ""
     readonly property string body: notif && notif.body ? notif.body : ""
@@ -99,6 +99,7 @@ Rectangle {
                     anchors.margins: item.img !== "" ? Theme.dp(5) : Theme.space10
                     visible: item.img !== ""
                     source: item.img
+                    sourceSize: Qt.size(Theme.dp(46) * 2, Theme.dp(46) * 2)
                     fillMode: item.hasImagePayload ? Image.PreserveAspectCrop : Image.PreserveAspectFit
                     smooth: true
                     asynchronous: true
@@ -163,30 +164,28 @@ Rectangle {
 
             Rectangle {
                 id: closeButton
-                // 'dismissing' se activa al pulsar: así el rojo es solo efecto de
-                // hover y se desvanece al cerrar, en vez de quedarse fijo mientras
-                // la notificación reproduce su animación de salida.
+                // 'dismissing' se activa al pulsar: así el rojo es solo hover y se
+                // apaga al cerrar, en vez de quedarse fijo durante la animación de salida.
                 property bool dismissing: false
                 property bool hovered: closeMa.containsMouse && !dismissing
                 Layout.alignment: Qt.AlignTop
                 implicitWidth: Theme.controlS
                 implicitHeight: Theme.controlS
                 radius: height / 2
-                // Al pasar el ratón se rellena de rojo (afordancia de descartar).
-                // Apagado = rojo con alfa 0 (no "transparent", que es negro con
-                // alfa 0 y ensuciaba el fundido de salida).
+                // Hover: se rellena de rojo (afordancia de descartar). Apagado = rojo
+                // con alfa 0 (no "transparent", que es negro con alfa 0 y ensuciaba el fundido).
                 color: closeButton.hovered
                     ? Theme.red
                     : Qt.rgba(Theme.red.r, Theme.red.g, Theme.red.b, 0)
-                // Fundido siempre fluido: nunca baja de ~140 ms aunque las
-                // animaciones globales estén en "Ninguna".
+                // Fundido siempre fluido: nunca baja de ~140 ms aunque las animaciones
+                // globales estén en "Ninguna".
                 Behavior on color { ColorAnimation { duration: Math.max(Theme.animFast, 140); easing.type: Easing.OutCubic } }
 
                 Text {
                     anchors.centerIn: parent
                     text: "󰅖"
-                    // Sobre el relleno rojo, el icono usa el color de fondo para
-                    // contrastar; en reposo, gris tenue. Funde junto al fondo.
+                    // Sobre el rojo, el icono va en color de fondo para contrastar;
+                    // en reposo, gris tenue.
                     color: closeButton.hovered ? Theme.bg : Theme.fgMuted
                     font.family: Theme.fontFamily
                     font.pixelSize: Theme.iconSize - 1

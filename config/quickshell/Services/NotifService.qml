@@ -5,11 +5,9 @@ import Quickshell
 import Quickshell.Services.Notifications
 import qs.Config
 
-// ─────────────────────────────────────────────────────────────
-//  Daemon de notificaciones. Quickshell se registra como servidor
-//  org.freedesktop.Notifications y conserva las notificaciones en
-//  'list' (centro de notificaciones). Emite 'posted' para popups.
-// ─────────────────────────────────────────────────────────────
+// Daemon de notificaciones. Quickshell se registra como servidor
+// org.freedesktop.Notifications y conserva las notificaciones en list (centro
+// de notificaciones). Emite posted para los popups.
 Singleton {
     id: root
 
@@ -24,10 +22,30 @@ Singleton {
     property var _clearQueue: []
 
     // Marca temporal de llegada por notificación (para "hace X min").
-    // El tick solo corre si hay notificaciones que fechar.
-    property var _arrival: new Map()
+    // WeakMap: al descartarse la notificación su entrada se libera sola
+    // (un Map normal retendría cada notificación de toda la sesión).
+    property var _arrival: new WeakMap()
     property int nowTick: 0
-    Timer { interval: 30000; running: root.count > 0; repeat: true; onTriggered: root.nowTick++ }
+    // El tick solo late con el centro de notificaciones abierto: los "hace X
+    // min" no se ven en otro sitio (los popups viven segundos y nacen como
+    // "ahora"), y al abrir el centro los bindings se evalúan frescos solos. El
+    // tick solo refresca mientras se mira.
+    Timer {
+        interval: 30000
+        running: root.count > 0 && Globals.notifCenterOpen
+        repeat: true
+        onTriggered: root.nowTick++
+    }
+
+    // Las notificaciones que sobreviven a una recarga (keepOnReload) pierden
+    // su marca de llegada (el WeakMap muere con cada generación): se sellan
+    // con la hora de carga, envejecen desde ahí, mejor que "ahora" perpetuo.
+    Component.onCompleted: {
+        const vals = server.trackedNotifications.values
+        for (let i = 0; i < vals.length; i++)
+            if (!_arrival.has(vals[i]))
+                _arrival.set(vals[i], Date.now())
+    }
 
     function appNameFor(n) {
         if (n && n.appName && n.appName !== "")
@@ -70,12 +88,20 @@ Singleton {
         if (m < 60) return I18n.tr("%1 min ago").arg(m)
         const h = Math.floor(m / 60)
         if (h < 24) return I18n.tr("%1 h ago").arg(h)
-        return I18n.tr("%1 d ago").arg(Math.floor(h / 24))
+        const d = Math.floor(h / 24)
+        if (d < 7)  return I18n.tr("%1 d ago").arg(d)
+        if (d < 30) return I18n.tr("%1 wk ago").arg(Math.floor(d / 7))
+        return I18n.tr("%1 mo ago").arg(Math.floor(d / 30))
     }
 
     NotificationServer {
         id: server
-        keepOnReload: false
+        // true: el registro D-Bus y las notificaciones retenidas pasan a la
+        // generación nueva en cada recarga en vivo. Con false, el servidor
+        // nuevo intentaba registrarse con el viejo aún vivo, fallaba
+        // ("already registered") y no reintentaba: el daemon quedaba muerto en
+        // silencio (sin popups ni centro) hasta reiniciar el shell entero.
+        keepOnReload: true
 
         actionsSupported: true
         bodySupported: true

@@ -4,41 +4,37 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 
-// ─────────────────────────────────────────────────────────────
-//  Almacén de ajustes persistente (fuente de verdad).
-//  Se guarda en ~/.config/quickshell/settings.json y los demás
-//  módulos (Theme, Weather, Wallpaper, reloj…) LEEN de aquí.
-// ─────────────────────────────────────────────────────────────
+// Almacén de ajustes persistente (fuente de verdad). Se guarda en
+// ~/.config/quickshell/settings.json; los demás módulos (Theme, Weather,
+// Wallpaper, reloj) leen de aquí.
 Singleton {
     id: s
 
     readonly property string home: Quickshell.env("HOME") ?? ""
 
-    // ── Apariencia ───────────────────────────────────────────
+    // Apariencia
     property string themeName: "solitude"
     property string accentName: "theme"
     property color  accentColor: resolvedAccent
     property bool   darkMode: true      // false = variante clara de Solitude
     property bool   hyprlandAvailable: false
     property real   uiScale: 1.0
-    property real   animScale: 1.0      // compatibilidad con settings.json antiguo
     property int    animationSpeed: 2   // 0 none | 1 short | 2 medium | 3 long | 4 custom
     property int    customAnimationDuration: 500
     property real   barOpacity: 0.78    // opacidad del fondo de la barra
     property real   popupOpacity: 0.85
     property real   widgetOpacity: 0.55
 
-    // Opacidades PROPIAS del tema Liquid Glass, independientes de las de arriba
-    // para no pisar las de otros temas al cambiar. Translúcidas pero legibles:
-    // con el blur del compositor detrás, ~0.45 se lee como cristal esmerilado
-    // nítido (antes 0.36/0.18/0.14 quedaban demasiado transparentes).
+    // Opacidades propias del tema Liquid Glass, independientes de las de
+    // arriba para no pisar las de otros temas. Translúcidas pero legibles:
+    // con el blur del compositor detrás, ~0.45 se lee como cristal esmerilado.
     property real   glassBarOpacity: 0.45
     property real   glassPopupOpacity: 0.45
     property real   glassWidgetOpacity: 0.35
 
-    // Opacidad "efectiva" según el tema activo. Tanto Theme como los sliders de
-    // Ajustes usan ESTAS: así el mismo control edita/refleja la opacidad del
-    // tema en uso (glass o no) sin mezclar valores entre temas.
+    // Opacidad efectiva según el tema activo. Theme y los sliders de Ajustes
+    // usan estas: el mismo control edita/refleja la opacidad del tema en uso
+    // (glass o no) sin mezclar valores entre temas.
     readonly property bool _isGlass: themeName === "liquid-glass"
     readonly property real effBarOpacity:    _isGlass ? glassBarOpacity    : barOpacity
     readonly property real effPopupOpacity:  _isGlass ? glassPopupOpacity  : popupOpacity
@@ -51,7 +47,7 @@ Singleton {
     property string fontFamily: "JetBrainsMono Nerd Font"
     property string monoFontFamily: "JetBrainsMono Nerd Font"
     property real   fontScale: 1.0
-    // ── Render de fuentes (fontconfig) — editables; se vuelcan a fonts.conf ──
+    // Render de fuentes (fontconfig): editables, se vuelcan a fonts.conf
     property bool   fontAntialias: true
     property bool   fontHinting: true
     property string fontHintstyle: "hintslight"   // hintnone | hintslight | hintmedium | hintfull
@@ -62,9 +58,8 @@ Singleton {
     property string panelMotionEffect: "standard" // standard | directional | depth
     property string language: "es"
 
-    // ── Terminal ─────────────────────────────────────────────
-    //  La PALETA de color la genera el servicio Terminal a partir del tema
-    //  (no editable aquí). Estos son los parámetros NO-color personalizables.
+    // Terminal. La paleta de color la genera el servicio Terminal a partir
+    // del tema (no editable aquí); aquí van los parámetros no-color.
     property string terminalApp: "kitty"        // kitty | alacritty | foot | …
     property string terminalFont: ""            // "" = usar fontFamily
     property real   terminalFontSize: 11.5
@@ -125,20 +120,18 @@ Singleton {
             "lightCyan": "#179299", "lightGreen": "#40a02b", "lightYellow": "#df8e1d", "lightOrange": "#fe640b", "lightRed": "#d20f39", "lightMagenta": "#ea76cb",
             "hyprInactive": "#45475a", "hyprShadow": "#11111b"
         },
-        // Cristal líquido estilo macOS. Es ADAPTATIVO: en modo oscuro da un
-        // cristal ahumado (fondo frío casi negro, texto claro) y en claro un
-        // cristal luminoso (casi blanco translúcido, texto oscuro). La
-        // translucidez REAL la aplica Theme (alphas de 'glass'); aquí solo van
-        // los colores base. 'overlay' se deja BRILLANTE a propósito: los bordes
-        // (withAlpha(overlay, …)) se convierten así en el filo de luz esmerilado.
-        // Acentos = colores de sistema de macOS. El blur del compositor lo activa
-        // shell.qml (hl.layer_rule) mientras este tema esté seleccionado.
+        // Cristal líquido adaptativo: en modo oscuro da un cristal ahumado
+        // (fondo casi negro, texto claro) y en claro uno luminoso (casi blanco
+        // translúcido, texto oscuro). La translucidez la aplica Theme (alphas
+        // de 'glass'); aquí solo van los colores base. 'overlay' se deja
+        // brillante a propósito: los bordes (withAlpha(overlay, …)) se
+        // convierten en el filo de luz esmerilado. El blur del compositor lo
+        // activa shell.qml (hl.layer_rule) mientras el tema esté seleccionado.
         "liquid-glass": {
             "label": "Liquid Glass",
             // Tonos neutros: bg = surfaceContainer (#1e2023), surface =
             // surfaceContainerHigh (#292b2f), overlay = 'outline' (borde de luz
-            // sutil). Los alphas de translucidez viven en
-            // Theme (0.36/0.18/0.14). Acentos = colores de sistema de macOS.
+            // sutil). Los alphas de translucidez viven en Theme.
             "bg": "#1e2023", "bgAlt": "#16181a", "surface": "#292b2f", "surfaceHi": "#34373b", "overlay": "#8b9198",
             "fg": "#e3e3e7", "fgDim": "#c3c6cc", "fgMuted": "#8b9198",
             "accent": "#0a84ff", "accent2": "#64d2ff", "cyan": "#64d2ff", "green": "#30d158", "yellow": "#ffd60a",
@@ -164,14 +157,9 @@ Singleton {
         ? currentPalette.accent
         : (currentPalette.lightAccent || currentPalette.accent)
 
-    readonly property var accentPresets: [
-        { name: "theme", color: themeAccent },
-        { name: "blue", color: "#7aa2f7" },
-        { name: "purple", color: "#bb9af7" },
-        { name: "green", color: "#9ece6a" },
-        { name: "amber", color: "#e0af68" },
-        { name: "red", color: "#de6145" }
-    ]
+    // Lista canónica de acentos {name, color, label}. Es la única fuente:
+    // de aquí leen accentFor/accentLabel/hasAccentPreset/pickAccent y el
+    // selector de la página de Tema (ThemePage usa este nombre desde fuera).
     readonly property var accentSwatches: [
         { name: "theme", color: themeAccent, label: "Theme" },
         { name: "blue", color: "#7aa2f7", label: "Blue" },
@@ -200,7 +188,7 @@ Singleton {
         ? customAnimationDuration
         : popoutAnimationDurations[normalizedAnimationSpeed]
 
-    // ── Barra (visibilidad de widgets) ───────────────────────
+    // Barra (visibilidad de widgets)
     property bool   showTray: true
     property bool   showSysmon: true
     property bool   showBattery: true
@@ -209,25 +197,25 @@ Singleton {
     property bool   showPowerProfile: true
     property bool   showCaffeine: false
 
-    // ── Reloj ────────────────────────────────────────────────
+    // Reloj
     property bool   clock24h: true
     property bool   clockShowSeconds: false
     property bool   clockShowDate: true
 
-    // ── Clima ────────────────────────────────────────────────
+    // Clima
     property bool   weatherEnabled: true
     property string weatherLocation: ""   // vacío = automático
     property bool   weatherMetric: true   // true = °C, false = °F
     property int    weatherRefreshMin: 30
 
-    // ── Notificaciones ───────────────────────────────────────
+    // Notificaciones
     property bool   notifPopupsEnabled: true
     property int    notifTimeout: 5            // segundos
     property int    notifMaxVisible: 4
     property string notifPosition: "tr"        // tr | tl | br | bl
     property var    mutedNotificationApps: []
 
-    // ── Fondos ───────────────────────────────────────────────
+    // Fondos
     // Transición visual que aplica Background/Backdrop.qml al cambiar de fondo:
     // fade | zoom | slide | push | wipe.
     property string wallpaperTransition: "fade"
@@ -237,18 +225,18 @@ Singleton {
     property var    wallpaperDirs: [home + "/.config/wallpapers"]
     property string wallpaperCurrent: ""  // último fondo aplicado (ruta absoluta)
 
-    // ── Captura de pantalla / grabación ──────────────────────
-    //  Sub-objeto con TODOS los ajustes del servicio ScreenCapture, unificados
-    //  aquí para tener una única fuente de verdad (settings.json). El servicio
-    //  los sanea con sus propios rangos/enums al aplicarlos; aquí solo validamos
-    //  que sea un objeto JSON para no corromper el archivo.
+    // Captura de pantalla / grabación
+    // Sub-objeto con todos los ajustes del servicio ScreenCapture, unificados
+    // aquí para tener una única fuente de verdad (settings.json). El servicio
+    // los sanea con sus rangos/enums al aplicarlos; aquí solo validamos que sea
+    // un objeto JSON para no corromper el archivo.
     property var screenCapture: ({})
 
-    // ── Persistencia ─────────────────────────────────────────
+    // Persistencia
     property bool _loaded: false
 
     readonly property var _keys: ["themeName", "accentName", "accentColor", "darkMode",
-        "uiScale", "animScale", "animationSpeed", "customAnimationDuration", "barOpacity",
+        "uiScale", "animationSpeed", "customAnimationDuration", "barOpacity",
         "popupOpacity", "widgetOpacity", "glassBarOpacity", "glassPopupOpacity", "glassWidgetOpacity",
         "cornerScale", "barScale", "fontFamily", "monoFontFamily", "fontScale",
         "fontAntialias", "fontHinting", "fontHintstyle", "fontRgba", "fontLcdfilter", "fontEmbeddedbitmap",
@@ -262,11 +250,40 @@ Singleton {
         "terminalCursorShape", "terminalCursorBlink", "terminalLineHeight", "terminalTabStyle", "terminalLigatures",
         "screenCapture"]
 
-    // ── Saneamiento de valores cargados ─────────────────────
-    //  Rangos numéricos (se recortan a [min,max]) y conjuntos de valores
-    //  válidos (enums). Lo que no encaje se IGNORA y se conserva el default.
+    // Valores por defecto de todas las claves persistidas (_keys).
+    // Copiados de las declaraciones de arriba (no capturados en runtime: tras
+    // load() las propiedades ya tienen los valores del JSON). reset() itera
+    // este mapa; al añadir un ajuste, añádelo a la declaración, a _keys y aquí.
+    // accentColor no aparece: su default es resolvedAccent y reset() lo
+    // recalcula al final.
+    readonly property var _defaults: ({
+        "themeName": "solitude", "accentName": "theme", "darkMode": true,
+        "uiScale": 1.0, "animationSpeed": 2, "customAnimationDuration": 500, "barOpacity": 0.78,
+        "popupOpacity": 0.85, "widgetOpacity": 0.55,
+        "glassBarOpacity": 0.45, "glassPopupOpacity": 0.45, "glassWidgetOpacity": 0.35,
+        "cornerScale": 1.0, "barScale": 1.0,
+        "fontFamily": "JetBrainsMono Nerd Font", "monoFontFamily": "JetBrainsMono Nerd Font", "fontScale": 1.0,
+        "fontAntialias": true, "fontHinting": true, "fontHintstyle": "hintslight",
+        "fontRgba": "rgb", "fontLcdfilter": "lcddefault", "fontEmbeddedbitmap": false,
+        "panelAnimationStyle": "material", "panelMotionEffect": "standard", "language": "es",
+        "showTray": true, "showSysmon": true, "showBattery": true, "showClipboard": true,
+        "showNotifications": true, "showPowerProfile": true, "showCaffeine": false,
+        "clock24h": true, "clockShowSeconds": false, "clockShowDate": true,
+        "weatherEnabled": true, "weatherLocation": "", "weatherMetric": true, "weatherRefreshMin": 30,
+        "notifPopupsEnabled": true, "notifTimeout": 5, "notifMaxVisible": 4, "notifPosition": "tr",
+        "mutedNotificationApps": [],
+        "wallpaperTransition": "fade", "wallpaperTransitionDuration": 1.0, "wallpaperCurrent": "",
+        "terminalApp": "kitty", "terminalFont": "", "terminalFontSize": 11.5, "terminalOpacity": 0.80,
+        "terminalPadding": 12, "terminalCursorShape": "beam", "terminalCursorBlink": true,
+        "terminalLineHeight": 2, "terminalTabStyle": "powerline", "terminalLigatures": true,
+        "screenCapture": {}
+    })
+
+    // Saneamiento de valores cargados
+    // Rangos numéricos (se recortan a [min,max]) y conjuntos válidos (enums).
+    // Lo que no encaje se ignora y se conserva el default.
     readonly property var _numBounds: ({
-        "uiScale": [0.5, 2.0], "animScale": [0.0, 3.0], "animationSpeed": [0, 4],
+        "uiScale": [0.5, 2.0], "animationSpeed": [0, 4],
         "customAnimationDuration": [50, 3000], "barOpacity": [0.0, 1.0],
         "popupOpacity": [0.0, 1.0], "widgetOpacity": [0.0, 1.0],
         "glassBarOpacity": [0.0, 1.0], "glassPopupOpacity": [0.0, 1.0], "glassWidgetOpacity": [0.0, 1.0],
@@ -290,7 +307,7 @@ Singleton {
         "weatherRefreshMin", "notifTimeout", "notifMaxVisible"]
 
     // Devuelve un valor válido para 'k', o 'undefined' si hay que descartarlo
-    // (→ se conserva el valor por defecto). Infiere el tipo esperado del default.
+    // (se conserva el valor por defecto). Infiere el tipo esperado del default.
     function sanitize(k, val) {
         // Enums: solo valores de la lista.
         if (_enums[k] !== undefined)
@@ -353,32 +370,24 @@ Singleton {
         if (!_loaded) return
         const o = {}
         for (const k of _keys) o[k] = s[k]
+        // accentColor es un QColor: serializado tal cual sería un objeto que
+        // sanitize() rechaza al cargar. Se persiste como "#rrggbb".
+        o.accentColor = colorHex(accentColor)
         file.setText(JSON.stringify(o, null, 2))
     }
 
     function reset() {
-        themeName = "solitude"; accentName = "theme"; accentColor = resolvedAccent
-        darkMode = true; uiScale = 1.0; animScale = 1.0; animationSpeed = 2; customAnimationDuration = 500; barOpacity = 0.78
-        popupOpacity = 0.85; widgetOpacity = 0.55
-        glassBarOpacity = 0.45; glassPopupOpacity = 0.45; glassWidgetOpacity = 0.35
-        cornerScale = 1.0; barScale = 1.0; fontFamily = "JetBrainsMono Nerd Font"
-        monoFontFamily = "JetBrainsMono Nerd Font"; fontScale = 1.0
-        fontAntialias = true; fontHinting = true; fontHintstyle = "hintslight"
-        fontRgba = "rgb"; fontLcdfilter = "lcddefault"; fontEmbeddedbitmap = false
-        panelAnimationStyle = "material"
-        panelMotionEffect = "standard"
-        language = "es"
-        showTray = true; showSysmon = true; showBattery = true
-        showClipboard = true; showNotifications = true; showPowerProfile = true; showCaffeine = false
-        clock24h = true; clockShowSeconds = false; clockShowDate = true
-        weatherEnabled = true; weatherLocation = ""; weatherMetric = true; weatherRefreshMin = 30
-        notifPopupsEnabled = true; notifTimeout = 5; notifMaxVisible = 4; notifPosition = "tr"; mutedNotificationApps = []
-        wallpaperTransition = "fade"; wallpaperTransitionDuration = 1.0
-        wallpaperCurrent = ""
-        terminalApp = "kitty"; terminalFont = ""; terminalFontSize = 11.5; terminalOpacity = 0.80
-        terminalPadding = 12; terminalCursorShape = "beam"; terminalCursorBlink = true
-        terminalLineHeight = 2; terminalTabStyle = "powerline"; terminalLigatures = true
-        screenCapture = ({})
+        // Restaura cada clave persistida a su valor de declaración (_defaults).
+        // Arrays/objetos se copian para no compartir la referencia del mapa
+        // (si algo los mutara in situ, corrompería los defaults).
+        for (const k in _defaults) {
+            const v = _defaults[k]
+            s[k] = Array.isArray(v) ? v.slice()
+                 : (v !== null && typeof v === "object") ? Object.assign({}, v)
+                 : v
+        }
+        // accentColor no está en _defaults: se recalcula del acento ya reseteado.
+        accentColor = resolvedAccent
     }
 
     function colorHex(c) {
@@ -394,19 +403,10 @@ Singleton {
         return colorHex(c).replace("#", "")
     }
 
-    // "#rrggbb" (+ alfa 0..1) → "rgba(r, g, b, a)" para CSS de GTK.
-    function rgbaCss(c, a) {
-        const h = stripHex(c)
-        const r = parseInt(h.substring(0, 2), 16)
-        const g = parseInt(h.substring(2, 4), 16)
-        const b = parseInt(h.substring(4, 6), 16)
-        return "rgba(" + r + ", " + g + ", " + b + ", " + a.toFixed(2) + ")"
-    }
-
     function accentFor(name) {
-        for (let i = 0; i < accentPresets.length; i++)
-            if (accentPresets[i].name === name)
-                return accentPresets[i].color
+        for (let i = 0; i < accentSwatches.length; i++)
+            if (accentSwatches[i].name === name)
+                return accentSwatches[i].color
         return currentPalette.accent
     }
 
@@ -418,8 +418,8 @@ Singleton {
     }
 
     function hasAccentPreset(name) {
-        for (let i = 0; i < accentPresets.length; i++)
-            if (accentPresets[i].name === name)
+        for (let i = 0; i < accentSwatches.length; i++)
+            if (accentSwatches[i].name === name)
                 return true
         return false
     }
@@ -443,9 +443,9 @@ Singleton {
         }
 
         const hex = colorHex(c).toLowerCase()
-        for (let i = 0; i < accentPresets.length; i++) {
-            if (colorHex(accentPresets[i].color).toLowerCase() === hex) {
-                accentName = accentPresets[i].name
+        for (let i = 0; i < accentSwatches.length; i++) {
+            if (colorHex(accentSwatches[i].color).toLowerCase() === hex) {
+                accentName = accentSwatches[i].name
                 accentColor = resolvedAccent
                 return
             }
@@ -496,14 +496,14 @@ Singleton {
             hyprReload.running = true
     }
 
-    // ── Tematizado de apps GTK4/libadwaita (Nautilus, etc.) ──────────
-    //  Redefine los colores con nombre de libadwaita en ~/.config/gtk-4.0/
-    //  gtk.css según el tema activo y el modo claro/oscuro; el interruptor
-    //  real claro↔oscuro lo da gsettings color-scheme. Reescribe en cada
-    //  cambio de tema/acento/darkMode (igual que la sync de Hyprland).
+    // Tematizado de apps GTK4/libadwaita (Nautilus, etc.)
+    // Redefine los colores con nombre de libadwaita en ~/.config/gtk-4.0/
+    // gtk.css según el tema y el modo claro/oscuro; el interruptor real
+    // claro↔oscuro lo da gsettings color-scheme. Se reescribe en cada cambio
+    // de tema/acento/darkMode (igual que la sync de Hyprland).
     function gtkColorCss(forGtk3) {
         // En Liquid Glass, las apps GTK (Nautilus) toman los colores de
-        // 'solitude' y OPACOS: se ven mejor que el cristal casi-blanco de
+        // 'solitude' y opacos: se ven mejor que el cristal casi-blanco de
         // libadwaita y evitan sus problemas de translucidez. El efecto cristal
         // se queda en el shell (paneles), no en las apps. El acento sigue al
         // usuario; si es "theme", usa el acento propio de solitude.
@@ -520,27 +520,17 @@ Singleton {
                   cardBg: p.surface, popBg: p.surface, popFg: p.fg, dlgBg: p.bgAlt,
                   border: p.overlay }
         } else {
-            // 'view' (listas/entradas de Nautilus, campos de texto): antes se
-            // aclaraba un punto sobre el fondo y "deslumbraba" en claro. Ahora se
-            // iguala al color de la barra (headerbar = lightBgAlt), más apagado,
-            // para un blanco que no brilla de más.
+            // 'view' (listas/entradas de Nautilus, campos de texto): se iguala
+            // al color de la barra (headerbar = lightBgAlt), más apagado, para
+            // un blanco que no deslumbra en modo claro.
             c = { accentBg: (p.lightAccent || accent), accentFg: "#ffffff",
                   winBg: p.lightBg, winFg: p.lightFg, viewBg: p.lightBgAlt, viewFg: p.lightFg,
                   headBg: p.lightBgAlt, headFg: p.lightFg, sideBg: p.lightBg, sideFg: (p.lightFgDim || p.lightFg),
                   cardBg: p.lightSurface, popBg: p.lightSurface, popFg: p.lightFg, dlgBg: p.lightBg,
                   border: (p.lightOverlay || p.lightSurface) }
         }
-        // Transparencias: SOLO en Liquid Glass, y de forma MÍNIMA — únicamente el
-        // fondo de la VENTANA (deslizador de panel) y del HEADERBAR (deslizador de
-        // barra) reciben alfa. Las zonas de contenido (vista/listas/entradas),
-        // sidebars, tarjetas, popovers y diálogos quedan OPACAS para no perder
-        // legibilidad. Textos, acento y bordes también opacos. Fuera de Glass,
-        // A() devuelve el hex tal cual (comportamiento anterior).
         // GTK siempre opaco: el 'glass' translúcido no se aplica a las apps
         // (ver arriba), solo a los paneles del shell.
-        const glass = false
-        function A(hex, a) { return glass ? rgbaCss(hex, a) : hex }
-        const aWin = effPopupOpacity, aBar = effBarOpacity
         // Colores con nombre de libadwaita (GTK4 / Nautilus).
         let out = [
             "/* Generado por Quickshell Settings — no editar a mano.",
@@ -548,15 +538,15 @@ Singleton {
             "@define-color accent_color "       + c.accentBg + ";",
             "@define-color accent_bg_color "    + c.accentBg + ";",
             "@define-color accent_fg_color "    + c.accentFg + ";",
-            "@define-color window_bg_color "    + A(c.winBg, aWin) + ";",
+            "@define-color window_bg_color "    + c.winBg + ";",
             "@define-color window_fg_color "    + c.winFg + ";",
             "@define-color view_bg_color "      + c.viewBg + ";",
             "@define-color view_fg_color "      + c.viewFg + ";",
-            "@define-color headerbar_bg_color " + A(c.headBg, aBar) + ";",
+            "@define-color headerbar_bg_color " + c.headBg + ";",
             "@define-color headerbar_fg_color " + c.headFg + ";",
             // backdrop = color cuando la ventana NO está enfocada (si no se
             // define, libadwaita usa un gris por defecto que no pega).
-            "@define-color headerbar_backdrop_color " + A(c.headBg, aBar) + ";",
+            "@define-color headerbar_backdrop_color " + c.headBg + ";",
             // Sidebar ("Carpeta personal", "Papelera"…) con su color propio
             // (sideBg). En Liquid Glass, como la paleta es la de solitude, queda
             // igual que la sidebar de solitude.
@@ -570,21 +560,18 @@ Singleton {
             "@define-color popover_fg_color "   + c.popFg + ";",
             "@define-color dialog_bg_color "    + c.dlgBg + ";"
         ]
-        // NOTA: no añadimos reglas CSS explícitas (window/headerbar/sidebar).
-        // libadwaita 1.9 ya pinta cada zona UNA sola vez a partir de estos
-        // @define-color (vía sus variables --window-bg-color, --sidebar-bg-color,
-        // etc.). Forzarlas a mano pintaba una capa extra sobre la sidebar y la
-        // dejaba con un tono distinto al del contenido. Con solo los colores con
-        // nombre —y la sidebar a alfa 0 para que muestre el mismo fondo de la
-        // ventana— todo el cristal queda uniforme.
-        // GTK3 (Nemo y apps GTK3): añade los nombres heredados del tema, para
+        // No añadimos reglas CSS explícitas (window/headerbar/sidebar):
+        // libadwaita 1.9 ya pinta cada zona una vez a partir de estos
+        // @define-color (--window-bg-color, --sidebar-bg-color, etc.).
+        // Forzarlas a mano pintaba una capa extra sobre la sidebar con un tono
+        // distinto al del contenido. Con solo los colores con nombre todo el
+        // cristal queda uniforme.
+        // GTK3 (Nemo y apps GTK3): añade los nombres heredados del tema para
         // que también se adapten sin depender solo de libadwaita.
-        //
-        // IMPORTANTE: aquí NO se aplica alfa. Chromium/Brave (y otras apps GTK3)
-        // leen estos theme_*_color para pintar su marco y PESTAÑAS, y no hacen
-        // cristal: un color translúcido les rompe el render. El efecto glass se
-        // queda solo en GTK4/libadwaita (Nautilus). Por eso los fondos van
-        // opacos (c.winBg tal cual, no A(...)).
+        // Aquí no se aplica alfa: Chromium/Brave leen estos theme_*_color para
+        // pintar su marco y pestañas y no hacen cristal, un color translúcido
+        // les rompe el render. El glass se queda en GTK4/libadwaita (Nautilus),
+        // por eso los fondos van opacos (c.winBg tal cual).
         if (forGtk3) {
             out = out.concat([
                 "@define-color theme_bg_color "           + c.winBg + ";",
@@ -610,7 +597,7 @@ Singleton {
     property bool _gtkPendingRefresh: false
     function applyGtkTheme(refresh) {
         // El refresco se dispara en gtk4CssFile.onSaved, así que la marca se pone
-        // ANTES de escribir. Los CSS se vuelcan con FileView (sin shell).
+        // antes de escribir. Los CSS se vuelcan con FileView (sin shell).
         _gtkPendingRefresh = (refresh === true)
         gtk4CssFile.setText(gtkColorCss(false))
         gtk3CssFile.setText(gtkColorCss(true))
@@ -631,10 +618,10 @@ Singleton {
             gtkSyncTimer.restart()
     }
 
-    // ── fontconfig (~/.config/fontconfig/fonts.conf) ────────────────
-    //  Gestionado desde la Tipografía: combina la fuente elegida (fontFamily /
-    //  monoFontFamily) como familia preferida + los ajustes de render
-    //  (subpíxel RGB, hinting). Afecta a Brave, Discord, GTK, Qt…
+    // fontconfig (~/.config/fontconfig/fonts.conf)
+    // Gestionado desde Tipografía: combina la fuente elegida (fontFamily /
+    // monoFontFamily) como familia preferida + los ajustes de render (subpíxel
+    // RGB, hinting). Afecta a Brave, Discord, GTK, Qt.
     function xmlEsc(t) {
         return String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
     }
@@ -664,7 +651,7 @@ Singleton {
     }
     // Traduce los ajustes de render del panel Tipografía a las claves de
     // gsettings que leen las apps GTK (GTK4/libadwaita las toma de aquí, no de
-    // fontconfig). Así el subpíxel/hinting elegido SÍ llega a GTK. No tocamos
+    // fontconfig). Así el subpíxel/hinting elegido sí llega a GTK. No tocamos
     // font-name: la fuente de UI de GTK se deja como esté (p. ej. Adwaita Sans).
     function gtkFontRenderCmds() {
         // antialiasing: sin AA → none; con AA y orden subpíxel → rgba; si no → grayscale.
@@ -700,15 +687,17 @@ Singleton {
     onAccentColorChanged: scheduleSave()
     onDarkModeChanged: notifyAppearanceChanged()
     onUiScaleChanged: scheduleSave()
-    onAnimScaleChanged: scheduleSave()
     onAnimationSpeedChanged: scheduleSave()
     onCustomAnimationDurationChanged: scheduleSave()
-    onBarOpacityChanged: { scheduleSave(); scheduleGtkSync() }
-    onPopupOpacityChanged: { scheduleSave(); scheduleGtkSync() }
-    onWidgetOpacityChanged: { scheduleSave(); scheduleGtkSync() }
-    onGlassBarOpacityChanged: { scheduleSave(); scheduleGtkSync() }
-    onGlassPopupOpacityChanged: { scheduleSave(); scheduleGtkSync() }
-    onGlassWidgetOpacityChanged: { scheduleSave(); scheduleGtkSync() }
+    // Las opacidades solo afectan al shell (el CSS de GTK va siempre opaco),
+    // así que no disparan scheduleGtkSync: reescribiría gtk.css idéntico y
+    // reiniciaría Nautilus sin efecto visible.
+    onBarOpacityChanged: scheduleSave()
+    onPopupOpacityChanged: scheduleSave()
+    onWidgetOpacityChanged: scheduleSave()
+    onGlassBarOpacityChanged: scheduleSave()
+    onGlassPopupOpacityChanged: scheduleSave()
+    onGlassWidgetOpacityChanged: scheduleSave()
     onCornerScaleChanged: scheduleSave()
     onBarScaleChanged: scheduleSave()
     onFontFamilyChanged: { scheduleSave(); scheduleFontSync() }
@@ -734,6 +723,7 @@ Singleton {
     onShowClipboardChanged: scheduleSave()
     onShowNotificationsChanged: scheduleSave()
     onShowPowerProfileChanged: scheduleSave()
+    onShowCaffeineChanged: scheduleSave()
     onClock24hChanged: scheduleSave()
     onClockShowSecondsChanged: scheduleSave()
     onClockShowDateChanged: scheduleSave()
@@ -770,17 +760,18 @@ Singleton {
         atomicWrites: true
     }
 
+    // Solo se escribe (setText en applyHyprlandThemeNow); su contenido nunca
+    // se lee, así que no necesita carga síncrona (blockLoading) al arrancar.
     FileView {
         id: hyprThemeFile
         path: s.home + "/.config/hypr/conf/theme.lua"
-        blockLoading: true
         printErrors: false
         atomicWrites: true
     }
 
     // gtk.css (GTK4/libadwaita y GTK3) + fonts.conf: se escriben con FileView
-    // (setText vuelca el string directo al archivo; sin base64 ni paso por
-    // shell, que era el único motivo del antiguo _b64/printf|base64 -d).
+    // (setText vuelca el string directo al archivo, sin base64 ni paso por
+    // shell).
     FileView {
         id: gtk4CssFile
         path: s.home + "/.config/gtk-4.0/gtk.css"

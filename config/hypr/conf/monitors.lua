@@ -1,11 +1,10 @@
--- ── Monitores ───────────────────────────────────────────────
+-- Monitores
 -- https://wiki.hypr.land/Configuring/Basics/Monitors/
 
 hl.monitor({
     output   = "",
-    -- "highres": máxima resolución nativa (2560x1440). NO se usa "highrr"
-    -- porque este panel solo alcanza 75 Hz a 1024x768; a 1440p va a ~60 Hz,
-    -- así que "highrr" sacrificaría la resolución por Hz que no merecen la pena.
+    -- highres = resolución nativa (2560x1440). No uso highrr porque este panel
+    -- solo da 75 Hz a 1024x768 y a 1440p baja a ~60 Hz; no compensa perder resolución.
     mode     = "highres",
     position = "auto",
     scale    = "auto",

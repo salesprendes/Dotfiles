@@ -3,9 +3,9 @@ import QtQuick.Layouts
 import Quickshell
 import qs.Config
 
-// Contenido del menú del tray. Sin recursión de tipos (QML la prohíbe):
-// los submenús se navegan "drill-in" cambiando el menú mostrado, con una
-// fila "atrás" para volver. Profundidad ilimitada, un solo componente.
+// Contenido del menú del tray. QML no deja tipos recursivos, así que los
+// submenús se navegan cambiando el menú mostrado, con una fila "atrás".
+// Un solo componente, profundidad ilimitada.
 Column {
     id: level
 
@@ -45,7 +45,7 @@ Column {
         menu: level.currentMenu
     }
 
-    // ── Fila "atrás" (solo dentro de un submenú) ─────────────
+    // Fila "atrás" (solo dentro de un submenú)
     Loader {
         width: parent.width
         active: level.navStack.length > 0
@@ -99,7 +99,7 @@ Column {
         color: Theme.withAlpha(Theme.overlay, 0.55)
     }
 
-    // ── Entradas del nivel actual ────────────────────────────
+    // Entradas del nivel actual
     Repeater {
         model: opener.children
 

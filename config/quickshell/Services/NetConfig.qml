@@ -3,25 +3,24 @@ pragma Singleton
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import qs.Config
 
-// ─────────────────────────────────────────────────────────────
-//  Configuración de red (NetworkManager vía nmcli), estilo Windows:
-//  · Por INTERFAZ/adaptador: lista todas las wifi y ethernet y edita
-//    IPv4/DNS, IPv6, MAC, MTU del perfil activo de la seleccionada.
-//  · Gestión de WIFIS GUARDADAS: lista perfiles wifi, permite olvidar
-//    (borrar), conectar y cambiar su prioridad de autoconexión.
-// ─────────────────────────────────────────────────────────────
+// Configuración de red (NetworkManager vía nmcli):
+// - Por interfaz/adaptador: lista wifi y ethernet y edita IPv4/DNS, IPv6, MAC
+//   y MTU del perfil activo de la seleccionada.
+// - Wifis guardadas: lista perfiles wifi, permite olvidar (borrar), conectar
+//   y cambiar su prioridad de autoconexión.
 Singleton {
     id: root
 
-    // ── Interfaces (adaptadores) ─────────────────────────────
+    // Interfaces (adaptadores)
     // [{ device, type, state, connection }]  type: wifi | ethernet
     property var    interfaces: []
     property string selectedIface: ""    // nombre del dispositivo (p.ej. wlp2s0)
     property string ifaceType: ""        // wifi | ethernet
     property string ifaceConn: ""        // perfil de conexión activo a editar ("" si ninguno)
 
-    // ── Wifis guardadas ──────────────────────────────────────
+    // Wifis guardadas
     // [{ name, uuid, autoconnect, priority, active }]
     property var    savedWifis: []
 
@@ -45,8 +44,7 @@ Singleton {
     readonly property bool isWifi: ifaceType === "wifi"
     readonly property bool hasConn: ifaceConn !== ""
 
-    // ── Utilidades ───────────────────────────────────────────
-    function shellQuote(s) { return "'" + String(s).replace(/'/g, "'\\''") + "'" }
+    // Utilidades
     function unesc(s) { return String(s).replace(/\\:/g, ":") }   // des-escapa ':' de nmcli -t
 
     // Parte la salida de `nmcli -t` en filas de campos (split por ':'),
@@ -95,7 +93,7 @@ Singleton {
     function refreshAll() { ifaceProc.running = true; wifiProc.running = true }
     function refreshConnections() { refreshAll() }   // alias compat
 
-    // ── Interfaz seleccionada ────────────────────────────────
+    // Interfaz seleccionada
     function selectIface(dev) {
         root.selectedIface = dev
         const d = root.interfaces.find(x => x.device === dev)
@@ -127,7 +125,7 @@ Singleton {
                      + "connection.autoconnect,connection.autoconnect-priority,"
                      + k + ".cloned-mac-address," + k + ".mtu"
         readProc.command = ["sh", "-c",
-            "nmcli -t -f " + fields + " connection show " + shellQuote(root.ifaceConn)]
+            "nmcli -t -f " + fields + " connection show " + Utils.shellQuote(root.ifaceConn)]
         readProc.running = true
     }
 
@@ -135,7 +133,7 @@ Singleton {
         if (!root.hasConn || !root.ready) return
         root.error = ""
         root.applying = true
-        const q = root.shellQuote
+        const q = Utils.shellQuote
         const k = root.isWifi ? "802-11-wireless" : "802-3-ethernet"
         const manual = root.ip4method === "manual"
         const dns = root.ip4dns.trim().replace(/[\s,]+/g, ",")
@@ -164,7 +162,7 @@ Singleton {
         applyProc.running = true
     }
 
-    // ── Gestión de wifis guardadas ───────────────────────────
+    // Gestión de wifis guardadas
     // Comandos en forma de array: nmcli recibe los argumentos tal cual,
     // sin shell intermedio ni necesidad de citar/escapar.
     function forgetWifi(name)  { wifiOp(["connection", "delete", name]) }
@@ -180,7 +178,7 @@ Singleton {
         wifiOpProc.running = true
     }
 
-    // ── Procesos ─────────────────────────────────────────────
+    // Procesos
     Process {
         id: ifaceProc
         command: ["sh", "-c", "nmcli -t -f DEVICE,TYPE,STATE,CONNECTION device status"]

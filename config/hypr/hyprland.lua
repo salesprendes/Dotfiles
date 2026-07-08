@@ -1,10 +1,5 @@
--- ╔══════════════════════════════════════════════════════════╗
--- ║   HYPRLAND · Configuración modular (API Lua)               ║
--- ║   https://wiki.hypr.land/Configuring/Start/                ║
--- ║                                                            ║
--- ║   Este archivo solo orquesta. La configuración real vive   ║
--- ║   en conf/*.lua para mantenerla ordenada y optimizada.     ║
--- ╚══════════════════════════════════════════════════════════╝
+-- Config de Hyprland (API Lua). Este archivo solo orquesta; lo real va en conf/*.lua.
+-- https://wiki.hypr.land/Configuring/Start/
 
 -- Permite require("conf.<modulo>") buscando en ~/.config/hypr/
 local base = (os.getenv("HOME") or "") .. "/.config/hypr/"

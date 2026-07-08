@@ -1,7 +1,5 @@
 pragma Singleton
-//  ╔══════════════════════════════════════════════════════════╗
-//  ║   Config — ajustes del greeter (lo único que se suele tocar)║
-//  ╚══════════════════════════════════════════════════════════╝
+// Ajustes del greeter (lo que se suele tocar).
 import QtQuick
 import Quickshell
 

@@ -7,8 +7,8 @@ Item {
 
     property bool open: false
     property Component sourceComponent: null
-    // Retiene el último componente para animar el cierre sin que el
-    // contenido desaparezca de golpe a mitad de animación.
+    // Retiene el último componente para animar el cierre sin que el contenido
+    // desaparezca de golpe a mitad de animación.
     property Component _shown: null
     onSourceComponentChanged: if (sourceComponent) _shown = sourceComponent
 

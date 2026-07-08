@@ -14,7 +14,7 @@ FloatingWindow {
 
     color: Theme.bg
 
-    // ── Fondo con leve zoom de entrada (one-shot) ────────────
+    // Fondo con leve zoom de entrada
     Image {
         id: wall
         anchors.fill: parent
@@ -46,13 +46,12 @@ FloatingWindow {
         }
     }
 
-    // ── Reglas responsive ────────────────────────────────────
-    //  La tarjeta de login manda: en pantallas bajas el reloj reduce su
-    //  margen y su fuente, y si aun así no queda hueco, se oculta.
+    // Responsive: la tarjeta de login manda. En pantallas bajas el reloj reduce
+    // margen y fuente, y si aun así no queda hueco, se oculta.
     readonly property bool shortScreen: height < Theme.dp(820)
     readonly property bool showClock: height - card.height >= Theme.dp(320)
 
-    // ── Reloj (todos los monitores) ──────────────────────────
+    // Reloj (todos los monitores)
     SystemClock { id: clock; precision: SystemClock.Minutes }
     Column {
         id: clockCol
@@ -79,14 +78,14 @@ FloatingWindow {
         }
         Text {
             anchors.horizontalCenter: parent.horizontalCenter
-            text: clock.date.toLocaleDateString(Theme.locale, "dddd, d 'de' MMMM")
+            text: I18n.longDate(clock.date)
             color: Theme.fgDim
             font.family: Theme.font
             font.pixelSize: Math.max(Theme.sp(11), Math.min(Theme.sp(15), Math.round(win.height * 0.022)))
         }
     }
 
-    // ── Tarjeta (solo en el monitor principal) ───────────────
+    // Tarjeta (solo en el monitor principal)
     Item {
         id: card
         visible: win.primary
@@ -201,7 +200,7 @@ FloatingWindow {
         }
     }
 
-    // ── Acciones de energía (abajo a la derecha) ─────────────
+    // Acciones de energía (abajo a la derecha)
     PowerBar {
         visible: win.primary
         anchors.right: parent.right

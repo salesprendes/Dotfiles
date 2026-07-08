@@ -5,15 +5,11 @@ import Quickshell
 import Quickshell.Io
 import qs.Config
 
-// ─────────────────────────────────────────────────────────────
-//  Servicio de Terminal. Detecta los emuladores instalados y, para
-//  el seleccionado (Settings.terminalApp), GENERA su configuración:
-//    · La PALETA de color viene del tema de Quickshell (no editable).
-//    · El resto (fuente, tamaño, opacidad, padding, cursor, etc.) de
-//      los parámetros editables en Ajustes → Terminal.
-//  Sabe escribir config para kitty, alacritty y foot. Se regenera al
-//  cambiar parámetros o tema, y recarga la terminal en caliente.
-// ─────────────────────────────────────────────────────────────
+// Terminal: detecta los emuladores instalados y, para el seleccionado
+// (Settings.terminalApp), genera su config. La paleta viene del tema de
+// Quickshell; el resto (fuente, tamaño, opacidad, padding, cursor…) de
+// Ajustes → Terminal. Sabe kitty, alacritty y foot. Se regenera al cambiar
+// parámetros o tema y recarga la terminal en caliente.
 Singleton {
     id: root
 
@@ -27,32 +23,30 @@ Singleton {
     function installed(app) { return root.available.some(t => t.value === app) }
     function canConfigure(app) { return root.configurable.indexOf(app) !== -1 }
 
-    Component.onCompleted: detectProc.running = true
-    function refresh() { detectProc.running = true }
-
-    Process {
-        id: detectProc
-        command: ["sh", "-c",
-            "for t in kitty alacritty foot; do " +
-            "command -v \"$t\" >/dev/null 2>&1 && echo \"$t\"; done"]
-        stdout: StdioCollector {
-            onStreamFinished: {
-                root.available = (this.text || "").split("\n")
-                    .filter(t => t.trim() !== "")
-                    .map(t => ({ text: t, value: t }))
-                root.apply()
-            }
-        }
+    // La detección de binarios viene de Deps (un solo proceso compartido al
+    // arrancar). Si Deps aún no terminó, available queda [] y apply() no hace
+    // nada; al dispararse Deps.loaded se recomputa y se aplica una vez.
+    Component.onCompleted: refresh()
+    function refresh() {
+        root.available = root.configurable
+            .filter(t => Deps.has(t))
+            .map(t => ({ text: t, value: t }))
+        root.apply()
     }
 
-    // ── Helpers de color (desde el tema) y parámetros ─────────
+    Connections {
+        target: Deps
+        function onLoaded() { root.refresh() }
+    }
+
+    // Helpers de color (desde el tema) y parámetros
     function _pal()      { return Settings.currentPalette }
     function hx(c)       { return Settings.colorHex(c) }
     function lit(c, f)   { return Settings.colorHex(Qt.lighter(c, f)) }
     function accent()    { return Settings.resolvedAccent }
     function font()      { return Settings.terminalFont !== "" ? Settings.terminalFont : Settings.fontFamily }
 
-    // ── Generadores por terminal ─────────────────────────────
+    // Generadores por terminal
     function kittyTheme() {
         const p = _pal(), a = accent()
         return [
@@ -193,20 +187,30 @@ Singleton {
         ].join("\n")
     }
 
-    // ── Aplicar ──────────────────────────────────────────────
+    // Aplicar
+    // Escribe solo si el contenido cambió de verdad: así evitamos reescribir
+    // las configs y lanzar pkill -USR1 (recarga con parpadeo de las kitty
+    // abiertas) en cada arranque cuando nada ha cambiado.
+    function _writeIfChanged(view, txt) {
+        if ((view.text() || "") === txt)
+            return false
+        view.setText(txt)
+        return true
+    }
     function apply() {
         const app = Settings.terminalApp
         if (!installed(app) || !canConfigure(app))
             return
         if (app === "kitty") {
-            kittyThemeFile.setText(kittyTheme())
-            kittyConfFile.setText(kittyConf())
-            reloadKitty.running = true
+            const themeChanged = _writeIfChanged(kittyThemeFile, kittyTheme())
+            const confChanged  = _writeIfChanged(kittyConfFile, kittyConf())
+            if (themeChanged || confChanged)
+                reloadKitty.running = true
         } else if (app === "alacritty") {
-            alacrittyFile.setText(alacrittyToml())   // alacritty recarga sola
+            _writeIfChanged(alacrittyFile, alacrittyToml())   // alacritty recarga sola
         } else if (app === "foot") {
-            footFile.setText(footIni())
-            reloadFoot.running = true
+            if (_writeIfChanged(footFile, footIni()))
+                reloadFoot.running = true
         }
     }
 
@@ -220,11 +224,14 @@ Singleton {
     on_WatchChanged: applyDebounce.restart()
     Timer { id: applyDebounce; interval: 250; onTriggered: root.apply() }
 
-    // ── Archivos y recargas ──────────────────────────────────
-    FileView { id: kittyConfFile;  path: root.home + "/.config/kitty/kitty.conf";        printErrors: false; atomicWrites: true }
-    FileView { id: kittyThemeFile; path: root.home + "/.config/kitty/theme.conf";        printErrors: false; atomicWrites: true }
-    FileView { id: alacrittyFile;  path: root.home + "/.config/alacritty/alacritty.toml"; printErrors: false; atomicWrites: true }
-    FileView { id: footFile;       path: root.home + "/.config/foot/foot.ini";            printErrors: false; atomicWrites: true }
+    // Archivos y recargas
+    //  blockLoading: necesario para que text() tenga el contenido actual en el
+    //  primer apply() y la comparación "solo si cambió" funcione (son archivos
+    //  pequeños leídos una vez al crear el singleton).
+    FileView { id: kittyConfFile;  path: root.home + "/.config/kitty/kitty.conf";        blockLoading: true; printErrors: false; atomicWrites: true }
+    FileView { id: kittyThemeFile; path: root.home + "/.config/kitty/theme.conf";        blockLoading: true; printErrors: false; atomicWrites: true }
+    FileView { id: alacrittyFile;  path: root.home + "/.config/alacritty/alacritty.toml"; blockLoading: true; printErrors: false; atomicWrites: true }
+    FileView { id: footFile;       path: root.home + "/.config/foot/foot.ini";            blockLoading: true; printErrors: false; atomicWrites: true }
     Process  { id: reloadKitty;    command: ["sh", "-c", "pkill -USR1 -x kitty >/dev/null 2>&1 || true"] }
     Process  { id: reloadFoot;     command: ["sh", "-c", "pkill -USR1 -x foot  >/dev/null 2>&1 || true"] }
 }

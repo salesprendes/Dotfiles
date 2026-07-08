@@ -2,8 +2,7 @@ import QtQuick
 import qs.Components
 import qs.Config
 
-// Indicador + toggle del modo cafeína. Acento cuando está activo
-// (no se suspende ni bloquea); atenuado cuando está inactivo.
+// Toggle del modo cafeína. Con acento cuando está activo, atenuado si no.
 Pill {
     id: root
     interactive: true

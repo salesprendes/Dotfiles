@@ -5,11 +5,11 @@ import Quickshell.Wayland
 import qs.Bar
 import qs.Config
 
-// Barra superior flotante con margen exterior, bordes redondeados y fondo translúcido.
+// Barra superior flotante: bordes redondeados y fondo translúcido.
 PanelWindow {
     id: bar
 
-    // 'modelData' lo inyecta Variants → es el QsScreen de este monitor.
+    // modelData lo inyecta Variants: es el QsScreen de este monitor.
     property var modelData
     screen: modelData
 
@@ -32,14 +32,13 @@ PanelWindow {
     // Reserva el espacio justo de la barra + su margen.
     exclusiveZone: Theme.barHeight + Theme.barMargin
 
-    // Modo "cafeína": mientras esté activo, inhibe el idle del compositor
-    // (no se suspende ni se bloquea). Se ancla a esta ventana, siempre visible.
+    // Cafeína: inhibe el idle del compositor mientras esté activo. Anclado a esta ventana.
     IdleInhibitor {
         window: bar
         enabled: Globals.caffeine
     }
 
-    // ── Fondo de la barra ────────────────────────────────────
+    // Fondo de la barra
     Rectangle {
         anchors.fill: parent
         radius: Theme.barRadius
@@ -47,7 +46,7 @@ PanelWindow {
         border.width: Theme.hairline
         border.color: Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.45)
 
-        // ── IZQUIERDA: workspaces + ventana activa ───────────
+        // Izquierda: workspaces + ventana activa
         RowLayout {
             anchors {
                 left: parent.left
@@ -61,7 +60,7 @@ PanelWindow {
             ActiveWindow {}
         }
 
-        // ── CENTRO: mini-reproductor (si hay música) + reloj ─
+        // Centro: reproductor (si hay música) + reloj
         RowLayout {
             anchors.centerIn: parent
             spacing: Theme.gap
@@ -70,7 +69,7 @@ PanelWindow {
             ClockWidget {}
         }
 
-        // ── DERECHA: bandeja + volumen + batería ─────────────
+        // Derecha: bandeja + volumen + batería
         RowLayout {
             anchors {
                 right: parent.right

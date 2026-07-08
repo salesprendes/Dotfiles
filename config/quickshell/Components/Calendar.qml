@@ -1,20 +1,16 @@
 import QtQuick
 import QtQuick.Layouts
-import Quickshell
 import qs.Config
+import qs.Services
 
-// ─────────────────────────────────────────────────────────────
-//  Calendario mensual (lunes primero, locale español).
-//  Cabecera con nombre de mes + navegación, rejilla 7×6 con el
-//  día de hoy resaltado. Botón para volver al mes actual.
-// ─────────────────────────────────────────────────────────────
+// Calendario mensual (lunes primero, locale español). Rejilla 7×6 con el día de
+// hoy resaltado y botón para volver al mes actual.
 ColumnLayout {
     id: cal
     spacing: Theme.space8
 
-    // Reloj para mantener "hoy" fresco aunque pase la medianoche.
-    SystemClock { id: sysClock; precision: SystemClock.Minutes }
-    readonly property var today: sysClock.date
+    // "Hoy" viene de Time: solo cambia a medianoche, no en cada tick del reloj.
+    readonly property var today: Time.today
 
     property int viewYear: today.getFullYear()
     property int viewMonth: today.getMonth()    // 0–11
@@ -34,25 +30,23 @@ ColumnLayout {
         while (out.length % 7 !== 0) out.push(0)
         return out
     }
-    property var cells: buildCells()
-    function rebuild() { cells = buildCells() }
+    // Se re-evalúa solo al cambiar viewYear/viewMonth.
+    readonly property var cells: buildCells()
 
     function prevMonth() {
         if (viewMonth === 0) { viewMonth = 11; viewYear-- } else viewMonth--
-        rebuild()
     }
     function nextMonth() {
         if (viewMonth === 11) { viewMonth = 0; viewYear++ } else viewMonth++
-        rebuild()
     }
     function goToday() {
-        viewYear = today.getFullYear(); viewMonth = today.getMonth(); rebuild()
+        viewYear = today.getFullYear(); viewMonth = today.getMonth()
     }
     function isToday(d) {
         return d > 0 && onCurrentMonth && d === today.getDate()
     }
 
-    // ── Cabecera: mes + navegación ───────────────────────────
+    // Cabecera: mes + navegación
     RowLayout {
         Layout.fillWidth: true
         spacing: Theme.space6
@@ -72,7 +66,7 @@ ColumnLayout {
         NavBtn { icon: "󰅂"; onClicked: cal.nextMonth() }
     }
 
-    // ── Cabecera de días de la semana ────────────────────────
+    // Días de la semana
     Grid {
         Layout.fillWidth: true
         columns: 7
@@ -94,7 +88,7 @@ ColumnLayout {
         }
     }
 
-    // ── Rejilla de días ──────────────────────────────────────
+    // Rejilla de días
     Grid {
         Layout.fillWidth: true
         columns: 7

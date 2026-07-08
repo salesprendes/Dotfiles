@@ -3,17 +3,14 @@ import QtQuick.Layouts
 import Quickshell
 import qs.Components
 import qs.Config
+import qs.Services
 
-// Reloj central: hora + fecha. Click → abre el Dashboard.
+// Reloj central: hora + fecha. Click abre el Dashboard.
+// La hora sale del singleton Time; aquí solo se formatea en cada tick.
 Pill {
     id: root
     interactive: true
     onClicked: Globals.toggleDashboard()
-
-    SystemClock {
-        id: clock
-        precision: Settings.clockShowSeconds ? SystemClock.Seconds : SystemClock.Minutes
-    }
 
     // Formato según ajustes: 24h/12h y segundos.
     readonly property string timeFormat: (Settings.clock24h ? "HH:mm" : "hh:mm")
@@ -28,7 +25,7 @@ Pill {
         Behavior on color { ColorAnimation { duration: Theme.animFast } }
     }
     Text {
-        text: Qt.formatDateTime(clock.date, root.timeFormat)
+        text: Qt.formatDateTime(Time.now, root.timeFormat)
         color: Theme.fg
         font.family: Theme.fontFamily
         font.pixelSize: Theme.fontSize
@@ -42,7 +39,7 @@ Pill {
     }
     Text {
         visible: Settings.clockShowDate
-        text: clock.date.toLocaleDateString(I18n.locale(), "ddd dd MMM")
+        text: Time.dateString   // precalculada en el singleton, una vez al día
         color: Theme.fg
         font.family: Theme.fontFamily
         font.pixelSize: Theme.fontSize

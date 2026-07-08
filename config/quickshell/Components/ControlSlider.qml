@@ -3,7 +3,7 @@ import QtQuick.Layouts
 import qs.Config
 
 // Slider con cabecera (icono + título + valor) para el Centro de control.
-// La pista la pone la base reutilizable `Slider` (sin duplicar lógica).
+// La pista la pone Slider.
 ColumnLayout {
     id: root
 

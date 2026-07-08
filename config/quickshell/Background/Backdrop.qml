@@ -4,20 +4,11 @@ import Quickshell.Wayland
 import qs.Config
 import qs.Services
 
-// ─────────────────────────────────────────────────────────────
-//  Fondo de pantalla renderizado en QML. Una ventana por monitor en la capa
-//  Background, sincronizada con el servicio Wallpaper.
-//
-//  Transiciones en QML puro, seleccionables (Settings.wallpaperTransition):
-//    fade   · fundido cruzado de opacidad
-//    zoom   · la nueva entra escalando desde 1.08→1 + fundido
-//    slide  · la nueva entra deslizando desde la derecha
-//    push   · la nueva empuja a la vieja (ambas se mueven)
-//    wipe   · la nueva se revela con un barrido de izquierda a derecha
-//
-//  Dos "slots" (A y B) que se alternan: el slot ENTRANTE recibe la nueva
-//  imagen y se anima de 0→1; el SALIENTE queda en reposo debajo.
-// ─────────────────────────────────────────────────────────────
+// Fondo de pantalla en QML: una ventana por monitor en la capa Background,
+// sincronizada con el servicio Wallpaper. Dos slots (A/B) que se alternan: el
+// entrante recibe la imagen nueva y se anima de 0→1, el saliente queda debajo
+// en reposo. Transiciones (Settings.wallpaperTransition): fade, zoom, slide,
+// push, wipe.
 PanelWindow {
     id: win
 
@@ -43,8 +34,11 @@ PanelWindow {
         property real   t: 1           // progreso de la transición (0→1)
 
         function texSize() {
-            return Qt.size(win.screen ? win.screen.width : 1920,
-                           win.screen ? win.screen.height : 1080)
+            // Píxeles FÍSICOS del monitor: screen.width/height son lógicos y
+            // en escalas >1 la textura quedaba pequeña (fondo borroso).
+            const dpr = (win.screen && win.screen.devicePixelRatio) ? win.screen.devicePixelRatio : 1
+            return Qt.size(Math.round((win.screen ? win.screen.width : 1920) * dpr),
+                           Math.round((win.screen ? win.screen.height : 1080) * dpr))
         }
 
         // Arranca la animación solo cuando la imagen entrante está lista,
@@ -81,11 +75,11 @@ PanelWindow {
             }
         }
 
-        // ── Componente "Holder": aplica la transición elegida ─
-        //  El SALIENTE (incoming=false) queda en reposo (lleno, opaco), salvo
-        //  en 'push' donde sale desplazándose. El ENTRANTE se anima según t.
-        //  La imagen interior mantiene SIEMPRE el tamaño del monitor (no se
-        //  deforma); en 'wipe' es el Holder quien recorta y la va revelando.
+        // Holder: aplica la transición elegida. El saliente (incoming=false)
+        // queda en reposo, lleno y opaco, salvo en 'push' donde sale
+        // desplazándose. El entrante se anima según t. La imagen interior
+        // mantiene siempre el tamaño del monitor; en 'wipe' el Holder recorta y
+        // la va revelando.
         component Holder: Item {
             id: holder
             property bool incoming: false

@@ -16,9 +16,10 @@ Rectangle {
     readonly property bool hl: pbMa.containsMouse || pb.activeFocus
 
     activeFocusOnTab: true
-    Keys.onSpacePressed:  Quickshell.execDetached(pb.cmd)
-    Keys.onReturnPressed: Quickshell.execDetached(pb.cmd)
-    Keys.onEnterPressed:  Quickshell.execDetached(pb.cmd)
+    function activate() { Quickshell.execDetached(pb.cmd) }
+    Keys.onSpacePressed:  pb.activate()
+    Keys.onReturnPressed: pb.activate()
+    Keys.onEnterPressed:  pb.activate()
     onActiveFocusChanged: if (activeFocus && pb.spin) spinAnim.restart()
 
     width: Theme.dp(42); height: Theme.dp(42); radius: width / 2
@@ -74,6 +75,6 @@ Rectangle {
         hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
         onEntered: if (pb.spin) spinAnim.restart()
-        onClicked: Quickshell.execDetached(pb.cmd)
+        onClicked: pb.activate()
     }
 }

@@ -15,11 +15,10 @@ Item {
     property bool open: false
     signal requestFocus()
 
-    // ── Manejo por teclado ───────────────────────────────────
-    //  Tab trae el foco aquí (anillo de acento en la píldora). Espacio o
-    //  Enter abren el menú; abierto: ↑/↓ recorren, Espacio/Enter eligen
-    //  y ESC cierra sin cambiar. Al cerrarse, el foco vuelve solo a la
-    //  contraseña (onOpenChanged → requestFocus).
+    // Manejo por teclado. Tab trae el foco aquí (anillo de acento en la
+    // píldora). Espacio o Enter abren el menú; abierto: ↑/↓ recorren,
+    // Espacio/Enter eligen y ESC cierra sin cambiar. Al cerrarse, el foco
+    // vuelve solo a la contraseña.
     activeFocusOnTab: true
     property int hi: 0
     function kbToggle() {
@@ -71,7 +70,7 @@ Item {
     }
     onOpenChanged: if (!open && !_skipRefocus) sp.requestFocus()
 
-    // ── Capa para descartar al hacer clic fuera (solo mientras abierto) ─
+    // Capa para descartar al hacer clic fuera (solo mientras abierto)
     MouseArea {
         anchors.centerIn: trigger
         width: 4000; height: 4000
@@ -81,18 +80,20 @@ Item {
         onClicked: sp.open = false
     }
 
-    // ── Disparador (píldora con la sesión actual) ────────────────────
+    // Disparador (píldora con la sesión actual)
     Rectangle {
         id: trigger
+        // 'lit' = resaltado (hover/abierto/foco); 'focused' = solo abierto/foco.
+        readonly property bool lit: trigMa.containsMouse || sp.open || sp.activeFocus
+        readonly property bool focused: sp.open || sp.activeFocus
         height: Theme.dp(32)
         width: trigRow.implicitWidth + Theme.dp(26)
         radius: height / 2
-        color: (trigMa.containsMouse || sp.open || sp.activeFocus)
-                   ? Theme.alpha(Theme.surfaceHi, 0.9)
-                   : Theme.alpha(Theme.surface, 0.5)
+        color: trigger.lit ? Theme.alpha(Theme.surfaceHi, 0.9)
+                           : Theme.alpha(Theme.surface, 0.5)
         border.width: 1
-        border.color: (sp.open || sp.activeFocus) ? Theme.alpha(Theme.accent, 0.6)
-                                                  : Theme.alpha(Theme.overlay, 0.4)
+        border.color: trigger.focused ? Theme.alpha(Theme.accent, 0.6)
+                                       : Theme.alpha(Theme.overlay, 0.4)
         Behavior on color { ColorAnimation { duration: 140 } }
         Behavior on border.color { ColorAnimation { duration: 140 } }
 
@@ -103,15 +104,15 @@ Item {
             Text {
                 anchors.verticalCenter: parent.verticalCenter
                 text: "󰧨"
-                color: sp.open || sp.activeFocus || trigMa.containsMouse ? Theme.accent : Theme.fgMuted
+                color: trigger.lit ? Theme.accent : Theme.fgMuted
                 font.family: Theme.font
                 font.pixelSize: Theme.sp(13)
                 Behavior on color { ColorAnimation { duration: 140 } }
             }
             Text {
                 anchors.verticalCenter: parent.verticalCenter
-                text: GreeterState.currentSession ? GreeterState.currentSession.name : "Sesión"
-                color: sp.open || sp.activeFocus || trigMa.containsMouse ? Theme.fg : Theme.fgDim
+                text: GreeterState.currentSession ? GreeterState.currentSession.name : I18n.tr("Sesión", "Session")
+                color: trigger.lit ? Theme.fg : Theme.fgDim
                 font.family: Theme.font
                 font.pixelSize: Theme.sp(12)
                 Behavior on color { ColorAnimation { duration: 140 } }
@@ -119,7 +120,7 @@ Item {
             Text {
                 anchors.verticalCenter: parent.verticalCenter
                 text: "󰅀"
-                color: sp.open || sp.activeFocus || trigMa.containsMouse ? Theme.accent : Theme.fgMuted
+                color: trigger.lit ? Theme.accent : Theme.fgMuted
                 font.family: Theme.font
                 font.pixelSize: Theme.sp(11)
                 rotation: sp.open ? 180 : 0
@@ -136,7 +137,7 @@ Item {
         }
     }
 
-    // ── Panel desplegable (se abre hacia arriba) ─────────────────────
+    // Panel desplegable (se abre hacia arriba)
     Item {
         id: menu
         z: 6

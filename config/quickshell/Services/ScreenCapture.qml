@@ -15,16 +15,19 @@ Singleton {
     readonly property string pidFile: runtimeDir + "/qs-screen-recording.pid"
     readonly property bool loaded: _loaded
 
-    property bool hyprshotAvailable: false
-    property bool grimAvailable: false
-    property bool slurpAvailable: false
-    property bool wlCopyAvailable: false
-    property bool notifyAvailable: false
-    property bool gsrAvailable: false
-    property bool jqAvailable: false
-    property bool hyprctlAvailable: false
-    property bool pactlAvailable: false
-    property bool ffmpegAvailable: false
+    // Disponibilidad de binarios vía Deps (detección centralizada, un solo
+    // proceso al arrancar). Bindings reactivos: valen false hasta que termina
+    // la detección y se re-evalúan solos.
+    readonly property bool hyprshotAvailable: Deps.has("hyprshot")
+    readonly property bool grimAvailable: Deps.has("grim")
+    readonly property bool slurpAvailable: Deps.has("slurp")
+    readonly property bool wlCopyAvailable: Deps.has("wl-copy")
+    readonly property bool notifyAvailable: Deps.has("notify-send")
+    readonly property bool gsrAvailable: Deps.has("gpu-screen-recorder")
+    readonly property bool jqAvailable: Deps.has("jq")
+    readonly property bool hyprctlAvailable: Deps.has("hyprctl")
+    readonly property bool pactlAvailable: Deps.has("pactl")
+    readonly property bool ffmpegAvailable: Deps.has("ffmpeg")
 
     // Valores por defecto NEUTROS (nombres XDG estándar en inglés). Se
     // sobrescriben al arrancar con `xdg-user-dir PICTURES/VIDEOS`, que devuelve
@@ -157,17 +160,6 @@ Singleton {
         function recordingStopped(): string { cap.recordingStopped(); return "stopped" }
     }
 
-    IpcHandler {
-        target: "screenCaptureToolbar"
-        function toggle(): string { cap.toggleToolbar(); return Globals.screenCaptureOpen ? "opened" : "closed" }
-        function open(): string { cap.openToolbar(false); return "opened" }
-        function record(): string { cap.openToolbar(true); return "opened" }
-        function close(): string { cap.closeToolbar(); return "closed" }
-        function cancelRecording(): string { cap.cancelRecording(); return "cancelled" }
-        function recordingStarted(): string { cap.recordingStarted(); return "started" }
-        function recordingStopped(): string { cap.recordingStopped(); return "stopped" }
-    }
-
     function sanitize(k, val) {
         if (_enums[k] !== undefined)
             return _enums[k].indexOf(val) !== -1 ? val : undefined
@@ -217,10 +209,6 @@ Singleton {
     function scheduleSave() {
         if (_loaded && !_applying)
             saveTimer.restart()
-    }
-
-    function shellQuote(value) {
-        return "'" + String(value).replace(/'/g, "'\"'\"'") + "'"
     }
 
     function parseDateTemplate(template) {
@@ -383,7 +371,7 @@ Singleton {
         } else if (captureMode === "monitor") {
             cmd += "-m output "
             if (captureMonitor !== "focused")
-                cmd += "-m " + shellQuote(captureMonitor) + " "
+                cmd += "-m " + Utils.shellQuote(captureMonitor) + " "
         }
         // OJO: usar la forma larga --raw. La versión de hyprshot instalada define
         // el getopt corto como "r:" (con argumento), así que "-r" falla ("option
@@ -424,16 +412,16 @@ Singleton {
             script += "ffmpeg -v error -y -i \"$TMP\" -q:v " + ffmpegJpegQuality() + " \"$CONVERTED\" || exit 1; FINAL=\"$CONVERTED\"; "
         }
         if (saveToDisk) {
-            script += "mkdir -p " + shellQuote(dir) + "; cp \"$FINAL\" " + shellQuote(out) + "; "
+            script += "mkdir -p " + Utils.shellQuote(dir) + "; cp \"$FINAL\" " + Utils.shellQuote(out) + "; "
         }
         if (copyToClipboard) {
-            script += "if command -v wl-copy >/dev/null 2>&1; then wl-copy -t " + shellQuote(mime) + " < \"$FINAL\"; fi; "
+            script += "if command -v wl-copy >/dev/null 2>&1; then wl-copy -t " + Utils.shellQuote(mime) + " < \"$FINAL\"; fi; "
         }
         if (showNotify) {
             if (saveToDisk)
-                script += "notify-send " + shellQuote("Captura guardada") + " " + shellQuote(out) + " 2>/dev/null || true; "
+                script += "notify-send " + Utils.shellQuote("Captura guardada") + " " + Utils.shellQuote(out) + " 2>/dev/null || true; "
             else if (copyToClipboard)
-                script += "notify-send " + shellQuote("Captura copiada") + " " + shellQuote(modeLabel()) + " 2>/dev/null || true; "
+                script += "notify-send " + Utils.shellQuote("Captura copiada") + " " + Utils.shellQuote(modeLabel()) + " 2>/dev/null || true; "
         }
 
         lastOutputPath = saveToDisk ? out : ""
@@ -476,7 +464,7 @@ Singleton {
             suffix += " -a \"" + audio.join("|") + "\""
 
         suffix += showPointer ? " -cursor yes" : " -cursor no"
-        suffix += " -o " + shellQuote(path)
+        suffix += " -o " + Utils.shellQuote(path)
         if (videoCodec !== "auto")
             suffix += " -k " + videoCodec
         return suffix
@@ -487,7 +475,7 @@ Singleton {
         const path = dir + "/" + videoFilenameResolved()
         lastOutputPath = path
 
-        let script = "set -u; PIDFILE=" + shellQuote(pidFile) + "; OUT=" + shellQuote(path) + "; "
+        let script = "set -u; PIDFILE=" + Utils.shellQuote(pidFile) + "; OUT=" + Utils.shellQuote(path) + "; "
         script += "cancel_rec() { qs ipc --any-display call screenCapture cancelRecording >/dev/null 2>&1 || true; }; "
         script += "start_rec() { qs ipc --any-display call screenCapture recordingStarted >/dev/null 2>&1 || true; }; "
         script += "stop_rec() { qs ipc --any-display call screenCapture recordingStopped >/dev/null 2>&1 || true; }; "
@@ -495,7 +483,7 @@ Singleton {
         if (showNotify)
             script += "notify-send 'Falta gpu-screen-recorder' 'Instala gpu-screen-recorder para grabar pantalla.' 2>/dev/null || true; "
         script += "cancel_rec; exit 1; fi; "
-        script += "mkdir -p " + shellQuote(dir) + "; "
+        script += "mkdir -p " + Utils.shellQuote(dir) + "; "
         script += "SYSTEM_AUDIO=\"\"; MIC_AUDIO=\"\"; "
         if (recordSystemAudio)
             script += "SINK=$(pactl get-default-sink 2>/dev/null || true); [ -n \"$SINK\" ] && SYSTEM_AUDIO=\"$SINK.monitor\" || SYSTEM_AUDIO=\"default_output\"; "
@@ -518,7 +506,7 @@ Singleton {
             script += "run_rec -w portal" + suffix + "; "
         } else {
             if (recordMonitor !== "focused") {
-                script += "run_rec -w " + shellQuote(recordMonitor) + suffix + "; "
+                script += "run_rec -w " + Utils.shellQuote(recordMonitor) + suffix + "; "
             } else {
                 script += "MONITOR=$(hyprctl monitors -j 2>/dev/null | jq -r '.[] | select(.focused) | .name' | head -n1); "
                 script += "[ -n \"$MONITOR\" ] && [ \"$MONITOR\" != \"null\" ] || MONITOR=portal; "
@@ -554,7 +542,7 @@ Singleton {
 
     function stopRecording() {
         Quickshell.execDetached(["sh", "-c",
-            "pid=$(cat " + shellQuote(pidFile) + " 2>/dev/null || true); " +
+            "pid=$(cat " + Utils.shellQuote(pidFile) + " 2>/dev/null || true); " +
             "if [ -n \"$pid\" ]; then kill -INT \"$pid\" 2>/dev/null || true; " +
             "else qs ipc --any-display call screenCapture recordingStopped >/dev/null 2>&1 || true; fi"])
         isRecording = false
@@ -565,7 +553,7 @@ Singleton {
 
     function pauseRecording() {
         Quickshell.execDetached(["sh", "-c",
-            "pid=$(cat " + shellQuote(pidFile) + " 2>/dev/null || true); " +
+            "pid=$(cat " + Utils.shellQuote(pidFile) + " 2>/dev/null || true); " +
             "[ -n \"$pid\" ] && kill -USR2 \"$pid\" 2>/dev/null || true"])
         isPaused = true
         setStatus("Grabacion pausada")
@@ -573,7 +561,7 @@ Singleton {
 
     function resumeRecording() {
         Quickshell.execDetached(["sh", "-c",
-            "pid=$(cat " + shellQuote(pidFile) + " 2>/dev/null || true); " +
+            "pid=$(cat " + Utils.shellQuote(pidFile) + " 2>/dev/null || true); " +
             "[ -n \"$pid\" ] && kill -USR2 \"$pid\" 2>/dev/null || true"])
         isPaused = false
         setStatus("Grabando")
@@ -633,32 +621,18 @@ Singleton {
         ensurePillScreen()
     }
 
-    onCaptureModeChanged: scheduleSave()
-    onCaptureMonitorChanged: scheduleSave()
-    onFreezeChanged: scheduleSave()
-    onSaveToDiskChanged: scheduleSave()
-    onCopyToClipboardChanged: scheduleSave()
-    onShowNotifyChanged: scheduleSave()
-    onShowPointerChanged: scheduleSave()
-    onImageFormatChanged: scheduleSave()
-    onImageQualityChanged: scheduleSave()
-    onScreenshotDirChanged: scheduleSave()
-    onScreenshotFilenameChanged: scheduleSave()
-    onRecordMonitorChanged: scheduleSave()
-    onRecordSystemAudioChanged: scheduleSave()
-    onRecordMicChanged: scheduleSave()
-    onVideoFormatChanged: scheduleSave()
-    onVideoFpsChanged: scheduleSave()
-    onVideoCodecChanged: scheduleSave()
-    onAudioCodecChanged: scheduleSave()
-    onVideoQualityChanged: scheduleSave()
-    onVideoDirChanged: scheduleSave()
-    onVideoFilenameChanged: scheduleSave()
-    onShowRecordingPillChanged: scheduleSave()
-    onRecordPillScreenNameChanged: scheduleSave()
-    onRecordPillXChanged: scheduleSave()
-    onRecordPillYChanged: scheduleSave()
-    onRecordPillExpandedChanged: scheduleSave()
+    // Guardado (debounce) al cambiar cualquier ajuste persistible.
+    // Mismo patrón que Services/Terminal.qml: la lista replica _keys.
+    readonly property var _watch: [
+        captureMode, captureMonitor, freeze,
+        saveToDisk, copyToClipboard, showNotify, showPointer,
+        imageFormat, imageQuality, screenshotDir, screenshotFilename,
+        recordMonitor, recordSystemAudio, recordMic, videoFormat,
+        videoFps, videoCodec, audioCodec, videoQuality, videoDir,
+        videoFilename, showRecordingPill, recordPillScreenName,
+        recordPillX, recordPillY, recordPillExpanded
+    ]
+    on_WatchChanged: scheduleSave()
 
     Connections {
         target: Quickshell
@@ -711,33 +685,6 @@ Singleton {
     }
 
     Process {
-        id: deps
-        command: ["sh", "-c",
-            "for c in hyprshot grim slurp wl-copy notify-send gpu-screen-recorder jq hyprctl pactl ffmpeg; do " +
-            "printf '%s=' \"$c\"; command -v \"$c\" >/dev/null 2>&1 && echo yes || echo no; done"]
-        stdout: StdioCollector {
-            onStreamFinished: {
-                const lines = (this.text || "").trim().split("\n")
-                for (let i = 0; i < lines.length; i++) {
-                    const parts = lines[i].split("=")
-                    if (parts.length < 2) continue
-                    const ok = parts[1] === "yes"
-                    if (parts[0] === "hyprshot") cap.hyprshotAvailable = ok
-                    else if (parts[0] === "grim") cap.grimAvailable = ok
-                    else if (parts[0] === "slurp") cap.slurpAvailable = ok
-                    else if (parts[0] === "wl-copy") cap.wlCopyAvailable = ok
-                    else if (parts[0] === "notify-send") cap.notifyAvailable = ok
-                    else if (parts[0] === "gpu-screen-recorder") cap.gsrAvailable = ok
-                    else if (parts[0] === "jq") cap.jqAvailable = ok
-                    else if (parts[0] === "hyprctl") cap.hyprctlAvailable = ok
-                    else if (parts[0] === "pactl") cap.pactlAvailable = ok
-                    else if (parts[0] === "ffmpeg") cap.ffmpegAvailable = ok
-                }
-            }
-        }
-    }
-
-    Process {
         id: xdgDirs
         command: ["sh", "-c",
             "printf 'pictures='; xdg-user-dir PICTURES 2>/dev/null || echo \"$HOME/Pictures\"; " +
@@ -760,7 +707,6 @@ Singleton {
     Component.onCompleted: {
         applyFromSettings()
         refreshMonitors()
-        deps.running = true
         xdgDirs.running = true
     }
 }

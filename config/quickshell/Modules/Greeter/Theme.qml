@@ -1,7 +1,5 @@
 pragma Singleton
-//  ╔══════════════════════════════════════════════════════════╗
-//  ║   Theme — colores 'solitude' + acento blue, con escala dp  ║
-//  ╚══════════════════════════════════════════════════════════╝
+// Colores 'solitude' + acento blue, con escala dp.
 import QtQuick
 import Quickshell
 
@@ -19,8 +17,8 @@ Singleton {
     readonly property color red:       "#de6145"
     readonly property string font:     "JetBrainsMono Nerd Font"
 
-    // Densidad automática según el monitor mayor (misma curva que tu
-    // Theme.qml: 1080p→1.00 · 1440p→~1.15 · 2160p→~1.45).
+    // Densidad automática según el monitor mayor
+    // (1080p→1.00 · 1440p→~1.15 · 2160p→~1.45).
     readonly property real scale: {
         const list = Quickshell.screens
         let best = null
@@ -37,5 +35,4 @@ Singleton {
     function dp(v) { return Math.round(v * scale) }
     function sp(v) { return Math.max(9, Math.round(v * scale)) }
     function alpha(c, a) { return Qt.rgba(c.r, c.g, c.b, a) }
-    readonly property var locale: Qt.locale("es_ES")
 }
