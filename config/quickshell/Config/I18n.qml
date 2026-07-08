@@ -279,7 +279,21 @@ Singleton {
             "Tabs": "Pestañas",
             "Hidden": "Oculto",
             "No terminals detected.": "No se detectaron terminales.",
-            "Auto-config not available for this terminal yet.": "Aún no hay autoconfiguración para esta terminal."
+            "Auto-config not available for this terminal yet.": "Aún no hay autoconfiguración para esta terminal.",
+            "About": "Acerca de",
+            "Handcrafted Quickshell desktop.": "Escritorio Quickshell hecho a mano.",
+            "Credits": "Créditos",
+            "Creator and developer": "Creador y desarrollador",
+            "System information": "Información del sistema",
+            "Distribution": "Distribución",
+            "Kernel": "Núcleo",
+            "Architecture": "Arquitectura",
+            "Hostname": "Nombre del equipo",
+            "Processor": "Procesador",
+            "Disk": "Disco",
+            "%1 threads": "%1 hilos",
+            "Window manager": "Gestor de ventanas",
+            "A lightweight, flexible Linux distribution that keeps it simple.": "Una distribución de Linux ligera y flexible que lo mantiene simple."
         }),
         "ca": ({
             "Language": "Idioma",
@@ -531,7 +545,21 @@ Singleton {
             "Tabs": "Pestanyes",
             "Hidden": "Ocult",
             "No terminals detected.": "No s'han detectat terminals.",
-            "Auto-config not available for this terminal yet.": "Encara no hi ha autoconfiguració per a aquesta terminal."
+            "Auto-config not available for this terminal yet.": "Encara no hi ha autoconfiguració per a aquesta terminal.",
+            "About": "Quant a",
+            "Handcrafted Quickshell desktop.": "Escriptori Quickshell fet a mà.",
+            "Credits": "Crèdits",
+            "Creator and developer": "Creador i desenvolupador",
+            "System information": "Informació del sistema",
+            "Distribution": "Distribució",
+            "Kernel": "Nucli",
+            "Architecture": "Arquitectura",
+            "Hostname": "Nom de l'equip",
+            "Processor": "Processador",
+            "Disk": "Disc",
+            "%1 threads": "%1 fils",
+            "Window manager": "Gestor de finestres",
+            "A lightweight, flexible Linux distribution that keeps it simple.": "Una distribució de Linux lleugera i flexible que ho manté simple."
         })
     })
 

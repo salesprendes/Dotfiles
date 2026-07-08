@@ -30,6 +30,11 @@ FloatingWindow {
     readonly property color settingsLine: SettingsPalette.settingsLine
     readonly property color settingsBorder: SettingsPalette.settingsBorder
     readonly property color accentSoft: SettingsPalette.accentSoft
+    // Resalte de hover de la navegación, tintado con el acento activo (el
+    // básico o el del tema, según lo elegido en la página de Tema). Solo aquí,
+    // en el panel de Ajustes.
+    readonly property color settingsAccentHover: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b,
+                                                         Theme.isDark ? 0.13 : 0.18)
 
     property string cat: "theme"
     property int navResetToken: 0
@@ -112,6 +117,9 @@ FloatingWindow {
                 const it = groups[g].items[i]
                 idx[it.key] = { label: it.label, glyph: it.glyph, group: groups[g].label }
             }
+        // Pestaña fija (fuera de los grupos): su cabecera usa el nombre del
+        // proyecto como antetítulo.
+        idx["about"] = { label: I18n.tr("About"), glyph: "󰋼", group: "Quickshell" }
         return idx
     }
     readonly property var activeItem: itemIndex[cat] || ({ label: "", glyph: "󰒓", group: "" })
@@ -198,6 +206,69 @@ FloatingWindow {
                                 items: modelData.items
                             }
                         }
+                    }
+                }
+
+                // Separador navegación → pie fijo.
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.topMargin: Theme.space2
+                    implicitHeight: Theme.hairline
+                    color: cfg.settingsLine
+                }
+
+                // Pestaña fija: About (siempre al pie, fuera de los grupos).
+                Rectangle {
+                    id: aboutNav
+                    readonly property bool sel: cfg.cat === "about"
+                    Layout.fillWidth: true
+                    implicitHeight: Theme.rowM
+                    radius: Theme.pillRadius
+                    color: sel ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.18)
+                               : "transparent"
+                    Behavior on color { ColorAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
+                    Rectangle {
+                        anchors.fill: parent; radius: parent.radius
+                        color: cfg.settingsAccentHover
+                        opacity: aboutMa.containsMouse && !aboutNav.sel ? 1 : 0
+                        Behavior on opacity { NumberAnimation { duration: 90; easing.type: Easing.OutQuad } }
+                    }
+                    // Barra indicadora "estás aquí".
+                    Rectangle {
+                        anchors.verticalCenter: parent.verticalCenter
+                        anchors.left: parent.left
+                        anchors.leftMargin: Theme.space4
+                        width: Theme.space2
+                        height: parent.height * 0.46
+                        radius: width / 2
+                        color: Theme.accent
+                        opacity: aboutNav.sel ? 1 : 0
+                        Behavior on opacity { NumberAnimation { duration: Theme.animNormal } }
+                    }
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: Theme.space10
+                        anchors.rightMargin: Theme.space10
+                        spacing: Theme.space8
+                        Text {
+                            text: "󰋼"
+                            color: aboutNav.sel ? Theme.accent : Theme.fgDim
+                            font.family: Theme.fontFamily; font.pixelSize: Theme.iconSize
+                        }
+                        Text {
+                            Layout.fillWidth: true
+                            text: I18n.tr("About")
+                            color: aboutNav.sel ? Theme.fg : Theme.fgDim
+                            font.family: Theme.fontFamily; font.pixelSize: Theme.fontSize - 1
+                            font.bold: aboutNav.sel
+                            elide: Text.ElideRight
+                        }
+                    }
+                    MouseArea {
+                        id: aboutMa
+                        anchors.fill: parent; hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: cfg.cat = "about"
                     }
                 }
 
@@ -319,6 +390,7 @@ FloatingWindow {
                         case "network":   return "SettingsPages/NetworkPage.qml"
                         case "weather":   return "SettingsPages/WeatherPage.qml"
                         case "notif":     return "SettingsPages/NotifPage.qml"
+                        case "about":     return "SettingsPages/AboutPage.qml"
                         default:          return "SettingsPages/ThemePage.qml"
                         }
                     }
@@ -365,7 +437,7 @@ FloatingWindow {
             // Capa de hover: opacidad rápida (sin rastro de color).
             Rectangle {
                 anchors.fill: parent; radius: parent.radius
-                color: cfg.settingsControl
+                color: cfg.settingsAccentHover
                 opacity: hdrMa.containsMouse ? 1 : 0
                 Behavior on opacity { NumberAnimation { duration: 90; easing.type: Easing.OutQuad } }
             }
@@ -425,7 +497,7 @@ FloatingWindow {
                         Behavior on color { ColorAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
                         Rectangle {
                             anchors.fill: parent; radius: parent.radius
-                            color: cfg.settingsControl
+                            color: cfg.settingsAccentHover
                             opacity: subMa.containsMouse && !parent.sel ? 1 : 0
                             Behavior on opacity { NumberAnimation { duration: 90; easing.type: Easing.OutQuad } }
                         }

@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Wayland
+import qs.Components
 import qs.Config
 
 PanelWindow {
@@ -129,121 +130,14 @@ PanelWindow {
             NumberAnimation { duration: 500; easing.type: Easing.OutCubic }
         }
 
-        Item {
+        AppLogo {
             id: logoMark
             anchors {
                 horizontalCenter: parent.horizontalCenter
                 top: parent.top
             }
-            width: Math.min(parent.height * 0.42, Theme.dp(148))
-            height: width
-
-            Rectangle {
-                anchors.fill: parent
-                anchors.margins: Theme.dp(8)
-                radius: Theme.dp(18)
-                color: Theme.withAlpha(Theme.surface, 0.28)
-                border.width: Math.max(2, Theme.dp(2))
-                border.color: Theme.withAlpha(Theme.accent, 0.78)
-            }
-
-            Rectangle {
-                anchors.fill: parent
-                anchors.margins: Theme.dp(22)
-                radius: Theme.dp(10)
-                color: "transparent"
-                border.width: Math.max(1, Theme.dp(1))
-                border.color: Theme.withAlpha(Theme.overlay, 0.44)
-            }
-
-            Text {
-                anchors {
-                    left: parent.left
-                    leftMargin: Theme.dp(20)
-                    verticalCenter: parent.verticalCenter
-                }
-                text: "<"
-                color: Theme.accent
-                font.family: Theme.monoFontFamily
-                font.pixelSize: Theme.dp(50)
-                font.bold: true
-            }
-
-            Text {
-                anchors.centerIn: parent
-                text: "A"
-                color: Theme.fg
-                font.family: Theme.monoFontFamily
-                font.pixelSize: Theme.dp(64)
-                font.bold: true
-            }
-
-            Text {
-                anchors {
-                    right: parent.right
-                    rightMargin: Theme.dp(16)
-                    verticalCenter: parent.verticalCenter
-                }
-                text: "/>"
-                color: Theme.cyan
-                font.family: Theme.monoFontFamily
-                font.pixelSize: Theme.dp(38)
-                font.bold: true
-            }
-
-            Rectangle {
-                x: parent.width * 0.18
-                y: parent.height * 0.28
-                width: parent.width * 0.2
-                height: Math.max(1, Theme.dp(2))
-                radius: height / 2
-                color: Theme.withAlpha(Theme.accent, 0.64)
-            }
-
-            Rectangle {
-                x: parent.width * 0.62
-                y: parent.height * 0.72
-                width: parent.width * 0.2
-                height: Math.max(1, Theme.dp(2))
-                radius: height / 2
-                color: Theme.withAlpha(Theme.cyan, 0.64)
-            }
-
-            Rectangle {
-                x: parent.width * 0.5 - width / 2
-                y: parent.height * 0.12
-                width: Math.max(1, Theme.dp(2))
-                height: parent.height * 0.18
-                radius: width / 2
-                color: Theme.withAlpha(Theme.yellow, 0.54)
-            }
-
-            Repeater {
-                model: [
-                    { x: 0.16, y: 0.28, c: Theme.accent, d: 0 },
-                    { x: 0.50, y: 0.12, c: Theme.yellow, d: 220 },
-                    { x: 0.84, y: 0.72, c: Theme.cyan, d: 440 }
-                ]
-
-                delegate: Rectangle {
-                    required property var modelData
-                    width: Theme.dp(10)
-                    height: width
-                    radius: width / 2
-                    x: logoMark.width * modelData.x - width / 2
-                    y: logoMark.height * modelData.y - height / 2
-                    color: modelData.c
-                    opacity: 0.82
-
-                    SequentialAnimation on opacity {
-                        running: splash.mapped
-                        loops: Animation.Infinite
-                        PauseAnimation { duration: modelData.d }
-                        NumberAnimation { from: 0.38; to: 1; duration: 420; easing.type: Easing.OutCubic }
-                        NumberAnimation { from: 1; to: 0.38; duration: 620; easing.type: Easing.InOutCubic }
-                    }
-                }
-            }
+            box: Math.min(parent.height * 0.42, Theme.dp(148))
+            animate: splash.mapped
         }
 
         Text {
