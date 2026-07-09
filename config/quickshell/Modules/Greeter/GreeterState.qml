@@ -38,17 +38,17 @@ Singleton {
     property bool   canRespond: false     // hay una pregunta de PAM esperando respuesta
     property string _pwBuffer: ""         // clave aceptada, pendiente de enviar
     property bool   _submitPending: false // el usuario pidió enviar; se hará al llegar el prompt
-    property bool   _leaving: false       // login correcto en curso (arrancando sesión)
-    property string _lastPamError: ""     // último PAM_ERROR_MSG (motivo real del fallo)
+    property bool   _leaving: false       // has entrado; la sesión está arrancando
+    property string _lastPamError: ""     // lo último que dijo PAM al fallar
 
     // Todo guiado por eventos (sin timers): cada vez que se pone busy=true es
     // por una acción que greetd SIEMPRE contesta (authMessage, authFailure,
     // readyToLaunch o error), y cada señal vuelve a bajar busy.
     //
-    // 'available' es la red de seguridad: si greetd cae (socket cerrado),
-    // Quickshell pone available=false y aquí se recupera el control. Un cuelgue
-    // de PAM que NO cierra el socket no tiene evento, pero no pasa en un greeter
-    // solo-contraseña (PAM responde al momento).
+    // 'available' es la red de seguridad: si greetd se cae y cierra el socket,
+    // se pone en false y desde aquí recuperamos el control. Si PAM se colgara
+    // sin cerrar el socket no nos enteraríamos, pero eso aquí no pasa: solo
+    // pedimos contraseña y PAM contesta al momento.
     onAvailableChanged: {
         if (available) {
             // (Re)disponible: si hay usuario elegido y greetd libre, abre sesión.
@@ -168,10 +168,9 @@ Singleton {
 
         // Pregunta / mensaje de PAM.
         function onAuthMessage(message, error, responseRequired, echoResponse) {
-            // Mensaje de ERROR de PAM (PAM_ERROR_MSG): no es un prompt, es el
-            // motivo del fallo (p.ej. "Authentication failure", "Permission
-            // denied") y no pide respuesta. Se guarda para clasificar el aviso
-            // en _failAttempt y NO se pinta como etiqueta del campo.
+            // Esto no es una pregunta, es PAM contándonos por qué ha fallado
+            // ("Authentication failure", "Permission denied"…). Lo guardamos
+            // para el aviso de después; como etiqueta del campo no pinta nada.
             if (error && !responseRequired) {
                 root._lastPamError = (message || "").trim()
                 return
@@ -179,11 +178,11 @@ Singleton {
             root.secret = !echoResponse
             root.prompt = _localizedPrompt(message, echoResponse)
             root.canRespond = responseRequired
-            // Mensaje informativo (no pide respuesta): Quickshell responde solo
-            // con cadena vacía y la conversación PAM avanza. No se toca nada más.
+            // Solo nos está informando de algo: se contesta solo con una cadena
+            // vacía y la charla con PAM sigue. Aquí no hay nada que hacer.
             if (!responseRequired) return
-            // Pregunta real: si el usuario ya pidió enviar, se manda ahora la
-            // clave guardada; si no, se espera a que escriba.
+            // Ahora sí pregunta: si ya le habías dado a enviar, va la clave que
+            // teníamos guardada; si no, a esperar a que escribas.
             if (root._submitPending) {
                 root._sendResponse()
             } else {
@@ -294,7 +293,7 @@ Singleton {
         busy = true
         canRespond = false
         _submitPending = false
-        _lastPamError = ""            // motivo fresco por intento
+        _lastPamError = ""            // cada intento, su motivo
         const pw = _pwBuffer
         _pwBuffer = ""
         Greetd.respond(pw)
@@ -305,10 +304,10 @@ Singleton {
     // siguiente envío del usuario abrirá una nueva. 'isError' = error genérico
     // en vez de contraseña incorrecta.
     function _failAttempt(message, isError) {
-        // OJO: 'message' (de authFailure) es jerga interna de greetd/PAM
-        // —"pam_authenticate: AUTH_ERR"—, NO texto para el usuario, así que no
-        // se muestra. El único motivo legible es un PAM_ERROR_MSG previo
-        // (_lastPamError, p.ej. "Account locked", "Password expired").
+        // Cuidado con 'message': viene de authFailure y trae cosas como
+        // "pam_authenticate: AUTH_ERR". Eso no se le enseña a nadie. Lo único
+        // que se entiende es el error que PAM mandó antes ("Account locked",
+        // "Password expired"…), que es lo que hemos guardado.
         const pamReason = _lastPamError.trim()
         _lastPamError = ""
         _resetAuth()
@@ -318,12 +317,12 @@ Singleton {
                             "Authentication error, please try again")
         } else {
             const wrong = I18n.tr("Contraseña incorrecta", "Incorrect password")
-            // Motivo concreto conocido (bloqueada/caducada…): traducido y con
-            // PRIORIDAD, porque su texto de PAM suele traer "failed" (p.ej.
-            // "locked due to N failed logins") y si no lo confundiría el filtro
-            // genérico con un fallo normal.
+            // Primero lo concreto (bloqueada, caducada…). Va antes a posta:
+            // esos mensajes suelen llevar dentro la palabra "failed" —"locked
+            // due to 3 failed logins"— y el filtro de abajo los tomaría por un
+            // fallo normal de contraseña.
             const special = _localizedReason(pamReason)
-            // Fórmula genérica de "fallo de autenticación" → contraseña mal.
+            // Si suena a "no has acertado", es que la contraseña está mal.
             const generic = pamReason === "" ||
                 /authentication\s+(failure|error)|auth(entication)?\s+failed|incorrect|permission\s+denied|login\s+(incorrect|failed)|try\s+again/i.test(pamReason)
             error = special !== "" ? special
@@ -335,9 +334,9 @@ Singleton {
             Greetd.cancelSession()
     }
 
-    // Traduce los motivos de PAM más habituales al idioma activo. Devuelve ""
-    // si no reconoce el mensaje (entonces se muestra el texto original de PAM).
-    // PAM emite en inglés (locale C del usuario 'greeter'), de ahí las claves.
+    // Traduce los motivos que más se repiten. Si no lo reconoce devuelve ""
+    // y acabaremos enseñando el texto tal cual. Buscamos en inglés porque el
+    // usuario 'greeter' corre con locale C y PAM habla así.
     function _localizedReason(raw) {
         const s = (raw || "").toLowerCase()
         if (s.indexOf("locked") !== -1)
@@ -352,9 +351,9 @@ Singleton {
         return ""
     }
 
-    // Localiza el prompt del campo. PAM manda su etiqueta en inglés ("Password:",
-    // "login:"); los prompts estándar se traducen al idioma activo y los no
-    // estándar (PIN, código 2FA…) se muestran tal cual los envía PAM.
+    // La etiqueta del campo nos llega de PAM en inglés ("Password:", "login:").
+    // Las dos de siempre las traducimos; cualquier otra cosa rara (un PIN, un
+    // código de doble factor) se deja como venga, que sabrá PAM lo que pide.
     function _localizedPrompt(message, echoResponse) {
         const raw = (message || "").replace(/:\s*$/, "").trim()
         const s = raw.toLowerCase()

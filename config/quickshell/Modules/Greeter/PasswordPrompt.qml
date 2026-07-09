@@ -23,8 +23,8 @@ Item {
         pwInput.forceActiveFocus()
     }
 
-    // Caret que parpadea. Reutilizado en modo oculto (junto a los puntos) y
-    // visible (cursorDelegate del TextInput): misma animación, distinta altura.
+    // El cursor que parpadea. Sirve tanto cuando la clave va tapada con puntos
+    // como cuando se ve; lo único que cambia es la altura.
     component BlinkCaret: Rectangle {
         width: Theme.dp(2)
         radius: width / 2
@@ -257,9 +257,9 @@ Item {
                 property bool active: pwInput.text.length > 0 && !GreeterState.busy
                                       && GreeterState.selectedUser !== ""
 
-                // Entra en la cadena de foco de Tab (tras el campo de contraseña)
-                // y se activa por teclado igual que un botón nativo. Fuera de la
-                // cadena mientras no está disponible (sin texto): Tab lo salta.
+                // Se coge con el tabulador y se pulsa con Enter, como cualquier
+                // botón. Mientras esté apagado (sin escribir nada) el tabulador
+                // pasa de largo.
                 activeFocusOnTab: enterBtn.active
                 Keys.onReturnPressed: if (active) pw._sendPassword()
                 Keys.onEnterPressed:  if (active) pw._sendPassword()

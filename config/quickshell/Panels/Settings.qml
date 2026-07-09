@@ -30,20 +30,99 @@ FloatingWindow {
     readonly property color settingsLine: SettingsPalette.settingsLine
     readonly property color settingsBorder: SettingsPalette.settingsBorder
     readonly property color accentSoft: SettingsPalette.accentSoft
-    // Resalte de hover de la navegación, tintado con el acento activo (el
-    // básico o el del tema, según lo elegido en la página de Tema). Solo aquí,
-    // en el panel de Ajustes.
+    // El hover de la nav va teñido con el acento que tengas puesto, sea el
+    // básico o el del tema. Solo en esta ventana.
     readonly property color settingsAccentHover: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b,
                                                          Theme.isDark ? 0.13 : 0.18)
 
     property string cat: "theme"
+    // La que pulsas (cat) y la que está montada (shownCat) no son la misma
+    // durante la transición: la nav se ilumina al instante, pero el contenido
+    // espera a que la página vieja se haya ido.
+    property string shownCat: "theme"
     property int navResetToken: 0
     onVisibleChanged: {
         if (visible) {
+            pageOut.stop()
+            pageIn.stop()
+            const already = (shownCat === "theme")
+            pageOpacity = 0
+            pageOffset = Theme.dp(10)
+            swapping = true
+            shownCat = "theme"
             cat = "theme"
+            // Si no toca recargar nadie nos va a avisar: tiramos ya.
+            if (already) pageReady()
             navResetToken++
         }
         else if (Globals.settingsOpen) Globals.settingsOpen = false   // cerrada por Hyprland
+    }
+
+    // ── Cambio de página ─────────────────────────────────────────────────────
+    // La vieja se desvanece subiendo un pelo. Cuando ya no se ve, pedimos la
+    // nueva y el Loader la construye aparte: montarla aquí mismo congelaría el
+    // hilo justo en el peor momento, y eso es el tirón que se notaba. La
+    // entrada la dispara el Loader cuando la página ya existe de verdad.
+    property real pageOpacity: 1
+    property real pageOffset: 0
+    property bool swapping: false      // hay una página en camino
+
+    // Van sin 'from' a propósito: si cortas la transición a medias, se
+    // reenganchan desde donde estaban en vez de saltar a cero.
+    ParallelAnimation {
+        id: pageIn
+        NumberAnimation {
+            target: cfg; property: "pageOpacity"
+            to: 1; duration: 300; easing.type: Easing.OutCubic
+        }
+        NumberAnimation {
+            target: cfg; property: "pageOffset"
+            to: 0; duration: 380; easing.type: Easing.OutQuint
+        }
+    }
+
+    SequentialAnimation {
+        id: pageOut
+        ParallelAnimation {
+            NumberAnimation {
+                target: cfg; property: "pageOpacity"
+                to: 0; duration: 130; easing.type: Easing.InCubic
+            }
+            NumberAnimation {
+                target: cfg; property: "pageOffset"
+                to: -Theme.dp(5); duration: 130; easing.type: Easing.InCubic
+            }
+        }
+        ScriptAction {
+            script: {
+                cfg.swapping = true
+                cfg.shownCat = cfg.cat
+                flick.contentY = 0
+            }
+        }
+    }
+
+    // Nos llama el Loader cuando la página nueva ya está en pantalla.
+    function pageReady() {
+        if (!swapping) return
+        swapping = false
+        pageOpacity = 0
+        pageOffset = Theme.dp(10)
+        pageIn.restart()
+    }
+
+    onCatChanged: {
+        if (cat === shownCat) {
+            // Has vuelto a la página que aún se estaba yendo: la traemos de
+            // vuelta. Si ya hay una en camino, que siga su curso.
+            if (pageOut.running && !swapping) {
+                pageOut.stop()
+                pageIn.restart()
+            }
+            return
+        }
+        pageIn.stop()                       // pulsas rápido: corta lo que hubiera
+        pageOut.restart()
     }
 
     // Reabrir cuando ya está abierta. Globals.toggleSettings() pide esto si la
@@ -117,12 +196,13 @@ FloatingWindow {
                 const it = groups[g].items[i]
                 idx[it.key] = { label: it.label, glyph: it.glyph, group: groups[g].label }
             }
-        // Pestaña fija (fuera de los grupos): su cabecera usa el nombre del
-        // proyecto como antetítulo.
+        // About va suelta, sin grupo, así que se lo inventamos.
         idx["about"] = { label: I18n.tr("About"), glyph: "󰋼", group: "Quickshell" }
         return idx
     }
-    readonly property var activeItem: itemIndex[cat] || ({ label: "", glyph: "󰒓", group: "" })
+    // Va con la página que se ve, no con la que has pulsado: si no, el título
+    // cambiaría antes que el contenido.
+    readonly property var activeItem: itemIndex[shownCat] || ({ label: "", glyph: "󰒓", group: "" })
     readonly property string catLabel:      activeItem.label
     readonly property string catGroupLabel: activeItem.group
     readonly property string catGlyph:      activeItem.glyph
@@ -217,7 +297,7 @@ FloatingWindow {
                     color: cfg.settingsLine
                 }
 
-                // Pestaña fija: About (siempre al pie, fuera de los grupos).
+                // About: siempre abajo del todo, no pertenece a ningún grupo.
                 Rectangle {
                     id: aboutNav
                     readonly property bool sel: cfg.cat === "about"
@@ -323,6 +403,7 @@ FloatingWindow {
                     implicitHeight: Theme.controlL
                     radius: Theme.pillRadius
                     color: cfg.accentSoft
+                    opacity: cfg.pageOpacity     // funde a la vez que la página
                     Text {
                         anchors.centerIn: parent
                         text: cfg.catGlyph; color: Theme.accent
@@ -334,6 +415,7 @@ FloatingWindow {
                     Layout.fillWidth: true
                     Layout.alignment: Qt.AlignVCenter
                     spacing: Theme.space2
+                    opacity: cfg.pageOpacity     // funde a la vez que la página
                     Text {
                         Layout.fillWidth: true
                         text: cfg.catGroupLabel
@@ -379,8 +461,15 @@ FloatingWindow {
                     id: pageLoader
                     anchors { left: parent.left; right: parent.right; top: parent.top
                               leftMargin: Theme.space18; rightMargin: Theme.space18; topMargin: Theme.space18 }
+                    // Sin esto, montar la página congela el hilo justo cuando
+                    // está corriendo la animación y se nota el tirón.
+                    asynchronous: true
+                    opacity: cfg.pageOpacity
+                    transform: Translate { y: cfg.pageOffset }
+                    // Ya está montada (o ha petado): que entre.
+                    onStatusChanged: if (status === Loader.Ready || status === Loader.Error) cfg.pageReady()
                     source: {
-                        switch (cfg.cat) {
+                        switch (cfg.shownCat) {
                         case "font":      return "SettingsPages/FontPage.qml"
                         case "terminal":  return "SettingsPages/TerminalPage.qml"
                         case "wallpaper": return "SettingsPages/WallpaperPage.qml"
@@ -393,14 +482,6 @@ FloatingWindow {
                         case "about":     return "SettingsPages/AboutPage.qml"
                         default:          return "SettingsPages/ThemePage.qml"
                         }
-                    }
-                    // Fundido de entrada al cargar cada página.
-                    onLoaded: { flick.contentY = 0; pageFadeIn.restart() }
-                    NumberAnimation {
-                        id: pageFadeIn
-                        target: pageLoader; property: "opacity"
-                        from: 0; to: 1
-                        duration: Theme.animNormal
                     }
                 }
             }

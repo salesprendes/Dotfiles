@@ -83,7 +83,8 @@ Item {
     // Disparador (píldora con la sesión actual)
     Rectangle {
         id: trigger
-        // 'lit' = resaltado (hover/abierto/foco); 'focused' = solo abierto/foco.
+        // 'lit': se ilumina con el ratón encima, abierto o con el foco.
+        // 'focused': solo abierto o con el foco.
         readonly property bool lit: trigMa.containsMouse || sp.open || sp.activeFocus
         readonly property bool focused: sp.open || sp.activeFocus
         height: Theme.dp(32)

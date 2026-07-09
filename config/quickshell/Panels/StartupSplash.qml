@@ -17,10 +17,9 @@ PanelWindow {
     property bool ready: false
     property bool minHoldDone: false
 
-    // Se emite cuando el splash ha terminado (ya invisible). El cargador
-    // perezoso de shell.qml lo escucha para liberar la ventana y su árbol
-    // de escena: solo se usa una vez al arrancar, no tiene sentido que
-    // siga residente por monitor el resto de la sesión.
+    // Cuando esto ya no se ve, avisamos para que shell.qml lo tire a la basura.
+    // Solo sale al arrancar; no pinta nada ocupando memoria por cada monitor
+    // durante toda la sesión.
     signal finished()
 
     visible: mapped

@@ -21,8 +21,8 @@ Singleton {
     // Devuelve el texto en el idioma activo: castellano o, si no, inglés.
     function tr(es, en) { return spanish ? es : en }
 
-    // Locale y fecha larga en el idioma activo (reloj del greeter). Antes vivía
-    // en Theme fijada a es_ES; aquí sigue al idioma real detectado.
+    // La fecha del reloj, en el idioma que toque. Estaba en Theme clavada a
+    // es_ES; aquí al menos sigue al idioma que hemos detectado.
     readonly property var locale: Qt.locale(spanish ? "es_ES" : "en_US")
     function longDate(date) {
         return date.toLocaleDateString(locale, spanish ? "dddd, d 'de' MMMM"

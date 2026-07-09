@@ -1,6 +1,5 @@
-// Raíz del login. Una superficie por monitor; el estado vive en el singleton
-// GreeterState, que solo se instancia al cargar esto (los singletons de
-// Quickshell son perezosos).
+// Raíz del login. Una superficie por monitor; el estado vive en GreeterState,
+// que no se crea hasta que se carga esto (los singletons son perezosos).
 import Quickshell
 import qs.Modules.Greeter
 

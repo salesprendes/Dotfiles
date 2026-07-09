@@ -1,21 +1,20 @@
 import QtQuick
 import qs.Config
 
-// Marca "<A/>" de Álvaro: el mismo distintivo que abre el splash de arranque.
-// Extraído aquí para que el splash (StartupSplash) y la pestaña About de
-// Ajustes compartan exactamente la misma imagen y no diverjan. Es cuadrado y
-// todas las medidas derivan de 'box', así escala a cualquier tamaño (las
-// proporciones están calibradas sobre el tamaño original de 148 px).
+// La marca "<A/>". Vive aquí y no dentro de la pantalla de arranque para que
+// esa y la pestaña About dibujen exactamente lo mismo y no se me vayan
+// separando con el tiempo. Es cuadrada y todo sale de 'box', así que escala
+// sola; las proporciones salieron de medirla a 148 px.
 Item {
     id: root
 
-    property real box: Theme.dp(148)      // lado del distintivo
-    property bool animate: true           // laten los puntos de color
+    property real box: Theme.dp(148)      // lo que mide de lado
+    property bool animate: true           // los puntos de color laten
 
     width: box
     height: box
 
-    // Placa exterior (fondo tenue + filo de acento).
+    // La placa de fuera.
     Rectangle {
         anchors.fill: parent
         anchors.margins: root.box * 0.054
@@ -24,7 +23,7 @@ Item {
         border.width: Math.max(2, Theme.dp(2))
         border.color: Theme.withAlpha(Theme.accent, 0.78)
     }
-    // Marco interior sutil.
+    // Y el marquito de dentro.
     Rectangle {
         anchors.fill: parent
         anchors.margins: root.box * 0.149
@@ -34,7 +33,7 @@ Item {
         border.color: Theme.withAlpha(Theme.overlay, 0.44)
     }
 
-    // Glifos de código: <  A  />
+    // <  A  />
     Text {
         anchors { left: parent.left; leftMargin: root.box * 0.135; verticalCenter: parent.verticalCenter }
         text: "<"
@@ -54,7 +53,7 @@ Item {
         font.family: Theme.monoFontFamily; font.pixelSize: Math.round(root.box * 0.257); font.bold: true
     }
 
-    // Trazos decorativos.
+    // Rayitas de adorno.
     Rectangle {
         x: root.width * 0.18; y: root.height * 0.28
         width: root.width * 0.2; height: Math.max(1, Theme.dp(2)); radius: height / 2
@@ -71,7 +70,7 @@ Item {
         color: Theme.withAlpha(Theme.yellow, 0.54)
     }
 
-    // Puntos de color que laten (accent · yellow · cyan) en cascada.
+    // Los tres puntos, latiendo uno detrás de otro.
     Repeater {
         model: [
             { x: 0.16, y: 0.28, c: Theme.accent, d: 0 },

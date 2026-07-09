@@ -6,21 +6,20 @@ import qs.Config
 import qs.Panels.SettingsPages
 import qs.Services
 
-// About: identidad del proyecto (misma marca que el splash), información del
-// sistema en vivo y una ficha de créditos que reúne autoría, distribución y
-// enlaces.
+// La misma marca que sale al arrancar, los datos del equipo en vivo y los
+// créditos.
 ColumnLayout {
     id: about
     spacing: Theme.space14
 
     readonly property bool isArch: ["arch", "archlinux", "arch32"].indexOf(SysMon.distroId) !== -1
 
-    // Refresca CPU/RAM/uptime al abrir y mientras la pestaña sigue visible
-    // (el temporizador global de SysMon solo corre con la barra/monitor).
+    // El reloj de SysMon solo va cuando está la barra o el monitor, así que
+    // aquí nos refrescamos por nuestra cuenta mientras la pestaña esté abierta.
     Component.onCompleted: SysMon.refreshStats(false)
     Timer { interval: 4000; running: true; repeat: true; onTriggered: SysMon.refreshStats(false) }
 
-    // ── Hero: la marca <A/> + el wordmark, como en el arranque ──────────────
+    // ── Portada: la marca y el nombre, igual que en el arranque ──────────────
     Rectangle {
         Layout.fillWidth: true
         radius: Theme.barRadius
@@ -65,7 +64,7 @@ ColumnLayout {
         }
     }
 
-    // ── Información del sistema ───────────────────────────────────────────────
+    // ── El equipo ────────────────────────────────────────────────────────────
     SettingsCard {
         title: I18n.tr("System information")
         glyph: "󰟀"
@@ -94,17 +93,17 @@ ColumnLayout {
         InfoRow { glyph: "󰆍"; label: I18n.tr("Shell");          value: "Quickshell" }
     }
 
-    // ── Créditos: autoría + distribución + enlaces, todo junto ────────────────
+    // ── Créditos: quién lo hizo, sobre qué corre y dónde encontrarlo ─────────
     SettingsCard {
         title: I18n.tr("Credits")
         glyph: "󰀄"
 
-        // Autor · Distribución, en dos columnas separadas por un filete.
+        // Dos columnas con un filete en medio.
         RowLayout {
             Layout.fillWidth: true
             spacing: Theme.space12
 
-            // Autor.
+            // Quién.
             RowLayout {
                 Layout.fillWidth: true
                 Layout.preferredWidth: 1
@@ -151,7 +150,7 @@ ColumnLayout {
                 }
             }
 
-            // Filete vertical entre columnas.
+            // El filete.
             Rectangle {
                 Layout.fillHeight: true
                 Layout.topMargin: Theme.space2
@@ -160,7 +159,7 @@ ColumnLayout {
                 color: Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.22)
             }
 
-            // Distribución sobre la que corre.
+            // Sobre qué.
             RowLayout {
                 Layout.fillWidth: true
                 Layout.preferredWidth: 1
@@ -221,9 +220,9 @@ ColumnLayout {
         }
     }
 
-    // ── Componentes internos ─────────────────────────────────────────────────
+    // ── Piezas de esta página ────────────────────────────────────────────────
 
-    // Fila etiqueta → valor de la ficha de sistema. Se oculta si no hay valor.
+    // Etiqueta a la izquierda, valor a la derecha. Si no hay valor, no aparece.
     component InfoRow: RowLayout {
         property string glyph: ""
         property string label: ""
@@ -247,7 +246,7 @@ ColumnLayout {
         }
     }
 
-    // Fila-enlace: abre una URL con xdg-open.
+    // Fila que se pincha y abre el enlace en el navegador.
     component LinkRow: Rectangle {
         id: linkRoot
         property string glyph: ""
