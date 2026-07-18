@@ -22,6 +22,6 @@ Pill {
         text: Power.icon
         color: Power.color
         font.family: Theme.fontFamily
-        font.pixelSize: Theme.iconSize
+        font.pixelSize: Theme.barIconSize
     }
 }

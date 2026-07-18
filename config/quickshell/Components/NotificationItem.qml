@@ -4,21 +4,46 @@ import Quickshell
 import qs.Config
 import qs.Services
 
+// Tarjeta de notificación. Se usa tanto en los popups como en el centro de
+// notificaciones.
+//
+// Mapeo de roles Material a Theme: Surface→bg, SurfaceVariant→surface,
+// OnSurface→fg, OnSurfaceVariant→fgDim, Outline→overlay, Primary→accent.
+// Las medidas van en px lógicos pasadas por Theme.dp()/sp(), para que sigan
+// respetando la escala de densidad y de fuente del shell.
+//
 // 'notif' = objeto Notification.
 Rectangle {
     id: item
     property var notif
     property bool popupMode: false
+    // Progreso del timeout (1 → 0). Lo mueve el popup; el centro no lo usa.
+    property real progress: 0
+    property bool showProgress: false
+
+    // Primer plano (todo menos el fondo de la tarjeta). El barrido de entrada
+    // descubre el fondo YA OPACO y sólo el contenido funde con retardo y se
+    // contra-desplaza; por eso opacidad y desplazamiento van aquí y no en la
+    // tarjeta entera.
+    property real contentOpacity: 1
+    property real contentOffsetX: 0
+
     readonly property bool closeHovered: closeButton.hovered
 
     readonly property string img: resolveImage()
     readonly property bool hasImagePayload: !!(notif && notif.image)
-    readonly property string appName: notif && notif.appName ? notif.appName : "Sistema"
+    readonly property string appName: NotifService.appNameFor(notif)
     readonly property string summary: notif && notif.summary ? notif.summary : ""
     readonly property string body: notif && notif.body ? notif.body : ""
     readonly property bool hasBody: body !== ""
     readonly property int actionCount: countActions()
     readonly property bool hasActions: actionCount > 0
+
+    // Urgencia: tiñe la barra de progreso. Critical → rojo; Low → texto atenuado.
+    readonly property int urgency: notif && notif.urgency !== undefined ? notif.urgency : 1
+    readonly property color progressColor: urgency === 2 ? Theme.red
+                                         : urgency === 0 ? Qt.rgba(Theme.fg.r, Theme.fg.g, Theme.fg.b, 0.9)
+                                         : Theme.accent
 
     signal closeRequested()
 
@@ -49,204 +74,266 @@ Rectangle {
         }
     }
 
-    implicitHeight: content.implicitHeight + Theme.space12 * 2
-    radius: Theme.pillRadius + Theme.space4
-    color: item.closeHovered
-        ? Qt.rgba(Theme.surfaceHi.r, Theme.surfaceHi.g, Theme.surfaceHi.b, 0.92)
-        : Qt.rgba(Theme.surface.r, Theme.surface.g, Theme.surface.b, 0.88)
-    border.width: Theme.hairline
-    border.color: Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.42)
-    clip: true
+    // Acción "default": la tarjeta entera es su area de clic.
+    function defaultAction() {
+        for (let i = 0; i < actionCount; i++) {
+            const a = actionAt(i)
+            if (a && a.identifier === "default")
+                return a
+        }
+        return null
+    }
+    readonly property bool hasDefaultAction: defaultAction() !== null
 
-    Behavior on color { ColorAnimation { duration: Theme.animFast } }
-    Behavior on border.color { ColorAnimation { duration: Theme.animFast } }
+    // --- geometria (px logicos) ---
+    readonly property int pad: Theme.dp(12)          // kCardInnerPad
+    readonly property int iconSize: Theme.dp(hasActions ? 45 : 38)
+    readonly property int iconGap: Theme.dp(8)       // kIconTextGap
+    readonly property int closeSize: Theme.dp(20)
+    readonly property int progressH: Theme.dp(3)
+
+    // Anchos de texto CALCULADOS a partir del ancho de tarjeta, en vez de
+    // dejarlos en manos de Layout.fillWidth. No es cosmética: con fillWidth,
+    // en la primera pasada de layout los anchos aún valen 0, el título
+    // envuelve a 2 líneas y la tarjeta mide ~22 px de más. El ListView de
+    // los popups mide JUSTO en ese instante y deja congelada la posición de
+    // las tarjetas de abajo, con lo que la primera quedaba separada del
+    // resto. Con el ancho derivado del de la tarjeta (que se conoce desde
+    // el primer frame) la altura es correcta a la primera.
+    readonly property int textColWidth: Math.max(1, width - pad * 2 - iconSize - iconGap)
+    readonly property int titleWidth: Math.max(1, textColWidth - closeSize - Theme.dp(8))
+
+    implicitHeight: layout.implicitHeight
+
+    radius: Theme.dp(12)                              // radiusXl
+    // La tarjeta se pinta con bg a 0.97 (no con surface): es el mismo tono
+    // del fondo del shell, apenas translucido.
+    color: Qt.rgba(Theme.bg.r, Theme.bg.g, Theme.bg.b, 0.97)
+    border.width: Theme.hairline
+    border.color: Theme.overlay
+    clip: true
+    antialiasing: true
+
+    // Clic izquierdo en la tarjeta: invoca la accion "default" y cierra.
+    // Clic derecho: descarta. (Va detras del contenido: los botones de accion y
+    // el de cerrar quedan por encima y se lo comen primero.)
+    MouseArea {
+        anchors.fill: parent
+        acceptedButtons: Qt.LeftButton | Qt.RightButton
+        cursorShape: item.hasDefaultAction ? Qt.PointingHandCursor : Qt.ArrowCursor
+        onClicked: (mouse) => {
+            if (mouse.button === Qt.RightButton) {
+                item.dismiss()
+                return
+            }
+            const a = item.defaultAction()
+            if (a)
+                a.invoke()
+            item.dismiss()
+        }
+    }
+
+    Item {
+        id: fg
+        anchors.fill: parent
+        opacity: item.contentOpacity
+        transform: Translate { x: item.contentOffsetX }
 
     ColumnLayout {
-        id: content
-        anchors {
-            left: parent.left
-            right: parent.right
-            top: parent.top
-            margins: Theme.space12
-            leftMargin: Theme.space14
+        id: layout
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
+        spacing: 0
+
+        // Barra de timeout: pegada al borde superior, por encima del contenido.
+        // El relleno es una pastilla CENTRADA que se encoge hacia el medio
+        // desde ambos extremos, no un vaciado lateral.
+        Item {
+            Layout.fillWidth: true
+            Layout.leftMargin: item.pad
+            Layout.rightMargin: item.pad
+            implicitHeight: item.progressH
+            visible: item.showProgress
+
+            Rectangle {
+                width: Math.max(0, parent.width * item.progress)
+                height: parent.height
+                x: (parent.width - width) / 2
+                radius: height / 2
+                color: item.progressColor
+                antialiasing: true
+            }
         }
-        spacing: Theme.space10
 
         RowLayout {
             Layout.fillWidth: true
-            spacing: Theme.space12
+            Layout.margins: item.pad
+            spacing: item.iconGap
 
+            // Icono / imagen de la notificación.
             Rectangle {
                 Layout.alignment: Qt.AlignTop
-                implicitWidth: Theme.dp(46)
-                implicitHeight: Theme.dp(46)
-                radius: height / 2
-                color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.12)
-                border.width: Math.max(1, Theme.dp(2))
-                border.color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, item.popupMode ? 0.75 : 0.48)
+                implicitWidth: item.iconSize
+                implicitHeight: item.iconSize
+                radius: Math.min(height / 2, Math.round(item.iconSize / 6))
+                color: item.img !== "" ? "transparent"
+                                       : Qt.rgba(Theme.surface.r, Theme.surface.g, Theme.surface.b, 1.0)
                 clip: true
-
-                Rectangle {
-                    anchors.fill: parent
-                    anchors.margins: Theme.space4
-                    radius: width / 2
-                    color: Qt.rgba(Theme.bgAlt.r, Theme.bgAlt.g, Theme.bgAlt.b, 0.65)
-                    visible: item.img !== ""
-                }
 
                 Image {
                     anchors.fill: parent
-                    anchors.margins: item.img !== "" ? Theme.dp(5) : Theme.space10
                     visible: item.img !== ""
                     source: item.img
-                    sourceSize: Qt.size(Theme.dp(46) * 2, Theme.dp(46) * 2)
-                    fillMode: item.hasImagePayload ? Image.PreserveAspectCrop : Image.PreserveAspectFit
+                    sourceSize: Qt.size(item.iconSize * 2, item.iconSize * 2)
+                    // Recorta a Cover: la imagen llena el hueco sin bandas.
+                    fillMode: item.hasImagePayload ? Image.PreserveAspectCrop
+                                                   : Image.PreserveAspectFit
                     smooth: true
                     asynchronous: true
                 }
+
+                // Sin icono: campana, como fallback.
                 Text {
                     anchors.centerIn: parent
                     visible: item.img === ""
                     text: "󰂚"
-                    color: Theme.accent
+                    color: Theme.fgDim
                     font.family: Theme.fontFamily
-                    font.pixelSize: Theme.iconSize + 3
+                    font.pixelSize: Theme.sp(item.hasActions ? 24 : 20)
                 }
             }
 
             ColumnLayout {
-                Layout.fillWidth: true
-                spacing: Theme.space4
+                Layout.preferredWidth: item.textColWidth
+                Layout.alignment: Qt.AlignTop
+                spacing: Theme.dp(2)
 
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: Theme.space8
-
-                    Text {
-                        Layout.fillWidth: true
-                        text: item.appName
-                        color: Theme.fgDim
-                        font.family: Theme.fontFamily
-                        font.pixelSize: Theme.fontSize - 3
-                        font.bold: true
-                        elide: Text.ElideRight
-                    }
-                    Text {
-                        text: NotifService.timeText(item.notif)
-                        color: Theme.fgMuted
-                        font.family: Theme.fontFamily
-                        font.pixelSize: Theme.fontSize - 3
-                    }
-                }
-
+                // Título. Reserva a su derecha el hueco del botón de cerrar.
                 Text {
-                    Layout.fillWidth: true
+                    Layout.preferredWidth: item.titleWidth
                     text: item.summary
                     color: Theme.fg
                     font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSize + 1
+                    font.pixelSize: Theme.sp(16)          // fontSizeTitle
                     font.bold: true
+                    wrapMode: Text.WordWrap
+                    maximumLineCount: 2                    // kMaxSummaryLines
                     elide: Text.ElideRight
+                    textFormat: Text.PlainText
                 }
+
                 Text {
-                    Layout.fillWidth: true
+                    Layout.preferredWidth: item.textColWidth
                     visible: item.hasBody
                     text: item.body
                     color: Theme.fgDim
                     font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSize - 1
+                    font.pixelSize: Theme.sp(14)          // fontSizeBody
                     wrapMode: Text.WordWrap
-                    maximumLineCount: 5
+                    maximumLineCount: 3                    // kToastMaxBodyLines
                     elide: Text.ElideRight
                     textFormat: Text.PlainText
                 }
-            }
 
-            Rectangle {
-                id: closeButton
-                // 'dismissing' se activa al pulsar: así el rojo es solo hover y se
-                // apaga al cerrar, en vez de quedarse fijo durante la animación de salida.
-                property bool dismissing: false
-                property bool hovered: closeMa.containsMouse && !dismissing
-                Layout.alignment: Qt.AlignTop
-                implicitWidth: Theme.controlS
-                implicitHeight: Theme.controlS
-                radius: height / 2
-                // Hover: se rellena de rojo (afordancia de descartar). Apagado = rojo
-                // con alfa 0 (no "transparent", que es negro con alfa 0 y ensuciaba el fundido).
-                color: closeButton.hovered
-                    ? Theme.red
-                    : Qt.rgba(Theme.red.r, Theme.red.g, Theme.red.b, 0)
-                // Fundido siempre fluido: nunca baja de ~140 ms aunque las animaciones
-                // globales estén en "Ninguna".
-                Behavior on color { ColorAnimation { duration: Math.max(Theme.animFast, 140); easing.type: Easing.OutCubic } }
+                // Acciones. Flow: se reparten en varias filas si no caben,
+                // con hueco de 4.
+                Flow {
+                    Layout.preferredWidth: item.textColWidth
+                    Layout.topMargin: Theme.dp(8)          // kActionRowGap
+                    visible: item.hasActions
+                    spacing: Theme.dp(4)                   // kActionGap
 
-                Text {
-                    anchors.centerIn: parent
-                    text: "󰅖"
-                    // Sobre el rojo, el icono va en color de fondo para contrastar;
-                    // en reposo, gris tenue.
-                    color: closeButton.hovered ? Theme.bg : Theme.fgMuted
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.iconSize - 1
-                    Behavior on color { ColorAnimation { duration: Math.max(Theme.animFast, 140); easing.type: Easing.OutCubic } }
-                }
+                    Repeater {
+                        model: item.actionCount
+                        delegate: Rectangle {
+                            readonly property var action: item.actionAt(index)
+                            // La accion "default" es la tarjeta entera, no un boton.
+                            visible: action && action.identifier !== "default"
+                            width: visible ? Math.min(Theme.dp(180), aTxt.implicitWidth + Theme.dp(16) * 2) : 0
+                            height: visible ? Theme.dp(32) : 0   // controlHeightSm
+                            radius: Theme.dp(6)                  // radiusMd
+                            color: aMa.containsMouse ? Theme.surfaceHi : Theme.surface
+                            border.width: aMa.containsMouse ? 0 : Theme.hairline
+                            border.color: Theme.overlay
+                            Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Theme.enterEasing } }
 
-                MouseArea {
-                    id: closeMa
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: { closeButton.dismissing = true; item.dismiss() }
-                }
-            }
-        }
-
-        RowLayout {
-            Layout.fillWidth: true
-            Layout.leftMargin: Theme.dp(53)
-            spacing: Theme.space8
-            visible: item.hasActions
-
-            Repeater {
-                model: item.actionCount
-                delegate: Rectangle {
-                    readonly property var action: item.actionAt(index)
-                    implicitWidth: Math.min(150, aTxt.implicitWidth + 22)
-                    implicitHeight: Theme.controlS
-                    radius: height / 2
-                    color: aMa.containsMouse
-                        ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.22)
-                        : Qt.rgba(Theme.bgAlt.r, Theme.bgAlt.g, Theme.bgAlt.b, 0.8)
-                    border.width: Theme.hairline
-                    border.color: Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.38)
-                    Behavior on color { ColorAnimation { duration: Theme.animFast } }
-
-                    Text {
-                        id: aTxt
-                        anchors.centerIn: parent
-                        width: Math.min(128, implicitWidth)
-                        text: parent.action && parent.action.text ? parent.action.text : ""
-                        color: Theme.accent
-                        font.family: Theme.fontFamily
-                        font.pixelSize: Theme.fontSize - 2
-                        font.bold: true
-                        elide: Text.ElideRight
-                        horizontalAlignment: Text.AlignHCenter
-                    }
-                    MouseArea {
-                        id: aMa
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: {
-                            if (parent.action) {
-                                parent.action.invoke()
+                            Text {
+                                id: aTxt
+                                anchors.centerIn: parent
+                                width: Math.min(parent.width - Theme.dp(16), implicitWidth)
+                                text: parent.action && parent.action.text ? parent.action.text : ""
+                                color: Theme.fg
+                                font.family: Theme.fontFamily
+                                font.pixelSize: Theme.sp(13)     // fontSizeCaption
+                                elide: Text.ElideRight
+                                horizontalAlignment: Text.AlignHCenter
+                            }
+                            MouseArea {
+                                id: aMa
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    if (parent.action)
+                                        parent.action.invoke()
+                                    item.dismiss()
+                                }
                             }
                         }
                     }
                 }
+
+                // Pie: nombre de la app, alineado a la derecha. El toast no
+                // lleva marca de tiempo (sólo la lista del historial).
+                Text {
+                    Layout.preferredWidth: item.textColWidth
+                    Layout.topMargin: Theme.dp(4)
+                    horizontalAlignment: Text.AlignRight
+                    text: item.appName
+                    color: Theme.fgDim
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.sp(11)          // fontSizeMini
+                    elide: Text.ElideRight
+                    maximumLineCount: 1
+                }
             }
         }
     }
+
+    // Botón de cerrar: fantasma, esquina superior derecha, posición absoluta.
+    Rectangle {
+        id: closeButton
+        property bool dismissing: false
+        property bool hovered: closeMa.containsMouse && !dismissing
+
+        width: item.closeSize
+        height: item.closeSize
+        x: item.width - item.pad - width
+        y: item.pad
+        radius: Theme.dp(6)
+        color: closeButton.hovered ? Theme.surfaceHi
+                                   : Qt.rgba(Theme.surfaceHi.r, Theme.surfaceHi.g, Theme.surfaceHi.b, 0)
+        Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Theme.enterEasing } }
+
+        Text {
+            anchors.centerIn: parent
+            text: "󰅖"
+            color: Theme.fg
+            font.family: Theme.fontFamily
+            font.pixelSize: Theme.sp(12)
+            opacity: closeButton.hovered ? 1.0 : 0.55
+            Behavior on opacity { NumberAnimation { duration: Theme.animFast; easing.type: Theme.enterEasing } }
+        }
+
+        MouseArea {
+            id: closeMa
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: { closeButton.dismissing = true; item.dismiss() }
+        }
+    }
+
+    }   // fg
 }

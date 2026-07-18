@@ -12,15 +12,15 @@ Pill {
     onRightClicked: Clipboard.refresh()
 
     Item {
-        implicitWidth: Theme.iconSize + 2
-        implicitHeight: Theme.iconSize + 2
+        implicitWidth: Theme.barIconSize + 2
+        implicitHeight: Theme.barIconSize + 2
 
         Text {
             anchors.centerIn: parent
             text: "󰅌"
             color: Globals.clipboardOpen ? Theme.accent : (Clipboard.available ? Theme.fgDim : Theme.fgMuted)
             font.family: Theme.fontFamily
-            font.pixelSize: Theme.iconSize
+            font.pixelSize: Theme.barIconSize
         }
 
         CountBadge {

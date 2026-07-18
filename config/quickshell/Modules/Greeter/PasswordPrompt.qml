@@ -2,6 +2,7 @@
 //  botón Enter, estado de error / indicador de login y selector de sesión.
 import QtQuick
 import Quickshell
+import Quickshell.Widgets
 import qs.Modules.Greeter
 
 Item {
@@ -42,8 +43,12 @@ Item {
         width: parent.width
         spacing: Theme.dp(14)
 
-        // Avatar con inicial.
+        // Avatar: inicial en círculo tonal y, si hay foto legible en
+        // Config.avatarPath, esa imagen recortada en círculo encima. La
+        // inicial va SIEMPRE debajo: si la foto no existe o no carga, no
+        // queda hueco (fallback seguro, nada que pueda romper el login).
         Rectangle {
+            id: avatarBox
             anchors.horizontalCenter: parent.horizontalCenter
             width: Theme.dp(76); height: Theme.dp(76); radius: width / 2
             color: Theme.alpha(Theme.accent, 0.16)
@@ -56,6 +61,27 @@ Item {
                 font.family: Theme.font
                 font.pixelSize: Theme.sp(32)
                 font.bold: true
+            }
+
+            ClippingRectangle {
+                anchors.fill: parent
+                radius: width / 2
+                color: "transparent"
+                visible: avatarImg.status === Image.Ready
+                Image {
+                    id: avatarImg
+                    anchors.fill: parent
+                    // Avatar del usuario seleccionado (vacío = sin foto → inicial).
+                    source: {
+                        const p = Config.avatarFor(GreeterState.selectedUser)
+                        return p !== "" ? "file://" + p : ""
+                    }
+                    fillMode: Image.PreserveAspectCrop
+                    asynchronous: true
+                    cache: false
+                    sourceSize.width: Math.round(parent.width * 2)
+                    sourceSize.height: Math.round(parent.height * 2)
+                }
             }
         }
         Text {

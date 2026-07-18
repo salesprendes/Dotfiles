@@ -10,6 +10,17 @@ ColumnLayout {
     property var options: []
     property var current
     signal picked(var v)
+
+    // Filtro de la ventana de Ajustes (buscador + "solo modificados").
+    // OPT-IN: sin 'skey' la fila no se filtra nunca, así el mismo componente
+    // sigue funcionando fuera de Ajustes. 'shown' es la condición propia de la
+    // página (p. ej. "solo si hay batería"), que se combina con el filtro.
+    property string skey: ""
+    property string cardTitle: ""
+    property bool shown: true
+    readonly property bool matches: SettingsFilter.accepts(
+        seg.label + " " + seg.cardTitle, seg.skey)
+    visible: seg.shown && seg.matches
     Layout.fillWidth: true
     spacing: Theme.space6
     Text {

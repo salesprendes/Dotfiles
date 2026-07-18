@@ -7,8 +7,17 @@ Singleton {
     id: root
 
     // Fondo. En despliegue, ruta legible por el usuario 'greeter'
-    // (el instalador copia tu wallpaper a /etc/greetd/wall.png).
+    // (el instalador copia el fondo de pantalla a /etc/greetd/wall.png).
     readonly property string wallpaper: "/etc/greetd/wall.png"
+
+    // Avatares por usuario, en el estándar de AccountsService (compatible con
+    // GDM y SDDM): /var/lib/AccountsService/icons/<usuario>, legible por el
+    // usuario 'greeter'. Se publica desde Ajustes → Shell → Avatar → "Aplicar
+    // al inicio de sesión". Si no existe, cae a la inicial.
+    readonly property string avatarDir: "/var/lib/AccountsService/icons"
+    function avatarFor(user) {
+        return (user && user !== "") ? avatarDir + "/" + user : ""
+    }
 
     // Sesión por defecto: el lanzador OFICIAL de Hyprland (watchdog), no
     // "Hyprland" pelado. Así heredas tu entorno y no salta el aviso

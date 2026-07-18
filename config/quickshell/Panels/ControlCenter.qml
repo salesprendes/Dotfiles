@@ -234,6 +234,7 @@ Popout {
                 onExpand: cc.expanded = (cc.expanded === "bt" ? "" : "bt")
             }
         }
+
         // Detalle en línea de la fila 1 (se despliega animando su altura).
         ExpandableDetail {
             open: cc.expanded === "wifi" || cc.expanded === "bt"
@@ -302,10 +303,10 @@ Popout {
                 Layout.fillWidth: true
                 icon: "󰅶"   // taza de café
                 title: I18n.tr("Caffeine")
-                subtitle: Globals.caffeine ? I18n.tr("Stays awake") : I18n.tr("Disabled")
-                active: Globals.caffeine
+                subtitle: Settings.caffeine ? I18n.tr("Stays awake") : I18n.tr("Disabled")
+                active: Settings.caffeine
                 accent: Theme.accent
-                onToggled: Globals.caffeine = !Globals.caffeine
+                onToggled: Settings.caffeine = !Settings.caffeine
             }
         }
         // Detalle en línea del perfil de energía (selector desplegable).

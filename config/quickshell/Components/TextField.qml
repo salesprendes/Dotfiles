@@ -12,6 +12,15 @@ ColumnLayout {
 
     property string label: ""
     property string placeholder: ""
+
+    // Filtro de la ventana de Ajustes (ver Config/SettingsFilter.qml). OPT-IN:
+    // sin 'skey' la fila no se filtra, así el campo sigue sirviendo fuera.
+    property string skey: ""
+    property string cardTitle: ""
+    property bool shown: true
+    readonly property bool matches: SettingsFilter.accepts(
+        field.label + " " + field.placeholder + " " + field.cardTitle, field.skey)
+    visible: field.shown && field.matches
     property string leftIcon: ""
     property string value: ""
     property bool   password: false

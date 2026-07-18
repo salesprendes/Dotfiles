@@ -1,7 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
 import Quickshell
-import Quickshell.Wayland
 import qs.Bar
 import qs.Config
 
@@ -19,9 +18,8 @@ PanelWindow {
         right: true
     }
 
-    // Deja un margen alrededor para el efecto "flotante".
     margins {
-        top: Theme.barMargin
+        top: Theme.barTopMargin
         left: Theme.barMargin
         right: Theme.barMargin
     }
@@ -30,13 +28,7 @@ PanelWindow {
     color: "transparent"
 
     // Reserva el espacio justo de la barra + su margen.
-    exclusiveZone: Theme.barHeight + Theme.barMargin
-
-    // Cafeína: inhibe el idle del compositor mientras esté activo. Anclado a esta ventana.
-    IdleInhibitor {
-        window: bar
-        enabled: Globals.caffeine
-    }
+    exclusiveZone: Theme.barHeight + Theme.barTopMargin
 
     // Fondo de la barra
     Rectangle {

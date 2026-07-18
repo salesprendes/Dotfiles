@@ -3,6 +3,7 @@ import QtQuick.Layouts
 import Quickshell
 import qs.Components
 import qs.Config
+import qs.Services
 
 Popout {
     id: launcher
@@ -13,31 +14,16 @@ Popout {
     shown: Globals.launcherOpen
 
     property string search: ""
-    property var allEntries: []
     property var apps: []
     property int selectedIndex: 0
     // Acciones de sesión del pie + etiqueta de la que está bajo el cursor.
     property bool powerOpen: false
     property string hoverAction: ""
 
-    function rebuildApps() {
-        allEntries = (DesktopEntries.applications?.values ?? [])
-            .filter(a => !(a.noDisplay ?? false))
-            .sort((x, y) => (x.name || "").localeCompare(y.name || ""))
-            .map(a => ({ entry: a, searchText: searchableText(a) }))
-        applySearch()
-    }
-
-    function searchableText(entry) {
-        const kw = Array.isArray(entry.keywords) ? entry.keywords.join(" ")
-                 : (typeof entry.keywords === "string" ? entry.keywords : "")
-        return ((entry.name || "") + " " + (entry.genericName || "") + " "
-              + (entry.comment || "") + " " + kw).toLowerCase()
-    }
-
     function applySearch() {
         const q = search.trim().toLowerCase()
-        apps = q === "" ? allEntries : allEntries.filter(a => a.searchText.includes(q))
+        const catalog = AppCatalog.entries
+        apps = q === "" ? catalog : catalog.filter(a => a.searchText.includes(q))
         selectedIndex = apps.length > 0 ? Math.min(selectedIndex, apps.length - 1) : -1
         appList.currentIndex = selectedIndex
     }
@@ -48,21 +34,16 @@ Popout {
             searchInput.text = ""
             powerOpen = false
             hoverAction = ""
-            if (allEntries.length === 0)
-                rebuildApps()
-            else
-                apps = allEntries
+            apps = AppCatalog.entries
             focusTimer.restart()
         }
     }
 
     onSearchChanged: searchTimer.restart()
 
-    Component.onCompleted: rebuildApps()
-
     Connections {
-        target: DesktopEntries
-        function onApplicationsChanged() { launcher.rebuildApps() }
+        target: AppCatalog
+        function onEntriesChanged() { launcher.applySearch() }
     }
 
     Timer {

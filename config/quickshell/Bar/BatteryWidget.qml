@@ -31,7 +31,7 @@ Pill {
              : ""
         color: root.charging ? Theme.cyan : root.levelColor
         font.family: Theme.fontFamily
-        font.pixelSize: Theme.iconSize
+        font.pixelSize: Theme.barIconSize
     }
     Text {
         text: root.percent + "%"

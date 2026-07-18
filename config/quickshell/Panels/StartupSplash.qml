@@ -106,7 +106,7 @@ PanelWindow {
         // Fondo del splash: en modo claro usa el mismo color que la barra
         // (Theme.barBg); con cristal ese barBg ya trae la transparencia, así
         // que la aplica sola. En oscuro no-cristal, fondo casi opaco.
-        color: (Theme.glass || !Theme.isDark) ? Theme.barBg
+        color: !Theme.isDark ? Theme.barBg
                                               : Theme.withAlpha(Theme.bg, 0.96)
         opacity: splash.shown ? 1 : 0
         Behavior on opacity {

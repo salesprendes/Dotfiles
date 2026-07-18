@@ -24,42 +24,13 @@ PanelWindow {
     property bool alignLeft: false        // ancla la tarjeta a la izquierda
     property bool alignCenter: false      // centra la tarjeta horizontalmente
     property bool scrollable: false
+    // Un unico escalar 0→1 mueve todo. La tarjeta se despliega
+    // desde el borde anclado (la barra, arriba) recortando su contenido, en vez
+    // de escalarse y fundirse. El contenido no se deforma ni se desplaza: se va
+    // descubriendo, y funde con retardo (ver Theme.revealOpacity).
     property real openProgress: 0
-    readonly property string animationStyle: Settings.panelAnimationStyle
-    readonly property bool fluentAnimation: animationStyle === "fluent"
-    readonly property bool dynamicAnimation: animationStyle === "dynamic"
-    readonly property real enterDurationFactor: fluentAnimation ? 0.95 : dynamicAnimation ? 1.2 : 1.08
-    readonly property real exitDurationFactor: fluentAnimation ? 0.72 : dynamicAnimation ? 0.9 : 0.86
-    readonly property int openAnimDuration: Math.round(Settings.popoutAnimationMs * enterDurationFactor)
-    readonly property int closeAnimDuration: Math.round(Settings.popoutAnimationMs * exitDurationFactor)
-    readonly property string motionEffect: Settings.panelMotionEffect
-    readonly property bool directionalMotion: motionEffect === "directional"
-    readonly property bool depthMotion: motionEffect === "depth"
-    readonly property real panelMotionOffset: directionalMotion ? Theme.dp(190)
-                                      : depthMotion ? Theme.dp(82)
-                                      : Theme.dp(28)
-    readonly property real panelClosedScale: directionalMotion ? 1.0
-                                      : depthMotion ? 0.82
-                                      : 0.94
-    readonly property real panelScale: panelClosedScale + (1.0 - panelClosedScale) * openProgress
-    readonly property real panelOffsetY: {
-        if (directionalMotion || depthMotion)
-            return -panelMotionOffset * (1 - openProgress)
-        return panelMotionOffset * (1 - openProgress)
-    }
-    readonly property var materialEnterCurve: [0.34, 1.14, 0.22, 1.0, 1.0, 1.0]
-    readonly property var fluentEnterCurve: [0.0, 0.0, 0.0, 1.0, 1.0, 1.0]
-    readonly property var dynamicEnterCurve: [0.28, 1.72, 0.18, 1.0, 1.0, 1.0]
-    readonly property var emphasizedExitCurve: [0.05, 0.0, 0.133333, 0.06, 0.166667, 0.40, 0.208333, 0.82, 0.25, 1.0, 1.0, 1.0]
-    readonly property var fluentExitCurve: [0.2, 0.0, 0.0, 1.0, 1.0, 1.0]
-    readonly property var directionalExitCurve: [0.3, 0.0, 0.8, 0.15, 1.0, 1.0]
-    readonly property var panelEnterCurve: dynamicAnimation ? dynamicEnterCurve
-                                           : fluentAnimation ? fluentEnterCurve
-                                           : directionalMotion ? fluentEnterCurve
-                                           : materialEnterCurve
-    readonly property var panelExitCurve: directionalMotion && (fluentAnimation || dynamicAnimation) ? directionalExitCurve
-                                          : fluentAnimation ? fluentExitCurve
-                                          : emphasizedExitCurve
+    readonly property int openAnimDuration: Settings.popoutAnimationMs
+    readonly property int closeAnimDuration: Settings.popoutAnimationMs
     default property alias content: col.data
 
     // Solo en el monitor con foco.
@@ -112,8 +83,7 @@ PanelWindow {
         from: 0
         to: 1
         duration: win.openAnimDuration
-        easing.type: Easing.BezierSpline
-        easing.bezierCurve: win.panelEnterCurve
+        easing.type: Theme.enterEasing
     }
 
     NumberAnimation {
@@ -122,8 +92,7 @@ PanelWindow {
         property: "openProgress"
         to: 0
         duration: win.closeAnimDuration
-        easing.type: Easing.BezierSpline
-        easing.bezierCurve: win.panelExitCurve
+        easing.type: Theme.exitEasing
     }
 
     // Fondo: click fuera cierra.
@@ -144,7 +113,13 @@ PanelWindow {
         anchors.right: (!win.alignCenter && !win.alignLeft) ? parent.right : undefined
         anchors.leftMargin: Theme.barMargin
         anchors.rightMargin: Theme.barMargin
-        height: Math.min(win.cardMaxHeight, col.implicitHeight + Theme.space16 * 2)
+
+        // Altura en reposo. La tarjeta se despliega hasta aquí desde el borde
+        // anclado (arriba, bajo la barra): 'height' es el recorte del barrido.
+        readonly property int fullHeight: Math.min(win.cardMaxHeight,
+                                                   col.implicitHeight + Theme.space16 * 2)
+        height: Math.round(fullHeight * win.openProgress)
+
         radius: Theme.barRadius + 2
         color: Theme.popupBg
         border.width: Theme.hairline
@@ -157,19 +132,6 @@ PanelWindow {
         // consumido burbujea hasta aquí.
         focus: true
         Keys.onEscapePressed: Globals.closeAll()
-        opacity: win.directionalMotion ? 1 : win.openProgress
-        scale: win.panelScale
-        transformOrigin: Item.Top
-
-        // Renderiza la tarjeta a una textura (FBO) mientras es visible y escala esa
-        // textura, en vez de re-rasterizar el hairline y las esquinas redondeadas en
-        // cada frame del escalado (eso hacía parpadear el contorno). Activa toda la vida
-        // visible, sin conmutar a mitad de animación. En reposo scale=1 y geometría
-        // entera: muestreo 1:1, nítido.
-        layer.enabled: win.visible
-        layer.smooth: true
-
-        transform: Translate { y: win.panelOffsetY }
 
         // Absorbe clicks para que no cierre.
         MouseArea {
@@ -177,25 +139,36 @@ PanelWindow {
             enabled: win.openProgress > 0.92
         }
 
-        // Contenedor desplazable. Con 'scrollable' activo y contenido más alto que la
-        // tarjeta (topada en cardMaxHeight), desplaza en vez de recortar: lo de abajo
-        // nunca desaparece. Sin 'scrollable' queda no interactivo y el scroll interno
-        // propio del panel sigue funcionando.
-        Flickable {
-            id: flick
-            anchors.fill: parent
-            anchors.margins: Theme.space16
-            contentWidth: width
-            contentHeight: col.implicitHeight
-            clip: true
-            interactive: win.scrollable && contentHeight > height + 0.5
-            boundsBehavior: Flickable.StopAtBounds
-            flickDeceleration: 6000
+        // Contenido a altura COMPLETA y anclado arriba, aunque la tarjeta aún
+        // no haya terminado de desplegarse: así el recorte lo va descubriendo
+        // sin comprimirlo ni arrastrarlo (si el contenido siguiera a la altura
+        // animada, el layout se recalcularía en cada frame y el texto bailaría).
+        Item {
+            id: contentHost
+            width: card.width
+            height: card.fullHeight
+            opacity: Theme.revealOpacity(win.openProgress)
 
-            ColumnLayout {
-                id: col
-                width: flick.width
-                spacing: Theme.space12
+            // Contenedor desplazable. Con 'scrollable' activo y contenido más alto que la
+            // tarjeta (topada en cardMaxHeight), desplaza en vez de recortar: lo de abajo
+            // nunca desaparece. Sin 'scrollable' queda no interactivo y el scroll interno
+            // propio del panel sigue funcionando.
+            Flickable {
+                id: flick
+                anchors.fill: parent
+                anchors.margins: Theme.space16
+                contentWidth: width
+                contentHeight: col.implicitHeight
+                clip: true
+                interactive: win.scrollable && contentHeight > height + 0.5
+                boundsBehavior: Flickable.StopAtBounds
+                flickDeceleration: 6000
+
+                ColumnLayout {
+                    id: col
+                    width: flick.width
+                    spacing: Theme.space12
+                }
             }
         }
     }

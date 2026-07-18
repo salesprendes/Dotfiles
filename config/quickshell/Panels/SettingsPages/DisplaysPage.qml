@@ -10,7 +10,7 @@ ColumnLayout {
     // Orden / alineación (con 2+ monitores).
     SettingsCard {
         title: I18n.tr("Arrangement"); glyph: "󰍹"
-        visible: Displays.monitors.length > 1
+        shown: Displays.monitors.length > 1
         MonitorArrangement { Layout.fillWidth: true }
     }
 

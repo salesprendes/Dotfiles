@@ -12,8 +12,19 @@ ColumnLayout {
     property real to: 1
     property real value: 0
     // Color de la pista.
-    property color trackColor: Qt.rgba(Theme.surface.r, Theme.surface.g, Theme.surface.b, 0.86)
+    property color trackColor: Theme.sliderTrack
     signal moved(real v)
+
+    // Filtro de la ventana de Ajustes (buscador + "solo modificados").
+    // OPT-IN: sin 'skey' la fila no se filtra nunca, así el mismo componente
+    // sigue funcionando fuera de Ajustes. 'shown' es la condición propia de la
+    // página (p. ej. "solo si hay batería"), que se combina con el filtro.
+    property string skey: ""
+    property string cardTitle: ""
+    property bool shown: true
+    readonly property bool matches: SettingsFilter.accepts(
+        slr.label + " " + slr.cardTitle, slr.skey)
+    visible: slr.shown && slr.matches
 
     Layout.fillWidth: true
     spacing: Theme.space6

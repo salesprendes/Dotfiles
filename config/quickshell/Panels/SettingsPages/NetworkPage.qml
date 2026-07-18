@@ -13,11 +13,13 @@ ColumnLayout {
     SettingsCard {
         title: I18n.tr("Interface"); glyph: "󰛳"
         SwitchRow {
+            skey: "@wifi"
             label: I18n.tr("WiFi")
             checked: Net.wifiEnabled
             onToggled: Net.toggleWifi()
         }
         DropdownRow {
+            skey: "@interface"
             label: I18n.tr("Interface")
             options: NetConfig.interfaces.map(i => ({
                 text: i.device + " · " + (i.type === "wifi" ? I18n.tr("WiFi") : I18n.tr("Ethernet"))
@@ -34,13 +36,15 @@ ColumnLayout {
             font.family: Theme.fontFamily; font.pixelSize: Theme.fontSize - 2
         }
         SwitchRow {
-            visible: NetConfig.hasConn
+            skey: "@connect-automatically"
+            shown: NetConfig.hasConn
             label: I18n.tr("Connect automatically")
             checked: NetConfig.autoconnect
             onToggled: NetConfig.autoconnect = !NetConfig.autoconnect
         }
         SliderRow {
-            visible: NetConfig.hasConn
+            skey: "@priority"
+            shown: NetConfig.hasConn
             label: I18n.tr("Priority"); glyph: "󰓅"
             from: -100; to: 100; value: NetConfig.priority
             valueText: NetConfig.priority
@@ -50,9 +54,10 @@ ColumnLayout {
 
     // IPv4 + DNS.
     SettingsCard {
-        visible: NetConfig.hasConn
+        shown: NetConfig.hasConn
         title: "IPv4"; glyph: "󰩟"
         SegRow {
+            skey: "@method"
             label: I18n.tr("Method")
             options: [ { text: I18n.tr("Automatic (DHCP)"), value: "auto" },
                        { text: I18n.tr("Manual (static)"), value: "manual" } ]
@@ -60,27 +65,31 @@ ColumnLayout {
             onPicked: (v) => NetConfig.ip4method = v
         }
         TextField {
-            visible: NetConfig.ip4method === "manual"; Layout.fillWidth: true
+            skey: "@ip-address"
+            shown: NetConfig.ip4method === "manual"; Layout.fillWidth: true
             label: I18n.tr("IP address"); placeholder: "192.168.1.50"
             value: NetConfig.ip4addr
             invalid: NetConfig.ip4addr !== "" && !NetConfig.validIp(NetConfig.ip4addr)
             onEdited: (t) => NetConfig.ip4addr = t
         }
         TextField {
-            visible: NetConfig.ip4method === "manual"; Layout.fillWidth: true
+            skey: "@subnet-mask"
+            shown: NetConfig.ip4method === "manual"; Layout.fillWidth: true
             label: I18n.tr("Subnet mask"); placeholder: "255.255.255.0"
             value: NetConfig.ip4mask
             invalid: NetConfig.ip4mask !== "" && NetConfig.maskToPrefix(NetConfig.ip4mask) < 0
             onEdited: (t) => NetConfig.ip4mask = t
         }
         TextField {
-            visible: NetConfig.ip4method === "manual"; Layout.fillWidth: true
+            skey: "@gateway"
+            shown: NetConfig.ip4method === "manual"; Layout.fillWidth: true
             label: I18n.tr("Gateway"); placeholder: "192.168.1.1"
             value: NetConfig.ip4gw
             invalid: NetConfig.ip4gw !== "" && !NetConfig.validIp(NetConfig.ip4gw)
             onEdited: (t) => NetConfig.ip4gw = t
         }
         TextField {
+            skey: "@textfield"
             Layout.fillWidth: true
             label: "DNS"; placeholder: "1.1.1.1, 8.8.8.8"
             value: NetConfig.ip4dns
@@ -90,9 +99,10 @@ ColumnLayout {
 
     // IPv6.
     SettingsCard {
-        visible: NetConfig.hasConn
+        shown: NetConfig.hasConn
         title: "IPv6"; glyph: "󰩟"
         SegRow {
+            skey: "@method"
             label: I18n.tr("Method")
             options: [ { text: I18n.tr("Automatic (DHCP)"), value: "auto" },
                        { text: I18n.tr("Disabled"), value: "disabled" },
@@ -104,9 +114,10 @@ ColumnLayout {
 
     // Privacidad / avanzado.
     SettingsCard {
-        visible: NetConfig.hasConn
+        shown: NetConfig.hasConn
         title: I18n.tr("Privacy and advanced"); glyph: "󰒃"
         DropdownRow {
+            skey: "@mac-address"
             label: I18n.tr("MAC address")
             options: [ { text: I18n.tr("Default"), value: "default" },
                        { text: I18n.tr("Random"), value: "random" },
@@ -115,6 +126,7 @@ ColumnLayout {
             onPicked: (v) => NetConfig.mac = v
         }
         TextField {
+            skey: "@textfield"
             Layout.fillWidth: true
             label: "MTU"; placeholder: I18n.tr("Automatic")
             value: NetConfig.mtu

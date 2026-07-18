@@ -1,6 +1,7 @@
 //  PASO 1 · Selector de usuario (teclado ↑/↓/Tab/Enter + ratón).
 import QtQuick
 import Quickshell
+import Quickshell.Widgets
 import qs.Modules.Greeter
 
 FocusScope {
@@ -62,13 +63,35 @@ FocusScope {
                         color: Theme.alpha(Theme.accent, urow.active ? 0.22 : 0.14)
                         border.width: 1
                         border.color: Theme.alpha(Theme.accent, 0.5)
+                        // Inicial de fondo; si este usuario tiene avatar propio
+                        // en AccountsService, se pinta encima recortado.
                         Text {
                             anchors.centerIn: parent
+                            visible: rowAvatar.status !== Image.Ready
                             text: (urow.modelData.full || urow.modelData.name).charAt(0).toUpperCase()
                             color: Theme.accent
                             font.family: Theme.font
                             font.pixelSize: Theme.sp(16)
                             font.bold: true
+                        }
+                        ClippingRectangle {
+                            anchors.fill: parent
+                            radius: width / 2
+                            color: "transparent"
+                            visible: rowAvatar.status === Image.Ready
+                            Image {
+                                id: rowAvatar
+                                anchors.fill: parent
+                                source: {
+                                    const p = Config.avatarFor(urow.modelData.name)
+                                    return p !== "" ? "file://" + p : ""
+                                }
+                                fillMode: Image.PreserveAspectCrop
+                                asynchronous: true
+                                cache: false
+                                sourceSize.width: Math.round(parent.width * 2)
+                                sourceSize.height: Math.round(parent.height * 2)
+                            }
                         }
                     }
                     Column {

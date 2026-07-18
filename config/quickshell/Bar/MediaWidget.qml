@@ -31,7 +31,7 @@ Pill {
         id: eq
         Layout.alignment: Qt.AlignVCenter
         implicitWidth: Theme.dp(16)
-        implicitHeight: Theme.iconSize
+        implicitHeight: Theme.barIconSize
 
         property int tick: 0
         Timer {
@@ -53,7 +53,7 @@ Pill {
                     radius: width / 2
                     color: root.playing ? Theme.accent : Theme.fgMuted
                     anchors.verticalCenter: parent.verticalCenter
-                    readonly property real maxH: Theme.iconSize
+                    readonly property real maxH: Theme.barIconSize
                     readonly property real minH: Theme.dp(3)
                     // Dos senos desfasados por barra: movimiento que no se ve
                     // periódico, sin gastar Math.random en cada tick.
@@ -74,8 +74,8 @@ Pill {
         property string glyph: ""
         property bool can: true
         signal tapped()
-        implicitWidth: Theme.iconSize + Theme.space4
-        implicitHeight: Theme.iconSize + Theme.space4
+        implicitWidth: Theme.barIconSize + Theme.space4
+        implicitHeight: Theme.barIconSize + Theme.space4
         Layout.alignment: Qt.AlignVCenter
 
         Text {
@@ -84,7 +84,7 @@ Pill {
             color: cma.containsMouse && cbtn.can ? Theme.accent : Theme.fgDim
             opacity: cbtn.can ? 1 : 0.4
             font.family: Theme.fontFamily
-            font.pixelSize: Theme.iconSize
+            font.pixelSize: Theme.barIconSize
             Behavior on color { ColorAnimation { duration: Theme.animFast } }
         }
         MouseArea {

@@ -24,7 +24,8 @@ PanelWindow {
     visible: activePopupCount > 0 && Settings.notifPopupsEnabled && Globals.openPanel === ""
     color: "transparent"
     exclusionMode: ExclusionMode.Ignore
-    implicitWidth: Theme.panelWidth(screen, 410, 320, 0.94)
+    // 360 px de ancho de tarjeta.
+    implicitWidth: Theme.panelWidth(screen, 360, 300, 0.94)
     // Altura con marca de agua: mientras haya popups vivos la superficie solo
     // crece; se recompacta al ocultarse. Encogerla en caliente dejaba una
     // banda gris en el hueco de la tarjeta saliente: Hyprland no recalcula la
@@ -56,26 +57,19 @@ PanelWindow {
     // Posición configurable: tr | tl | br | bl.
     readonly property string pos: Settings.notifPosition
 
-    // Animación de popup: desplazamiento lateral, fundido corto y reacomodo
-    // estable. La altura reservada evita que la primera notificación de una
-    // nueva tanda nazca recortada por el primer cálculo de layout.
+    // La tarjeta NO se desliza ni se escala; se
+    // descubre con un barrido de recorte desde el borde de la pantalla al que
+    // está anclada, mientras su contenido funde con retardo y se contra-desplaza
+    // 12 px. La altura reservada evita que la primera notificación de una nueva
+    // tanda nazca recortada por el primer cálculo de layout.
     readonly property int  reservedStackHeight: Theme.dp(190)
-    // Entrada larga con aterrizaje suave. El fundido termina antes que el
-    // movimiento para que la tarjeta sea legible mientras aún se desliza.
-    readonly property int  enterDuration: Theme.animNormal <= 0 ? 0 : 380
-    readonly property int  enterFadeDuration: Theme.animNormal <= 0 ? 0 : 240
-    readonly property int  exitDuration:  Theme.animNormal <= 0 ? 0 : 240
-    // Reacomodo de la pila con la misma deceleración que la entrada: las
-    // tarjetas restantes "flotan" a su sitio en vez de dar un tirón corto.
-    readonly property int  reflowDuration: Theme.animNormal <= 0 ? 0 : 300
-    readonly property real enterOffset: (pos.charAt(1) === "l" ? -1 : 1) * Theme.dp(44)
-    readonly property real exitOffset:  (pos.charAt(1) === "l" ? -1 : 1) * Theme.dp(48)
-    readonly property var  enterCurve:  [0.05, 0.7, 0.1, 1.0, 1.0, 1.0]
-    // Salida acelerada: la tarjeta "se marcha" ganando velocidad, en vez de
-    // frenar a mitad de camino.
-    readonly property var  exitCurve:   [0.3, 0.0, 0.8, 0.15, 1.0, 1.0]
-    readonly property var  reflowCurve: [0.05, 0.7, 0.1, 1.0, 1.0, 1.0]
-    readonly property real collapsedScale: 0.972
+    readonly property int  enterDuration:  Theme.animNormal
+    readonly property int  exitDuration:   Theme.animNormal
+    readonly property int  reflowDuration: Theme.animNormal
+    // Hacia qué lado barre: el del borde al que está anclada la pila.
+    readonly property bool fromRight: pos.charAt(1) === "r"
+    readonly property int  contentSlide: Theme.dp(12)   // kContentSlideOffset
+    readonly property int  gap: Theme.dp(8)             // kGap
     anchors {
         top: pos.charAt(0) === "t"
         bottom: pos.charAt(0) === "b"
@@ -129,31 +123,38 @@ PanelWindow {
         notificationsByKey = ({})
     }
 
-    // Cierre en dos tiempos dentro del delegate: la tarjeta se desvanece en su
-    // sitio y luego su hueco se colapsa, así las de debajo suben siguiéndolo sin
-    // cruzarse con una capa fantasma. Solo al final se retira del modelo.
+    // Al descartar se quita del modelo INMEDIATAMENTE: el ListView mantiene vivo
+    // el delegate mientras corre su transición 'remove' (la tarjeta se repliega)
+    // y a la vez desplaza las de debajo con 'removeDisplaced'. Antes se animaba
+    // la ALTURA de la fila hasta 0 para colapsar el hueco: eso rompía el binding
+    // height→implicitHeight y descolocaba las posiciones que el ListView tiene
+    // cacheadas, dejando un hueco de más entre la primera y la segunda tarjeta.
+    // La notificación en sí se olvida (_forgetQueue/forgetTimer) cuando la
+    // transición de salida ha terminado: el delegate sigue vivo hasta
+    // entonces y necesita seguir leyéndola para pintarse mientras se repliega.
     function removeKey(key) {
         for (let i = 0; i < popupModel.count; i++) {
             if (popupModel.get(i).key === key) {
-                const item = list.itemAtIndex(i)
-                if (item) item.beginExit()
-                else finishRemove(key)
+                popupModel.remove(i)
+                activePopupCount = Math.max(0, activePopupCount - 1)
+                _forgetQueue.push(key)
+                forgetTimer.restart()
                 return
             }
         }
     }
 
-    function finishRemove(key) {
-        for (let i = 0; i < popupModel.count; i++) {
-            if (popupModel.get(i).key === key) {
-                popupModel.remove(i)
-                break
-            }
+    property var _forgetQueue: []
+    Timer {
+        id: forgetTimer
+        interval: popups.exitDuration + 120
+        onTriggered: {
+            const map = Object.assign({}, popups.notificationsByKey)
+            for (const k of popups._forgetQueue)
+                delete map[k]
+            popups.notificationsByKey = map
+            popups._forgetQueue = []
         }
-        const map = Object.assign({}, notificationsByKey)
-        delete map[key]
-        notificationsByKey = map
-        activePopupCount = Math.max(0, activePopupCount - 1)
     }
 
     // Alto útil de pantalla para la pila (descontando los márgenes de barra).
@@ -200,9 +201,8 @@ PanelWindow {
         y: popups.pos.charAt(0) === "b" ? Math.max(0, parent.height - height) : 0
         interactive: false
         clip: false
-        // El hueco entre tarjetas vive DENTRO de cada delegate (no en
-        // spacing): al colapsar la altura en el cierre se lleva también su
-        // separación y las siguientes aterrizan exactamente en su sitio.
+        // El hueco entre tarjetas va dentro de cada delegate (implicitHeight =
+        // tarjeta + gap), no en 'spacing'.
         spacing: 0
         model: popupModel
         // Según la posición: arriba → la nueva encima; abajo → la nueva debajo.
@@ -212,11 +212,30 @@ PanelWindow {
         // tardíos (imágenes/cuerpos que se expanden al medirse).
         onContentHeightChanged: popups.enforceStackHeight()
 
-        // Reacomodo de los delegates cuando entra o sale un item. Solo cambia
-        // la coordenada Y para evitar reajustes de altura en cada frame.
+        // Transiciones NATIVAS del ListView. La altura del delegate no se toca
+        // nunca (era la causa del hueco de más): sólo se anima 'reveal' —el
+        // barrido— y la 'y' de las que se recolocan. Al entrar una tarjeta, las
+        // de debajo bajan; al salir, suben para cerrar el hueco mientras la que
+        // se va se repliega encima.
+        add: Transition {
+            NumberAnimation { property: "reveal"; from: 0; to: 1
+                duration: popups.enterDuration; easing.type: Theme.enterEasing }
+        }
+        addDisplaced: Transition {
+            NumberAnimation { properties: "y"; duration: popups.reflowDuration
+                easing.type: Theme.reflowEasing }
+        }
+        remove: Transition {
+            NumberAnimation { property: "reveal"; to: 0
+                duration: popups.exitDuration; easing.type: Theme.reflowEasing }
+        }
+        removeDisplaced: Transition {
+            NumberAnimation { properties: "y"; duration: popups.reflowDuration
+                easing.type: Theme.reflowEasing }
+        }
         displaced: Transition {
             NumberAnimation { properties: "y"; duration: popups.reflowDuration
-                easing.type: Easing.BezierSpline; easing.bezierCurve: popups.reflowCurve }
+                easing.type: Theme.reflowEasing }
         }
 
         delegate: Item {
@@ -225,83 +244,67 @@ PanelWindow {
             readonly property var notification: popups.notificationFor(key)
 
             width: ListView.view.width
-            implicitHeight: card.implicitHeight + Theme.space8
+            implicitHeight: card.implicitHeight + popups.gap
             height: implicitHeight
             clip: false
 
-            property bool exiting: false
-            function beginExit() {
-                if (exiting)
-                    return
-                exiting = true
-                exitAnim.start()
-            }
+            // Escalar único del movimiento: de él salen recorte, contra-posición
+            // y opacidad del contenido. Lo animan las transiciones del ListView.
+            property real reveal: 0
+            // Cuenta atrás del timeout, 1 → 0. Alimenta la barra de la tarjeta.
+            property real progress: 1
 
-            SequentialAnimation {
-                id: exitAnim
-                ParallelAnimation {
-                    NumberAnimation { target: card; property: "opacity"; to: 0; duration: popups.exitDuration
-                        easing.type: Easing.BezierSpline; easing.bezierCurve: popups.exitCurve }
-                    NumberAnimation { target: card; property: "x"; to: popups.exitOffset; duration: popups.exitDuration
-                        easing.type: Easing.BezierSpline; easing.bezierCurve: popups.exitCurve }
-                }
-                // La tarjeta ya es invisible: colapsar ahora su hueco no
-                // deforma nada y arrastra suavemente a las de debajo.
-                NumberAnimation { target: row; property: "height"; to: 0; duration: popups.reflowDuration
-                    easing.type: Easing.BezierSpline; easing.bezierCurve: popups.reflowCurve }
-                ScriptAction { script: popups.finishRemove(row.key) }
-            }
+            // Ventana de recorte: crece desde el borde anclado. La tarjeta de
+            // dentro se contra-posiciona (x: -viewport.x) para quedarse quieta:
+            // no se desliza, se descubre.
+            Item {
+                id: viewport
+                width: Math.round(row.width * row.reveal)
+                height: card.implicitHeight
+                x: popups.fromRight ? row.width - width : 0
+                clip: true
 
-            NotificationItem {
-                id: card
-                width: parent.width
-                notif: row.notification
-                popupMode: true
-                onCloseRequested: popups.removeKey(row.key)
-
-                // Entrada del popup: desplazamiento lateral con fundido y escala sutil.
-                // No toca la altura para evitar reajustes verticales al nacer.
-                opacity: 0
-                x: popups.enterOffset
-                scale: popups.collapsedScale
-                transformOrigin: popups.pos.charAt(1) === "r" ? Item.Right : Item.Left
-                layer.enabled: opacity < 0.999 || Math.abs(x) > 0.5 || scale < 0.999
-                layer.smooth: true
-                // Diferido: arranca tras el primer pase de layout (cuando el
-                // delegate ya está medido y posicionado), evitando la carrera
-                // que hacía que la primera "saltara" abajo y volviera arriba.
-                Component.onCompleted: Qt.callLater(enterAnim.start)
-                ParallelAnimation {
-                    id: enterAnim
-                    NumberAnimation { target: card; property: "opacity"; to: 1; duration: popups.enterFadeDuration
-                        easing.type: Easing.OutCubic }
-                    NumberAnimation { target: card; property: "x"; to: 0; duration: popups.enterDuration
-                        easing.type: Easing.BezierSpline; easing.bezierCurve: popups.enterCurve }
-                    NumberAnimation { target: card; property: "scale"; to: 1; duration: popups.enterDuration
-                        easing.type: Easing.BezierSpline; easing.bezierCurve: popups.enterCurve }
+                NotificationItem {
+                    id: card
+                    width: row.width
+                    x: -viewport.x
+                    notif: row.notification
+                    popupMode: true
+                    showProgress: true
+                    progress: row.progress
+                    // El fondo se descubre opaco; sólo el contenido funde (con
+                    // retardo) y se contra-desplaza contra el sentido del barrido.
+                    contentOpacity: Theme.revealOpacity(row.reveal)
+                    contentOffsetX: popups.contentSlide * (1 - row.reveal)
+                                    * (popups.fromRight ? 1 : -1)
+                    onCloseRequested: popups.removeKey(row.key)
                 }
             }
 
-            // Pausa el auto-cierre mientras el ratón está sobre el popup. Va
-            // DEBAJO de la tarjeta (z:-1) para NO robar el hover a los botones
-            // internos (la X se pone roja gracias a su propio MouseArea); el
-            // cuerpo vacío de la tarjeta le pasa el hover por transparencia.
-            MouseArea {
-                id: hov
-                anchors.fill: parent
-                hoverEnabled: true
-                acceptedButtons: Qt.NoButton
-                z: -1
+            // Cuenta atrás lineal y en TIEMPO REAL: se excluye a propósito
+            // del multiplicador de velocidad de animaciones, porque mide
+            // segundos de verdad, no es decoración. Arranca ya, sin esperar
+            // al barrido — se lanza al crear el toast.
+            Component.onCompleted: countdown.start()
+
+            NumberAnimation {
+                id: countdown
+                target: row; property: "progress"; from: 1; to: 0
+                duration: Math.max(1000, Settings.notifTimeout * 1000)
+                easing.type: Easing.Linear
+                onFinished: popups.removeKey(row.key)
             }
 
-            Timer {
-                id: autoDismiss
-                interval: Math.max(1000, Settings.notifTimeout * 1000)
-                repeat: false
-                // Pausa sobre el cuerpo (hov) y también sobre la propia X, cuyo
-                // hover consume su MouseArea y no llegaría a hov.
-                running: !row.exiting && !hov.containsMouse && !card.closeHovered
-                onTriggered: popups.removeKey(row.key)
+            // El ratón encima pausa la cuenta atrás (y con ella la barra, que se
+            // queda congelada donde iba). HoverHandler en vez de un MouseArea
+            // por debajo: los handlers no se roban el hover entre sí, así que
+            // sigue contando como "encima" aunque el puntero esté sobre la X o
+            // sobre un botón de acción, que tienen su propio MouseArea.
+            HoverHandler { id: hov }
+            readonly property bool hovered: hov.hovered
+            onHoveredChanged: {
+                if (row.hovered) countdown.pause()
+                else             countdown.resume()
             }
         }
     }

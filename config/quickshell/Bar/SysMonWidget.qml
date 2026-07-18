@@ -14,7 +14,7 @@ Pill {
         text: "󰻠"   // cpu
         color: Theme.accent
         font.family: Theme.fontFamily
-        font.pixelSize: Theme.iconSize
+        font.pixelSize: Theme.barIconSize
     }
     Text {
         text: Math.round(SysMon.cpu) + "%"
@@ -27,7 +27,7 @@ Pill {
         text: "󰍛"   // ram
         color: Theme.accent
         font.family: Theme.fontFamily
-        font.pixelSize: Theme.iconSize
+        font.pixelSize: Theme.barIconSize
     }
     Text {
         text: Math.round(SysMon.memPercent) + "%"

@@ -21,7 +21,7 @@ Pill {
         text: "󰅐"
         color: Globals.dashboardOpen ? Theme.accent2 : Theme.accent
         font.family: Theme.fontFamily
-        font.pixelSize: Theme.iconSize
+        font.pixelSize: Theme.barIconSize
         Behavior on color { ColorAnimation { duration: Theme.animFast } }
     }
     Text {

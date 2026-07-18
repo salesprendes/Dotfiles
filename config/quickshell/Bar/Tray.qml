@@ -75,8 +75,8 @@ Pill {
         delegate: Item {
             id: trayItem
             required property var modelData
-            implicitWidth: Theme.iconSize + 4
-            implicitHeight: Theme.iconSize + 4
+            implicitWidth: Theme.barIconSize + 4
+            implicitHeight: Theme.barIconSize + 4
 
             // Si el icono desaparece con su menú abierto, ciérralo para no
             // dejar el popup anclado a un item destruido.
@@ -97,11 +97,11 @@ Pill {
 
             Image {
                 anchors.centerIn: parent
-                width: Theme.iconSize
-                height: Theme.iconSize
+                width: Theme.barIconSize
+                height: Theme.barIconSize
                 source: trayItem.modelData?.icon ?? ""
-                sourceSize.width: Theme.iconSize
-                sourceSize.height: Theme.iconSize
+                sourceSize.width: Theme.barIconSize
+                sourceSize.height: Theme.barIconSize
                 smooth: true
             }
 

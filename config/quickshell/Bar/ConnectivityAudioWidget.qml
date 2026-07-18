@@ -52,7 +52,7 @@ Pill {
         text: Net.icon
         color: Net.online ? Theme.accent : Theme.fgMuted
         font.family: Theme.fontFamily
-        font.pixelSize: Theme.iconSize
+        font.pixelSize: Theme.barIconSize
     }
 
     Text {
@@ -60,7 +60,7 @@ Pill {
         text: BT.icon
         color: BT.enabled ? Theme.accent : Theme.fgMuted
         font.family: Theme.fontFamily
-        font.pixelSize: Theme.iconSize
+        font.pixelSize: Theme.barIconSize
     }
 
     Text {
@@ -72,6 +72,6 @@ Pill {
              : "󰕾"
         color: root.audio && !root.muted && root.volume > 0 ? Theme.accent : Theme.fgMuted
         font.family: Theme.fontFamily
-        font.pixelSize: Theme.iconSize
+        font.pixelSize: Theme.barIconSize
     }
 }

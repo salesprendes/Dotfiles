@@ -708,6 +708,7 @@ Popout {
                 cacheBuffer: cellHeight * 2
                 clip: true
                 model: Wallpaper.list
+                reuseItems: true
                 boundsBehavior: Flickable.StopAtBounds
 
                 delegate: Item {

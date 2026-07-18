@@ -11,6 +11,17 @@ ColumnLayout {
     property color current: Theme.accent
     property string currentName: ""
     signal picked(var c)
+
+    // Filtro de la ventana de Ajustes (buscador + "solo modificados").
+    // OPT-IN: sin 'skey' la fila no se filtra nunca, así el mismo componente
+    // sigue funcionando fuera de Ajustes. 'shown' es la condición propia de la
+    // página (p. ej. "solo si hay batería"), que se combina con el filtro.
+    property string skey: ""
+    property string cardTitle: ""
+    property bool shown: true
+    readonly property bool matches: SettingsFilter.accepts(
+        cr.label + " " + cr.cardTitle, cr.skey)
+    visible: cr.shown && cr.matches
     Layout.fillWidth: true
     spacing: Theme.space6
 

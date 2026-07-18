@@ -21,10 +21,17 @@ Singleton {
     property bool clearingAll: false
     property var _clearQueue: []
 
-    // Marca temporal de llegada por notificación (para "hace X min").
-    // WeakMap: al descartarse la notificación su entrada se libera sola
-    // (un Map normal retendría cada notificación de toda la sesión).
-    property var _arrival: new WeakMap()
+    // Marca temporal de llegada por notificación (para "hace X min"), indexada
+    // por notif.id.
+    //
+    // No usar un WeakMap con las notificaciones como clave: son QObjects de
+    // C++, y cuando uno se destruye (descarte/expiración) su wrapper JS puede
+    // colectarse mientras la clave sigue en la tabla interna del WeakMap. La
+    // siguiente escritura recorre esas claves comparándolas (sameValueZero) y
+    // desreferencia la muerta → segfault dentro del handler de onNotification.
+    // La clave es un uint, así que no retiene nada; _pruneArrival() evita que
+    // el mapa crezca sin límite.
+    property var _arrival: ({})
     property int nowTick: 0
     // El tick solo late con el centro de notificaciones abierto: los "hace X
     // min" no se ven en otro sitio (los popups viven segundos y nacen como
@@ -38,13 +45,27 @@ Singleton {
     }
 
     // Las notificaciones que sobreviven a una recarga (keepOnReload) pierden
-    // su marca de llegada (el WeakMap muere con cada generación): se sellan
-    // con la hora de carga, envejecen desde ahí, mejor que "ahora" perpetuo.
+    // su marca de llegada (el mapa muere con cada generación): se sellan con la
+    // hora de carga, envejecen desde ahí, mejor que "ahora" perpetuo.
     Component.onCompleted: {
         const vals = server.trackedNotifications.values
+        const now = Date.now()
         for (let i = 0; i < vals.length; i++)
-            if (!_arrival.has(vals[i]))
-                _arrival.set(vals[i], Date.now())
+            if (root._arrival[vals[i].id] === undefined)
+                root._arrival[vals[i].id] = now
+    }
+
+    // Descarta las marcas de las notificaciones que ya no existen. Se llama al
+    // llegar una nueva: es el único momento en que el mapa puede crecer.
+    function _pruneArrival() {
+        const vals = server.trackedNotifications.values
+        const alive = ({})
+        for (let i = 0; i < vals.length; i++) {
+            const t = root._arrival[vals[i].id]
+            if (t !== undefined)
+                alive[vals[i].id] = t
+        }
+        root._arrival = alive
     }
 
     function appNameFor(n) {
@@ -80,7 +101,7 @@ Singleton {
 
     function timeText(n) {
         const _ = root.nowTick   // dependencia reactiva
-        const t = root._arrival.get(n)
+        const t = n ? root._arrival[n.id] : undefined
         if (!t) return I18n.tr("now")
         const s = Math.floor((Date.now() - t) / 1000)
         if (s < 60) return I18n.tr("now")
@@ -114,7 +135,8 @@ Singleton {
 
             // Conservar en la lista persistente del centro.
             notif.tracked = true
-            root._arrival.set(notif, Date.now())
+            root._pruneArrival()
+            root._arrival[notif.id] = Date.now()
             // Mostrar popup solo si "No molestar" está desactivado.
             if (!Globals.dnd)
                 root.posted(notif)

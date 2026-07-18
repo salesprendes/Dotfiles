@@ -1,0 +1,22 @@
+set $primary            #{{primaryStripped}}
+set $on_primary         #{{onPrimaryStripped}}
+set $secondary          #{{secondaryStripped}}
+set $on_secondary_transp #{{onSecondaryStripped}}AA
+set $tertiary           #{{tertiaryStripped}}
+set $error              #{{errorStripped}}
+set $surface            #{{surfaceStripped}}
+set $on_surface         #{{onSurfaceStripped}}
+set $on_surface_variant #{{onSurfaceVariantStripped}}
+set $outline            #{{outlineStripped}}
+
+## Window Colours
+# class                 border    backgr.   text                indicator  child_border
+client.focused          $primary  $surface  $on_surface         $primary   $primary
+client.focused_inactive $outline  $surface  $on_surface_variant $outline   $outline
+client.unfocused        $outline  $surface  $on_surface_variant $outline   $outline
+client.urgent           $error    $surface  $on_surface         $error     $error
+client.placeholder      $surface  $surface  $on_surface_variant $surface   $surface
+client.background       $surface
+
+jump_labels_color       $secondary
+jump_labels_background  $on_secondary_transp

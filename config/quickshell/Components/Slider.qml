@@ -8,7 +8,7 @@ RowLayout {
     property string icon: ""
     property real value: 0.0
     property color accent: Theme.accent
-    property color trackColor: Theme.surface
+    property color trackColor: Theme.sliderTrack
     signal moved(real v)
 
     // Al arrastrar, relleno y agarre siguen al puntero con un valor local (dragValue),

@@ -12,21 +12,21 @@ Item {
     property Component _shown: null
     onSourceComponentChanged: if (sourceComponent) _shown = sourceComponent
 
-    readonly property var enterCurve: [0.05, 0.70, 0.10, 1.0, 1.0, 1.0]   // emphasizedDecel
-    readonly property var exitCurve:  [0.30, 0.00, 0.80, 0.15, 1.0, 1.0]  // emphasizedAccel
+    // Escalar único 0→1 (ver Theme.qml): la altura hace de barrido de
+    // recorte y la opacidad se deriva del mismo valor, así entran/salen
+    // coordinados en vez de solo cortarse en seco.
+    property real reveal: wrap.open ? 1 : 0
+    Behavior on reveal {
+        NumberAnimation {
+            duration: Theme.animNormal
+            easing.type: wrap.open ? Theme.enterEasing : Theme.exitEasing
+        }
+    }
 
     Layout.fillWidth: true
     clip: true
-    Layout.preferredHeight: open ? loader.implicitHeight : 0
+    Layout.preferredHeight: loader.implicitHeight * reveal
     visible: Layout.preferredHeight > 0.5
-
-    Behavior on Layout.preferredHeight {
-        NumberAnimation {
-            duration: Theme.animNormal
-            easing.type: Easing.BezierSpline
-            easing.bezierCurve: wrap.open ? wrap.enterCurve : wrap.exitCurve
-        }
-    }
 
     Loader {
         id: loader
@@ -34,5 +34,6 @@ Item {
         // Sigue cargado mientras se está recogiendo, para animar el cierre.
         active: wrap.open || wrap.Layout.preferredHeight > 0.5
         sourceComponent: wrap.open ? wrap.sourceComponent : wrap._shown
+        opacity: Theme.revealOpacity(wrap.reveal)
     }
 }

@@ -13,11 +13,29 @@ Singleton {
     readonly property string home: Quickshell.env("HOME") ?? ""
 
     // Apariencia
-    property string themeName: "solitude"
+    property string themeName: "salesprendes"
     property string accentName: "theme"
     property color  accentColor: resolvedAccent
     property bool   darkMode: true      // false = variante clara de Solitude
-    property bool   hyprlandAvailable: false
+    // ¿Hyprland es el compositor ACTIVO ahora mismo? Vía la variable de
+    // entorno que pone al arrancar (no 'which': eso solo diría si el
+    // paquete está instalado, no si es el que corre).
+    readonly property bool hyprlandAvailable: (Quickshell.env("HYPRLAND_INSTANCE_SIGNATURE") ?? "") !== ""
+    // Interruptor maestro de Ajustes → Plantillas: pausa TODO el sistema de
+    // plantillas (GTK/Hyprland incluidos) sin tocar qué apps tenía marcadas
+    // cada uno — 'gtkThemingEnabled'/'hyprlandThemingEnabled'/
+    // 'templatesEnabled' de abajo no se tocan al pausar, así que al
+    // reactivar vuelve exactamente a lo que ya estaba.
+    property bool   templatesOn: true
+    // Tematizado GTK (ver Ajustes → Plantillas y Templates/gtk/).
+    property bool   gtkThemingEnabled: true
+    // Tematizado Hyprland (ver Ajustes → Plantillas y applyHyprlandThemeNow).
+    property bool   hyprlandThemingEnabled: true
+    // Resto de plantillas (ver Ajustes → Plantillas y Config/AppTemplates.qml):
+    // mapa id → activada/no, todas apagadas por defecto (cada plantilla se
+    // activa a mano). GTK/Hyprland quedan aparte, arriba: ya tenían su
+    // propio interruptor antes de que existiera este mecanismo.
+    property var    templatesEnabled: ({})
     property real   uiScale: 1.0
     property int    animationSpeed: 2   // 0 none | 1 short | 2 medium | 3 long | 4 custom
     property int    customAnimationDuration: 500
@@ -25,23 +43,14 @@ Singleton {
     property real   popupOpacity: 0.85
     property real   widgetOpacity: 0.55
 
-    // Opacidades propias del tema Liquid Glass, independientes de las de
-    // arriba para no pisar las de otros temas. Translúcidas pero legibles:
-    // con el blur del compositor detrás, ~0.45 se lee como cristal esmerilado.
-    property real   glassBarOpacity: 0.45
-    property real   glassPopupOpacity: 0.45
-    property real   glassWidgetOpacity: 0.35
-
-    // Opacidad efectiva según el tema activo. Theme y los sliders de Ajustes
-    // usan estas: el mismo control edita/refleja la opacidad del tema en uso
-    // (glass o no) sin mezclar valores entre temas.
-    readonly property bool _isGlass: themeName === "liquid-glass"
-    readonly property real effBarOpacity:    _isGlass ? glassBarOpacity    : barOpacity
-    readonly property real effPopupOpacity:  _isGlass ? glassPopupOpacity  : popupOpacity
-    readonly property real effWidgetOpacity: _isGlass ? glassWidgetOpacity : widgetOpacity
-    function setBarOpacity(v)    { if (_isGlass) glassBarOpacity = v;    else barOpacity = v }
-    function setPopupOpacity(v)  { if (_isGlass) glassPopupOpacity = v;  else popupOpacity = v }
-    function setWidgetOpacity(v) { if (_isGlass) glassWidgetOpacity = v; else widgetOpacity = v }
+    // Opacidad efectiva. Se conservan los nombres eff*/set* (los usan Theme y
+    // los sliders de Ajustes) aunque ya no haya un tema con opacidades propias.
+    readonly property real effBarOpacity:    barOpacity
+    readonly property real effPopupOpacity:  popupOpacity
+    readonly property real effWidgetOpacity: widgetOpacity
+    function setBarOpacity(v)    { barOpacity = v }
+    function setPopupOpacity(v)  { popupOpacity = v }
+    function setWidgetOpacity(v) { widgetOpacity = v }
     property real   cornerScale: 1.0    // multiplicador del redondeo
     property real   barScale: 1.0       // multiplicador de la altura de barra
     property string fontFamily: "JetBrainsMono Nerd Font"
@@ -54,8 +63,6 @@ Singleton {
     property string fontRgba: "rgb"               // none | rgb | bgr | vrgb | vbgr
     property string fontLcdfilter: "lcddefault"   // none | lcddefault | lcdlight | lcdlegacy
     property bool   fontEmbeddedbitmap: false
-    property string panelAnimationStyle: "material" // material | fluent | dynamic
-    property string panelMotionEffect: "standard" // standard | directional | depth
     property string language: "es"
 
     // Terminal. La paleta de color la genera el servicio Terminal a partir
@@ -72,84 +79,146 @@ Singleton {
     property bool   terminalLigatures: true
 
     readonly property var themePresets: ({
-        "solitude": {
-            "label": "Solitude",
-            "bg": "#101315", "bgAlt": "#161a1d", "surface": "#1e2427", "surfaceHi": "#2a3033", "overlay": "#4b4e55",
-            "fg": "#cacccc", "fgDim": "#a5aeb4", "fgMuted": "#707070",
-            "accent": "#798186", "accent2": "#cacccc", "cyan": "#a5aeb4", "green": "#9fa5a9", "yellow": "#c9c2b4",
-            "orange": "#cbc2be", "red": "#de6145", "magenta": "#aeaeae",
-            "lightBg": "#cccfd2", "lightBgAlt": "#c0c4c8", "lightSurface": "#b3b9be", "lightSurfaceHi": "#a5acb2",
-            "lightOverlay": "#778086", "lightFg": "#101315", "lightFgDim": "#2b3338", "lightFgMuted": "#4c5358",
-            "lightAccent": "#375259", "lightAccent2": "#48545a",
-            "lightCyan": "#4f636a", "lightGreen": "#56655b", "lightYellow": "#877a52", "lightOrange": "#946a52", "lightRed": "#bb4628", "lightMagenta": "#6c646a",
-            "hyprInactive": "#1e1e1e", "hyprShadow": "#1a1a1a"
-        },
-        "tokyo": {
-            "label": "Tokyo Night",
-            "bg": "#1a1b26", "bgAlt": "#24283b", "surface": "#292e42", "surfaceHi": "#343b58", "overlay": "#414868",
-            "fg": "#c0caf5", "fgDim": "#a9b1d6", "fgMuted": "#565f89",
-            "accent": "#7aa2f7", "accent2": "#bb9af7", "cyan": "#7dcfff", "green": "#9ece6a", "yellow": "#e0af68",
-            "orange": "#ff9e64", "red": "#f7768e", "magenta": "#bb9af7",
-            "lightBg": "#c8cbd4", "lightBgAlt": "#bcbfc9", "lightSurface": "#aeb3c4", "lightSurfaceHi": "#9ea5bd",
-            "lightOverlay": "#7e85a6", "lightFg": "#3760bf", "lightFgDim": "#6172b0", "lightFgMuted": "#767ea8",
-            "lightAccent": "#2668d1", "lightAccent2": "#8641e0",
-            "lightCyan": "#007197", "lightGreen": "#587539", "lightYellow": "#8c6c3e", "lightOrange": "#b15c00", "lightRed": "#f52a65", "lightMagenta": "#9854f1",
-            "hyprInactive": "#565f89", "hyprShadow": "#16161e"
-        },
-        "kanagawa": {
-            "label": "Kanagawa",
-            "bg": "#1f1f28", "bgAlt": "#2a2a37", "surface": "#363646", "surfaceHi": "#54546d", "overlay": "#727169",
-            "fg": "#dcd7ba", "fgDim": "#c8c093", "fgMuted": "#938aa9",
-            "accent": "#7e9cd8", "accent2": "#dcd7ba", "cyan": "#7aa89f", "green": "#98bb6c", "yellow": "#e6c384",
-            "orange": "#ffa066", "red": "#e46876", "magenta": "#957fb8",
-            "lightBg": "#d0ca9f", "lightBgAlt": "#c4bb90", "lightSurface": "#b6ab80", "lightSurfaceHi": "#a89d6d",
-            "lightOverlay": "#6f6e64", "lightFg": "#545464", "lightFgDim": "#5e5e69", "lightFgMuted": "#76756c",
-            "lightAccent": "#3d5b8f", "lightAccent2": "#a24a68",
-            "lightCyan": "#597b75", "lightGreen": "#6f894e", "lightYellow": "#836f4e", "lightOrange": "#cc6d00", "lightRed": "#c84053", "lightMagenta": "#624c83",
-            "hyprInactive": "#54546d", "hyprShadow": "#16161d"
+        // Paletas de temas/editores conocidos, más una propia
+        // (salesprendes). Los tonos intermedios (bgAlt/surfaceHi/fgMuted) y
+        // el naranja no existen en las paletas originales: se derivan. Los
+        // colores semanticos salen de la paleta ANSI de terminal de cada
+        // una, corregidos para garantizar contraste WCAG sobre el fondo de
+        // cada modo (algunos acentos claros son ilegibles sobre fondo claro
+        // en el original: alli se usan como relleno, aqui van encima).
+        "ayu": {
+            "label": "Ayu",
+            "bg": "#0b0e14", "bgAlt": "#14181f", "surface": "#1e222a", "surfaceHi": "#2e323b", "overlay": "#565b66",
+            "fg": "#d1d1c7", "fgDim": "#8e959e", "fgMuted": "#60666e",
+            "accent": "#e6b450", "accent2": "#aad94c", "cyan": "#95e6cb", "green": "#d5ff80", "yellow": "#ffd173",
+            "orange": "#f9b076", "red": "#f28779", "magenta": "#dfbfff",
+            "lightBg": "#f8f9fa", "lightBgAlt": "#eef0f2", "lightSurface": "#e4e6e9", "lightSurfaceHi": "#cbced3",
+            "lightOverlay": "#8a9199", "lightFg": "#42474c", "lightFgDim": "#6d747b", "lightFgMuted": "#979da2",
+            "lightAccent": "#f26400", "lightAccent2": "#769e00",
+            "lightCyan": "#3ca07f", "lightGreen": "#5aa237", "lightYellow": "#c78014", "lightOrange": "#e66f28", "lightRed": "#e96667", "lightMagenta": "#9e75c7",
+            "hyprInactive": "#1e222a", "hyprShadow": "#000000"
         },
         "catppuccin": {
             "label": "Catppuccin",
-            "bg": "#181824", "bgAlt": "#1e1e2e", "surface": "#313244", "surfaceHi": "#45475a", "overlay": "#6c7086",
-            "fg": "#cdd6f4", "fgDim": "#bac2de", "fgMuted": "#9399b2",
-            "accent": "#89b4fa", "accent2": "#cba6f7", "cyan": "#89dceb", "green": "#a6e3a1", "yellow": "#f9e2af",
-            "orange": "#fab387", "red": "#f38ba8", "magenta": "#f5c2e7",
-            "lightBg": "#cbcfdb", "lightBgAlt": "#bfc4d1", "lightSurface": "#adb3c2", "lightSurfaceHi": "#9ba2b5",
-            "lightOverlay": "#71748b", "lightFg": "#4c4f69", "lightFgDim": "#50536c", "lightFgMuted": "#6c6f86",
-            "lightAccent": "#1a5ae0", "lightAccent2": "#7a2fe0",
-            "lightCyan": "#179299", "lightGreen": "#40a02b", "lightYellow": "#df8e1d", "lightOrange": "#fe640b", "lightRed": "#d20f39", "lightMagenta": "#ea76cb",
-            "hyprInactive": "#45475a", "hyprShadow": "#11111b"
+            "bg": "#1e1e2e", "bgAlt": "#282839", "surface": "#313244", "surfaceHi": "#393a4e", "overlay": "#4c4f69",
+            "fg": "#cdd6f4", "fgDim": "#a3b4eb", "fgMuted": "#7480a9",
+            "accent": "#cba6f7", "accent2": "#fab387", "cyan": "#6bd7ca", "green": "#89d88b", "yellow": "#ebd391",
+            "orange": "#efaa95", "red": "#f37799", "magenta": "#f2aede",
+            "lightBg": "#eff1f5", "lightBgAlt": "#dee0e8", "lightSurface": "#ccd0da", "lightSurfaceHi": "#c1c6d6",
+            "lightOverlay": "#a5adcb", "lightFg": "#4c4f69", "lightFgDim": "#6a6d82", "lightFgMuted": "#9396a6",
+            "lightAccent": "#8839ef", "lightAccent2": "#f05901",
+            "lightCyan": "#42978b", "lightGreen": "#61983b", "lightYellow": "#af8129", "lightOrange": "#d56e3c", "lightRed": "#e16163", "lightMagenta": "#e450bd",
+            "hyprInactive": "#313244", "hyprShadow": "#11111b"
         },
-        // Cristal líquido adaptativo: en modo oscuro da un cristal ahumado
-        // (fondo casi negro, texto claro) y en claro uno luminoso (casi blanco
-        // translúcido, texto oscuro). La translucidez la aplica Theme (alphas
-        // de 'glass'); aquí solo van los colores base. 'overlay' se deja
-        // brillante a propósito: los bordes (withAlpha(overlay, …)) se
-        // convierten en el filo de luz esmerilado. El blur del compositor lo
-        // activa shell.qml (hl.layer_rule) mientras el tema esté seleccionado.
-        "liquid-glass": {
-            "label": "Liquid Glass",
-            // Tonos neutros: bg = surfaceContainer (#1e2023), surface =
-            // surfaceContainerHigh (#292b2f), overlay = 'outline' (borde de luz
-            // sutil). Los alphas de translucidez viven en Theme.
-            "bg": "#1e2023", "bgAlt": "#16181a", "surface": "#292b2f", "surfaceHi": "#34373b", "overlay": "#8b9198",
-            "fg": "#e3e3e7", "fgDim": "#c3c6cc", "fgMuted": "#8b9198",
-            "accent": "#0a84ff", "accent2": "#64d2ff", "cyan": "#64d2ff", "green": "#30d158", "yellow": "#ffd60a",
-            "orange": "#ff9f0a", "red": "#ff453a", "magenta": "#bf5af2",
-            "lightBg": "#eceef3", "lightBgAlt": "#e3e5ec", "lightSurface": "#dadde6", "lightSurfaceHi": "#cccfdb",
-            "lightOverlay": "#b9bec9", "lightFg": "#1a1c1f", "lightFgDim": "#282c33", "lightFgMuted": "#33373e",
-            "lightAccent": "#007aff", "lightAccent2": "#0a84ff",
-            "lightCyan": "#0071a4", "lightGreen": "#248a3d", "lightYellow": "#a1670a", "lightOrange": "#c93400", "lightRed": "#d70015", "lightMagenta": "#a63ec0",
-            "hyprInactive": "#3a3f47", "hyprShadow": "#000000"
+        "dracula": {
+            "label": "Dracula",
+            "bg": "#282a36", "bgAlt": "#363848", "surface": "#44475a", "surfaceHi": "#4a4d62", "overlay": "#5a5e77",
+            "fg": "#f8f8f2", "fgDim": "#d6d8e0", "fgMuted": "#999ba4",
+            "accent": "#bd93f9", "accent2": "#ff79c6", "cyan": "#a4ffff", "green": "#69ff94", "yellow": "#ffffa5",
+            "orange": "#ffbe8c", "red": "#ff6e6e", "magenta": "#ff92df",
+            "lightBg": "#f8f8f2", "lightBgAlt": "#efefee", "lightSurface": "#e6e6ea", "lightSurfaceHi": "#dedee4",
+            "lightOverlay": "#cacad3", "lightFg": "#282a36", "lightFgDim": "#44475a", "lightFgMuted": "#83858f",
+            "lightAccent": "#8332f4", "lightAccent2": "#ff1399",
+            "lightCyan": "#039cbd", "lightGreen": "#05a72e", "lightYellow": "#8a9607", "lightOrange": "#e36f0c", "lightRed": "#ff4e4e", "lightMagenta": "#ff3dac",
+            "hyprInactive": "#44475a", "hyprShadow": "#282a36"
+        },
+        "eldritch": {
+            "label": "Eldritch",
+            "bg": "#212337", "bgAlt": "#25283d", "surface": "#292e42", "surfaceHi": "#2e344b", "overlay": "#3b4261",
+            "fg": "#ebfafa", "fgDim": "#abb4da", "fgMuted": "#7b81a1",
+            "accent": "#37f499", "accent2": "#04d1f9", "cyan": "#66e4fd", "green": "#69f8b3", "yellow": "#f1fc79",
+            "orange": "#f1bb77", "red": "#f16c75", "magenta": "#fd92ce",
+            "lightBg": "#ffffff", "lightBgAlt": "#f8fafc", "lightSurface": "#f2f4f8", "lightSurfaceHi": "#e0e3e9",
+            "lightOverlay": "#b0b6c3", "lightFg": "#171928", "lightFgDim": "#3b4261", "lightFgMuted": "#808498",
+            "lightAccent": "#09aa5d", "lightAccent2": "#03a1c0",
+            "lightCyan": "#1a6c8c", "lightGreen": "#1a7f4c", "lightYellow": "#9e8c13", "lightOrange": "#ab5916", "lightRed": "#ba1a1a", "lightMagenta": "#8c2a6c",
+            "hyprInactive": "#292e42", "hyprShadow": "#414868"
+        },
+        "gruvbox": {
+            "label": "Gruvbox",
+            "bg": "#282828", "bgAlt": "#32302f", "surface": "#3c3836", "surfaceHi": "#443f3d", "overlay": "#57514e",
+            "fg": "#fbf1c7", "fgDim": "#ebdbb2", "fgMuted": "#a79c82",
+            "accent": "#b8bb26", "accent2": "#fabd2f", "cyan": "#8ec07c", "green": "#b8bb26", "yellow": "#fabd2f",
+            "orange": "#fa8931", "red": "#fb4934", "magenta": "#d3869b",
+            "lightBg": "#fbf1c7", "lightBgAlt": "#f3e6bc", "lightSurface": "#ebdbb2", "lightSurfaceHi": "#decea9",
+            "lightOverlay": "#bdae93", "lightFg": "#3c3836", "lightFgDim": "#786c61", "lightFgMuted": "#a1947c",
+            "lightAccent": "#908f19", "lightAccent2": "#b5811c",
+            "lightCyan": "#629664", "lightGreen": "#908f19", "lightYellow": "#b5811c", "lightOrange": "#d2641f", "lightRed": "#cc241d", "lightMagenta": "#b16286",
+            "hyprInactive": "#3c3836", "hyprShadow": "#282828"
+        },
+        "kanagawa": {
+            "label": "Kanagawa",
+            "bg": "#1f1f28", "bgAlt": "#242430", "surface": "#2a2a37", "surfaceHi": "#2d2d3b", "overlay": "#363646",
+            "fg": "#c8c093", "fgDim": "#7d8989", "fgMuted": "#5b6266",
+            "accent": "#76946a", "accent2": "#c0a36e", "cyan": "#7aa89f", "green": "#98bb6c", "yellow": "#e6c384",
+            "orange": "#e77b59", "red": "#e82424", "magenta": "#938aa9",
+            "lightBg": "#f2ecbc", "lightBgAlt": "#ece4b6", "lightSurface": "#e5ddb0", "lightSurfaceHi": "#dfd6aa",
+            "lightOverlay": "#cfc49c", "lightFg": "#4c4c5a", "lightFgDim": "#6b6a62", "lightFgMuted": "#959274",
+            "lightAccent": "#6f894e", "lightAccent2": "#77713f",
+            "lightCyan": "#597b75", "lightGreen": "#6f894e", "lightYellow": "#77713f", "lightOrange": "#9b5b48", "lightRed": "#c84053", "lightMagenta": "#b35b79",
+            "hyprInactive": "#2a2a37", "hyprShadow": "#1f1f28"
+        },
+        "nord": {
+            "label": "Nord",
+            "bg": "#2e3440", "bgAlt": "#343b49", "surface": "#3b4252", "surfaceHi": "#41495a", "overlay": "#505a70",
+            "fg": "#eceff4", "fgDim": "#d8dee9", "fgMuted": "#9ca3ae",
+            "accent": "#8fbcbb", "accent2": "#88c0d0", "cyan": "#8fbcbb", "green": "#a3be8c", "yellow": "#ebcb8b",
+            "orange": "#d79b7c", "red": "#bf616a", "magenta": "#b48ead",
+            "lightBg": "#eceff4", "lightBgAlt": "#e9ecf2", "lightSurface": "#e5e9f0", "lightSurfaceHi": "#dce1eb",
+            "lightOverlay": "#c5cedd", "lightFg": "#2e3440", "lightFgDim": "#4c566a", "lightFgMuted": "#848c9a",
+            "lightAccent": "#5e81ac", "lightAccent2": "#4394ab",
+            "lightCyan": "#4c92a6", "lightGreen": "#739159", "lightYellow": "#a7843f", "lightOrange": "#bb7956", "lightRed": "#bf616a", "lightMagenta": "#a77b9f",
+            "hyprInactive": "#3b4252", "hyprShadow": "#2e3440"
+        },
+        "rose-pine": {
+            "label": "Rosé Pine",
+            "bg": "#191724", "bgAlt": "#201d2f", "surface": "#26233a", "surfaceHi": "#2d2a41", "overlay": "#403d52",
+            "fg": "#e0def4", "fgDim": "#908caa", "fgMuted": "#66637b",
+            "accent": "#ebbcba", "accent2": "#9ccfd8", "cyan": "#86e6ee", "green": "#31748f", "yellow": "#f6c177",
+            "orange": "#f19c83", "red": "#eb6f92", "magenta": "#c4a7e7",
+            "lightBg": "#fffaf3", "lightBgAlt": "#f8f2ea", "lightSurface": "#f2e9e1", "lightSurfaceHi": "#ede5df",
+            "lightOverlay": "#dfdad9", "lightFg": "#575279", "lightFgDim": "#736f8e", "lightFgMuted": "#9f9aad",
+            "lightAccent": "#d47874", "lightAccent2": "#56949f",
+            "lightCyan": "#34a0a9", "lightGreen": "#286983", "lightYellow": "#cd7f15", "lightOrange": "#cf7c4a", "lightRed": "#b4637a", "lightMagenta": "#907aa9",
+            "hyprInactive": "#26233a", "hyprShadow": "#191724"
+        },
+        "salesprendes": {
+            "label": "Salesprendes",
+            "bg": "#070722", "bgAlt": "#0c0c28", "surface": "#11112d", "surfaceHi": "#15153b", "overlay": "#21215f",
+            "fg": "#f3edf7", "fgDim": "#7c80b4", "fgMuted": "#535681",
+            "accent": "#fff59b", "accent2": "#a9aefe", "cyan": "#9bfece", "green": "#9bfe9b", "yellow": "#fff59b",
+            "orange": "#fea682", "red": "#fd4663", "magenta": "#fe9be5",
+            "lightBg": "#e6e8fa", "lightBgAlt": "#ebecfc", "lightSurface": "#eff0ff", "lightSurfaceHi": "#d0d3fe",
+            "lightOverlay": "#8288fc", "lightFg": "#0e0e43", "lightFgDim": "#4b55c8", "lightFgMuted": "#8188d9",
+            "lightAccent": "#5d65f5", "lightAccent2": "#797fd1",
+            "lightCyan": "#0e0e43", "lightGreen": "#0a9b0a", "lightYellow": "#9b830a", "lightOrange": "#d8620d", "lightRed": "#fd3050", "lightMagenta": "#f124be",
+            "hyprInactive": "#11112d", "hyprShadow": "#070722"
+        },
+        "tokyo-night": {
+            "label": "Tokyo-Night",
+            "bg": "#1a1b26", "bgAlt": "#1f2230", "surface": "#24283b", "surfaceHi": "#292e43", "overlay": "#353d57",
+            "fg": "#c0caf5", "fgDim": "#9aa5ce", "fgMuted": "#6d7593",
+            "accent": "#7aa2f7", "accent2": "#bb9af7", "cyan": "#7dcfff", "green": "#9ece6a", "yellow": "#e0af68",
+            "orange": "#ea9579", "red": "#f7768e", "magenta": "#bb9af7",
+            "lightBg": "#e1e2e7", "lightBgAlt": "#d8dce5", "lightSurface": "#d0d5e3", "lightSurfaceHi": "#c8ccd7",
+            "lightOverlay": "#b4b5b9", "lightFg": "#28458a", "lightFgDim": "#5061a0", "lightFgMuted": "#7c89ba",
+            "lightAccent": "#2e7de9", "lightAccent2": "#9854f1",
+            "lightCyan": "#007197", "lightGreen": "#587539", "lightYellow": "#8c6c3e", "lightOrange": "#bb4e50", "lightRed": "#f52a65", "lightMagenta": "#9854f1",
+            "hyprInactive": "#24283b", "hyprShadow": "#15161e"
         }
     })
 
     readonly property var themeOptions: [
-        { text: "Solitude", value: "solitude" },
-        { text: "Tokyo Night", value: "tokyo" },
-        { text: "Kanagawa", value: "kanagawa" },
+        { text: "Ayu", value: "ayu" },
         { text: "Catppuccin", value: "catppuccin" },
-        { text: "Liquid Glass", value: "liquid-glass" }
+        { text: "Dracula", value: "dracula" },
+        { text: "Eldritch", value: "eldritch" },
+        { text: "Gruvbox", value: "gruvbox" },
+        { text: "Kanagawa", value: "kanagawa" },
+        { text: "Nord", value: "nord" },
+        { text: "Rosé Pine", value: "rose-pine" },
+        { text: "Salesprendes", value: "salesprendes" },
+        { text: "Tokyo-Night", value: "tokyo-night" }
     ]
     // Acento "theme": en modo claro usa la variante lightAccent (más oscura,
     // para que contraste sobre fondo claro); en oscuro, el accent normal.
@@ -168,25 +237,36 @@ Singleton {
         { name: "amber", color: "#e0af68", label: "Amber" },
         { name: "red", color: "#de6145", label: "Red" }
     ]
-    readonly property var currentPalette: themePresets[themeName] || themePresets.solitude
+    readonly property var currentPalette: themePresets[themeName] || themePresets.salesprendes
     readonly property color resolvedAccent: accentFor(accentName)
 
-    readonly property var animationDurations: [
-        { "fast": 0, "normal": 0 },
-        { "fast": 75, "normal": 150 },
-        { "fast": 150, "normal": 300 },
-        { "fast": 225, "normal": 450 }
-    ]
-    readonly property var popoutAnimationDurations: [0, 250, 500, 750]
+    // Base de las tres velocidades: 100 / 200 / 400 ms, moduladas por un
+    // multiplicador continuo (duracion / speed) en vez de tres valores
+    // sueltos por paso. El paso "Medium" es speed = 1.0, sin modular.
+    readonly property int animBaseFast: 100
+    readonly property int animBaseNormal: 200
+    readonly property int animBaseSlow: 400
+    readonly property var animationSpeedFactors: [0, 1.5, 1.0, 0.6]   // duracion / factor
     readonly property int normalizedAnimationSpeed: Math.max(0, Math.min(4, animationSpeed))
-    readonly property var currentAnimationDurations: normalizedAnimationSpeed === 4
-        ? ({ "fast": customAnimationDuration, "normal": customAnimationDuration })
-        : animationDurations[normalizedAnimationSpeed]
-    readonly property int animFastMs: currentAnimationDurations.fast
-    readonly property int animNormalMs: currentAnimationDurations.normal
-    readonly property int popoutAnimationMs: normalizedAnimationSpeed === 4
+    readonly property real _speedFactor: animationSpeedFactors[normalizedAnimationSpeed] || 0
+
+    readonly property int animFastMs: normalizedAnimationSpeed === 4
+        ? Math.round(customAnimationDuration / 2)
+        : (_speedFactor === 0 ? 0 : Math.round(animBaseFast / _speedFactor))
+    readonly property int animNormalMs: normalizedAnimationSpeed === 4
         ? customAnimationDuration
-        : popoutAnimationDurations[normalizedAnimationSpeed]
+        : (_speedFactor === 0 ? 0 : Math.round(animBaseNormal / _speedFactor))
+    readonly property int animSlowMs: normalizedAnimationSpeed === 4
+        ? customAnimationDuration * 2
+        : (_speedFactor === 0 ? 0 : Math.round(animBaseSlow / _speedFactor))
+    // Los paneles usan la duracion "normal": todo abre y cierra en 200 ms.
+    readonly property int popoutAnimationMs: animNormalMs
+
+    // Cafeína: inhibe la inactividad (no se suspende ni bloquea). Vive aquí, y
+    // no en Globals, para que sobreviva a los reinicios del shell: si lo dejaste
+    // puesto, sigue puesto. El proceso inhibidor lo levanta shell.qml leyendo
+    // este estado.
+    property bool   caffeine: false
 
     // Barra (visibilidad de widgets)
     property bool   showTray: true
@@ -225,6 +305,11 @@ Singleton {
     property var    wallpaperDirs: [home + "/.config/wallpapers"]
     property string wallpaperCurrent: ""  // último fondo aplicado (ruta absoluta)
 
+    // Avatar del usuario: ruta absoluta a una imagen (vacío = inicial en
+    // círculo tonal). Se muestra recortado en círculo en el perfil de Ajustes,
+    // en "Acerca de" y, si se copia al greeter, en la pantalla de bloqueo.
+    property string avatarPath: ""
+
     // Captura de pantalla / grabación
     // Sub-objeto con todos los ajustes del servicio ScreenCapture, unificados
     // aquí para tener una única fuente de verdad (settings.json). El servicio
@@ -237,15 +322,17 @@ Singleton {
 
     readonly property var _keys: ["themeName", "accentName", "accentColor", "darkMode",
         "uiScale", "animationSpeed", "customAnimationDuration", "barOpacity",
-        "popupOpacity", "widgetOpacity", "glassBarOpacity", "glassPopupOpacity", "glassWidgetOpacity",
+        "popupOpacity", "widgetOpacity",
         "cornerScale", "barScale", "fontFamily", "monoFontFamily", "fontScale",
         "fontAntialias", "fontHinting", "fontHintstyle", "fontRgba", "fontLcdfilter", "fontEmbeddedbitmap",
-        "panelAnimationStyle", "panelMotionEffect", "language",
+        "language",
+        "caffeine",
+        "templatesOn", "gtkThemingEnabled", "hyprlandThemingEnabled", "templatesEnabled",
         "showTray", "showSysmon", "showBattery", "showClipboard", "showNotifications", "showPowerProfile", "showCaffeine",
         "clock24h", "clockShowSeconds", "clockShowDate",
         "weatherEnabled", "weatherLocation", "weatherMetric", "weatherRefreshMin",
         "notifPopupsEnabled", "notifTimeout", "notifMaxVisible", "notifPosition", "mutedNotificationApps",
-        "wallpaperTransition", "wallpaperTransitionDuration", "wallpaperCurrent",
+        "wallpaperTransition", "wallpaperTransitionDuration", "wallpaperCurrent", "avatarPath",
         "terminalApp", "terminalFont", "terminalFontSize", "terminalOpacity", "terminalPadding",
         "terminalCursorShape", "terminalCursorBlink", "terminalLineHeight", "terminalTabStyle", "terminalLigatures",
         "screenCapture"]
@@ -257,22 +344,23 @@ Singleton {
     // accentColor no aparece: su default es resolvedAccent y reset() lo
     // recalcula al final.
     readonly property var _defaults: ({
-        "themeName": "solitude", "accentName": "theme", "darkMode": true,
+        "themeName": "salesprendes", "accentName": "theme", "darkMode": true,
         "uiScale": 1.0, "animationSpeed": 2, "customAnimationDuration": 500, "barOpacity": 0.78,
         "popupOpacity": 0.85, "widgetOpacity": 0.55,
-        "glassBarOpacity": 0.45, "glassPopupOpacity": 0.45, "glassWidgetOpacity": 0.35,
         "cornerScale": 1.0, "barScale": 1.0,
         "fontFamily": "JetBrainsMono Nerd Font", "monoFontFamily": "JetBrainsMono Nerd Font", "fontScale": 1.0,
         "fontAntialias": true, "fontHinting": true, "fontHintstyle": "hintslight",
         "fontRgba": "rgb", "fontLcdfilter": "lcddefault", "fontEmbeddedbitmap": false,
-        "panelAnimationStyle": "material", "panelMotionEffect": "standard", "language": "es",
+        "language": "es",
         "showTray": true, "showSysmon": true, "showBattery": true, "showClipboard": true,
+        "caffeine": false,
+        "templatesOn": true, "gtkThemingEnabled": true, "hyprlandThemingEnabled": true, "templatesEnabled": ({}),
         "showNotifications": true, "showPowerProfile": true, "showCaffeine": false,
         "clock24h": true, "clockShowSeconds": false, "clockShowDate": true,
         "weatherEnabled": true, "weatherLocation": "", "weatherMetric": true, "weatherRefreshMin": 30,
         "notifPopupsEnabled": true, "notifTimeout": 5, "notifMaxVisible": 4, "notifPosition": "tr",
         "mutedNotificationApps": [],
-        "wallpaperTransition": "fade", "wallpaperTransitionDuration": 1.0, "wallpaperCurrent": "",
+        "wallpaperTransition": "fade", "wallpaperTransitionDuration": 1.0, "wallpaperCurrent": "", "avatarPath": "",
         "terminalApp": "kitty", "terminalFont": "", "terminalFontSize": 11.5, "terminalOpacity": 0.80,
         "terminalPadding": 12, "terminalCursorShape": "beam", "terminalCursorBlink": true,
         "terminalLineHeight": 2, "terminalTabStyle": "powerline", "terminalLigatures": true,
@@ -286,15 +374,12 @@ Singleton {
         "uiScale": [0.5, 2.0], "animationSpeed": [0, 4],
         "customAnimationDuration": [50, 3000], "barOpacity": [0.0, 1.0],
         "popupOpacity": [0.0, 1.0], "widgetOpacity": [0.0, 1.0],
-        "glassBarOpacity": [0.0, 1.0], "glassPopupOpacity": [0.0, 1.0], "glassWidgetOpacity": [0.0, 1.0],
         "cornerScale": [0.0, 2.0],
         "barScale": [0.5, 2.0], "fontScale": [0.5, 2.0], "weatherRefreshMin": [1, 1440],
         "notifTimeout": [1, 120], "notifMaxVisible": [1, 20],
         "wallpaperTransitionDuration": [0.1, 5.0]
     })
     readonly property var _enums: ({
-        "panelAnimationStyle": ["material", "fluent", "dynamic"],
-        "panelMotionEffect": ["standard", "directional", "depth"],
         "language": ["en", "es", "ca"],
         "notifPosition": ["tl", "tr", "bl", "br"],
         "wallpaperTransition": ["fade", "zoom", "slide", "push", "wipe"],
@@ -339,7 +424,6 @@ Singleton {
 
     function load() {
         const t = file.text()
-        let ok = false
         if (t && t.trim() !== "") {
             try {
                 const o = JSON.parse(t)
@@ -349,16 +433,20 @@ Singleton {
                     if (v !== undefined) s[k] = v
                 }
                 normalizeSavedSettings()
-                ok = true
             } catch (e) {
                 console.warn("Settings: JSON inválido, se regenera con valores por defecto.", e)
             }
         }
         _loaded = true
-        // Si no había archivo válido (ausente o corrupto), créalo/recupéralo ya
-        // con los valores actuales (por defecto), sin esperar a cambiar un ajuste.
-        if (!ok)
-            save()
+        // Reescribe siempre tras cargar. normalizeSavedSettings() corrige en
+        // memoria lo que ya no existe (un tema retirado, p.ej.), pero corre con
+        // _loaded aún en false, así que su scheduleSave() se descarta y el
+        // archivo se quedaba con el valor muerto y con claves de ajustes ya
+        // eliminados. Al guardar aquí, el archivo queda saneado (save() escribe
+        // solo las claves de _keys) sin esperar a que se toque un ajuste.
+        // También cubre el caso de que no hubiera archivo válido (ausente o
+        // corrupto): queda creado con los valores por defecto.
+        save()
     }
 
     function scheduleSave() {
@@ -376,18 +464,59 @@ Singleton {
         file.setText(JSON.stringify(o, null, 2))
     }
 
+    // Restaura cada clave persistida a su valor de declaración (_defaults).
+    // Arrays/objetos se copian para no compartir la referencia del mapa (si
+    // algo los mutara in situ, corrompería los defaults); accentColor se
+    // recalcula aparte porque no vive en _defaults (se deriva de accentName).
     function reset() {
-        // Restaura cada clave persistida a su valor de declaración (_defaults).
-        // Arrays/objetos se copian para no compartir la referencia del mapa
-        // (si algo los mutara in situ, corrompería los defaults).
         for (const k in _defaults) {
             const v = _defaults[k]
             s[k] = Array.isArray(v) ? v.slice()
                  : (v !== null && typeof v === "object") ? Object.assign({}, v)
                  : v
         }
-        // accentColor no está en _defaults: se recalcula del acento ya reseteado.
         accentColor = resolvedAccent
+    }
+
+    // Claves que casi siempre difieren de su "valor por defecto" recién
+    // arrancado sin que el usuario haya tocado nada: screenCapture se
+    // autorrellena con sus propios valores la primera vez que se lee
+    // (ver ScreenCapture.applyFromSettings, así el JSON queda editable a
+    // mano), y wallpaperCurrent parte vacío pero siempre acaba con un fondo
+    // puesto (elegido o auto-asignado). Comparar cualquiera de las dos
+    // contra su default literal siempre da "modificado", así que no cuentan
+    // para "solo modificados" / mostrar "Restablecer" — pero 'reset()' sí
+    // las restaura (vía _defaults) si de verdad se pulsa el botón.
+    readonly property var _volatileKeys: ({ "screenCapture": true, "wallpaperCurrent": true })
+
+    // ¿Difiere esta clave de su valor por defecto? Lo usa el filtro "solo
+    // modificados" de la ventana de Ajustes. accentColor queda fuera a
+    // propósito: no está en _defaults (se deriva de accentName).
+    function isModified(key) {
+        if (_volatileKeys[key])
+            return false
+        const def = _defaults[key]
+        if (def === undefined)
+            return false
+        const cur = s[key]
+        // Arrays y objetos (mutedNotificationApps, screenCapture): comparación
+        // estructural; comparar por referencia daría siempre "modificado".
+        if (def !== null && typeof def === "object")
+            return JSON.stringify(cur) !== JSON.stringify(def)
+        // Los reales llevan coma flotante (uiScale, opacidades…): un == exacto
+        // marcaría como modificado un 0.78 que ha ido y vuelto por un slider.
+        if (typeof def === "number" && typeof cur === "number")
+            return Math.abs(cur - def) > 1e-6
+        return cur !== def
+    }
+
+    // ¿Hay algo que restablecer? Gatea el botón "Restablecer" de Ajustes:
+    // no tiene sentido mostrarlo si no cambiaría nada.
+    readonly property bool anyModified: {
+        for (let i = 0; i < _keys.length; i++)
+            if (isModified(_keys[i]))
+                return true
+        return false
     }
 
     function colorHex(c) {
@@ -428,9 +557,12 @@ Singleton {
         return themePresets[name] !== undefined
     }
 
+    // Corrige un tema/acento guardado que ya no exista (renombrado o
+    // quitado de themePresets/accentSwatches), volviendo al valor por
+    // defecto en vez de dejar la app con una paleta inválida.
     function normalizeSavedSettings() {
         if (!hasThemePreset(themeName))
-            themeName = "solitude"
+            themeName = "salesprendes"
         if (!hasAccentPreset(accentName))
             accentName = "theme"
     }
@@ -460,16 +592,25 @@ Singleton {
     }
 
     function scheduleHyprSync() {
-        if (_loaded && hyprlandAvailable)
+        if (_loaded && hyprlandAvailable && templatesOn && hyprlandThemingEnabled)
             hyprSyncTimer.restart()
     }
 
+    // Tabla Lua con los colores del tema, para que el hyprland.lua del
+    // usuario haga require() de este archivo y los aplique con hl.config().
+    // Además de accent/accent2/inactive/shadow (bordes de ventana normales,
+    // ya existían), añade los colores de GRUPO de ventanas (border_active/
+    // inactive/locked_active/locked_inactive + su groupbar), que Hyprland
+    // usa al agrupar pestañas — antes se quedaban en el valor por defecto de
+    // Hyprland, sin seguir el tema. accent2 hace de color secundario del
+    // grupo activo, y rojo fijo para el estado bloqueado.
     function hyprThemeLua() {
         const p = currentPalette
         const accent = stripHex(resolvedAccent)
         const accent2 = stripHex(p.accent2 || p.fg)
         const inactive = stripHex(p.hyprInactive || p.overlay)
         const shadow = stripHex(p.hyprShadow || p.bg)
+        const locked = stripHex(p.red)
 
         return [
             "-- Generated by Quickshell Settings. Edit presets in ~/.config/quickshell/Config/Settings.qml.",
@@ -479,138 +620,232 @@ Singleton {
             "    accent2  = \"rgba(" + accent2 + "ee)\",",
             "    inactive = \"rgba(" + inactive + "cc)\",",
             "    shadow   = \"rgba(" + shadow + "ee)\",",
+            "    locked   = \"rgba(" + locked + "ee)\",",
             "",
             "    active_border = { colors = { \"rgba(" + accent + "ee)\", \"rgba(" + accent2 + "ee)\" }, angle = 45 },",
             "    inactive_border = \"rgba(" + inactive + "cc)\",",
+            "",
+            "    group_active_border = \"rgba(" + accent2 + "ee)\",",
+            "    group_inactive_border = \"rgba(" + inactive + "cc)\",",
+            "    group_locked_active_border = \"rgba(" + locked + "ee)\",",
+            "    group_locked_inactive_border = \"rgba(" + inactive + "cc)\",",
+            "",
+            "    groupbar_active = \"rgba(" + accent2 + "ee)\",",
+            "    groupbar_inactive = \"rgba(" + inactive + "cc)\",",
+            "    groupbar_locked_active = \"rgba(" + locked + "ee)\",",
+            "    groupbar_locked_inactive = \"rgba(" + inactive + "cc)\",",
             "}",
             ""
         ].join("\n")
     }
 
+    // Vuelca hyprThemeLua() en theme.lua y recarga Hyprland — no hace nada
+    // si Hyprland no está corriendo, el maestro de plantillas está en pausa,
+    // o esta plantilla está desactivada.
     function applyHyprlandThemeNow() {
-        if (!hyprlandAvailable)
+        if (!hyprlandAvailable || !templatesOn || !hyprlandThemingEnabled)
             return
-
         hyprThemeFile.setText(hyprThemeLua())
         if (!hyprReload.running)
             hyprReload.running = true
     }
 
-    // Tematizado de apps GTK4/libadwaita (Nautilus, etc.)
-    // Redefine los colores con nombre de libadwaita en ~/.config/gtk-4.0/
-    // gtk.css según el tema y el modo claro/oscuro; el interruptor real
-    // claro↔oscuro lo da gsettings color-scheme. Se reescribe en cada cambio
-    // de tema/acento/darkMode (igual que la sync de Hyprland).
-    function gtkColorCss(forGtk3) {
-        // En Liquid Glass, las apps GTK (Nautilus) toman los colores de
-        // 'solitude' y opacos: se ven mejor que el cristal casi-blanco de
-        // libadwaita y evitan sus problemas de translucidez. El efecto cristal
-        // se queda en el shell (paneles), no en las apps. El acento sigue al
-        // usuario; si es "theme", usa el acento propio de solitude.
-        const soli = themePresets.solitude
-        const p = _isGlass ? soli : currentPalette
-        const soliAccent = darkMode ? soli.accent : (soli.lightAccent || soli.accent)
-        const accent = colorHex(_isGlass && accentName === "theme" ? soliAccent : resolvedAccent)
-        let c
-        if (darkMode) {
-            // Fondo casi-negro del propio tema ("negro adaptado").
-            c = { accentBg: accent, accentFg: p.bg,
-                  winBg: p.bg, winFg: p.fg, viewBg: p.bgAlt, viewFg: p.fg,
-                  headBg: p.bg, headFg: p.fg, sideBg: p.bg, sideFg: p.fgDim,
-                  cardBg: p.surface, popBg: p.surface, popFg: p.fg, dlgBg: p.bgAlt,
-                  border: p.overlay }
-        } else {
-            // 'view' (listas/entradas de Nautilus, campos de texto): se iguala
-            // al color de la barra (headerbar = lightBgAlt), más apagado, para
-            // un blanco que no deslumbra en modo claro.
-            c = { accentBg: (p.lightAccent || accent), accentFg: "#ffffff",
-                  winBg: p.lightBg, winFg: p.lightFg, viewBg: p.lightBgAlt, viewFg: p.lightFg,
-                  headBg: p.lightBgAlt, headFg: p.lightFg, sideBg: p.lightBg, sideFg: (p.lightFgDim || p.lightFg),
-                  cardBg: p.lightSurface, popBg: p.lightSurface, popFg: p.lightFg, dlgBg: p.lightBg,
-                  border: (p.lightOverlay || p.lightSurface) }
-        }
-        // GTK siempre opaco: el 'glass' translúcido no se aplica a las apps
-        // (ver arriba), solo a los paneles del shell.
-        // Colores con nombre de libadwaita (GTK4 / Nautilus).
-        let out = [
-            "/* Generado por Quickshell Settings — no editar a mano.",
-            "   Colores del tema adaptados a GTK según modo claro/oscuro. */",
-            "@define-color accent_color "       + c.accentBg + ";",
-            "@define-color accent_bg_color "    + c.accentBg + ";",
-            "@define-color accent_fg_color "    + c.accentFg + ";",
-            "@define-color window_bg_color "    + c.winBg + ";",
-            "@define-color window_fg_color "    + c.winFg + ";",
-            "@define-color view_bg_color "      + c.viewBg + ";",
-            "@define-color view_fg_color "      + c.viewFg + ";",
-            "@define-color headerbar_bg_color " + c.headBg + ";",
-            "@define-color headerbar_fg_color " + c.headFg + ";",
-            // backdrop = color cuando la ventana NO está enfocada (si no se
-            // define, libadwaita usa un gris por defecto que no pega).
-            "@define-color headerbar_backdrop_color " + c.headBg + ";",
-            // Sidebar ("Carpeta personal", "Papelera"…) con su color propio
-            // (sideBg). En Liquid Glass, como la paleta es la de solitude, queda
-            // igual que la sidebar de solitude.
-            "@define-color sidebar_bg_color "   + c.sideBg + ";",
-            "@define-color sidebar_fg_color "   + c.sideFg + ";",
-            "@define-color sidebar_backdrop_color " + c.sideBg + ";",
-            "@define-color secondary_sidebar_bg_color " + c.sideBg + ";",
-            "@define-color secondary_sidebar_backdrop_color " + c.sideBg + ";",
-            "@define-color card_bg_color "      + c.cardBg + ";",
-            "@define-color popover_bg_color "   + c.popBg + ";",
-            "@define-color popover_fg_color "   + c.popFg + ";",
-            "@define-color dialog_bg_color "    + c.dlgBg + ";"
-        ]
-        // No añadimos reglas CSS explícitas (window/headerbar/sidebar):
-        // libadwaita 1.9 ya pinta cada zona una vez a partir de estos
-        // @define-color (--window-bg-color, --sidebar-bg-color, etc.).
-        // Forzarlas a mano pintaba una capa extra sobre la sidebar con un tono
-        // distinto al del contenido. Con solo los colores con nombre todo el
-        // cristal queda uniforme.
-        // GTK3 (Nemo y apps GTK3): añade los nombres heredados del tema para
-        // que también se adapten sin depender solo de libadwaita.
-        // Aquí no se aplica alfa: Chromium/Brave leen estos theme_*_color para
-        // pintar su marco y pestañas y no hacen cristal, un color translúcido
-        // les rompe el render. El glass se queda en GTK4/libadwaita (Nautilus),
-        // por eso los fondos van opacos (c.winBg tal cual).
-        if (forGtk3) {
-            out = out.concat([
-                "@define-color theme_bg_color "           + c.winBg + ";",
-                "@define-color theme_fg_color "           + c.winFg + ";",
-                "@define-color theme_base_color "         + c.viewBg + ";",
-                "@define-color theme_text_color "         + c.viewFg + ";",
-                "@define-color theme_selected_bg_color "  + c.accentBg + ";",
-                "@define-color theme_selected_fg_color "  + c.accentFg + ";",
-                "@define-color theme_unfocused_bg_color " + c.winBg + ";",
-                "@define-color theme_unfocused_fg_color " + c.winFg + ";",
-                "@define-color insensitive_bg_color "     + c.winBg + ";",
-                "@define-color menu_bg_color "            + c.popBg + ";",
-                "@define-color menu_fg_color "            + c.popFg + ";",
-                "@define-color borders "                  + c.border + ";"
-            ])
-        }
-        return out.join("\n") + "\n"
+    // Blanco o casi-negro según la luminancia del color, para roles sin
+    // convención previa en el shell (destructive/error/warning/success): el
+    // acento y la paleta ya tienen su fg pensado a mano, pero red/yellow/green
+    // sueltos no. Fórmula de luminancia relativa estándar (coeficientes
+    // Rec. 709).
+    function readableOn(hex) {
+        hex = String(hex).replace("#", "")
+        const r = parseInt(hex.substring(0, 2), 16) / 255
+        const g = parseInt(hex.substring(2, 4), 16) / 255
+        const b = parseInt(hex.substring(4, 6), 16) / 255
+        const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b
+        return lum > 0.5 ? "#1a1a1a" : "#ffffff"
     }
 
-    // refresh=true → tras escribir el CSS, reinicia Nautilus reabriendo su
-    // carpeta (GTK4/libadwaita no recarga CSS en caliente). En el arranque
-    // se llama con false para no reiniciar nada.
+    // Mezcla lineal de dos colores hex (t=0 → a, t=1 → b). Para derivar los
+    // niveles que la paleta no tiene explícitos (contenedores, variantes).
+    function mix(hexA, hexB, t) {
+        const a = String(hexA).replace("#", ""), b = String(hexB).replace("#", "")
+        const ar = parseInt(a.substring(0, 2), 16), ag = parseInt(a.substring(2, 4), 16), ab = parseInt(a.substring(4, 6), 16)
+        const br = parseInt(b.substring(0, 2), 16), bg = parseInt(b.substring(2, 4), 16), bb = parseInt(b.substring(4, 6), 16)
+        const r = Math.round(ar + (br - ar) * t), g = Math.round(ag + (bg - ag) * t), bl = Math.round(ab + (bb - ab) * t)
+        const h = (n) => n.toString(16).padStart(2, "0")
+        return "#" + h(r) + h(g) + h(bl)
+    }
+
+    // Tokens "Material-ish" para las plantillas de apps (Templates/<app>/):
+    // aproximan los ~35 roles de Material 3 (primary/surface/outline/...
+    // con variantes on*/*Container) a partir de nuestra paleta, que solo
+    // tiene ~15 campos. No es un motor HCT real: es una derivación
+    // razonable (mismo espíritu que gtkTokens/readableOn) para que las
+    // plantillas de cada app tengan de dónde sacar cada rol sin reescribirlas.
+    function materialTokens() {
+        const p = currentPalette
+        const pick = (dk, lt) => darkMode ? dk : (lt || dk)
+        const bg = pick(p.bg, p.lightBg)
+        const surface = pick(p.surface, p.lightSurface)
+        const surfaceHi = pick(p.surfaceHi, p.lightSurfaceHi)
+        const overlay = pick(p.overlay, p.lightOverlay)
+        const fg = pick(p.fg, p.lightFg)
+        const fgDim = pick(p.fgDim, p.lightFgDim)
+        const fgMuted = pick(p.fgMuted, p.lightFgMuted)
+        const accent = colorHex(resolvedAccent)
+        const accent2 = pick(p.accent2, p.lightAccent2 || p.accent2)
+        const cyan = pick(p.cyan, p.lightCyan || p.cyan)
+        const green = pick(p.green, p.lightGreen || p.green)
+        const yellow = pick(p.yellow, p.lightYellow || p.yellow)
+        const red = pick(p.red, p.lightRed || p.red)
+        const magenta = pick(p.magenta, p.lightMagenta || p.magenta)
+        const shadow = p.hyprShadow || "#000000"
+        const white = "#ffffff"
+
+        return {
+            background: bg, onBackground: fg,
+            surface: surface, onSurface: fg,
+            surfaceVariant: surfaceHi, onSurfaceVariant: fgDim,
+            surfaceContainerLowest: mix(surface, bg, 0.35),
+            surfaceContainerLow: mix(surface, bg, 0.15),
+            surfaceContainer: surface,
+            surfaceContainerHigh: mix(surface, surfaceHi, 0.5),
+            surfaceContainerHighest: surfaceHi,
+            primary: accent, onPrimary: readableOn(accent),
+            primaryContainer: surfaceHi, onPrimaryContainer: fg,
+            secondary: accent2, onSecondary: readableOn(accent2),
+            secondaryContainer: mix(accent2, surface, 0.75), onSecondaryContainer: fg,
+            tertiary: cyan, onTertiary: readableOn(cyan),
+            tertiaryContainer: mix(cyan, surface, 0.75), onTertiaryContainer: fg,
+            error: red, onError: readableOn(red),
+            errorContainer: mix(red, surface, 0.75), onErrorContainer: fg,
+            outline: overlay, outlineVariant: mix(overlay, surface, 0.5),
+            inverseSurface: fg, hover: surfaceHi, shadow: shadow,
+            terminalBackground: bg, terminalForeground: fg,
+            terminalBackgroundDarken01: mix(bg, "#000000", 0.1),
+            terminalBackgroundDarken005: mix(bg, "#000000", 0.05),
+            terminalCursor: accent, terminalCursorText: readableOn(accent),
+            terminalSelectionBg: overlay, terminalSelectionFg: fg,
+            terminalNormalBlack: bg, terminalNormalRed: red, terminalNormalGreen: green,
+            terminalNormalYellow: yellow, terminalNormalBlue: accent2, terminalNormalMagenta: magenta,
+            terminalNormalCyan: cyan, terminalNormalWhite: fgDim,
+            terminalBrightBlack: fgMuted, terminalBrightRed: mix(red, white, 0.18),
+            terminalBrightGreen: mix(green, white, 0.18), terminalBrightYellow: mix(yellow, white, 0.18),
+            terminalBrightBlue: mix(accent2, white, 0.18), terminalBrightMagenta: mix(magenta, white, 0.18),
+            terminalBrightCyan: mix(cyan, white, 0.18), terminalBrightWhite: fg
+        }
+    }
+
+    // Añade automáticamente, por cada token hex de materialTokens(), las
+    // variantes que algunas plantillas necesitan: '<token>Stripped' (sin #,
+    // para formatos "0xRRGGBB") y '<token>Rgb' (r,g,b decimal, para KDE).
+    function expandTokenVariants(tokens) {
+        const out = Object.assign({}, tokens)
+        for (const k in tokens) {
+            const hex = String(tokens[k]).replace("#", "")
+            out[k + "Stripped"] = hex
+            const r = parseInt(hex.substring(0, 2), 16)
+            const g = parseInt(hex.substring(2, 4), 16)
+            const b = parseInt(hex.substring(4, 6), 16)
+            out[k + "Rgb"] = r + "," + g + "," + b
+        }
+        return out
+    }
+
+    // Mapa de tokens que consumen Templates/gtk/gtk3.css y gtk4.css.
+    function gtkTokens() {
+        const p = currentPalette
+        const accent = colorHex(resolvedAccent)
+        const warning = darkMode ? p.yellow : (p.lightYellow || p.yellow)
+        const success = darkMode ? p.green  : (p.lightGreen  || p.green)
+        const destructive = darkMode ? p.red : (p.lightRed || p.red)
+
+        if (darkMode) {
+            return {
+                accent: accent, accent_fg: p.bg,
+                destructive: destructive, destructive_fg: readableOn(destructive),
+                error: destructive, error_fg: readableOn(destructive),
+                warning: warning, warning_bg: warning, warning_fg: readableOn(warning),
+                success: success, success_bg: success, success_fg: readableOn(success),
+                window_bg: p.bg, window_fg: p.fg,
+                view_bg: p.bgAlt, view_fg: p.fg,
+                headerbar_bg: p.bg, headerbar_fg: p.fg,
+                popover_bg: p.surface, popover_fg: p.fg,
+                card_bg: p.surface, card_fg: p.fg,
+                dialog_bg: p.bgAlt, dialog_fg: p.fg,
+                overview_bg: p.surface, overview_fg: p.fg,
+                sidebar_bg: p.bg, sidebar_fg: p.fgDim,
+                secondary_sidebar_bg: p.bg, secondary_sidebar_fg: p.fgDim,
+                legacy_border: p.overlay
+            }
+        }
+        // 'view' (listas/entradas de Nautilus, campos de texto): se iguala al
+        // color de la barra (headerbar = lightBgAlt), más apagado, para un
+        // blanco que no deslumbra en modo claro.
+        return {
+            accent: (p.lightAccent || accent), accent_fg: "#ffffff",
+            destructive: destructive, destructive_fg: readableOn(destructive),
+            error: destructive, error_fg: readableOn(destructive),
+            warning: warning, warning_bg: warning, warning_fg: readableOn(warning),
+            success: success, success_bg: success, success_fg: readableOn(success),
+            window_bg: p.lightBg, window_fg: p.lightFg,
+            view_bg: p.lightBgAlt, view_fg: p.lightFg,
+            headerbar_bg: p.lightBgAlt, headerbar_fg: p.lightFg,
+            popover_bg: p.lightSurface, popover_fg: p.lightFg,
+            card_bg: p.lightSurface, card_fg: p.lightFg,
+            dialog_bg: p.lightBg, dialog_fg: p.lightFg,
+            overview_bg: p.lightSurface, overview_fg: p.lightFg,
+            sidebar_bg: p.lightBg, sidebar_fg: (p.lightFgDim || p.lightFg),
+            secondary_sidebar_bg: p.lightBg, secondary_sidebar_fg: (p.lightFgDim || p.lightFg),
+            legacy_border: (p.lightOverlay || p.lightSurface)
+        }
+    }
+
+    // Motor de plantillas mínimo: sustituye {{clave}} por tokens[clave]. Deja
+    // intacto cualquier {{...}} sin correspondencia (para detectar erratas
+    // a simple vista en vez de borrarlas en silencio).
+    function renderTemplate(text, tokens) {
+        return String(text).replace(/\{\{(\w+)\}\}/g, function (whole, key) {
+            return tokens[key] !== undefined ? tokens[key] : whole
+        })
+    }
+
+    // Asegura que gtk.css importe quickshell.css, sin pisar nada que ya
+    // hubiera ahí: si el import ya está, no toca el archivo; si no, lo añade
+    // al final (o crea el archivo si no existía). 'view' es el FileView que
+    // apunta al gtk.css real del usuario.
+    function ensureGtkImport(view) {
+        const content = view.text() || ""
+        if (content.indexOf("@import") !== -1 && content.indexOf("quickshell.css") !== -1)
+            return
+        const importLine = "@import url(\"quickshell.css\");"
+        const trimmed = content.replace(/\s+$/, "")
+        view.setText(trimmed.length > 0 ? (trimmed + "\n\n" + importLine + "\n") : (importLine + "\n"))
+    }
+
     property bool _gtkPendingRefresh: false
+    // Tematiza apps GTK3/GTK4/libadwaita (Nautilus, GNOME apps…): renderiza
+    // las plantillas de Templates/gtk/ e inyecta el @import en gtk.css SIN
+    // pisar lo que ya hubiera ahí (ensureGtkImport, FileView puro). El
+    // refresco (refresh=true) se dispara en gtk4CssFile.onSaved, así que la
+    // marca se pone antes de escribir — reinicia Nautilus reabriendo su
+    // carpeta, porque GTK4/libadwaita no recarga CSS en caliente; en el
+    // arranque se llama con false para no reiniciar nada. El modo
+    // claro/oscuro se sincroniza aparte vía gsettings, directo (un binario
+    // con sus argumentos, no un script). El tema base GTK3 (adw-gtk3) no se
+    // toca: queda a mano del usuario, vía nwg-look.
     function applyGtkTheme(refresh) {
-        // El refresco se dispara en gtk4CssFile.onSaved, así que la marca se pone
-        // antes de escribir. Los CSS se vuelcan con FileView (sin shell).
+        if (!templatesOn || !gtkThemingEnabled)
+            return
         _gtkPendingRefresh = (refresh === true)
-        gtk4CssFile.setText(gtkColorCss(false))
-        gtk3CssFile.setText(gtkColorCss(true))
-        // Process solo para lo que no es un archivo: asegurar carpetas (por si
-        // no existen) y conmutar el modo claro/oscuro de las apps GTK.
-        const g4 = home + "/.config/gtk-4.0"
-        const g3 = home + "/.config/gtk-3.0"
-        const mode = darkMode ? "prefer-dark" : "prefer-light"
-        gtkApply.command = ["sh", "-c",
-            "mkdir -p '" + g4 + "' '" + g3 + "' ; "
-            + "gsettings set org.gnome.desktop.interface color-scheme '" + mode + "' || true"]
-        if (!gtkApply.running)
-            gtkApply.running = true
+        const tokens = gtkTokens()
+        gtk4CssFile.setText(renderTemplate(gtk4Template.text(), tokens))
+        gtk3CssFile.setText(renderTemplate(gtk3Template.text(), tokens))
+        ensureGtkImport(gtk4RealCssFile)
+        ensureGtkImport(gtk3RealCssFile)
+        const mode = darkMode ? "dark" : "light"
+        gtkAppearanceSync.command = ["gsettings", "set", "org.gnome.desktop.interface", "color-scheme", "prefer-" + mode]
+        if (!gtkAppearanceSync.running)
+            gtkAppearanceSync.running = true
     }
 
     function scheduleGtkSync() {
@@ -695,9 +930,6 @@ Singleton {
     onBarOpacityChanged: scheduleSave()
     onPopupOpacityChanged: scheduleSave()
     onWidgetOpacityChanged: scheduleSave()
-    onGlassBarOpacityChanged: scheduleSave()
-    onGlassPopupOpacityChanged: scheduleSave()
-    onGlassWidgetOpacityChanged: scheduleSave()
     onCornerScaleChanged: scheduleSave()
     onBarScaleChanged: scheduleSave()
     onFontFamilyChanged: { scheduleSave(); scheduleFontSync() }
@@ -709,8 +941,6 @@ Singleton {
     onFontRgbaChanged: { scheduleSave(); scheduleFontSync() }
     onFontLcdfilterChanged: { scheduleSave(); scheduleFontSync() }
     onFontEmbeddedbitmapChanged: { scheduleSave(); scheduleFontSync() }
-    onPanelAnimationStyleChanged: scheduleSave()
-    onPanelMotionEffectChanged: scheduleSave()
     onLanguageChanged: scheduleSave()
     onNotifPopupsEnabledChanged: scheduleSave()
     onNotifTimeoutChanged: scheduleSave()
@@ -723,7 +953,12 @@ Singleton {
     onShowClipboardChanged: scheduleSave()
     onShowNotificationsChanged: scheduleSave()
     onShowPowerProfileChanged: scheduleSave()
+    onCaffeineChanged: scheduleSave()
     onShowCaffeineChanged: scheduleSave()
+    onTemplatesOnChanged: { scheduleSave(); if (templatesOn) { scheduleGtkSync(); scheduleHyprSync() } }
+    onGtkThemingEnabledChanged: { scheduleSave(); if (gtkThemingEnabled) scheduleGtkSync() }
+    onHyprlandThemingEnabledChanged: { scheduleSave(); if (hyprlandThemingEnabled) scheduleHyprSync() }
+    onTemplatesEnabledChanged: scheduleSave()
     onClock24hChanged: scheduleSave()
     onClockShowSecondsChanged: scheduleSave()
     onClockShowDateChanged: scheduleSave()
@@ -769,14 +1004,42 @@ Singleton {
         atomicWrites: true
     }
 
-    // gtk.css (GTK4/libadwaita y GTK3) + fonts.conf: se escriben con FileView
-    // (setText vuelca el string directo al archivo, sin base64 ni paso por
-    // shell).
+    // Plantillas GTK (Templates/gtk/): se LEEN en cada aplicación, no solo al
+    // arrancar, para que un cambio a mano en el archivo se note sin reiniciar
+    // el shell. blockLoading: lectura síncrona, como el resto de plantillas
+    // de este archivo (son pocos KB).
+    FileView {
+        id: gtk4Template
+        path: s.home + "/.config/quickshell/Templates/gtk/gtk4.css"
+        blockLoading: true
+        printErrors: false
+    }
+    FileView {
+        id: gtk3Template
+        path: s.home + "/.config/quickshell/Templates/gtk/gtk3.css"
+        blockLoading: true
+        printErrors: false
+    }
+
+    // Salida YA renderizada de las plantillas de arriba. Vive en un archivo
+    // PROPIO (quickshell.css), no en gtk.css: gtk.css es del usuario y
+    // ensureGtkImport() solo le asegura un @import a este, sin pisar nada
+    // más que hubiera ahí.
     FileView {
         id: gtk4CssFile
-        path: s.home + "/.config/gtk-4.0/gtk.css"
+        path: s.home + "/.config/gtk-4.0/quickshell.css"
         atomicWrites: true
         printErrors: false
+    }
+    // gtk.css real del usuario: solo se le añade el @import si falta
+    // (ensureGtkImport). watchChanges (activo por defecto) recarga __text
+    // solo si lo tocas a mano fuera del shell.
+    FileView {
+        id: gtk4RealCssFile
+        path: s.home + "/.config/gtk-4.0/gtk.css"
+        blockLoading: true
+        printErrors: false
+        atomicWrites: true
     }
     // Al guardar el CSS de GTK4 tras un cambio del usuario, refresca las apps GTK
     // abiertas (reinicio de Nautilus). Nautilus lee GTK4, así que basta este.
@@ -792,9 +1055,16 @@ Singleton {
     }
     FileView {
         id: gtk3CssFile
-        path: s.home + "/.config/gtk-3.0/gtk.css"
+        path: s.home + "/.config/gtk-3.0/quickshell.css"
         atomicWrites: true
         printErrors: false
+    }
+    FileView {
+        id: gtk3RealCssFile
+        path: s.home + "/.config/gtk-3.0/gtk.css"
+        blockLoading: true
+        printErrors: false
+        atomicWrites: true
     }
     FileView {
         id: fontsConfFile
@@ -809,23 +1079,20 @@ Singleton {
         onTriggered: s.applyHyprlandThemeNow()
     }
 
+    // Crea la carpeta de destino de theme.lua una sola vez al arrancar (si
+    // Hyprland está activo): FileView no crea directorios por sí solo, y
+    // sin esto el primer setText() a hyprThemeFile fallaría en silencio si
+    // el usuario nunca ha tenido nada en conf/. applyHyprlandThemeNow()
+    // espera a que termine (onExited), no se dispara en paralelo.
     Process {
-        id: hyprDetect
-        command: ["sh", "-c",
-            "(command -v Hyprland >/dev/null 2>&1 || command -v hyprland >/dev/null 2>&1) " +
-            "&& command -v hyprctl >/dev/null 2>&1 " +
-            "&& test -d \"$HOME/.config/hypr/conf\" && echo yes || true"]
-        stdout: StdioCollector {
-            onStreamFinished: {
-                s.hyprlandAvailable = (this.text || "").indexOf("yes") !== -1
-                s.scheduleHyprSync()
-            }
-        }
+        id: hyprConfDirMkdir
+        command: ["mkdir", "-p", s.home + "/.config/hypr/conf"]
+        onExited: (code, status) => s.applyHyprlandThemeNow()
     }
 
     Process {
         id: hyprReload
-        command: ["sh", "-c", "test -n \"$HYPRLAND_INSTANCE_SIGNATURE\" && hyprctl reload >/dev/null 2>&1 || true"]
+        command: ["hyprctl", "reload"]
     }
 
     Timer {
@@ -834,10 +1101,11 @@ Singleton {
         onTriggered: s.applyGtkTheme(true)
     }
 
-    // Solo asegura carpetas y conmuta el modo claro/oscuro (gsettings). La
-    // escritura de los CSS y el refresco de Nautilus van por los FileView.
+    // Sincroniza modo claro/oscuro + tema base GTK3 por gsettings/dconf
+    // (comando armado en applyGtkTheme). El @import en gtk.css y la escritura
+    // de los CSS (quickshell.css) van por los FileView de arriba, sin shell.
     Process {
-        id: gtkApply
+        id: gtkAppearanceSync
     }
 
     // Reinicia Nautilus reabriendo la(s) misma(s) carpeta(s): detecta sus
@@ -895,9 +1163,10 @@ Singleton {
 
     Component.onCompleted: {
         load()
-        hyprDetect.running = true
+        if (hyprlandAvailable)
+            hyprConfDirMkdir.running = true
         xdgPicturesProc.running = true   // resuelve la carpeta de imágenes XDG
-        applyGtkTheme(false)   // genera gtk.css y fija color-scheme (sin reiniciar apps)
+        applyGtkTheme(false)   // genera quickshell.css y fija color-scheme (sin reiniciar apps)
         applyFontsConf()       // genera ~/.config/fontconfig/fonts.conf (render + fuente)
     }
 }

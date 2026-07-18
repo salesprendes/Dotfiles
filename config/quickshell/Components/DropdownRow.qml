@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Controls.Basic
 import QtQuick.Layouts
 import qs.Config
 
@@ -14,6 +15,17 @@ ColumnLayout {
     property string detailText: ""
     property int keyboardIndex: -1
     signal picked(var v)
+
+    // Filtro de la ventana de Ajustes (buscador + "solo modificados").
+    // OPT-IN: sin 'skey' la fila no se filtra nunca, así el mismo componente
+    // sigue funcionando fuera de Ajustes. 'shown' es la condición propia de la
+    // página (p. ej. "solo si hay batería"), que se combina con el filtro.
+    property string skey: ""
+    property string cardTitle: ""
+    property bool shown: true
+    readonly property bool matches: SettingsFilter.accepts(
+        root.label + " " + root.cardTitle, root.skey)
+    visible: root.shown && root.matches
 
     // Grupo exclusivo opcional: si varios DropdownRow comparten el objeto 'group'
     // (con propiedad 'openItem'), solo uno queda abierto; abrir uno cierra los demás.
@@ -103,8 +115,15 @@ ColumnLayout {
     }
 
     onOpenChanged: {
+        // La barra desplazable no se ve hasta que termina de abrirse (ver
+        // dropdownClip.settled): al arrancar un ciclo nuevo (abrir o cerrar)
+        // se apaga de golpe, y solo vuelve a encenderse si la apertura llega
+        // a completarse (settleTimer, temporizada a la par de la animación
+        // de altura — no depende de que la animación emita 'finished').
+        dropdownClip.settled = false
         if (open) {
             syncKeyboardIndex()
+            settleTimer.restart()
             if (group) group.openItem = root   // reclama el grupo, cierra los demás
         }
     }
@@ -187,6 +206,19 @@ ColumnLayout {
         readonly property int panelHeight: Math.min(
             Math.max(1, root.maxVisibleItems) * optionHeight + Theme.space4 * 2,
             optionList.contentHeight + Theme.space4 * 2)
+        // Se enciende cuando termina de crecer, no antes: mientras el panel
+        // todavía se está abriendo, optionList.height va de 0 al valor
+        // final, así que decidir la barra con eso a medias se veía como un
+        // parpadeo feo desde el primer fotograma. settleTimer (temporizado a
+        // la par de la animación de altura) la enciende al terminar — no un
+        // 'onFinished' de la animación, que con Behavior no siempre llega a
+        // dispararse si el destino cambia a media transición.
+        property bool settled: false
+        Timer {
+            id: settleTimer
+            interval: Theme.animNormal
+            onTriggered: dropdownClip.settled = root.open
+        }
         // Solo altura + opacidad; scale/desplazamiento causaban "salto".
         implicitHeight: root.open ? panelHeight : 0
         Behavior on implicitHeight { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
@@ -208,6 +240,38 @@ ColumnLayout {
                 clip: true
                 model: root.options
                 boundsBehavior: Flickable.StopAtBounds
+                // Contra el hueco YA ABIERTO del todo (maxVisibleItems), no
+                // contra 'height': ese va animando de 0 al valor final según
+                // se abre, y compararse con eso hacía que 'scrollable' fuera
+                // true casi siempre mientras crecía (falso positivo, no un
+                // parpadeo de verdad). Así es una cuenta fija, sin depender
+                // de en qué fotograma de la animación estemos.
+                readonly property bool scrollable: contentHeight > Math.max(1, root.maxVisibleItems) * dropdownClip.optionHeight
+                readonly property real scrollGutter: scrollable ? Theme.dp(10) : 0
+
+                ScrollBar.vertical: ScrollBar {
+                    id: optionScrollBar
+                    policy: optionList.scrollable ? ScrollBar.AlwaysOn : ScrollBar.AlwaysOff
+                    // No se ve hasta que el panel termina de abrirse del
+                    // todo (ver dropdownClip.settled): antes se dibujaba con
+                    // el tamaño/posición a medio calcular sobre una altura
+                    // que todavía se estaba animando.
+                    opacity: dropdownClip.settled ? 1 : 0
+                    Behavior on opacity { NumberAnimation { duration: Theme.animFast } }
+                    contentItem: Rectangle {
+                        implicitWidth: Theme.dp(5)
+                        radius: width / 2
+                        color: Theme.accent
+                        opacity: optionScrollBar.pressed ? 0.9 : (optionScrollBar.active ? 0.65 : 0.4)
+                        Behavior on opacity { NumberAnimation { duration: Theme.animFast } }
+                    }
+                    background: Rectangle {
+                        implicitWidth: Theme.dp(5)
+                        radius: width / 2
+                        color: Theme.sliderTrack
+                        opacity: 0.35
+                    }
+                }
 
                 function choose(value) {
                     root.picked(value)
@@ -220,7 +284,7 @@ ColumnLayout {
                     required property int index
                     readonly property bool sel: modelData.value === root.current
                     readonly property bool focused: ListView.isCurrentItem
-                    width: ListView.view.width
+                    width: ListView.view.width - optionList.scrollGutter
                     height: dropdownClip.optionHeight
                     radius: Theme.pillRadius - Theme.space2
                     // El color base solo va de acento-tinte a "transparent"; el hover

@@ -50,7 +50,6 @@ ColumnLayout {
     Slider {
         Layout.fillWidth: true
         accent: root.accent
-        trackColor: Theme.bgAlt
         value: root.value
         onMoved: (v) => root.moved(v)
     }

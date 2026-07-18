@@ -16,27 +16,7 @@ ColumnLayout {
         title: I18n.tr("Animations and motion"); glyph: "󰓞"
 
         SegRow {
-            label: I18n.tr("Animation Style")
-            options: [
-                { text: "Material", value: "material" },
-                { text: "Fluent", value: "fluent" },
-                { text: "Dynamic", value: "dynamic" }
-            ]
-            current: Settings.panelAnimationStyle
-            onPicked: (v) => Settings.panelAnimationStyle = v
-        }
-
-        Hint {
-            text: {
-                if (Settings.panelAnimationStyle === "fluent")
-                    return I18n.tr("Fluent: clean entrance with smooth deceleration and quick close.")
-                if (Settings.panelAnimationStyle === "dynamic")
-                    return I18n.tr("Dynamic: elastic entrance with visible bounce and quick close.")
-                return I18n.tr("Material: expressive entrance with soft scale and short displacement.")
-            }
-        }
-
-        SegRow {
+            skey: "animationSpeed"
             label: I18n.tr("Animation Speed")
             options: [
                 { text: I18n.tr("None"), value: 0 },
@@ -50,6 +30,7 @@ ColumnLayout {
         }
 
         Hint {
+            skey: "animationSpeed"
             text: {
                 if (Settings.animationSpeed === 0)
                     return I18n.tr("None: panels change instantly, with no transition.")
@@ -63,32 +44,6 @@ ColumnLayout {
             }
         }
 
-        Rectangle {
-            Layout.fillWidth: true
-            implicitHeight: Theme.hairline
-            color: Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.32)
-        }
-
-        SegRow {
-            label: I18n.tr("Panel motion")
-            options: [
-                { text: I18n.tr("Standard"), value: "standard" },
-                { text: I18n.tr("Directional"), value: "directional" },
-                { text: I18n.tr("Depth"), value: "depth" }
-            ]
-            current: Settings.panelMotionEffect
-            onPicked: (v) => Settings.panelMotionEffect = v
-        }
-
-        Hint {
-            text: {
-                if (Settings.panelMotionEffect === "directional")
-                    return I18n.tr("Directional: wide full-size slide, without scaling.")
-                if (Settings.panelMotionEffect === "depth")
-                    return I18n.tr("Depth: deep scale and medium displacement with approach effect.")
-                return I18n.tr("Standard: short displacement with subtle scale and Material feel.")
-            }
-        }
     }
 
     SettingsCard {
@@ -123,6 +78,7 @@ ColumnLayout {
         }
 
         DropdownRow {
+            skey: "fontFamily"
             label: I18n.tr("Normal Font")
             options: Fonts.list.map(f => ({ text: f, value: f, font: f }))
             current: Settings.fontFamily
@@ -132,6 +88,7 @@ ColumnLayout {
         }
 
         DropdownRow {
+            skey: "monoFontFamily"
             label: I18n.tr("Monospace Font")
             options: Fonts.monoList.map(f => ({ text: f, value: f, font: f }))
             current: Settings.monoFontFamily
@@ -141,6 +98,7 @@ ColumnLayout {
         }
 
         SliderRow {
+            skey: "fontScale"
             label: I18n.tr("Letter scale"); glyph: "󰗊"
             from: 0.8; to: 1.3; value: Settings.fontScale
             valueText: I18n.tr("%1% · effective %2%").arg(Math.round(Settings.fontScale * 100)).arg(Math.round(Theme.scale * Settings.fontScale * 100))
@@ -153,16 +111,19 @@ ColumnLayout {
         title: I18n.tr("Font rendering"); glyph: "󰚌"
 
         SwitchRow {
+            skey: "fontAntialias"
             label: I18n.tr("Antialiasing")
             checked: Settings.fontAntialias
             onToggled: Settings.fontAntialias = !Settings.fontAntialias
         }
         SwitchRow {
+            skey: "fontHinting"
             label: I18n.tr("Hinting")
             checked: Settings.fontHinting
             onToggled: Settings.fontHinting = !Settings.fontHinting
         }
         SegRow {
+            skey: "fontHintstyle"
             label: I18n.tr("Hint style")
             options: [
                 { text: I18n.tr("None"),   value: "hintnone" },
@@ -174,6 +135,7 @@ ColumnLayout {
             onPicked: (v) => Settings.fontHintstyle = v
         }
         DropdownRow {
+            skey: "fontRgba"
             label: I18n.tr("Subpixel order (RGBA)")
             options: [
                 { text: I18n.tr("None (grayscale)"), value: "none" },
@@ -186,6 +148,7 @@ ColumnLayout {
             onPicked: (v) => Settings.fontRgba = v
         }
         DropdownRow {
+            skey: "fontLcdfilter"
             label: I18n.tr("LCD filter")
             options: [
                 { text: I18n.tr("None"),    value: "none" },
@@ -197,6 +160,7 @@ ColumnLayout {
             onPicked: (v) => Settings.fontLcdfilter = v
         }
         SwitchRow {
+            skey: "fontEmbeddedbitmap"
             label: I18n.tr("Embedded bitmaps")
             desc: I18n.tr("Disabled avoids pixelated bitmap fonts")
             checked: Settings.fontEmbeddedbitmap

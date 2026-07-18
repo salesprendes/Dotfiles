@@ -15,12 +15,6 @@ Singleton {
 
     readonly property var palette: Settings.currentPalette
 
-    // Tema "Liquid Glass" activo: las superficies se vuelven bastante más
-    // translúcidas para que el blur del compositor (que activa shell.qml con
-    // hl.layer_rule) se lea como cristal esmerilado. Con otros temas, cero
-    // cambios: se respetan las opacidades del usuario.
-    readonly property bool glass: Settings.themeName === "liquid-glass"
-
     // Paleta base
     readonly property color bg:        isDark ? palette.bg        : palette.lightBg
     readonly property color bgAlt:     isDark ? palette.bgAlt     : palette.lightBgAlt
@@ -51,19 +45,22 @@ Singleton {
         return Qt.rgba(c.r, c.g, c.b, a)
     }
 
-    // Opacidades EFECTIVAS: en Liquid Glass usan glass*Opacity; en el resto, las
-    // normales (ver Settings.eff*). Así los sliders de Ajustes editan y reflejan
-    // la opacidad del tema activo. El blur del compositor detrás convierte estas
-    // superficies translúcidas en cristal esmerilado.
+    // Opacidades efectivas (ver Settings.eff*): los sliders de Ajustes las editan.
     readonly property color barBg:      withAlpha(bg, Settings.effBarOpacity)
     readonly property color popupBg:    withAlpha(bg, Settings.effPopupOpacity)
     readonly property color pillBg:     withAlpha(surface, Settings.effWidgetOpacity)
-    // Borde de los paneles (filo de luz). En cristal se afina a un outline
-    // sutil; en el resto de temas mantiene el valor previo (overlay@0.5)
-    // para no alterar nada.
-    readonly property color panelBorder: withAlpha(overlay, glass ? 0.22 : 0.5)
+    readonly property color panelBorder: withAlpha(overlay, 0.5)
     readonly property color focusRing:  withAlpha(accent, 0.92)
     readonly property color focusBg:    withAlpha(accent, 0.14)
+
+    // Carril de los sliders. OPACO a propósito: los paneles ya son translúcidos,
+    // así que un carril con alfa dejaba ver el fondo de escritorio a través y se
+    // leía como un hueco, no como un control. Usa 'overlay' (el Outline) y
+    // no 'surface': el escalón sobre el fondo del panel tiene que
+    // verse desde lejos, y las superficies quedan demasiado cerca del fondo.
+    // Token único para que los tres sliders no vuelvan a divergir (había tres
+    // colores distintos).
+    readonly property color sliderTrack: overlay
 
     // densityScale se deriva de la resolución del monitor mayor (lado corto
     // relativo a 1080p). uiScale del usuario multiplica encima (1.0 = neutro):
@@ -135,7 +132,10 @@ Singleton {
     readonly property int tileL: dp(64)
 
     readonly property int   barHeight:   dp(Math.round(38 * Settings.barScale))
-    readonly property int   barMargin:   dp(8)       // separación del borde
+    // barMargin conserva la geometría interna original de las pills.
+    // barTopMargin controla únicamente la posición vertical de la barra.
+    readonly property int   barMargin:      dp(8)
+    readonly property int   barTopMargin:   dp(4)
     // Factor de redondeo amplificado: por debajo del 100% es lineal
     // (de casi-cuadrado a normal); por encima crece x2.2 para que subir
     // hasta el 160% se note claramente más redondeado (≈ doble de radio).
@@ -154,7 +154,30 @@ Singleton {
     readonly property real   fontScale: Settings.fontScale
     readonly property int    fontSize:    sp(13)
     readonly property int    iconSize:    sp(15)
+    // Iconos de la barra superior: más prominentes que iconSize general.
+    // En la pill (Components/Pill.qml) quedaban perdidos con mucho hueco
+    // alrededor sobre monitores grandes; un multiplicador fijo sobre iconSize
+    // los hace notoriamente más grandes mientras siguen escalando con
+    // 'scale' (resolución/densidad), en vez de quedar en un tamaño fijo.
+    readonly property int    barIconSize: Math.round(iconSize * 1.2)
 
     readonly property int   animFast:   Settings.animFastMs
     readonly property int   animNormal: Settings.animNormalMs
+    readonly property int   animSlow:   Settings.animSlowMs
+
+    // Todo lo que aparece entra con OutCubic y sale con InQuad, en
+    // animNormal. No hay muelles ni curvas bezier: se anima un único
+    // escalar 'reveal' 0→1 y se deriva de él la geometria (un barrido de
+    // recorte desde el borde anclado, no un escalado) y la opacidad.
+    readonly property int enterEasing: Easing.OutCubic
+    readonly property int exitEasing:  Easing.InQuad
+    // Reacomodos (pilas que se recolocan, cambios de pestaña).
+    readonly property int reflowEasing: Easing.InOutQuad
+
+    // Opacidad del contenido en funcion del reveal: se mantiene invisible
+    // hasta el 15% y funde en el 85% restante — la tarjeta se abre primero
+    // y el contenido aparece dentro, con retardo.
+    function revealOpacity(reveal) {
+        return Math.max(0, Math.min(1, (reveal - 0.15) / 0.85))
+    }
 }

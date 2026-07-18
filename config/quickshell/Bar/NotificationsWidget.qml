@@ -13,15 +13,15 @@ Pill {
     onRightClicked: Globals.dnd = !Globals.dnd
 
     Item {
-        implicitWidth: Theme.iconSize + 2
-        implicitHeight: Theme.iconSize + 2
+        implicitWidth: Theme.barIconSize + 2
+        implicitHeight: Theme.barIconSize + 2
 
         Text {
             anchors.centerIn: parent
             text: Globals.dnd ? "󰂛" : "󰂚"
             color: Globals.dnd ? Theme.fgMuted : Theme.yellow
             font.family: Theme.fontFamily
-            font.pixelSize: Theme.iconSize
+            font.pixelSize: Theme.barIconSize
         }
 
         CountBadge {

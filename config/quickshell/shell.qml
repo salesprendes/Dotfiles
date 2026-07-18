@@ -1,7 +1,8 @@
-//@ pragma UseQApplication
+//@ pragma Env QV4_FORCE_INTERPRETER = 1
 // Punto de entrada del shell: una barra por monitor.
-// UseQApplication hace falta para los menús nativos del tray
-// (SystemTray → modelData.display()).
+// Se fuerza el intérprete de QV4 para evitar una caída reproducida del JIT de
+// Qt 6.11.1 (QV4::Value::sameValueZero) al reevaluar bindings de larga vida.
+// La bandeja usa su propio menú QML, así que no necesita QApplication/Widgets.
 
 import QtQuick
 import Quickshell
@@ -15,6 +16,36 @@ import qs.Services
 
 ShellRoot {
     id: shell
+
+    // Un único inhibidor global para el modo cafeína. Hypridle respeta los
+    // inhibidores systemd de tipo "idle", por lo que pausa todos sus listeners
+    // (brillo, bloqueo, DPMS y suspensión). Al poner running a false, Process
+    // envía SIGTERM y systemd-inhibit libera el bloqueo inmediatamente.
+    Process {
+        id: caffeineInhibitor
+        running: Settings.caffeine
+        command: [
+            "systemd-inhibit",
+            "--what=idle",
+            "--who=Quickshell",
+            "--why=Modo cafeína activo",
+            "--mode=block",
+            "sleep", "infinity"
+        ]
+
+        stderr: SplitParser {
+            onRead: (line) => console.warn("Cafeína: " + line)
+        }
+
+        onExited: (exitCode, exitStatus) => {
+            // Si el comando falla mientras debía estar activo, no dejamos la
+            // interfaz mostrando un estado que en realidad no está protegido.
+            if (Settings.caffeine) {
+                console.warn("Cafeína: el inhibidor terminó (código " + exitCode + ")")
+                Settings.caffeine = false
+            }
+        }
+    }
 
     readonly property int startupScreenCount: Math.max(1, Quickshell.screens.length)
     property int startupBackdropReadyCount: 0
@@ -70,7 +101,7 @@ ShellRoot {
         function record(): void { ScreenCapture.openToolbar(true) }
         function settings(): void { Globals.toggleSettings() }
         function dnd(): void { Globals.dnd = !Globals.dnd }
-        function caffeine(): void { Globals.caffeine = !Globals.caffeine }
+        function caffeine(): void { Settings.caffeine = !Settings.caffeine }
         function close(): void { Globals.closeAll() }
     }
 
@@ -106,45 +137,17 @@ ShellRoot {
         onTriggered: lockMonitor.running = true
     }
 
-    // Tema "Liquid Glass": pide a Hyprland (parser Lua → `hyprctl eval`) que
-    // aplique blur a los namespaces del shell mientras el tema esté activo.
-    // `ignore_alpha` limita el blur a la parte translúcida (barra/tarjeta); el
-    // resto de la ventana es transparente y no se esmerila, si no un popout a
-    // pantalla completa frostearía toda la pantalla. Al salir se revierte
-    // (blur=false). Se re-aplica al arrancar por si el tema ya venía puesto. Se
-    // excluyen a propósito wallpaper/splash/carrusel.
-    readonly property var glassLayers: [
-        "quickshell", "qs-popout", "qs-launcher", "qs-notifcenter", "qs-clipboard",
-        "qs-controlcenter", "qs-sysmon", "qs-dashboard", "qs-popups", "qs-osd-volume",
-        "qs-ipconfig", "qs-wifiprompt", "qs-recording-pill", "qs-screen-capture"
-    ]
-    function applyGlassBlur() {
-        const on = Settings.themeName === "liquid-glass"
-        // qs-popups lleva además xray: sin él, la caché del blur de Hyprland
-        // se realimenta con el fotograma anterior de la propia capa y, al
-        // reacomodarse la pila de popups (escena estática tras no_anim), la
-        // tarjeta restante se veía con el texto duplicado/emborronado durante
-        // segundos. Con xray el blur muestrea solo lo que hay detrás.
-        const lua = shell.glassLayers.map(n =>
-            'hl.layer_rule({ name = "qs-glass-' + n + '", match = { namespace = "' + n
-            + '" }, blur = ' + on + ', ignore_alpha = 0.1'
-            + (n === "qs-popups" ? ', xray = true' : '') + ' })'
-        ).join("; ")
-        // Los popups de notificación animan su entrada/salida DESDE QML;
-        // sin esta regla Hyprland superpone además su animación de layers
-        // (fade al mapear/desmapear y el redimensionado de la capa), lo que
-        // producía una entrada doble "forzada" y una franja gris residual
-        // al desvanecer la instantánea del último búfer tras cerrar.
-        const noanim = '; hl.layer_rule({ name = "qs-noanim-popups", match = '
-            + '{ namespace = "qs-popups" }, no_anim = true })'
-        Quickshell.execDetached(["hyprctl", "eval", lua + noanim])
+    // Los popups de notificación animan su entrada/salida DESDE QML; sin esta
+    // regla Hyprland superpone además su animación de layers (fade al mapear/
+    // desmapear y el redimensionado de la capa), lo que producía una entrada
+    // doble "forzada" y una franja gris residual al desvanecer la instantánea
+    // del último búfer tras cerrar.
+    function applyLayerRules() {
+        Quickshell.execDetached(["hyprctl", "eval",
+            'hl.layer_rule({ name = "qs-noanim-popups", match = '
+            + '{ namespace = "qs-popups" }, no_anim = true })'])
     }
-    Component.onCompleted: applyGlassBlur()
-    Connections {
-        target: Settings
-        function onThemeNameChanged() { shell.applyGlassBlur() }
-    }
-
+    Component.onCompleted: applyLayerRules()
     // Fondo de pantalla: una ventana por monitor en la capa Background,
     // con la transición de imagen gestionada desde QML.
     Variants {

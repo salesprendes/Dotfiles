@@ -20,6 +20,7 @@ Singleton {
 
     property int _ddcBus: -1
     property int _ddcMax: 100
+    property string _backlightPath: ""
     property int _pending: -1           // valor DDC pendiente (debounce)
     property int _pendingPct: -1        // % backlight pendiente (throttle)
 
@@ -37,8 +38,9 @@ Singleton {
     Process {
         id: detect
         command: ["sh", "-c",
-            "bl=$(brightnessctl -m -c backlight 2>/dev/null | grep -m1 ',backlight,'); " +
-            "if [ -n \"$bl\" ]; then p=$(echo \"$bl\" | cut -d, -f4 | tr -d '%'); echo \"backlight ${p:-0} 100 -1\"; exit 0; fi; " +
+            "dev=''; for p in /sys/class/backlight/*; do [ -r \"$p/brightness\" ] && dev=$p && break; done; " +
+            "if [ -n \"$dev\" ]; then c=$(cat \"$dev/brightness\"); m=$(cat \"$dev/max_brightness\"); " +
+            "echo \"backlight ${c:-0} ${m:-100} $dev/brightness\"; exit 0; fi; " +
             (!Deps.has("ddcutil") ? "echo 'none 0 100 -1'" :
             "cache=\"${XDG_CACHE_HOME:-$HOME/.cache}/qs-brightness-bus\"; " +
             "bus=$(cat \"$cache\" 2>/dev/null); " +
@@ -69,17 +71,22 @@ Singleton {
         if (f.length < 3 || f[0] === "none") {
             bright.available = false
             bright.method = "none"
+            bright._backlightPath = ""
             return
         }
         bright.method = f[0]
         // Marca de tiempo de la última lectura DDC válida (para el enfriamiento
         // de la relectura al abrir el Centro de control).
-        if (f[0] === "ddc")
+        if (f[0] === "ddc") {
             bright._lastDdcRead = Date.now()
+            bright._backlightPath = ""
+        } else {
+            bright._backlightPath = f.length >= 4 ? f[3] : ""
+        }
         const cur = parseInt(f[1]) || 0
         const max = parseInt(f[2]) || 100
         bright._ddcMax = max > 0 ? max : 100
-        bright._ddcBus = (f.length >= 4) ? parseInt(f[3]) : -1
+        bright._ddcBus = (f[0] === "ddc" && f.length >= 4) ? parseInt(f[3]) : -1
         bright.percent = Math.max(0, Math.min(100, Math.round(cur / bright._ddcMax * 100)))
         bright.available = true
     }
@@ -100,28 +107,20 @@ Singleton {
         }
     }
 
-    // Relectura periódica (solo backlight; DDC es lento). El único consumidor
-    // de percent es el slider del Centro de control, así que solo se sondea
-    // mientras está abierto (lectura inmediata al abrir vía triggeredOnStart).
-    // Capturar cambios por tecla de hardware solo importa si el slider se ve.
-    Timer {
-        interval: 5000
-        running: bright.available && bright.method === "backlight" && Globals.controlCenterOpen
-        repeat: true
-        triggeredOnStart: true
-        onTriggered: reader.running = true
-    }
-    Process {
-        id: reader
-        command: ["sh", "-c", "brightnessctl -m -c backlight 2>/dev/null | grep -m1 ',backlight,'"]
-        stdout: StdioCollector {
-            onStreamFinished: {
-                const l = (this.text || "").trim()
-                if (!l) return
-                const parts = l.split(",")
-                if (parts.length >= 4)
-                    bright.percent = parseInt(parts[3]) || bright.percent
-            }
+    // El kernel notifica cambios del backlight por sysfs. FileView mantiene un
+    // inotify y evita lanzar brightnessctl cada cinco segundos mientras el
+    // Centro de control está abierto.
+    FileView {
+        id: backlightFile
+        path: bright.method === "backlight" ? bright._backlightPath : ""
+        watchChanges: path !== ""
+        printErrors: false
+        onFileChanged: reload()
+        onLoaded: {
+            const current = parseInt(text())
+            if (!isNaN(current) && bright._ddcMax > 0)
+                bright.percent = Math.max(0, Math.min(100,
+                    Math.round(current / bright._ddcMax * 100)))
         }
     }
 

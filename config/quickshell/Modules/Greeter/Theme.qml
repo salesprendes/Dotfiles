@@ -1,20 +1,23 @@
 pragma Singleton
-// Colores 'solitude' + acento blue, con escala dp.
+// Paleta 'salesprendes' (modo oscuro), con escala dp. El greeter corre antes
+// de la sesión y no lee settings.json, así que los colores van fijos aquí:
+// se mantienen a mano en sintonía con themePresets.salesprendes de
+// Config/Settings.qml.
 import QtQuick
 import Quickshell
 
 Singleton {
     id: root
 
-    readonly property color bg:        "#101315"
-    readonly property color surface:   "#1e2427"
-    readonly property color surfaceHi: "#2a3033"
-    readonly property color overlay:   "#4b4e55"
-    readonly property color fg:        "#cacccc"
-    readonly property color fgDim:     "#a5aeb4"
-    readonly property color fgMuted:   "#707070"
-    readonly property color accent:    "#7aa2f7"
-    readonly property color red:       "#de6145"
+    readonly property color bg:        "#070722"
+    readonly property color surface:   "#11112d"
+    readonly property color surfaceHi: "#15153b"
+    readonly property color overlay:   "#21215f"
+    readonly property color fg:        "#f3edf7"
+    readonly property color fgDim:     "#7c80b4"
+    readonly property color fgMuted:   "#535681"
+    readonly property color accent:    "#fff59b"
+    readonly property color red:       "#fd4663"
     readonly property string font:     "JetBrainsMono Nerd Font"
 
     // Densidad automática según el monitor mayor

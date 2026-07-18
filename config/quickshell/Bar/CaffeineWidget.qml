@@ -6,18 +6,18 @@ import qs.Config
 Pill {
     id: root
     interactive: true
-    onClicked: Globals.caffeine = !Globals.caffeine
+    onClicked: Settings.caffeine = !Settings.caffeine
 
     Item {
-        implicitWidth: Theme.iconSize + 2
-        implicitHeight: Theme.iconSize + 2
+        implicitWidth: Theme.barIconSize + 2
+        implicitHeight: Theme.barIconSize + 2
 
         Text {
             anchors.centerIn: parent
             text: "󰅶"   // taza de café
-            color: Globals.caffeine ? Theme.accent : Theme.fgMuted
+            color: Settings.caffeine ? Theme.accent : Theme.fgMuted
             font.family: Theme.fontFamily
-            font.pixelSize: Theme.iconSize
+            font.pixelSize: Theme.barIconSize
             Behavior on color { ColorAnimation { duration: Theme.animFast } }
         }
     }

@@ -1,0 +1,35 @@
+layout {
+
+    focus-ring {
+        active-color   "{{primary}}"
+        inactive-color "{{surface}}"
+        urgent-color   "{{error}}"
+    }
+
+    border {
+        active-color   "{{primary}}"
+        inactive-color "{{surface}}"
+        urgent-color   "{{error}}"
+    }
+
+    shadow {
+        color "{{shadow}}70"
+    }
+
+    tab-indicator {
+        active-color   "{{primary}}"
+        inactive-color "{{primaryContainer}}"
+        urgent-color   "{{error}}"
+    }
+
+    insert-hint {
+        color "{{primary}}80"
+    }
+}
+
+recent-windows {
+    highlight {
+        active-color "{{primary}}"
+        urgent-color "{{error}}"
+    }
+}

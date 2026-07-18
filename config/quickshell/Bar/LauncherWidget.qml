@@ -13,7 +13,7 @@ Pill {
         text: SysMon.distroGlyph
         color: Globals.launcherOpen ? Theme.accent2 : Theme.accent
         font.family: Theme.fontFamily
-        font.pixelSize: Theme.iconSize + 3
+        font.pixelSize: Theme.barIconSize + 3
         Behavior on color { ColorAnimation { duration: Theme.animFast } }
     }
 }

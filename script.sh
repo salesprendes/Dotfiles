@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 SCRIPT_NAME=salesprendes
 
-BASE_PACKAGES=(base-devel git linux-firmware quickshell qt6-declarative hyprland ttf-jetbrains-mono-nerd cliphist wl-clipboard hyprlock polkit hyprpolkitagent procps-ng nano networkmanager bluez bluez-utils pipewire wireplumber pipewire-pulse playerctl upower rtkit hypridle power-profiles-daemon xdg-desktop-portal xdg-desktop-portal-gtk xdg-desktop-portal-hyprland xdg-user-dirs hyprshot net-tools imv wireless-regdb nautilus kitty zsh zsh-autosuggestions zsh-syntax-highlighting starship fastfetch uwsm eza fzf zoxide bat satty gpu-screen-recorder mpv)
+BASE_PACKAGES=(base-devel git linux-firmware quickshell qt6-declarative hyprland ttf-jetbrains-mono-nerd cliphist wl-clipboard hyprlock polkit hyprpolkitagent procps-ng nano networkmanager bluez bluez-utils pipewire wireplumber pipewire-pulse playerctl upower rtkit hypridle power-profiles-daemon xdg-desktop-portal xdg-desktop-portal-gtk xdg-desktop-portal-hyprland xdg-user-dirs hyprshot net-tools imv wireless-regdb nautilus kitty zsh zsh-autosuggestions zsh-syntax-highlighting starship fastfetch uwsm eza fzf zoxide bat satty gpu-screen-recorder mpv accountsservice)
 AMD_PACKAGES=(mesa vulkan-radeon mesa-utils vulkan-tools libva-utils lib32-mesa lib32-vulkan-radeon libva-mesa-driver lib32-libva-mesa-driver)
 
 BRIGHTNESSCTL_PACKAGES=(brightnessctl)
@@ -675,7 +675,7 @@ install_dotfiles() {
 # Servicios (#1)
 # ---------------------------------------------------------------------------
 enable_services() {
-  local services=(systemd-resolved.service NetworkManager.service bluetooth.service rtkit-daemon.service power-profiles-daemon.service upower.service systemd-homed.service)
+  local services=(systemd-resolved.service NetworkManager.service bluetooth.service rtkit-daemon.service power-profiles-daemon.service upower.service systemd-homed.service accounts-daemon.service)
   local service
   for service in "${services[@]}"; do
     if ! service_exists "${service}"; then

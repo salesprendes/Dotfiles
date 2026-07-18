@@ -34,6 +34,17 @@ Rectangle {
                  : Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.4)
     Behavior on border.color { ColorAnimation { duration: Theme.animFast } }
 
+    // Toda la píldora enfoca el campo, no solo la franja del texto: el
+    // TextInput mide lo que mide su fuente y clicar el relleno de alrededor
+    // no hacía nada (en los popouts no se notaba porque enfocan por código
+    // al abrirse; en una ventana normal dejaba el buscador "muerto").
+    // Declarado ANTES de la fila: el botón de limpiar queda encima y gana.
+    MouseArea {
+        anchors.fill: parent
+        cursorShape: Qt.IBeamCursor
+        onPressed: input.forceActiveFocus()
+    }
+
     RowLayout {
         id: row
         anchors.fill: parent
@@ -52,6 +63,7 @@ Rectangle {
         TextInput {
             id: input
             Layout.fillWidth: true
+            Layout.fillHeight: true
             clip: true
             color: Theme.fg
             font.family: Theme.fontFamily

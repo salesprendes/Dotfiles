@@ -1,0 +1,84 @@
+[colors]
+ansi = [
+    "{{terminalNormalBlack}}",
+    "{{terminalNormalRed}}",
+    "{{terminalNormalGreen}}",
+    "{{terminalNormalYellow}}",
+    "{{terminalNormalBlue}}",
+    "{{terminalNormalMagenta}}",
+    "{{terminalNormalCyan}}",
+    "{{terminalNormalWhite}}",
+]
+background = "{{terminalBackground}}"
+brights = [
+    "{{terminalBrightBlack}}",
+    "{{terminalBrightRed}}",
+    "{{terminalBrightGreen}}",
+    "{{terminalBrightYellow}}",
+    "{{terminalBrightBlue}}",
+    "{{terminalBrightMagenta}}",
+    "{{terminalBrightCyan}}",
+    "{{terminalBrightWhite}}",
+]
+compose_cursor = "{{terminalCursor}}"
+cursor_bg = "{{terminalCursor}}"
+cursor_border = "{{terminalCursor}}"
+cursor_fg = "{{terminalCursorText}}"
+foreground = "{{terminalForeground}}"
+scrollbar_thumb = "{{terminalSelectionBg}}"
+selection_bg = "{{terminalSelectionBg}}"
+selection_fg = "{{terminalSelectionFg}}"
+split = "{{terminalBrightBlack}}"
+visual_bell = "{{terminalNormalBlack}}"
+
+[colors.indexed]
+16 = "{{secondary}}"
+17 = "{{terminalCursor}}"
+
+[colors.tab_bar]
+background = "{{terminalBackgroundDarken01}}"
+inactive_tab_edge = "{{terminalSelectionBg}}"
+
+[colors.tab_bar.active_tab]
+bg_color = "{{primary}}"
+fg_color = "{{onPrimary}}"
+intensity = "Normal"
+italic = false
+strikethrough = false
+underline = "None"
+
+[colors.tab_bar.inactive_tab]
+bg_color = "{{terminalBackgroundDarken005}}"
+fg_color = "{{terminalForeground}}"
+intensity = "Normal"
+italic = false
+strikethrough = false
+underline = "None"
+
+[colors.tab_bar.inactive_tab_hover]
+bg_color = "{{terminalBackground}}"
+fg_color = "{{terminalForeground}}"
+intensity = "Normal"
+italic = false
+strikethrough = false
+underline = "None"
+
+[colors.tab_bar.new_tab]
+bg_color = "{{terminalSelectionBg}}"
+fg_color = "{{terminalForeground}}"
+intensity = "Normal"
+italic = false
+strikethrough = false
+underline = "None"
+
+[colors.tab_bar.new_tab_hover]
+bg_color = "{{terminalBrightBlack}}"
+fg_color = "{{terminalForeground}}"
+intensity = "Normal"
+italic = false
+strikethrough = false
+underline = "None"
+
+[metadata]
+author = "Quickshell"
+name = "Quickshell"

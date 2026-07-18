@@ -1,0 +1,80 @@
+/*
+ * Colores GTK3 / libadwaita (tema clásico).
+ * Renderizado por Config/Settings.qml (gtkTokens() + renderTemplate()):
+ * los {{token}} los sustituye el shell; las líneas @nombre son alias GTK
+ * (referencian un color ya definido arriba, sin repetir el hex).
+ *
+ * Este archivo se escribe en ~/.config/gtk-3.0/quickshell.css. gtk.css NO se
+ * toca directamente: ensureGtkImport() en Config/Settings.qml se limita a
+ * asegurar que gtk.css importe este archivo, conservando lo que ya tuvieras ahí.
+ *
+ * Editable a mano: cambia lo que quieras, se relee en cada aplicación.
+ */
+
+@define-color accent_color {{accent}};
+@define-color accent_bg_color {{accent}};
+@define-color accent_fg_color {{accent_fg}};
+
+@define-color destructive_bg_color {{destructive}};
+@define-color destructive_fg_color {{destructive_fg}};
+
+@define-color error_bg_color {{error}};
+@define-color error_fg_color {{error_fg}};
+
+@define-color window_bg_color {{window_bg}};
+@define-color window_fg_color {{window_fg}};
+
+@define-color view_bg_color {{view_bg}};
+@define-color view_fg_color {{view_fg}};
+
+@define-color headerbar_bg_color {{headerbar_bg}};
+@define-color headerbar_fg_color {{headerbar_fg}};
+@define-color headerbar_backdrop_color @window_bg_color;
+
+@define-color popover_bg_color {{popover_bg}};
+@define-color popover_fg_color {{popover_fg}};
+
+@define-color card_bg_color {{card_bg}};
+@define-color card_fg_color {{card_fg}};
+
+@define-color dialog_bg_color {{dialog_bg}};
+@define-color dialog_fg_color {{dialog_fg}};
+
+@define-color overview_bg_color {{overview_bg}};
+@define-color overview_fg_color {{overview_fg}};
+
+@define-color sidebar_bg_color {{sidebar_bg}};
+@define-color sidebar_fg_color {{sidebar_fg}};
+@define-color sidebar_backdrop_color @window_bg_color;
+@define-color sidebar_border_color @window_bg_color;
+
+@define-color secondary_sidebar_bg_color {{secondary_sidebar_bg}};
+@define-color secondary_sidebar_fg_color {{secondary_sidebar_fg}};
+
+/* Selección con foco. */
+@define-color theme_selected_bg_color @accent_bg_color;
+@define-color theme_selected_fg_color @accent_fg_color;
+
+/* Ventana sin foco. */
+@define-color theme_unfocused_fg_color @window_fg_color;
+@define-color theme_unfocused_text_color @view_fg_color;
+@define-color theme_unfocused_bg_color @window_bg_color;
+@define-color theme_unfocused_base_color @window_bg_color;
+@define-color theme_unfocused_selected_bg_color @accent_bg_color;
+@define-color theme_unfocused_selected_fg_color @accent_fg_color;
+
+/*
+ * Nombres CLÁSICOS de GTK3 previos a libadwaita. El tema base adw-gtk3(-dark)
+ * (instalación y activación manuales, vía nwg-look — ver Ajustes → Plantillas)
+ * ya remapea estos nombres por dentro; si no lo tienes instalado o activo,
+ * estas líneas son las que dan color a esas apps igualmente. Con adw-gtk3
+ * activo son redundantes pero inofensivas (mismo valor).
+ */
+@define-color theme_bg_color {{window_bg}};
+@define-color theme_fg_color {{window_fg}};
+@define-color theme_base_color {{view_bg}};
+@define-color theme_text_color {{view_fg}};
+@define-color insensitive_bg_color {{window_bg}};
+@define-color menu_bg_color {{popover_bg}};
+@define-color menu_fg_color {{popover_fg}};
+@define-color borders {{legacy_border}};
