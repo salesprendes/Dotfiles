@@ -10,7 +10,7 @@ Rectangle {
     property bool  checked: false
     property color onColor: Theme.accent
     property color offColor: Theme.surface
-    property color offBorderColor: Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.4)
+    property color offBorderColor: Theme.withAlpha(Theme.overlay, 0.4)
     signal toggled()
 
     activeFocusOnTab: enabled

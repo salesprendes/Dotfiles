@@ -70,15 +70,25 @@ Singleton {
     // Escaneo de imágenes con `find` sobre todas las carpetas.
     Process {
         id: scanProc
-        command: ["sh", "-c",
-            "for d in " + root.searchDirs.map(Utils.shellQuote).join(" ") + "; do "
-            + "[ -d \"$d\" ] && find -L \"$d\" -maxdepth 2 -type f "
-            + "\\( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' "
-            + "-o -iname '*.webp' -o -iname '*.gif' \\); done | sort -u"]
+        // find acepta varios directorios de partida en argv plano; los que no
+        // existan solo producen un error ignorable en stderr. La ordenación y
+        // la deduplicación (antes sort -u) se hacen al recoger la salida.
+        command: ["find", "-L"].concat(root.searchDirs).concat([
+            "-maxdepth", "2", "-type", "f",
+            "(", "-iname", "*.jpg", "-o", "-iname", "*.jpeg", "-o", "-iname", "*.png",
+            "-o", "-iname", "*.webp", "-o", "-iname", "*.gif", ")"])
         onRunningChanged: root.scanning = running
         stdout: StdioCollector {
             onStreamFinished: {
-                root.list = text.split("\n").filter(l => l.trim() !== "")
+                const seen = {}
+                const out = []
+                const lines = text.split("\n")
+                for (let i = 0; i < lines.length; i++) {
+                    const l = lines[i].trim()
+                    if (l !== "" && !seen[l]) { seen[l] = true; out.push(l) }
+                }
+                out.sort()
+                root.list = out
                 root._lastScan = Date.now()
                 root._applyDefaultIfNeeded()
             }

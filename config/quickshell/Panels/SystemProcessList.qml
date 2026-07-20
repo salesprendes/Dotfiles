@@ -18,9 +18,9 @@ Rectangle {
     implicitHeight: processesHeader.implicitHeight + processColumns.implicitHeight
                   + processListHeight + processesBox.spacing * 2 + Theme.space12 * 2
     radius: Theme.barRadius
-    color: Qt.rgba(Theme.surface.r, Theme.surface.g, Theme.surface.b, 0.72)
+    color: Theme.withAlpha(Theme.surface, 0.72)
     border.width: Theme.hairline
-    border.color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.38)
+    border.color: Theme.withAlpha(Theme.accent, 0.38)
 
     function formatProcessMem(p) {
         const kb = Math.round(p.memKB || 0)
@@ -75,10 +75,10 @@ Rectangle {
                 radius: Theme.space8 - Theme.hairline
                 readonly property bool active: root.sortKey === "name"
                 color: active || nameMa.containsMouse
-                    ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, active ? 0.18 : 0.08)
+                    ? Theme.withAlpha(Theme.accent, active ? 0.18 : 0.08)
                     : "transparent"
                 border.width: active ? Theme.hairline : 0
-                border.color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.45)
+                border.color: Theme.withAlpha(Theme.accent, 0.45)
 
                 Text {
                     anchors.verticalCenter: parent.verticalCenter
@@ -148,7 +148,7 @@ Rectangle {
                 // Estado apagado = surfaceHi con alfa 0 (NO "transparent", que es
                 // negro: interpolar hacia él deja una sombra gris/negra). Así la
                 // transición solo cambia la opacidad, sin pasar por tonos grises.
-                readonly property color rowOff: Qt.rgba(Theme.surfaceHi.r, Theme.surfaceHi.g, Theme.surfaceHi.b, 0)
+                readonly property color rowOff: Theme.withAlpha(Theme.surfaceHi, 0)
                 readonly property bool hovered: processList.hoveredIndex === row.index
                 // Resalte instantáneo, sin Behavior: animar solo la entrada
                 // dejaba varias filas marcadas al mover el ratón rápido.
@@ -202,16 +202,16 @@ Rectangle {
                         radius: 13
                         // Capa base ligada a la fila: instantánea (si fundiera,
                         // dejaría un circulito residual al saltar entre filas).
-                        color: Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, row.hovered ? 0.12 : 0.0)
+                        color: Theme.withAlpha(Theme.overlay, row.hovered ? 0.12 : 0.0)
 
                         // Hover rojo del propio botón: aislado del movimiento
                         // entre filas, así su fundido no deja estela.
                         Rectangle {
                             anchors.fill: parent
                             radius: parent.radius
-                            color: Qt.rgba(Theme.red.r, Theme.red.g, Theme.red.b, killMa.containsMouse ? 0.18 : 0)
+                            color: Theme.withAlpha(Theme.red, killMa.containsMouse ? 0.18 : 0)
                             border.width: killMa.containsMouse ? 1 : 0
-                            border.color: Qt.rgba(Theme.red.r, Theme.red.g, Theme.red.b, 0.45)
+                            border.color: Theme.withAlpha(Theme.red, 0.45)
                             Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
                         }
 
@@ -262,10 +262,10 @@ Rectangle {
         implicitHeight: Theme.controlXS
         radius: Theme.space8 - Theme.hairline
         color: active || chipMa.containsMouse
-            ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, active ? 0.18 : 0.08)
+            ? Theme.withAlpha(Theme.accent, active ? 0.18 : 0.08)
             : "transparent"
         border.width: active ? Theme.hairline : 0
-        border.color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.45)
+        border.color: Theme.withAlpha(Theme.accent, 0.45)
 
         Text {
             anchors.centerIn: parent

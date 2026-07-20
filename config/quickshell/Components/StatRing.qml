@@ -13,7 +13,7 @@ Item {
     property string glyph: ""
     property bool animated: true
     property real ringWidth: Theme.dp(4)
-    property color trackColor: Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.4)
+    property color trackColor: Theme.withAlpha(Theme.overlay, 0.4)
     implicitWidth: Theme.dp(50)
     implicitHeight: Theme.dp(50)
 

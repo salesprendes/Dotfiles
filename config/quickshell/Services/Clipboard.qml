@@ -173,7 +173,7 @@ Singleton {
     Process {
         id: listProc
         running: false
-        command: ["sh", "-c", "cliphist list 2>/dev/null || true"]
+        command: ["cliphist", "list"]
         stdout: StdioCollector {
             onStreamFinished: clip._parseList(this.text)
         }

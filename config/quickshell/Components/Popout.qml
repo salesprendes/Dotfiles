@@ -1,7 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
 import Quickshell
-import Quickshell.Hyprland
 import Quickshell.Wayland
 import qs.Config
 
@@ -33,14 +32,13 @@ PanelWindow {
     readonly property int closeAnimDuration: Settings.popoutAnimationMs
     default property alias content: col.data
 
-    // Solo en el monitor con foco.
-    // El popout existe por pantalla (Variants), pero solo se mapea la superficie del
-    // monitor que tenía el foco AL ABRIR (fijado en onShownChanged, no en vivo: mover
-    // el ratón a otro monitor con el panel abierto no lo teletransporta). Sin Hyprland
-    // (focusedMonitor null) cae al fallback: visible en todos.
-    property string openedOnMonitor: ""
-    readonly property bool showsHere: openedOnMonitor === "" || !screen
-                                      || screen.name === openedOnMonitor
+    // Solo en el monitor con foco AL ABRIR (Globals.openedOnMonitor, fijado al
+    // abrir y no en vivo: mover el ratón a otro monitor con el panel abierto no
+    // lo teletransporta). shell.qml ya solo construye la ranura en ese monitor;
+    // esto queda como fallback para la toolbar única (sin screen) y para el
+    // caso sin Hyprland (openedOnMonitor "" → visible en todos).
+    readonly property bool showsHere: Globals.openedOnMonitor === "" || !screen
+                                      || screen.name === Globals.openedOnMonitor
 
     visible: (shown && showsHere) || openProgress > 0
     color: "transparent"
@@ -60,7 +58,6 @@ PanelWindow {
 
     onShownChanged: {
         if (shown) {
-            openedOnMonitor = Hyprland.focusedMonitor?.name ?? ""
             if (showsHere)
                 openAnim.restart()
         } else {
@@ -69,11 +66,8 @@ PanelWindow {
     }
 
     Component.onCompleted: {
-        if (shown) {
-            openedOnMonitor = Hyprland.focusedMonitor?.name ?? ""
-            if (showsHere)
-                openAnim.restart()
-        }
+        if (shown && showsHere)
+            openAnim.restart()
     }
 
     NumberAnimation {

@@ -3,22 +3,11 @@ import qs.Components
 import qs.Config
 
 // Toggle del modo cafeína. Con acento cuando está activo, atenuado si no.
-Pill {
+IconPill {
     id: root
     interactive: true
+    icon: "󰅶"   // taza de café
+    iconColor: Settings.caffeine ? Theme.accent : Theme.fgMuted
+    animateColor: true
     onClicked: Settings.caffeine = !Settings.caffeine
-
-    Item {
-        implicitWidth: Theme.barIconSize + 2
-        implicitHeight: Theme.barIconSize + 2
-
-        Text {
-            anchors.centerIn: parent
-            text: "󰅶"   // taza de café
-            color: Settings.caffeine ? Theme.accent : Theme.fgMuted
-            font.family: Theme.fontFamily
-            font.pixelSize: Theme.barIconSize
-            Behavior on color { ColorAnimation { duration: Theme.animFast } }
-        }
-    }
 }

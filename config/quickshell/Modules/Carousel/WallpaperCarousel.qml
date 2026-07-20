@@ -398,7 +398,7 @@ Scope {
                             anchors.fill: parent
                             color: card.isCurrent ? Theme.accent : Qt.rgba(1, 1, 1, 0.18)
                             opacity: innerImage.status === Image.Ready ? 1 : 0
-                            Behavior on opacity { NumberAnimation { duration: 180 } }
+                            Behavior on opacity { NumberAnimation { duration: Theme.animFast } }
                         }
 
                         Rectangle {
@@ -419,7 +419,11 @@ Scope {
                             }
 
                             SequentialAnimation {
-                                running: cardSkeleton.visible
+                                // plugin.open además de visible: ocultar la
+                                // ventana no detiene animaciones de items, y
+                                // una imagen que nunca cargue dejaría este
+                                // bucle latiendo con el carrusel cerrado.
+                                running: cardSkeleton.visible && plugin.open
                                 loops: Animation.Infinite
                                 NumberAnimation {
                                     target: shimmer
@@ -429,7 +433,7 @@ Scope {
                                     duration: 950
                                     easing.type: Easing.InOutSine
                                 }
-                                PauseAnimation { duration: 160 }
+                                PauseAnimation { duration: Theme.animFast }
                             }
                         }
 
@@ -482,7 +486,7 @@ Scope {
                 spacing: Theme.space10
                 visible: plugin.loading
                 opacity: visible ? 1 : 0
-                Behavior on opacity { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
+                Behavior on opacity { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
 
                 Item {
                     anchors.horizontalCenter: parent.horizontalCenter

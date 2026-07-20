@@ -99,7 +99,7 @@ ColumnLayout {
                         radius: height / 2
                         color: swatch.swatchColor
                         border.width: Theme.hairline
-                        border.color: Qt.rgba(Theme.fg.r, Theme.fg.g, Theme.fg.b, 0.45)
+                        border.color: Theme.withAlpha(Theme.fg, 0.45)
                         Text {
                             anchors.centerIn: parent
                             visible: swatch.sel

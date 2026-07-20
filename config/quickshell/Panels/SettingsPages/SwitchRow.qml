@@ -45,7 +45,7 @@ Item {
         radius: Theme.dp(8)
         color: SettingsPalette.settingsHover
         opacity: rowMa.containsMouse ? 1 : 0
-        Behavior on opacity { NumberAnimation { duration: 90; easing.type: Easing.OutQuad } }
+        Behavior on opacity { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutQuad } }
     }
 
     // Área de toque de la fila entera. Va ANTES del contenido (más abajo en

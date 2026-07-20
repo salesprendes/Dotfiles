@@ -21,9 +21,9 @@ Rectangle {
     radius: Theme.pillRadius + Theme.space4
 
     color: (bodyMa.containsMouse || activeFocus) ? Theme.surfaceHi
-                                : Qt.rgba(Theme.surface.r, Theme.surface.g, Theme.surface.b, 0.82)
+                                : Theme.withAlpha(Theme.surface, 0.82)
     border.width: activeFocus ? Theme.focusWidth : Theme.hairline
-    border.color: activeFocus ? Theme.focusRing : Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.38)
+    border.color: activeFocus ? Theme.focusRing : Theme.withAlpha(Theme.overlay, 0.38)
 
     Behavior on color { ColorAnimation { duration: Theme.animFast } }
     Behavior on border.color { ColorAnimation { duration: Theme.animFast } }
@@ -59,10 +59,10 @@ Rectangle {
             color: root.active
                    ? Qt.rgba(root.accent.r, root.accent.g, root.accent.b, iconMa.containsMouse ? 0.30 : 0.22)
                    : (iconMa.containsMouse ? Theme.surfaceHi
-                                           : Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.48))
+                                           : Theme.withAlpha(Theme.overlay, 0.48))
             border.width: Theme.hairline
             border.color: root.active ? Qt.rgba(root.accent.r, root.accent.g, root.accent.b, 0.55)
-                                      : Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.42)
+                                      : Theme.withAlpha(Theme.overlay, 0.42)
             Behavior on color { ColorAnimation { duration: Theme.animFast } }
             Behavior on border.color { ColorAnimation { duration: Theme.animFast } }
 

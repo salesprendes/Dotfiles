@@ -29,13 +29,11 @@ Singleton {
     readonly property bool pactlAvailable: Deps.has("pactl")
     readonly property bool ffmpegAvailable: Deps.has("ffmpeg")
 
-    // Valores por defecto NEUTROS (nombres XDG estándar en inglés). Se
-    // sobrescriben al arrancar con `xdg-user-dir PICTURES/VIDEOS`, que devuelve
-    // la carpeta LOCALIZADA según el idioma del sistema (Imágenes, Bilder…).
-    // Solo se usan durante el instante previo a esa resolución o si
-    // `xdg-user-dir` no está disponible.
-    property string picturesDir: home + "/Pictures"
-    property string videosDir: home + "/Videos"
+    // Carpetas XDG localizadas (Imágenes, Bilder…), resueltas una sola vez
+    // para todo el shell en Config/Settings.qml (antes cada servicio lanzaba
+    // su propio xdg-user-dir al arrancar).
+    readonly property string picturesDir: Settings.xdgPicturesDir
+    readonly property string videosDir: Settings.xdgVideosDir
     property var monitorOptions: [{ text: "Enfocado", value: "focused" }]
 
     property string captureMode: "region"       // region | monitor | window | all
@@ -299,7 +297,7 @@ Singleton {
 
     function openToolbar(record) {
         videoMode = record === true
-        Globals.openPanel = "capture"
+        Globals.open("capture")
     }
 
     function closeToolbar() {
@@ -684,29 +682,8 @@ Singleton {
         }
     }
 
-    Process {
-        id: xdgDirs
-        command: ["sh", "-c",
-            "printf 'pictures='; xdg-user-dir PICTURES 2>/dev/null || echo \"$HOME/Pictures\"; " +
-            "printf 'videos='; xdg-user-dir VIDEOS 2>/dev/null || echo \"$HOME/Videos\""]
-        stdout: StdioCollector {
-            onStreamFinished: {
-                const lines = (this.text || "").trim().split("\n")
-                for (let i = 0; i < lines.length; i++) {
-                    const p = lines[i].indexOf("=")
-                    if (p <= 0) continue
-                    const k = lines[i].substring(0, p)
-                    const v = lines[i].substring(p + 1).trim()
-                    if (k === "pictures" && v !== "") cap.picturesDir = v
-                    else if (k === "videos" && v !== "") cap.videosDir = v
-                }
-            }
-        }
-    }
-
     Component.onCompleted: {
         applyFromSettings()
         refreshMonitors()
-        xdgDirs.running = true
     }
 }

@@ -16,8 +16,15 @@ ColumnLayout {
 
     // El reloj de SysMon solo va cuando está la barra o el monitor, así que
     // aquí nos refrescamos por nuestra cuenta mientras la pestaña esté abierta.
+    // Mismo intervalo que el tick del servicio (5 s) para no solapar dos
+    // sondeos, y parado si la ventana de Ajustes no está a la vista.
     Component.onCompleted: SysMon.refreshStats(false)
-    Timer { interval: 4000; running: true; repeat: true; onTriggered: SysMon.refreshStats(false) }
+    Timer {
+        interval: 5000
+        running: about.Window.window ? about.Window.window.visible : true
+        repeat: true
+        onTriggered: SysMon.refreshStats(false)
+    }
 
     // ── Portada: la marca y el nombre, igual que en el arranque ──────────────
     Rectangle {
@@ -156,7 +163,7 @@ ColumnLayout {
                 Layout.topMargin: Theme.space2
                 Layout.bottomMargin: Theme.space2
                 implicitWidth: Theme.hairline
-                color: Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.22)
+                color: Theme.withAlpha(Theme.overlay, 0.22)
             }
 
             // Sobre qué.

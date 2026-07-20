@@ -169,9 +169,9 @@ Popout {
         Layout.fillWidth: true
         implicitHeight: Theme.dp(142)
         radius: Theme.barRadius
-        color: Qt.rgba(Theme.surface.r, Theme.surface.g, Theme.surface.b, 0.72)
+        color: Theme.withAlpha(Theme.surface, 0.72)
         border.width: Theme.hairline
-        border.color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.38)
+        border.color: Theme.withAlpha(Theme.accent, 0.38)
 
         ColumnLayout {
             anchors.fill: parent
@@ -214,9 +214,9 @@ Popout {
                     Layout.preferredWidth: 0
                     Layout.fillHeight: true
                     radius: Theme.pillRadius
-                    color: Qt.rgba(Theme.bgAlt.r, Theme.bgAlt.g, Theme.bgAlt.b, 0.7)
+                    color: Theme.withAlpha(Theme.bgAlt, 0.7)
                     border.width: Theme.hairline
-                    border.color: Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.5)
+                    border.color: Theme.withAlpha(Theme.overlay, 0.5)
 
                     ColumnLayout {
                         anchors.fill: parent
@@ -256,7 +256,7 @@ Popout {
                             Layout.fillWidth: true
                             implicitHeight: Theme.dp(9)
                             radius: 5
-                            color: Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.32)
+                            color: Theme.withAlpha(Theme.overlay, 0.32)
                             Rectangle {
                                 height: parent.height
                                 radius: parent.radius
@@ -282,9 +282,9 @@ Popout {
                     Layout.preferredWidth: 0
                     Layout.fillHeight: true
                     radius: Theme.pillRadius
-                    color: Qt.rgba(Theme.bgAlt.r, Theme.bgAlt.g, Theme.bgAlt.b, 0.7)
+                    color: Theme.withAlpha(Theme.bgAlt, 0.7)
                     border.width: Theme.hairline
-                    border.color: Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.5)
+                    border.color: Theme.withAlpha(Theme.overlay, 0.5)
 
                     ColumnLayout {
                         anchors.fill: parent
@@ -325,7 +325,7 @@ Popout {
                             Layout.fillWidth: true
                             implicitHeight: Theme.dp(9)
                             radius: 5
-                            color: Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.32)
+                            color: Theme.withAlpha(Theme.overlay, 0.32)
                             Rectangle {
                                 height: parent.height
                                 radius: parent.radius
@@ -351,14 +351,21 @@ Popout {
 
     Rectangle { Layout.fillWidth: true; implicitHeight: Theme.hairline; color: Theme.overlay; opacity: 0.4 }
 
-    // Buscador
+    // Buscador. Debounce del filtrado (patrón de ClipboardPanel): agrupa la
+    // ráfaga de teclas antes de re-filtrar y reordenar toda la lista de
+    // procesos.
+    Timer {
+        id: searchDebounce
+        interval: 80
+        onTriggered: sm.search = searchInput.text
+    }
     SearchField {
         id: searchInput
         Layout.fillWidth: true
         implicitHeight: Theme.rowS
         textPixelSize: Theme.fontSize
         placeholder: I18n.tr("Search process...")
-        onTextChanged: sm.search = text
+        onTextChanged: searchDebounce.restart()
     }
 
     // Sección de procesos. Carga y lista superpuestas con fundido cruzado. La
@@ -389,9 +396,9 @@ Popout {
             implicitHeight: skelHeader.implicitHeight + Theme.controlXS + Theme.dp(280)
                           + Theme.space8 * 2 + Theme.space12 * 2
             radius: Theme.barRadius
-            color: Qt.rgba(Theme.surface.r, Theme.surface.g, Theme.surface.b, 0.72)
+            color: Theme.withAlpha(Theme.surface, 0.72)
             border.width: Theme.hairline
-            border.color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.25)
+            border.color: Theme.withAlpha(Theme.accent, 0.25)
             opacity: sm.processViewReady ? 0 : 1
             visible: opacity > 0
             Behavior on opacity { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
@@ -426,9 +433,9 @@ Popout {
                             implicitWidth: Theme.dp(56)
                             implicitHeight: Theme.dp(56)
                             radius: width / 2
-                            color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.12)
+                            color: Theme.withAlpha(Theme.accent, 0.12)
                             border.width: Math.max(1, Theme.hairline)
-                            border.color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.45)
+                            border.color: Theme.withAlpha(Theme.accent, 0.45)
 
                             Text {
                                 anchors.centerIn: parent

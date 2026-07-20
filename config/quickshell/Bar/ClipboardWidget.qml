@@ -1,32 +1,17 @@
 import QtQuick
-import QtQuick.Layouts
 import qs.Components
 import qs.Config
 import qs.Services
 
 // Boton de historial de portapapeles.
-Pill {
+IconPill {
     id: root
     interactive: true
+    active: Globals.clipboardOpen
+    icon: "󰅌"
+    iconColor: Globals.clipboardOpen ? Theme.accent : (Clipboard.available ? Theme.fgDim : Theme.fgMuted)
+    badgeCount: Clipboard.count
+    badgeColor: Theme.accent
     onClicked: Globals.toggleClipboard()
     onRightClicked: Clipboard.refresh()
-
-    Item {
-        implicitWidth: Theme.barIconSize + 2
-        implicitHeight: Theme.barIconSize + 2
-
-        Text {
-            anchors.centerIn: parent
-            text: "󰅌"
-            color: Globals.clipboardOpen ? Theme.accent : (Clipboard.available ? Theme.fgDim : Theme.fgMuted)
-            font.family: Theme.fontFamily
-            font.pixelSize: Theme.barIconSize
-        }
-
-        CountBadge {
-            count: Clipboard.count
-            badgeColor: Theme.accent
-            anchors { right: parent.right; top: parent.top; rightMargin: -Theme.space4; topMargin: -Theme.space4 }
-        }
-    }
 }

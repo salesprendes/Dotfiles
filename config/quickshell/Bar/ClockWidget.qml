@@ -10,12 +10,9 @@ import qs.Services
 Pill {
     id: root
     interactive: true
+    active: Globals.dashboardOpen
     onClicked: Globals.toggleDashboard()
 
-    // Formato según ajustes: 24h/12h y segundos.
-    readonly property string timeFormat: (Settings.clock24h ? "HH:mm" : "hh:mm")
-        + (Settings.clockShowSeconds ? ":ss" : "")
-        + (Settings.clock24h ? "" : " AP")
 
     Text {
         text: "󰅐"
@@ -25,7 +22,7 @@ Pill {
         Behavior on color { ColorAnimation { duration: Theme.animFast } }
     }
     Text {
-        text: Qt.formatDateTime(Time.now, root.timeFormat)
+        text: Qt.formatDateTime(Time.now, Time.clockFormat)
         color: Theme.fg
         font.family: Theme.fontFamily
         font.pixelSize: Theme.fontSize

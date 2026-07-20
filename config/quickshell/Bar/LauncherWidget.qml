@@ -7,6 +7,7 @@ import qs.Services
 Pill {
     id: root
     interactive: true
+    active: Globals.launcherOpen
     onClicked: Globals.toggleLauncher()
 
     Text {

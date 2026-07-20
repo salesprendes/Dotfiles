@@ -103,6 +103,8 @@ Pill {
                 sourceSize.width: Theme.barIconSize
                 sourceSize.height: Theme.barIconSize
                 smooth: true
+                scale: trayMa.containsMouse ? 1.2 : 1
+                Behavior on scale { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
             }
 
             MouseArea {

@@ -33,10 +33,15 @@ Pill {
         font.family: Theme.fontFamily
         font.pixelSize: Theme.barIconSize
     }
+    // El porcentaje hereda el color de nivel cuando queda poca batería, para
+    // que el aviso se lea sin mirar el icono.
     Text {
         text: root.percent + "%"
-        color: Theme.fgDim
+        color: root.charging ? Theme.fgDim
+             : root.percent <= 35 ? root.levelColor
+             : Theme.fgDim
         font.family: Theme.fontFamily
         font.pixelSize: Theme.fontSize
+        Behavior on color { ColorAnimation { duration: Theme.animFast } }
     }
 }

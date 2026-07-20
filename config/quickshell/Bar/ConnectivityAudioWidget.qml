@@ -11,6 +11,7 @@ Pill {
     spacing: Theme.space10
     interactive: true
     hoverHighlight: true
+    active: Globals.controlCenterOpen
 
     readonly property var audio: Pipewire.defaultAudioSink?.audio ?? null
     readonly property bool muted: audio?.muted ?? false

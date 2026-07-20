@@ -190,7 +190,7 @@ ColumnLayout {
                         Rectangle {
                             visible: modelData.active
                             radius: Theme.pillRadius
-                            color: Qt.rgba(Theme.green.r, Theme.green.g, Theme.green.b, 0.18)
+                            color: Theme.withAlpha(Theme.green, 0.18)
                             implicitWidth: badge.implicitWidth + Theme.space10
                             implicitHeight: badge.implicitHeight + Theme.space4
                             Text {

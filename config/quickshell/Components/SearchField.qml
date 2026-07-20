@@ -31,7 +31,7 @@ Rectangle {
     color: Theme.surface
     border.width: Theme.hairline
     border.color: input.activeFocus ? Theme.accent
-                 : Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.4)
+                 : Theme.withAlpha(Theme.overlay, 0.4)
     Behavior on border.color { ColorAnimation { duration: Theme.animFast } }
 
     // Toda la píldora enfoca el campo, no solo la franja del texto: el
@@ -91,8 +91,7 @@ Rectangle {
             visible: root.showClear && input.text !== ""
             implicitWidth: Theme.dp(22); implicitHeight: Theme.dp(22)
             radius: width / 2
-            color: Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b,
-                           clearMa.containsMouse ? 0.5 : 0)
+            color: Theme.withAlpha(Theme.overlay, clearMa.containsMouse ? 0.5 : 0)
             Text {
                 anchors.centerIn: parent
                 text: "󰅖"

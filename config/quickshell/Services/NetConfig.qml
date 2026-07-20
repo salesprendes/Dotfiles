@@ -89,7 +89,9 @@ Singleton {
         || (validIp(ip4addr) && maskToPrefix(ip4mask) >= 0
             && (ip4gw === "" || validIp(ip4gw)))
 
-    Component.onCompleted: refreshAll()
+    // Sin refreshAll() al arrancar: los datos (interfaces/wifis guardadas)
+    // solo se usan en los modales de configuración IP, y IpSettingsModal ya
+    // llama a refreshAll() en cada apertura. Ahorra 2 nmcli por arranque.
     function refreshAll() { ifaceProc.running = true; wifiProc.running = true }
     function refreshConnections() { refreshAll() }   // alias compat
 
@@ -124,8 +126,7 @@ Singleton {
         const fields = "ipv4.method,ipv4.addresses,ipv4.gateway,ipv4.dns,IP4.DNS,ipv6.method,"
                      + "connection.autoconnect,connection.autoconnect-priority,"
                      + k + ".cloned-mac-address," + k + ".mtu"
-        readProc.command = ["sh", "-c",
-            "nmcli -t -f " + fields + " connection show " + Utils.shellQuote(root.ifaceConn)]
+        readProc.command = ["nmcli", "-t", "-f", fields, "connection", "show", root.ifaceConn]
         readProc.running = true
     }
 
@@ -181,7 +182,7 @@ Singleton {
     // Procesos
     Process {
         id: ifaceProc
-        command: ["sh", "-c", "nmcli -t -f DEVICE,TYPE,STATE,CONNECTION device status"]
+        command: ["nmcli", "-t", "-f", "DEVICE,TYPE,STATE,CONNECTION", "device", "status"]
         stdout: StdioCollector {
             onStreamFinished: {
                 const out = root.nmRows(this.text, 4)
@@ -203,8 +204,8 @@ Singleton {
 
     Process {
         id: wifiProc
-        command: ["sh", "-c",
-            "nmcli -t -f UUID,TYPE,AUTOCONNECT,AUTOCONNECT-PRIORITY,ACTIVE,NAME connection show"]
+        command: ["nmcli", "-t", "-f", "UUID,TYPE,AUTOCONNECT,AUTOCONNECT-PRIORITY,ACTIVE,NAME",
+            "connection", "show"]
         stdout: StdioCollector {
             onStreamFinished: {
                 const out = root.nmRows(this.text, 6)

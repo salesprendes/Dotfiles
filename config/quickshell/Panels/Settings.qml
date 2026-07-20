@@ -43,7 +43,6 @@ FloatingWindow {
     readonly property int spaceMd: Theme.dp(12)
     readonly property int spaceLg: Theme.dp(16)
     readonly property int radiusMd: Theme.dp(6)
-    readonly property int radiusXl: Theme.dp(12)
     // Radio de esquina de las tarjetas flotantes (barra lateral y contenido).
     // Fijo: no sigue el ajuste de redondeo de esquinas del shell.
     readonly property int radiusCard: Theme.dp(22)
@@ -55,7 +54,6 @@ FloatingWindow {
         : width < Theme.dp(1080) ? Theme.dp(240) : Theme.dp(264)
 
     // Paleta compartida con las páginas (ver SettingsPages/SettingsPalette.qml).
-    readonly property color settingsBase: SettingsPalette.settingsBase
     // Fondo de la ventana entre y alrededor de las tarjetas: más oscuro que
     // ellas para que el contraste las separe visualmente del fondo.
     readonly property color settingsBackdrop: Theme.withAlpha(Theme.bg, Theme.isDark ? 0.86 : 0.82)
@@ -64,12 +62,6 @@ FloatingWindow {
     readonly property color settingsHover: SettingsPalette.settingsHover
     readonly property color settingsLine: SettingsPalette.settingsLine
     readonly property color settingsBorder: SettingsPalette.settingsBorder
-    readonly property color accentSoft: SettingsPalette.accentSoft
-    // Degradado acento→acento2 de los "distintivos" (ver SettingsPalette):
-    // pestaña activa de la nav, cabecera de la ventana, cabecera de tarjeta.
-    readonly property color tileGradA:  SettingsPalette.tileGradA
-    readonly property color tileGradB:  SettingsPalette.tileGradB
-    readonly property color tileBorder: SettingsPalette.tileBorder
 
     property string cat: "theme"
     // La que pulsas (cat) y la que está montada (shownCat) no son la misma
@@ -145,11 +137,11 @@ FloatingWindow {
         ParallelAnimation {
             NumberAnimation {
                 target: cfg; property: "pageOpacity"
-                to: 0; duration: 130; easing.type: Easing.InCubic
+                to: 0; duration: Theme.animFast; easing.type: Easing.InCubic
             }
             NumberAnimation {
                 target: cfg; property: "pageOffset"
-                to: -Theme.dp(5); duration: 130; easing.type: Easing.InCubic
+                to: -Theme.dp(5); duration: Theme.animFast; easing.type: Easing.InCubic
             }
         }
         ScriptAction {
@@ -336,7 +328,7 @@ FloatingWindow {
                         color: sel || profileMa.containsMouse
                              ? Theme.withAlpha(Theme.accent, Theme.isDark ? 0.26 : 0.32)
                              : "transparent"
-                        Behavior on color { ColorAnimation { duration: 120 } }
+                        Behavior on color { ColorAnimation { duration: Theme.animFast } }
 
                         RowLayout {
                             id: profileRow
@@ -381,7 +373,7 @@ FloatingWindow {
                                     font.family: Theme.fontFamily
                                     font.pixelSize: Theme.sp(12)
                                     elide: Text.ElideRight
-                                    Behavior on color { ColorAnimation { duration: 120 } }
+                                    Behavior on color { ColorAnimation { duration: Theme.animFast } }
                                 }
                             }
 
@@ -602,7 +594,7 @@ FloatingWindow {
                                                          : resetRow.implicitWidth + cfg.spaceMd * 2
                         implicitHeight: cfg.controlHeightSm
                         radius: cfg.radiusMd
-                        color: resetMa.containsMouse ? Qt.rgba(Theme.red.r, Theme.red.g, Theme.red.b, 0.18)
+                        color: resetMa.containsMouse ? Theme.withAlpha(Theme.red, 0.18)
                                                      : cfg.settingsControl
                         border.width: Theme.hairline
                         border.color: resetMa.containsMouse ? Theme.red : cfg.settingsBorder
@@ -935,7 +927,7 @@ FloatingWindow {
                 color: tab.active ? Theme.accent : Theme.fgDim
                 font.family: Theme.fontFamily
                 font.pixelSize: Theme.sp(21)
-                Behavior on color { ColorAnimation { duration: 120 } }
+                Behavior on color { ColorAnimation { duration: Theme.animFast } }
             }
             Text {
                 Layout.fillWidth: true
@@ -948,7 +940,7 @@ FloatingWindow {
                 font.pixelSize: Theme.sp(15)
                 font.bold: tab.sel
                 elide: Text.ElideRight
-                Behavior on color { ColorAnimation { duration: 120 } }
+                Behavior on color { ColorAnimation { duration: Theme.animFast } }
             }
         }
 

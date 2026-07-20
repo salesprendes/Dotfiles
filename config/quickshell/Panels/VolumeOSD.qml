@@ -63,7 +63,7 @@ PanelWindow {
         radius: Theme.barRadius
         color: Theme.popupBg
         border.width: Theme.hairline
-        border.color: Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.5)
+        border.color: Theme.withAlpha(Theme.overlay, 0.5)
 
         opacity: osd.revealed ? 1 : 0
         transform: Translate {

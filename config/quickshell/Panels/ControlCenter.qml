@@ -41,9 +41,9 @@ Popout {
         Layout.fillWidth: true
         implicitHeight: Theme.dp(64)
         radius: Theme.barRadius
-        color: Qt.rgba(Theme.surface.r, Theme.surface.g, Theme.surface.b, 0.62)
+        color: Theme.withAlpha(Theme.surface, 0.62)
         border.width: Theme.hairline
-        border.color: Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.34)
+        border.color: Theme.withAlpha(Theme.overlay, 0.34)
 
         RowLayout {
             anchors.fill: parent
@@ -87,12 +87,8 @@ Popout {
                 onClicked: { Globals.closeAll(); Globals.toggleSettings() }
             }
         Repeater {
-            model: [
-                { ic: "󰍁", action: "lock", col: Theme.accent },
-                { ic: "󰤄", action: "suspend", col: Theme.accent },
-                { ic: "󰜉", action: "reboot",  col: Theme.accent },
-                { ic: "󰐥", action: "poweroff", col: Theme.red }
-            ]
+            // Modelo compartido con el lanzador (Config/PowerActions.qml).
+            model: PowerActions.model
             delegate: Item {
                 id: btn
                 required property var modelData
@@ -145,7 +141,7 @@ Popout {
                 NumberAnimation {
                     id: resetAnim
                     target: btn; property: "holdProgress"
-                    to: 0; duration: 150
+                    to: 0; duration: Theme.animFast
                 }
 
                 MouseArea {

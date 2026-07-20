@@ -7,6 +7,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import Quickshell.Services.UPower
 import qs.Background
 import qs.Bar
 import qs.Config
@@ -85,6 +86,35 @@ ShellRoot {
         running: true
         repeat: false
         onTriggered: shell.updateStartupWallpaperReady()
+    }
+
+    // Aviso de batería baja (solo portátiles): 15% aviso normal, 5% crítico.
+    // Un aviso por cruce de umbral; se rearma al volver a subir del 20%
+    // (cargador conectado). En equipos sin batería no hace nada.
+    readonly property var battery: UPower.displayDevice
+    property int _battStage: 0
+    readonly property real _battPct:
+        (battery && battery.isLaptopBattery) ? battery.percentage : -1
+    readonly property bool _battDischarging:
+        battery ? battery.state === UPowerDeviceState.Discharging : false
+    on_BattPctChanged: _battCheck()
+    on_BattDischargingChanged: _battCheck()
+    function _battCheck() {
+        if (_battPct < 0 || !_battDischarging) {
+            if (_battPct >= 20) _battStage = 0
+            return
+        }
+        if (_battPct <= 5 && _battStage < 2) {
+            _battStage = 2
+            Quickshell.execDetached(["notify-send", "-u", "critical", "-a", "Quickshell",
+                I18n.tr("Critical battery"),
+                I18n.tr("%1% remaining — plug in now").arg(Math.round(_battPct))])
+        } else if (_battPct <= 15 && _battStage < 1) {
+            _battStage = 1
+            Quickshell.execDetached(["notify-send", "-u", "normal", "-a", "Quickshell",
+                I18n.tr("Low battery"),
+                I18n.tr("%1% remaining").arg(Math.round(_battPct))])
+        }
     }
 
     // Control por IPC / atajos de teclado:
@@ -190,101 +220,75 @@ ShellRoot {
         }
     }
 
-    // Paneles emergentes (uno por pantalla; Globals controla su visibilidad
-    // desde los widgets de la barra). Carga perezosa sin latch: se construyen
-    // al abrir (Popout anima al nacer vía Component.onCompleted) y se liberan al
-    // terminar la animación de cierre; `closing` mantiene el loader activo
-    // mientras la ventana siga visible (openProgress > 0), así el cierre anima
-    // completo antes de destruir.
-    Variants {
-        model: Quickshell.screens
-        delegate: LazyLoader {
-            id: ccL
-            required property var modelData
-            property bool closing: false
-            activeAsync: Globals.controlCenterOpen || closing
-            ControlCenter {
-                modelData: ccL.modelData
-                onVisibleChanged: ccL.closing = visible
-            }
-        }
-    }
-    Variants {
-        model: Quickshell.screens
-        delegate: LazyLoader {
-            id: ncL
-            required property var modelData
-            property bool closing: false
-            activeAsync: Globals.notifCenterOpen || closing
-            NotificationCenter {
-                modelData: ncL.modelData
-                onVisibleChanged: ncL.closing = visible
-            }
-        }
-    }
-    Variants {
-        model: Quickshell.screens
-        delegate: LazyLoader {
-            id: smL
-            required property var modelData
-            property bool closing: false
-            activeAsync: Globals.sysMonOpen || closing
-            SystemMonitor {
-                modelData: smL.modelData
-                onVisibleChanged: smL.closing = visible
-            }
-        }
-    }
-    Variants {
-        model: Quickshell.screens
-        delegate: LazyLoader {
-            id: alL
-            required property var modelData
-            property bool closing: false
-            activeAsync: Globals.launcherOpen || closing
-            AppLauncher {
-                modelData: alL.modelData
-                onVisibleChanged: alL.closing = visible
-            }
-        }
-    }
-    Variants {
-        model: Quickshell.screens
-        delegate: LazyLoader {
-            id: clipL
-            required property var modelData
-            property bool closing: false
-            activeAsync: Globals.clipboardOpen || closing
-            ClipboardPanel {
-                modelData: clipL.modelData
-                onVisibleChanged: clipL.closing = visible
-            }
-        }
-    }
-    Variants {
-        model: Quickshell.screens
-        delegate: LazyLoader {
-            id: dashL
-            required property var modelData
-            property bool closing: false
-            activeAsync: Globals.dashboardOpen || closing
-            Dashboard {
-                modelData: dashL.modelData
-                onVisibleChanged: dashL.closing = visible
-            }
-        }
-    }
-    // La toolbar se libera al cerrarse (patrón `closing`, como los paneles): la
-    // píldora basta para controlar la grabación y ScreenCapture (singleton)
-    // conserva el estado. Si se reabre mientras graba, se reconstruye al momento.
-    LazyLoader {
-        id: sctL
+    // Ranura de panel con cierre animado: se construye al abrir ('open') y se
+    // libera cuando termina la animación de cierre — 'closing' mantiene el
+    // loader activo mientras la ventana siga visible (openProgress > 0), así
+    // el cierre anima completo antes de destruir. Toda la maquinaria vive
+    // aquí; cada uso declara solo su bandera 'open' y el panel que aloja.
+    component PanelSlot: LazyLoader {
+        property bool open: false
         property bool closing: false
-        activeAsync: Globals.screenCaptureOpen || closing
-        ScreenCaptureToolbar {
-            onVisibleChanged: sctL.closing = visible
+        activeAsync: open || closing
+    }
+
+    // Paneles emergentes (Globals controla su visibilidad desde los widgets
+    // de la barra). Un único recorrido de pantallas aloja las seis ranuras de
+    // cada monitor; Popout anima al nacer vía Component.onCompleted.
+    Variants {
+        model: Quickshell.screens
+        delegate: Scope {
+            id: scr
+            required property var modelData
+
+            // Solo el monitor donde se abrió el panel construye su ranura: los
+            // demás ni instancian (antes se creaban N copias del panel, N-1
+            // invisibles, con sus timers y decodificaciones duplicados). Con
+            // openedOnMonitor vacío (sin Hyprland) instancian todos, como antes.
+            readonly property bool showsPanels: Globals.openedOnMonitor === ""
+                                                || scr.modelData.name === Globals.openedOnMonitor
+
+            PanelSlot {
+                id: ccS
+                open: Globals.controlCenterOpen && scr.showsPanels
+                ControlCenter { modelData: scr.modelData; onVisibleChanged: ccS.closing = visible }
+            }
+            PanelSlot {
+                id: ncS
+                open: Globals.notifCenterOpen && scr.showsPanels
+                NotificationCenter { modelData: scr.modelData; onVisibleChanged: ncS.closing = visible }
+            }
+            PanelSlot {
+                id: smS
+                open: Globals.sysMonOpen && scr.showsPanels
+                SystemMonitor { modelData: scr.modelData; onVisibleChanged: smS.closing = visible }
+            }
+            PanelSlot {
+                id: alS
+                open: Globals.launcherOpen && scr.showsPanels
+                AppLauncher { modelData: scr.modelData; onVisibleChanged: alS.closing = visible }
+            }
+            PanelSlot {
+                id: clipS
+                open: Globals.clipboardOpen && scr.showsPanels
+                ClipboardPanel { modelData: scr.modelData; onVisibleChanged: clipS.closing = visible }
+            }
+            PanelSlot {
+                id: dashS
+                open: Globals.dashboardOpen && scr.showsPanels
+                Dashboard { modelData: scr.modelData; onVisibleChanged: dashS.closing = visible }
+            }
         }
     }
+
+    // La toolbar de captura es única (no por pantalla): la píldora basta para
+    // controlar la grabación y ScreenCapture (singleton) conserva el estado.
+    // Si se reabre mientras graba, se reconstruye al momento.
+    PanelSlot {
+        id: sctS
+        open: Globals.screenCaptureOpen
+        ScreenCaptureToolbar { onVisibleChanged: sctS.closing = visible }
+    }
+
     // La píldora de grabación solo existe mientras se graba.
     Variants {
         model: Quickshell.screens

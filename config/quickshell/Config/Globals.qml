@@ -2,6 +2,7 @@ pragma Singleton
 
 import QtQuick
 import Quickshell
+import Quickshell.Hyprland
 
 // Estado global compartido. Un único panel abierto a la vez.
 Singleton {
@@ -9,6 +10,15 @@ Singleton {
 
     // "", "control", "notif", "sysmon", "launcher", "clipboard", "dashboard", "capture"
     property string openPanel: ""
+
+    // Monitor con foco al abrir el panel. Se captura aquí (en open(), ANTES de
+    // tocar openPanel, para que las ranuras de shell.qml nunca se evalúen con
+    // el monitor viejo) y no en cada Popout: shell.qml solo construye el panel
+    // en esta pantalla, así los otros monitores no instancian copias
+    // invisibles con sus timers. Se conserva al cerrar para que la animación
+    // de cierre termine en el mismo monitor. Sin Hyprland queda "" y todas
+    // las pantallas instancian (fallback).
+    property string openedOnMonitor: ""
 
     // La ventana de Ajustes es independiente (es una ventana real de
     // Hyprland): tiene su propio estado y NO se cierra al abrir popups.
@@ -25,7 +35,11 @@ Singleton {
     readonly property bool dashboardOpen:      openPanel === "dashboard"
     readonly property bool screenCaptureOpen:  openPanel === "capture"
 
-    function toggle(p)            { openPanel = (openPanel === p) ? "" : p }
+    function open(p) {
+        openedOnMonitor = Hyprland.focusedMonitor?.name ?? ""
+        openPanel = p
+    }
+    function toggle(p)            { if (openPanel === p) openPanel = ""; else open(p) }
     function toggleControlCenter() { toggle("control") }
     function toggleNotifCenter()   { toggle("notif") }
     function toggleSysMon()        { toggle("sysmon") }

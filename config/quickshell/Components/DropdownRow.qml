@@ -40,10 +40,10 @@ ColumnLayout {
     }
 
     // Colores derivados de Theme (sobreescribibles).
-    property color controlColor: Qt.rgba(Theme.surface.r, Theme.surface.g, Theme.surface.b, 0.86)
-    property color borderColor:  Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.28)
-    property color cardColor:    Qt.rgba(Theme.surface.r, Theme.surface.g, Theme.surface.b, 0.72)
-    property color hoverColor:   Qt.rgba(Theme.surfaceHi.r, Theme.surfaceHi.g, Theme.surfaceHi.b, 0.74)
+    property color controlColor: Theme.withAlpha(Theme.surface, 0.86)
+    property color borderColor:  Theme.withAlpha(Theme.overlay, 0.28)
+    property color cardColor:    Theme.withAlpha(Theme.surface, 0.72)
+    property color hoverColor:   Theme.withAlpha(Theme.surfaceHi, 0.74)
 
     Layout.fillWidth: true
     spacing: Theme.space6
@@ -290,7 +290,7 @@ ColumnLayout {
                     // El color base solo va de acento-tinte a "transparent"; el hover
                     // es una capa aparte que anima su opacidad (si no, se interpola
                     // hacia el negro de "transparent").
-                    color: sel ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.18)
+                    color: sel ? Theme.withAlpha(Theme.accent, 0.18)
                                : focused ? Theme.focusBg : "transparent"
                     Behavior on color { ColorAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
 
@@ -302,7 +302,7 @@ ColumnLayout {
                         radius: parent.radius
                         color: root.hoverColor
                         opacity: rowMa.containsMouse && !optionRow.sel && !optionRow.focused ? 1 : 0
-                        Behavior on opacity { NumberAnimation { duration: 90; easing.type: Easing.OutQuad } }
+                        Behavior on opacity { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutQuad } }
                     }
 
                     RowLayout {

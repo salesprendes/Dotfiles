@@ -76,7 +76,7 @@ PanelWindow {
         radius: Theme.barRadius + Theme.space2
         color: Theme.bgAlt
         border.width: Theme.hairline
-        border.color: Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.5)
+        border.color: Theme.withAlpha(Theme.overlay, 0.5)
 
         opacity: modal.visible ? 1 : 0
         scale: modal.visible ? 1 : 0.96

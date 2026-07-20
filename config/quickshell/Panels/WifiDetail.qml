@@ -29,9 +29,9 @@ ColumnLayout {
         Layout.fillWidth: true
         implicitHeight: body.implicitHeight + Theme.space16 * 2
         radius: Theme.barRadius
-        color: Qt.rgba(Theme.surface.r, Theme.surface.g, Theme.surface.b, 0.62)
+        color: Theme.withAlpha(Theme.surface, 0.62)
         border.width: Theme.hairline
-        border.color: Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.34)
+        border.color: Theme.withAlpha(Theme.overlay, 0.34)
 
         ColumnLayout {
             id: body
@@ -121,8 +121,9 @@ ColumnLayout {
         }
     }
 
-    // Fila de red (mismo estilo que DeviceRow del audio).
-    component NetRow: Rectangle {
+    // Fila de red sobre la DeviceRow compartida; aquí solo queda lo propio
+    // del WiFi: glifo por cobertura, % y candado, y la lógica de conexión.
+    component NetRow: DeviceRow {
         id: nr
         required property var modelData
         width: ListView.view ? ListView.view.width : implicitWidth
@@ -132,77 +133,36 @@ ColumnLayout {
         readonly property int sig: Math.round((modelData?.signalStrength ?? 0) * 100)
         readonly property bool secured: (modelData?.security ?? WifiSecurityType.None) !== WifiSecurityType.None
 
-        implicitHeight: Theme.rowL
-        radius: Theme.pillRadius
-        color: conn ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.16)
-                    : nrMa.containsMouse ? Theme.surfaceHi : Qt.rgba(Theme.surface.r, Theme.surface.g, Theme.surface.b, 0.36)
-        border.width: conn ? Math.max(1, Theme.dp(2)) : Theme.hairline
-        border.color: conn ? Theme.accent : Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.28)
-        Behavior on color { ColorAnimation { duration: Theme.animFast } }
+        active: conn
+        icon: sig >= 75 ? "󰤨" : sig >= 50 ? "󰤥" : sig >= 25 ? "󰤢" : "󰤟"
+        title: modelData?.name ?? ""
+        subtitle: conn ? I18n.tr("connected") : known ? I18n.tr("saved") : ""
+        subtitleColor: conn ? Theme.green : Theme.fgMuted
 
-        RowLayout {
-            anchors.fill: parent
-            anchors.leftMargin: Theme.space10
-            anchors.rightMargin: Theme.space10
-            spacing: Theme.space8
-
-            Text {
-                text: nr.sig >= 75 ? "󰤨" : nr.sig >= 50 ? "󰤥" : nr.sig >= 25 ? "󰤢" : "󰤟"
-                color: nr.conn ? Theme.accent : Theme.fgDim
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.iconSize
-            }
-            ColumnLayout {
-                Layout.fillWidth: true
-                spacing: 0
-                Text {
-                    Layout.fillWidth: true
-                    text: nr.modelData?.name ?? ""
-                    color: nr.conn ? Theme.fg : Theme.fgDim
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSize - 1
-                    font.bold: nr.conn
-                    elide: Text.ElideRight
-                }
-                Text {
-                    Layout.fillWidth: true
-                    visible: nr.conn || nr.known
-                    text: nr.conn ? I18n.tr("connected") : I18n.tr("saved")
-                    color: nr.conn ? Theme.green : Theme.fgMuted
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSize - 4
-                }
-            }
-            // % de cobertura de la red.
-            Text {
-                text: nr.sig + "%"
-                color: nr.conn ? Theme.accent : Theme.fgMuted
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontSize - 3
-                font.bold: nr.conn
-            }
-            Text {
-                visible: nr.secured
-                text: "󰌾"
-                color: Theme.fgMuted
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontSize - 2
-            }
+        // % de cobertura de la red.
+        Text {
+            text: nr.sig + "%"
+            color: nr.conn ? Theme.accent : Theme.fgMuted
+            font.family: Theme.fontFamily
+            font.pixelSize: Theme.fontSize - 3
+            font.bold: nr.conn
+        }
+        // Candado para redes protegidas.
+        Text {
+            visible: nr.secured
+            text: "󰌾"
+            color: Theme.fgMuted
+            font.family: Theme.fontFamily
+            font.pixelSize: Theme.fontSize - 2
         }
 
-        MouseArea {
-            id: nrMa
-            anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: {
-                if (nr.conn)
-                    nr.modelData.disconnect()
-                else if (nr.known || !nr.secured)
-                    nr.modelData.connect()
-                else
-                    Net.requestPassword(nr.modelData)
-            }
+        onClicked: {
+            if (conn)
+                modelData.disconnect()
+            else if (known || !secured)
+                modelData.connect()
+            else
+                Net.requestPassword(modelData)
         }
     }
 }

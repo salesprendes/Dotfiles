@@ -16,9 +16,9 @@ ColumnLayout {
         Layout.fillWidth: true
         implicitHeight: body.implicitHeight + Theme.space16 * 2
         radius: Theme.barRadius
-        color: Qt.rgba(Theme.surface.r, Theme.surface.g, Theme.surface.b, 0.62)
+        color: Theme.withAlpha(Theme.surface, 0.62)
         border.width: Theme.hairline
-        border.color: Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.34)
+        border.color: Theme.withAlpha(Theme.overlay, 0.34)
 
         ColumnLayout {
             id: body
@@ -79,9 +79,9 @@ ColumnLayout {
         implicitHeight: Theme.rowL
         radius: Theme.pillRadius
         color: active ? Qt.rgba(info.color.r, info.color.g, info.color.b, 0.16)
-                      : prMa.containsMouse ? Theme.surfaceHi : Qt.rgba(Theme.surface.r, Theme.surface.g, Theme.surface.b, 0.36)
+                      : prMa.containsMouse ? Theme.surfaceHi : Theme.withAlpha(Theme.surface, 0.36)
         border.width: active ? Math.max(1, Theme.dp(2)) : Theme.hairline
-        border.color: active ? info.color : Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.28)
+        border.color: active ? info.color : Theme.withAlpha(Theme.overlay, 0.28)
         Behavior on color { ColorAnimation { duration: Theme.animFast } }
 
         RowLayout {

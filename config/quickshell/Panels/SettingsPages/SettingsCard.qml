@@ -101,7 +101,7 @@ Rectangle {
             Layout.topMargin: -Theme.space4
             visible: cardRoot.title !== ""
             implicitHeight: Theme.hairline
-            color: Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.22)
+            color: Theme.withAlpha(Theme.overlay, 0.22)
         }
     }
 }

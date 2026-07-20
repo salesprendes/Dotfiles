@@ -80,13 +80,13 @@ ColumnLayout {
                 model: root.sinks
                 delegate: DeviceRow {
                     required property var modelData
-                    device: modelData
-                    selected: modelData === root.sink
-                    icon: root.outputIcon(modelData)
+                    Layout.fillWidth: true
+                    active: modelData === root.sink
+                    icon: active ? "󰓃" : root.outputIcon(modelData)
                     title: root.deviceName(modelData)
-                    subtitle: selected ? I18n.tr("Active") : I18n.tr("Available")
+                    subtitle: active ? I18n.tr("Active") : I18n.tr("Available")
                     accent: Theme.green
-                    onPicked: Pipewire.preferredDefaultAudioSink = modelData
+                    onClicked: Pipewire.preferredDefaultAudioSink = modelData
                 }
             }
             EmptyRow {
@@ -143,9 +143,9 @@ ColumnLayout {
         Layout.fillWidth: true
         implicitHeight: body.implicitHeight + Theme.space16 * 2
         radius: Theme.barRadius
-        color: Qt.rgba(Theme.surface.r, Theme.surface.g, Theme.surface.b, 0.62)
+        color: Theme.withAlpha(Theme.surface, 0.62)
         border.width: Theme.hairline
-        border.color: Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.34)
+        border.color: Theme.withAlpha(Theme.overlay, 0.34)
 
         ColumnLayout {
             id: body
@@ -174,70 +174,6 @@ ColumnLayout {
         }
     }
 
-    component DeviceRow: Rectangle {
-        id: dev
-        property var device
-        property string icon: ""
-        property string title: ""
-        property string subtitle: ""
-        property bool selected: false
-        property color accent: Theme.accent
-        signal picked()
-
-        Layout.fillWidth: true
-        implicitHeight: Theme.rowL
-        radius: Theme.pillRadius
-        color: selected ? Qt.rgba(accent.r, accent.g, accent.b, 0.16)
-                        : rowMa.containsMouse ? Theme.surfaceHi : Qt.rgba(Theme.surface.r, Theme.surface.g, Theme.surface.b, 0.36)
-        border.width: selected ? Math.max(1, Theme.dp(2)) : Theme.hairline
-        border.color: selected ? accent : Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.28)
-        Behavior on color { ColorAnimation { duration: Theme.animFast } }
-
-        RowLayout {
-            anchors.fill: parent
-            anchors.leftMargin: Theme.space10
-            anchors.rightMargin: Theme.space10
-            spacing: Theme.space8
-
-            Text {
-                text: dev.selected ? "󰓃" : dev.icon
-                color: dev.selected ? dev.accent : Theme.fgDim
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.iconSize
-            }
-
-            ColumnLayout {
-                Layout.fillWidth: true
-                spacing: 0
-                Text {
-                    Layout.fillWidth: true
-                    text: dev.title
-                    color: dev.selected ? Theme.fg : Theme.fgDim
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSize - 1
-                    font.bold: dev.selected
-                    elide: Text.ElideRight
-                }
-                Text {
-                    Layout.fillWidth: true
-                    text: dev.subtitle
-                    color: Theme.fgMuted
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSize - 4
-                    elide: Text.ElideRight
-                }
-            }
-        }
-
-        MouseArea {
-            id: rowMa
-            anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: dev.picked()
-        }
-    }
-
     component StreamRow: Rectangle {
         id: streamRow
         property var stream
@@ -248,9 +184,9 @@ ColumnLayout {
         // Altura pegada al contenido para que el slider no se salga por abajo.
         implicitHeight: streamCol.implicitHeight + Theme.space10 * 2
         radius: Theme.pillRadius
-        color: Qt.rgba(Theme.surface.r, Theme.surface.g, Theme.surface.b, 0.36)
+        color: Theme.withAlpha(Theme.surface, 0.36)
         border.width: Theme.hairline
-        border.color: Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.28)
+        border.color: Theme.withAlpha(Theme.overlay, 0.28)
 
         PwObjectTracker { objects: streamRow.stream ? [streamRow.stream] : [] }
 

@@ -207,7 +207,7 @@ PanelWindow {
                     NumberAnimation { duration: 260; easing.type: Easing.OutCubic }
                 }
                 Behavior on opacity {
-                    NumberAnimation { duration: 180; easing.type: Easing.OutCubic }
+                    NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic }
                 }
             }
         }

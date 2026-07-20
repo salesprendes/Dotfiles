@@ -42,7 +42,7 @@ Rectangle {
     // Urgencia: tiñe la barra de progreso. Critical → rojo; Low → texto atenuado.
     readonly property int urgency: notif && notif.urgency !== undefined ? notif.urgency : 1
     readonly property color progressColor: urgency === 2 ? Theme.red
-                                         : urgency === 0 ? Qt.rgba(Theme.fg.r, Theme.fg.g, Theme.fg.b, 0.9)
+                                         : urgency === 0 ? Theme.withAlpha(Theme.fg, 0.9)
                                          : Theme.accent
 
     signal closeRequested()
@@ -108,7 +108,7 @@ Rectangle {
     radius: Theme.dp(12)                              // radiusXl
     // La tarjeta se pinta con bg a 0.97 (no con surface): es el mismo tono
     // del fondo del shell, apenas translucido.
-    color: Qt.rgba(Theme.bg.r, Theme.bg.g, Theme.bg.b, 0.97)
+    color: Theme.withAlpha(Theme.bg, 0.97)
     border.width: Theme.hairline
     border.color: Theme.overlay
     clip: true
@@ -178,7 +178,7 @@ Rectangle {
                 implicitHeight: item.iconSize
                 radius: Math.min(height / 2, Math.round(item.iconSize / 6))
                 color: item.img !== "" ? "transparent"
-                                       : Qt.rgba(Theme.surface.r, Theme.surface.g, Theme.surface.b, 1.0)
+                                       : Theme.withAlpha(Theme.surface, 1.0)
                 clip: true
 
                 Image {
@@ -313,7 +313,7 @@ Rectangle {
         y: item.pad
         radius: Theme.dp(6)
         color: closeButton.hovered ? Theme.surfaceHi
-                                   : Qt.rgba(Theme.surfaceHi.r, Theme.surfaceHi.g, Theme.surfaceHi.b, 0)
+                                   : Theme.withAlpha(Theme.surfaceHi, 0)
         Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Theme.enterEasing } }
 
         Text {

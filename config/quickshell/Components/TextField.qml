@@ -49,7 +49,7 @@ ColumnLayout {
         border.width: Theme.hairline
         border.color: field.invalid ? Theme.red
                      : input.activeFocus ? Theme.accent
-                     : Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.4)
+                     : Theme.withAlpha(Theme.overlay, 0.4)
         Behavior on border.color { ColorAnimation { duration: Theme.animFast } }
 
         RowLayout {

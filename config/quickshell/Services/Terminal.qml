@@ -228,6 +228,6 @@ Singleton {
     FileView { id: kittyThemeFile; path: root.home + "/.config/kitty/theme.conf";        blockLoading: true; printErrors: false; atomicWrites: true }
     FileView { id: alacrittyFile;  path: root.home + "/.config/alacritty/alacritty.toml"; blockLoading: true; printErrors: false; atomicWrites: true }
     FileView { id: footFile;       path: root.home + "/.config/foot/foot.ini";            blockLoading: true; printErrors: false; atomicWrites: true }
-    Process  { id: reloadKitty;    command: ["sh", "-c", "pkill -USR1 -x kitty >/dev/null 2>&1 || true"] }
-    Process  { id: reloadFoot;     command: ["sh", "-c", "pkill -USR1 -x foot  >/dev/null 2>&1 || true"] }
+    Process  { id: reloadKitty;    command: ["pkill", "-USR1", "-x", "kitty"] }
+    Process  { id: reloadFoot;     command: ["pkill", "-USR1", "-x", "foot"] }
 }

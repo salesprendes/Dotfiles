@@ -6,6 +6,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import qs.Config
+import qs.Services
 
 // Plantillas de apps (Ajustes → Plantillas): una parrilla de apps con
 // casillas, cada una vuelca los colores del tema en el archivo de
@@ -14,7 +15,7 @@ import qs.Config
 // argv directo) — nada de scripts .sh.
 //
 // Ajustes → Plantillas solo LISTA las apps detectadas en el sistema
-// ('which <bin>', ver 'installed' más abajo) — con 15 apps casi ninguna
+// (vía Services/Deps.qml, ver 'isInstalled' más abajo) — con 15 apps casi ninguna
 // instalada a la vez, mostrarlas todas era más ruido que utilidad. GTK e
 // Hyprland son la excepción: GTK porque no hay un binario que comprobar (es
 // una librería, no un programa); Hyprland porque su detección real es "es
@@ -69,31 +70,16 @@ Singleton {
         { id: "btop",      label: "Btop",         glyph: "󰘚", bin: "btop",      category: "misc" }
     ]
 
-    // id -> bool, resultado de 'which <bin>' (gtk/hyprland no se detectan
-    // así: siempre usan su propio criterio, ver isInstalled). Solo decide
-    // qué se LISTA en Ajustes; activar/aplicar sigue funcionando igual sin
-    // más comprobación.
-    property var installed: ({})
+    // Detección vía Deps (un único 'which' compartido al arrancar, ver
+    // Services/Deps.qml). gtk/hyprland no se detectan así: siempre usan su
+    // propio criterio. Solo decide qué se LISTA en Ajustes; activar/aplicar
+    // sigue funcionando igual sin más comprobación. Reactivo: Deps.has() lee
+    // Deps._found, así que los bindings se re-evalúan al acabar la detección.
     function isInstalled(id) {
         if (id === "gtk") return true
         if (id === "hyprland") return Settings.hyprlandAvailable
-        return !!installed[id]
-    }
-
-    // ── Detección: un 'which <bin>' por app, todas en paralelo ─────────────
-    Instantiator {
-        model: root.registry
-        delegate: Process {
-            id: detectProc
-            required property var modelData
-            command: modelData.bin ? ["which", modelData.bin] : ["true"]
-            Component.onCompleted: running = true
-            onExited: (code, status) => {
-                const cur = Object.assign({}, root.installed)
-                cur[detectProc.modelData.id] = (code === 0)
-                root.installed = cur
-            }
-        }
+        const r = registry.find(e => e.id === id)
+        return r ? Deps.has(r.bin) : false
     }
 
     // Marca real, guardada en el archivo — independiente del interruptor
@@ -217,54 +203,71 @@ Singleton {
     }
     function render(text) { return Settings.renderTemplate(text, Settings.materialTokens()) }
 
+    // Escribe solo si el contenido cambió de verdad (mismo patrón que
+    // Services/Terminal.qml): evita reescribir los archivos y mandar señales
+    // de recarga (pkill) a las apps en cada arranque del shell cuando nada
+    // ha cambiado. Devuelve si hubo escritura.
+    function _writeIfChanged(view, txt) {
+        if (readText(view) === txt)
+            return false
+        view.setText(txt)
+        return true
+    }
+
     // Si 'hasFn(contenido)' ya es verdad, no toca el archivo. Si el archivo
     // está vacío/no existe, lo crea con 'createContent'. Si no, añade
-    // 'appendLine' al final (con una línea en blanco delante).
+    // 'appendLine' al final (con una línea en blanco delante). Devuelve si
+    // hubo escritura.
     function ensureLine(view, hasFn, appendLine, createContent) {
         const content = readText(view)
         if (content.length === 0) {
             view.setText(createContent)
-            return
+            return true
         }
         if (hasFn(content))
-            return
+            return false
         const trimmed = content.replace(/\s+$/, "")
         view.setText(trimmed + "\n\n" + appendLine + "\n")
+        return true
     }
 
     // ═══════════════════════════════ ghostty ════════════════════════════════
     FileView { id: ghosttyTpl; path: root.tplDir + "/ghostty/ghostty"; blockLoading: true; printErrors: false }
-    FileView { id: ghosttyOut; path: root.home + "/.config/ghostty/themes/quickshell"; atomicWrites: true; printErrors: false }
+    FileView { id: ghosttyOut; path: root.home + "/.config/ghostty/themes/quickshell"; blockLoading: true; atomicWrites: true; printErrors: false }
     FileView { id: ghosttyCfgA; path: root.home + "/.config/ghostty/config"; blockLoading: true; printErrors: false; atomicWrites: true }
     FileView { id: ghosttyCfgB; path: root.home + "/.config/ghostty/config.ghostty"; blockLoading: true; printErrors: false }
     Process { id: ghosttyReload; command: ["pkill", "-SIGUSR2", "ghostty"] }
     function applyGhostty() {
-        ghosttyOut.setText(render(ghosttyTpl.text()))
+        let changed = _writeIfChanged(ghosttyOut, render(ghosttyTpl.text()))
         const target = readText(ghosttyCfgB).length > 0 ? ghosttyCfgB : ghosttyCfgA
         const content = readText(target)
         const line = "theme = quickshell"
         if (content.length === 0) {
             ghosttyCfgA.setText(line + "\n")
+            changed = true
         } else if (/^theme\s*=\s*quickshell\s*$/m.test(content)) {
             // ya correcto
         } else if (/^theme\s*=/m.test(content)) {
             target.setText(content.replace(/^theme\s*=.*/m, line))
+            changed = true
         } else {
             target.setText(content.replace(/\s+$/, "") + "\n" + line + "\n")
+            changed = true
         }
-        ghosttyReload.running = true
+        if (changed)
+            ghosttyReload.running = true
     }
 
     // ═══════════════════════════════ wezterm ════════════════════════════════
     FileView { id: weztermTpl; path: root.tplDir + "/wezterm/wezterm.toml"; blockLoading: true; printErrors: false }
-    FileView { id: weztermOut; path: root.home + "/.config/wezterm/colors/Quickshell.toml"; atomicWrites: true; printErrors: false }
+    FileView { id: weztermOut; path: root.home + "/.config/wezterm/colors/Quickshell.toml"; blockLoading: true; atomicWrites: true; printErrors: false }
     FileView { id: weztermCfg; path: root.home + "/.config/wezterm/wezterm.lua"; blockLoading: true; printErrors: false; atomicWrites: true }
     // Si no hay wezterm.lua, se fabrica uno mínimo (en vez de no hacer nada:
     // es Lua del usuario y podría preferirse no tocarlo, pero así activar la
     // plantilla no exige ningún paso a mano). Si ya existe, se edita sin
     // tocar el resto.
     function applyWezterm() {
-        weztermOut.setText(render(weztermTpl.text()))
+        _writeIfChanged(weztermOut, render(weztermTpl.text()))
         const content = readText(weztermCfg)
         const line = 'config.color_scheme = "Quickshell"'
         if (content.length === 0) {
@@ -291,7 +294,8 @@ Singleton {
         const markerBegin = "# >>> QUICKSHELL STARSHIP PALETTE >>>"
         const markerEnd = "# <<< QUICKSHELL STARSHIP PALETTE <<<"
         const palette = render(starshipTpl.text())
-        let content = readText(starshipCfg)
+        const original = readText(starshipCfg)
+        let content = original
 
         if (content.indexOf(markerBegin) !== -1) {
             const re = new RegExp(markerBegin.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
@@ -303,64 +307,72 @@ Singleton {
         else
             content = 'palette = "quickshell"\n' + content
 
-        starshipCfg.setText(content.replace(/\s+$/, "") + "\n\n" + markerBegin + "\n" + palette.trim() + "\n" + markerEnd + "\n")
+        const next = content.replace(/\s+$/, "") + "\n\n" + markerBegin + "\n" + palette.trim() + "\n" + markerEnd + "\n"
+        if (next !== original)
+            starshipCfg.setText(next)
     }
 
     // ═══════════════════════════════ btop ═══════════════════════════════════
     FileView { id: btopTpl; path: root.tplDir + "/btop/btop.theme"; blockLoading: true; printErrors: false }
-    FileView { id: btopOut; path: root.home + "/.config/btop/themes/quickshell.theme"; atomicWrites: true; printErrors: false }
+    FileView { id: btopOut; path: root.home + "/.config/btop/themes/quickshell.theme"; blockLoading: true; atomicWrites: true; printErrors: false }
     FileView { id: btopCfg; path: root.home + "/.config/btop/btop.conf"; blockLoading: true; printErrors: false; atomicWrites: true }
     Process { id: btopReload; command: ["pkill", "-SIGUSR2", "-x", "btop"] }
     // Si btop.conf no existe todavía (no se ha arrancado btop ni una vez),
     // no lo fabricamos.
     function applyBtop() {
-        btopOut.setText(render(btopTpl.text()))
+        let changed = _writeIfChanged(btopOut, render(btopTpl.text()))
         const content = readText(btopCfg)
         if (content.length === 0)
             return
-        if (/^color_theme\s*=\s*"quickshell"/m.test(content))
-            { btopReload.running = true; return }
-        if (/^color_theme\s*=/m.test(content))
+        if (/^color_theme\s*=\s*"quickshell"/m.test(content)) {
+            // ya correcto
+        } else if (/^color_theme\s*=/m.test(content)) {
             btopCfg.setText(content.replace(/^color_theme\s*=.*/m, 'color_theme = "quickshell"'))
-        else
+            changed = true
+        } else {
             btopCfg.setText(content.replace(/\s+$/, "") + "\ncolor_theme = \"quickshell\"\n")
-        btopReload.running = true
+            changed = true
+        }
+        if (changed)
+            btopReload.running = true
     }
 
     // ═══════════════════════════════ cava ═══════════════════════════════════
     FileView { id: cavaTpl; path: root.tplDir + "/cava/cava.ini"; blockLoading: true; printErrors: false }
-    FileView { id: cavaOut; path: root.home + "/.config/cava/themes/quickshell"; atomicWrites: true; printErrors: false }
+    FileView { id: cavaOut; path: root.home + "/.config/cava/themes/quickshell"; blockLoading: true; atomicWrites: true; printErrors: false }
     FileView { id: cavaCfg; path: root.home + "/.config/cava/config"; blockLoading: true; printErrors: false; atomicWrites: true }
     Process { id: cavaReload; command: ["pkill", "-USR1", "-x", "cava"] }
     function applyCava() {
-        cavaOut.setText(render(cavaTpl.text()))
+        let changed = _writeIfChanged(cavaOut, render(cavaTpl.text()))
         const content = readText(cavaCfg)
         if (content.length === 0)
             return
         const sectionRe = /(\[color\][^[]*)/
         const m = content.match(sectionRe)
         if (m && /^theme\s*=\s*"quickshell"/m.test(m[1])) {
-            cavaReload.running = true
-            return
-        }
-        if (m && /^theme\s*=/m.test(m[1])) {
+            // ya correcto
+        } else if (m && /^theme\s*=/m.test(m[1])) {
             cavaCfg.setText(content.replace(sectionRe, m[1].replace(/^theme\s*=.*/m, 'theme = "quickshell"')))
+            changed = true
         } else if (m) {
             cavaCfg.setText(content.replace(sectionRe, m[1].replace(/\s*$/, "") + '\ntheme = "quickshell"\n'))
+            changed = true
         } else {
             cavaCfg.setText(content.replace(/\s+$/, "") + '\n\n[color]\ntheme = "quickshell"\n')
+            changed = true
         }
-        cavaReload.running = true
+        if (changed)
+            cavaReload.running = true
     }
 
     // ═══════════════════════════════ helix ══════════════════════════════════
     FileView { id: helixTpl; path: root.tplDir + "/helix/helix.toml"; blockLoading: true; printErrors: false }
-    FileView { id: helixOut; path: root.home + "/.config/helix/themes/quickshell.toml"; atomicWrites: true; printErrors: false }
+    FileView { id: helixOut; path: root.home + "/.config/helix/themes/quickshell.toml"; blockLoading: true; atomicWrites: true; printErrors: false }
     FileView { id: helixCfg; path: root.home + "/.config/helix/config.toml"; blockLoading: true; printErrors: false; atomicWrites: true }
     // Además de dejar el archivo de tema, edita config.toml para que quede
     // activo sin pasos extra (en vez de dejar que el usuario lo active a mano).
     function applyHelix() {
-        helixOut.setText(render(helixTpl.text()))
+        _writeIfChanged(helixOut, render(helixTpl.text()))
         const content = readText(helixCfg)
         const line = 'theme = "quickshell"'
         if (content.length === 0) {
@@ -376,72 +388,75 @@ Singleton {
 
     // ═══════════════════════════════ emacs ══════════════════════════════════
     FileView { id: emacsTpl; path: root.tplDir + "/emacs/quickshell-theme.el"; blockLoading: true; printErrors: false }
-    FileView { id: emacsOut; path: root.home + "/.emacs.d/themes/quickshell-theme.el"; atomicWrites: true; printErrors: false }
+    FileView { id: emacsOut; path: root.home + "/.emacs.d/themes/quickshell-theme.el"; blockLoading: true; atomicWrites: true; printErrors: false }
     Process { id: emacsReload; command: ["emacsclient", "-e", "(load-theme 'quickshell t)"] }
     // Siempre ~/.emacs.d/themes, sin probar ~/.config/doom o ~/.config/emacs
     // antes.
     function applyEmacs() {
-        emacsOut.setText(render(emacsTpl.text()))
-        emacsReload.running = true
+        if (_writeIfChanged(emacsOut, render(emacsTpl.text())))
+            emacsReload.running = true
     }
 
     // ═══════════════════════════════ qt ═════════════════════════════════════
     FileView { id: qtTpl; path: root.tplDir + "/qt/qtct.conf"; blockLoading: true; printErrors: false }
-    FileView { id: qt5Out; path: root.home + "/.config/qt5ct/colors/quickshell.conf"; atomicWrites: true; printErrors: false }
-    FileView { id: qt6Out; path: root.home + "/.config/qt6ct/colors/quickshell.conf"; atomicWrites: true; printErrors: false }
+    FileView { id: qt5Out; path: root.home + "/.config/qt5ct/colors/quickshell.conf"; blockLoading: true; atomicWrites: true; printErrors: false }
+    FileView { id: qt6Out; path: root.home + "/.config/qt6ct/colors/quickshell.conf"; blockLoading: true; atomicWrites: true; printErrors: false }
     FileView { id: qt5Cfg; path: root.home + "/.config/qt5ct/qt5ct.conf"; blockLoading: true; printErrors: false; atomicWrites: true }
     FileView { id: qt6Cfg; path: root.home + "/.config/qt6ct/qt6ct.conf"; blockLoading: true; printErrors: false; atomicWrites: true }
     // Crea o actualiza la sección [Appearance] de qt5ct.conf/qt6ct.conf,
     // sin tocar el resto del archivo.
     function ensureQtAppearance(view, colorSchemePath) {
         const content = readText(view)
+        let next
         if (content.length === 0) {
-            view.setText("[Appearance]\ncolor_scheme_path=" + colorSchemePath + "\ncustom_palette=true\n")
-            return
+            next = "[Appearance]\ncolor_scheme_path=" + colorSchemePath + "\ncustom_palette=true\n"
+        } else {
+            const sectionRe = /(\[Appearance\][^[]*)/
+            const m = content.match(sectionRe)
+            if (!m) {
+                next = content.replace(/\s+$/, "") + "\n\n[Appearance]\ncolor_scheme_path=" + colorSchemePath + "\ncustom_palette=true\n"
+            } else {
+                let section = m[1]
+                section = /^color_scheme_path\s*=/m.test(section)
+                    ? section.replace(/^color_scheme_path\s*=.*/m, "color_scheme_path=" + colorSchemePath)
+                    : section.replace(/\s*$/, "") + "\ncolor_scheme_path=" + colorSchemePath + "\n"
+                section = /^custom_palette\s*=/m.test(section)
+                    ? section.replace(/^custom_palette\s*=.*/m, "custom_palette=true")
+                    : section.replace(/\s*$/, "") + "\ncustom_palette=true\n"
+                next = content.replace(sectionRe, section)
+            }
         }
-        const sectionRe = /(\[Appearance\][^[]*)/
-        const m = content.match(sectionRe)
-        if (!m) {
-            view.setText(content.replace(/\s+$/, "") + "\n\n[Appearance]\ncolor_scheme_path=" + colorSchemePath + "\ncustom_palette=true\n")
-            return
-        }
-        let section = m[1]
-        section = /^color_scheme_path\s*=/m.test(section)
-            ? section.replace(/^color_scheme_path\s*=.*/m, "color_scheme_path=" + colorSchemePath)
-            : section.replace(/\s*$/, "") + "\ncolor_scheme_path=" + colorSchemePath + "\n"
-        section = /^custom_palette\s*=/m.test(section)
-            ? section.replace(/^custom_palette\s*=.*/m, "custom_palette=true")
-            : section.replace(/\s*$/, "") + "\ncustom_palette=true\n"
-        view.setText(content.replace(sectionRe, section))
+        if (next !== content)
+            view.setText(next)
     }
     // Además de escribir los archivos de esquema, activa "quickshell" en
     // qt5ct/qt6ct directamente (en vez de que el usuario lo elija a mano).
     function applyQt() {
         const rendered = render(qtTpl.text())
-        qt5Out.setText(rendered)
-        qt6Out.setText(rendered)
+        _writeIfChanged(qt5Out, rendered)
+        _writeIfChanged(qt6Out, rendered)
         ensureQtAppearance(qt5Cfg, root.home + "/.config/qt5ct/colors/quickshell.conf")
         ensureQtAppearance(qt6Cfg, root.home + "/.config/qt6ct/colors/quickshell.conf")
     }
 
     // ═══════════════════════════════ kde / KColorScheme ═════════════════════
     FileView { id: kdeTpl; path: root.tplDir + "/kde/kcolorscheme.colors"; blockLoading: true; printErrors: false }
-    FileView { id: kdeOut; path: root.home + "/.local/share/color-schemes/Quickshell.colors"; atomicWrites: true; printErrors: false }
+    FileView { id: kdeOut; path: root.home + "/.local/share/color-schemes/Quickshell.colors"; blockLoading: true; atomicWrites: true; printErrors: false }
     Process { id: kdeNotify; command: ["dbus-send", "/KGlobalSettings", "org.kde.KGlobalSettings.notifyChange", "int32:0", "int32:0"] }
     function applyKde() {
-        kdeOut.setText(render(kdeTpl.text()))
-        kdeNotify.running = true
+        if (_writeIfChanged(kdeOut, render(kdeTpl.text())))
+            kdeNotify.running = true
     }
 
     // ═══════════════════════════════ labwc ══════════════════════════════════
     FileView { id: labwcTpl; path: root.tplDir + "/labwc/labwc.conf"; blockLoading: true; printErrors: false }
-    FileView { id: labwcStaging; path: root.home + "/.config/labwc/quickshell.conf"; atomicWrites: true; printErrors: false }
-    FileView { id: labwcThemerc; path: root.home + "/.local/share/themes/quickshell/openbox-3/themerc"; atomicWrites: true; printErrors: false }
+    FileView { id: labwcStaging; path: root.home + "/.config/labwc/quickshell.conf"; blockLoading: true; atomicWrites: true; printErrors: false }
+    FileView { id: labwcThemerc; path: root.home + "/.local/share/themes/quickshell/openbox-3/themerc"; blockLoading: true; atomicWrites: true; printErrors: false }
     FileView { id: labwcRc; path: root.home + "/.config/labwc/rc.xml"; blockLoading: true; printErrors: false; atomicWrites: true }
     function applyLabwc() {
         const rendered = render(labwcTpl.text())
-        labwcStaging.setText(rendered)
-        labwcThemerc.setText(rendered)
+        _writeIfChanged(labwcStaging, rendered)
+        _writeIfChanged(labwcThemerc, rendered)
 
         const content = readText(labwcRc)
         if (content.length === 0) {
@@ -462,10 +477,10 @@ Singleton {
 
     // ═══════════════════════════════ niri ═══════════════════════════════════
     FileView { id: niriTpl; path: root.tplDir + "/niri/niri.kdl"; blockLoading: true; printErrors: false }
-    FileView { id: niriOut; path: root.home + "/.config/niri/quickshell.kdl"; atomicWrites: true; printErrors: false }
+    FileView { id: niriOut; path: root.home + "/.config/niri/quickshell.kdl"; blockLoading: true; atomicWrites: true; printErrors: false }
     FileView { id: niriCfg; path: root.home + "/.config/niri/config.kdl"; blockLoading: true; printErrors: false; atomicWrites: true }
     function applyNiri() {
-        niriOut.setText(render(niriTpl.text()))
+        _writeIfChanged(niriOut, render(niriTpl.text()))
         ensureLine(niriCfg,
             c => /include\s+"?quickshell\.kdl"?/.test(c),
             'include "quickshell.kdl"',
@@ -474,24 +489,26 @@ Singleton {
 
     // ═══════════════════════════════ mango ══════════════════════════════════
     FileView { id: mangoTpl; path: root.tplDir + "/mango/mango.conf"; blockLoading: true; printErrors: false }
-    FileView { id: mangoOut; path: root.home + "/.config/mango/quickshell.conf"; atomicWrites: true; printErrors: false }
+    FileView { id: mangoOut; path: root.home + "/.config/mango/quickshell.conf"; blockLoading: true; atomicWrites: true; printErrors: false }
     FileView { id: mangoCfg; path: root.home + "/.config/mango/config.conf"; blockLoading: true; printErrors: false; atomicWrites: true }
     Process { id: mangoReload; command: ["mmsg", "dispatch", "reload_config"] }
     function applyMango() {
-        mangoOut.setText(render(mangoTpl.text()))
-        ensureLine(mangoCfg,
-            c => /source\s*=.*quickshell\.conf/.test(c),
-            "source=~/.config/mango/quickshell.conf",
-            "source=~/.config/mango/quickshell.conf\n")
-        mangoReload.running = true
+        let changed = _writeIfChanged(mangoOut, render(mangoTpl.text()))
+        if (ensureLine(mangoCfg,
+                c => /source\s*=.*quickshell\.conf/.test(c),
+                "source=~/.config/mango/quickshell.conf",
+                "source=~/.config/mango/quickshell.conf\n"))
+            changed = true
+        if (changed)
+            mangoReload.running = true
     }
 
     // ═══════════════════════════════ scroll ═════════════════════════════════
     FileView { id: scrollTpl; path: root.tplDir + "/scroll/scroll"; blockLoading: true; printErrors: false }
-    FileView { id: scrollOut; path: root.home + "/.config/scroll/quickshell"; atomicWrites: true; printErrors: false }
+    FileView { id: scrollOut; path: root.home + "/.config/scroll/quickshell"; blockLoading: true; atomicWrites: true; printErrors: false }
     FileView { id: scrollCfg; path: root.home + "/.config/scroll/config"; blockLoading: true; printErrors: false; atomicWrites: true }
     function applyScroll() {
-        scrollOut.setText(render(scrollTpl.text()))
+        _writeIfChanged(scrollOut, render(scrollTpl.text()))
         ensureLine(scrollCfg,
             c => /^include\s+.*quickshell/m.test(c),
             "include ~/.config/scroll/quickshell",
@@ -500,10 +517,10 @@ Singleton {
 
     // ═══════════════════════════════ sway ═══════════════════════════════════
     FileView { id: swayTpl; path: root.tplDir + "/sway/sway"; blockLoading: true; printErrors: false }
-    FileView { id: swayOut; path: root.home + "/.config/sway/quickshell"; atomicWrites: true; printErrors: false }
+    FileView { id: swayOut; path: root.home + "/.config/sway/quickshell"; blockLoading: true; atomicWrites: true; printErrors: false }
     FileView { id: swayCfg; path: root.home + "/.config/sway/config"; blockLoading: true; printErrors: false; atomicWrites: true }
     function applySway() {
-        swayOut.setText(render(swayTpl.text()))
+        _writeIfChanged(swayOut, render(swayTpl.text()))
         ensureLine(swayCfg,
             c => /^include\s+.*quickshell/m.test(c),
             "include ~/.config/sway/quickshell",

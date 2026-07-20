@@ -13,19 +13,24 @@ Popout {
     cardWidth: 430
     cardMinWidth: 320
     shown: Globals.notifCenterOpen
-    property bool clearing: false
-    property bool emptyMessageReady: true
-    property bool showingClearedState: false
-    property real listClearOpacity: 1
-    property real listClearOffset: 0
-    property bool freezeListHeight: false
-    property real frozenListHeight: 0
-    property real emptyBodyHeight: 76
-    // Con "No molestar" activo mostramos el símbolo DND en grande, que necesita
-    // más alto que el mensaje normal de "Sin notificaciones".
-    readonly property real emptyStateHeight: Globals.dnd ? 132 : emptyBodyHeight
-    property real bodyHeight: emptyBodyHeight
     property var groups: []
+
+    // Estado y animación del vaciado (alto del cuerpo incluido), compartidos
+    // con el portapapeles (Components/ClearableListState.qml). asyncClear: el
+    // borrado real lo confirma NotifService con clearAllFinished.
+    ClearableListState {
+        id: clearState
+        itemCount: () => NotifService.count
+        clearAll: () => NotifService.clearAll()
+        body: notifBody
+        list: groupList
+        emptyBodyHeight: 76
+        // Con "No molestar" activo mostramos el símbolo DND en grande, que
+        // necesita más alto que el mensaje normal de "Sin notificaciones".
+        emptyExtent: Globals.dnd ? 132 : emptyBodyHeight
+        maxContentHeight: 500
+        asyncClear: true
+    }
     // Con el panel oculto no reconstruimos la lista: marcamos "sucio" y se
     // reconstruye una sola vez al abrir. Ahorra destruir/crear delegados
     // por cada notificación que llega o se descarta en segundo plano.
@@ -34,8 +39,6 @@ Popout {
     // la raíz para sobrevivir a los reseteos de modelo: al reasignar
     // `groups`, los delegados se recrean pero releen este mapa.
     property var _expandedGroups: ({})
-
-    Behavior on bodyHeight { NumberAnimation { duration: 240; easing.type: Easing.OutCubic } }
 
     function appNameFor(n) {
         if (n && n.appName && n.appName !== "")
@@ -123,30 +126,6 @@ Popout {
         return summary !== "" ? summary : body
     }
 
-    function refreshBodyHeight() {
-        if (freezeListHeight || showingClearedState)
-            return
-
-        bodyHeight = NotifService.count > 0 ? Math.max(emptyBodyHeight, Math.min(500, groupList.contentHeight))
-                                            : emptyStateHeight
-    }
-
-    function clearAnimated() {
-        if (clearing)
-            return
-        if (NotifService.count === 0) {
-            NotifService.clearAll()
-            return
-        }
-        clearing = true
-        showingClearedState = false
-        refreshBodyHeight()
-        frozenListHeight = notifBody.height
-        bodyHeight = frozenListHeight
-        freezeListHeight = true
-        clearAnim.restart()
-    }
-
     Connections {
         target: NotifService
         function onCountChanged() {
@@ -155,12 +134,12 @@ Popout {
                 return
             }
             nc.rebuildGroups()
-            nc.refreshBodyHeight()
+            clearState.refreshBodyHeight()
         }
 
         function onClearAllFinished() {
-            if (nc.clearing)
-                clearDoneAnim.restart()
+            if (clearState.clearing)
+                clearState.finishClear()
         }
     }
 
@@ -168,56 +147,7 @@ Popout {
     // sitio (o quitarlo) al símbolo DND grande; el cambio se anima solo.
     Connections {
         target: Globals
-        function onDndChanged() { nc.refreshBodyHeight() }
-    }
-
-    SequentialAnimation {
-        id: clearAnim
-        ScriptAction {
-            script: {
-                nc.emptyMessageReady = false
-            }
-        }
-        ParallelAnimation {
-            NumberAnimation {
-                target: nc
-                property: "listClearOpacity"
-                to: 0
-                duration: 260
-                easing.type: Easing.OutCubic
-            }
-
-            NumberAnimation {
-                target: nc
-                property: "listClearOffset"
-                to: 18
-                duration: 260
-                easing.type: Easing.OutCubic
-            }
-        }
-        ScriptAction {
-            script: {
-                nc.emptyMessageReady = true
-                nc.showingClearedState = true
-                NotifService.clearAll()
-                nc.freezeListHeight = false
-                nc.bodyHeight = nc.emptyStateHeight
-            }
-        }
-    }
-
-    SequentialAnimation {
-        id: clearDoneAnim
-        PauseAnimation { duration: 80 }
-        ScriptAction {
-            script: {
-                nc.showingClearedState = false
-                nc.clearing = false
-                nc.listClearOpacity = 1
-                nc.listClearOffset = 0
-                nc.refreshBodyHeight()
-            }
-        }
+        function onDndChanged() { clearState.refreshBodyHeight() }
     }
 
     onShownChanged: if (shown) {
@@ -225,11 +155,11 @@ Popout {
             _dirty = false
             rebuildGroups()
         }
-        refreshBodyHeight()
+        clearState.refreshBodyHeight()
     }
     Component.onCompleted: {
         rebuildGroups()
-        refreshBodyHeight()
+        clearState.refreshBodyHeight()
     }
 
     RowLayout {
@@ -246,14 +176,14 @@ Popout {
         }
 
         Rectangle {
-            visible: NotifService.count > 0 && !nc.clearing
+            visible: NotifService.count > 0 && !clearState.clearing
             implicitWidth: clearRow.implicitWidth + 18
             implicitHeight: Theme.controlM
             radius: height / 2
-            color: clearMa.containsMouse ? Qt.rgba(Theme.red.r, Theme.red.g, Theme.red.b, 0.18)
-                                         : Qt.rgba(Theme.surface.r, Theme.surface.g, Theme.surface.b, 0.85)
+            color: clearMa.containsMouse ? Theme.withAlpha(Theme.red, 0.18)
+                                         : Theme.withAlpha(Theme.surface, 0.85)
             border.width: Theme.hairline
-            border.color: Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.34)
+            border.color: Theme.withAlpha(Theme.overlay, 0.34)
             Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
 
             RowLayout {
@@ -282,7 +212,7 @@ Popout {
                 anchors.fill: parent
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
-                onClicked: nc.clearAnimated()
+                onClicked: clearState.clearAnimated()
             }
         }
     }
@@ -299,11 +229,11 @@ Popout {
                 implicitWidth: mutedRow.implicitWidth + Theme.space12
                 implicitHeight: Theme.controlS
                 radius: height / 2
-                color: unmuteMa.containsMouse ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.20)
-                                               : Qt.rgba(Theme.surface.r, Theme.surface.g, Theme.surface.b, 0.72)
+                color: unmuteMa.containsMouse ? Theme.withAlpha(Theme.accent, 0.20)
+                                               : Theme.withAlpha(Theme.surface, 0.72)
                 border.width: Theme.hairline
-                border.color: Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.34)
-                Behavior on color { ColorAnimation { duration: 140; easing.type: Easing.OutCubic } }
+                border.color: Theme.withAlpha(Theme.overlay, 0.34)
+                Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
 
                 RowLayout {
                     id: mutedRow
@@ -328,7 +258,7 @@ Popout {
                         font.family: Theme.fontFamily
                         font.pixelSize: Theme.iconSize - 5
                         // Funde junto al fondo del chip.
-                        Behavior on color { ColorAnimation { duration: 140; easing.type: Easing.OutCubic } }
+                        Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
                     }
                 }
 
@@ -347,13 +277,13 @@ Popout {
         id: notifBody
 
         Layout.fillWidth: true
-        Layout.preferredHeight: nc.bodyHeight
+        Layout.preferredHeight: clearState.bodyHeight
         clip: true
 
         // Vacío normal: "Sin notificaciones" (solo si NO está "No molestar").
         Text {
             anchors.centerIn: parent
-            visible: (NotifService.count === 0 || nc.showingClearedState) && nc.emptyMessageReady && !Globals.dnd
+            visible: (NotifService.count === 0 || clearState.showingClearedState) && clearState.emptyMessageReady && !Globals.dnd
             opacity: visible ? 1 : 0
             horizontalAlignment: Text.AlignHCenter
             text: "󰂜\n" + I18n.tr("No notifications")
@@ -369,7 +299,7 @@ Popout {
         ColumnLayout {
             anchors.centerIn: parent
             width: parent.width
-            visible: (NotifService.count === 0 || nc.showingClearedState) && nc.emptyMessageReady && Globals.dnd
+            visible: (NotifService.count === 0 || clearState.showingClearedState) && clearState.emptyMessageReady && Globals.dnd
             opacity: visible ? 1 : 0
             spacing: Theme.space6
 
@@ -395,15 +325,15 @@ Popout {
         ListView {
             id: groupList
             anchors.fill: parent
-            visible: (NotifService.count > 0 || nc.clearing) && !nc.showingClearedState
+            visible: (NotifService.count > 0 || clearState.clearing) && !clearState.showingClearedState
             clip: true
-            enabled: !nc.clearing
+            enabled: !clearState.clearing
             spacing: Theme.space10
             model: nc.groups
             boundsBehavior: Flickable.StopAtBounds
-            opacity: nc.listClearOpacity
-            transform: Translate { y: nc.listClearOffset }
-            onContentHeightChanged: nc.refreshBodyHeight()
+            opacity: clearState.listClearOpacity
+            transform: Translate { y: clearState.listClearOffset }
+            onContentHeightChanged: clearState.refreshBodyHeight()
 
             delegate: Item {
                 id: groupDelegate
@@ -412,7 +342,7 @@ Popout {
                 // (los delegados se recrean pero la clave persiste).
                 property bool expanded: nc._expandedGroups[modelData.title] === true
                 property bool closing: false
-                onExpandedChanged: Qt.callLater(nc.refreshBodyHeight)
+                onExpandedChanged: Qt.callLater(clearState.refreshBodyHeight)
                 readonly property var group: modelData
                 readonly property var items: group.items || []
                 readonly property var latest: items.length > 0 ? items[0] : null
@@ -430,12 +360,12 @@ Popout {
                     opacity: groupDelegate.closing ? 0 : 1
                     scale: groupDelegate.closing ? 0.985 : 1
 
-                    Behavior on opacity { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
-                    Behavior on scale { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
+                    Behavior on opacity { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+                    Behavior on scale { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
 
                     Behavior on x {
                         enabled: !drag.active
-                        NumberAnimation { duration: 180; easing.type: Easing.OutCubic }
+                        NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic }
                     }
 
                     Timer {
@@ -455,9 +385,9 @@ Popout {
                         width: parent.width
                         implicitHeight: groupContent.implicitHeight + Theme.space12 * 2
                         radius: Theme.pillRadius + Theme.space4
-                        color: Qt.rgba(Theme.surface.r, Theme.surface.g, Theme.surface.b, 0.74)
+                        color: Theme.withAlpha(Theme.surface, 0.74)
                         border.width: Theme.hairline
-                        border.color: Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.34)
+                        border.color: Theme.withAlpha(Theme.overlay, 0.34)
 
                         ColumnLayout {
                             id: groupContent
@@ -478,9 +408,9 @@ Popout {
                                     implicitWidth: Theme.dp(34)
                                     implicitHeight: Theme.dp(34)
                                     radius: height / 2
-                                    color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.14)
+                                    color: Theme.withAlpha(Theme.accent, 0.14)
                                     border.width: Theme.hairline
-                                    border.color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.38)
+                                    border.color: Theme.withAlpha(Theme.accent, 0.38)
                                     clip: true
 
                                     Image {
@@ -534,16 +464,16 @@ Popout {
                                     radius: height / 2
                                     scale: ceMa.pressed && canExpand ? 0.93 : ceMa.containsMouse && canExpand ? 1.05 : 1
                                     color: groupDelegate.expanded
-                                        ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, ceMa.containsMouse ? 0.30 : 0.24)
-                                        : ceMa.containsMouse && canExpand ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.24)
-                                                                          : Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.16)
+                                        ? Theme.withAlpha(Theme.accent, ceMa.containsMouse ? 0.30 : 0.24)
+                                        : ceMa.containsMouse && canExpand ? Theme.withAlpha(Theme.accent, 0.24)
+                                                                          : Theme.withAlpha(Theme.accent, 0.16)
                                     border.width: Theme.hairline
                                     border.color: groupDelegate.expanded
-                                        ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.55)
-                                        : Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.45)
-                                    Behavior on color { ColorAnimation { duration: 160; easing.type: Easing.OutCubic } }
-                                    Behavior on border.color { ColorAnimation { duration: 160; easing.type: Easing.OutCubic } }
-                                    Behavior on scale { NumberAnimation { duration: 130; easing.type: Easing.OutBack } }
+                                        ? Theme.withAlpha(Theme.accent, 0.55)
+                                        : Theme.withAlpha(Theme.accent, 0.45)
+                                    Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+                                    Behavior on border.color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+                                    Behavior on scale { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutBack } }
 
                                     RowLayout {
                                         id: ceRow
@@ -569,8 +499,8 @@ Popout {
                                             color: groupDelegate.expanded || ceMa.containsMouse ? Theme.accent : Theme.fgMuted
                                             font.family: Theme.fontFamily
                                             font.pixelSize: Theme.iconSize - 4
-                                            Behavior on rotation { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
-                                            Behavior on color { ColorAnimation { duration: 160; easing.type: Easing.OutCubic } }
+                                            Behavior on rotation { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+                                            Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
                                         }
                                     }
 
@@ -591,7 +521,7 @@ Popout {
                                     baseColor: "transparent"
                                     iconColor: Theme.fgMuted
                                     hoverIconColor: Theme.red
-                                    hoverColor: Qt.rgba(Theme.red.r, Theme.red.g, Theme.red.b, 0.18)
+                                    hoverColor: Theme.withAlpha(Theme.red, 0.18)
                                     onClicked: {
                                         if (groupDelegate.closing)
                                             return
@@ -608,7 +538,7 @@ Popout {
                                     baseColor: "transparent"
                                     iconColor: Theme.fgMuted
                                     hoverIconColor: Theme.yellow
-                                    hoverColor: Qt.rgba(Theme.yellow.r, Theme.yellow.g, Theme.yellow.b, 0.18)
+                                    hoverColor: Theme.withAlpha(Theme.yellow, 0.18)
                                     onClicked: {
                                         if (groupDelegate.closing)
                                             return

@@ -209,6 +209,7 @@ Singleton {
     })
 
     readonly property var themeOptions: [
+        { text: "Dinámico (fondo)", value: "dynamic" },
         { text: "Ayu", value: "ayu" },
         { text: "Catppuccin", value: "catppuccin" },
         { text: "Dracula", value: "dracula" },
@@ -237,7 +238,11 @@ Singleton {
         { name: "amber", color: "#e0af68", label: "Amber" },
         { name: "red", color: "#de6145", label: "Red" }
     ]
-    readonly property var currentPalette: themePresets[themeName] || themePresets.salesprendes
+    // Con el tema "dynamic", la paleta viene del extractor del fondo (si ya
+    // hay una calculada); mientras no la haya, se pinta con el preset base.
+    readonly property var currentPalette:
+        themeName === "dynamic" && dynamicPalette.bg !== undefined ? dynamicPalette
+        : themePresets[themeName] || themePresets.salesprendes
     readonly property color resolvedAccent: accentFor(accentName)
 
     // Base de las tres velocidades: 100 / 200 / 400 ms, moduladas por un
@@ -287,6 +292,13 @@ Singleton {
     property string weatherLocation: ""   // vacío = automático
     property bool   weatherMetric: true   // true = °C, false = °F
     property int    weatherRefreshMin: 30
+    property bool   weatherShowForecast: true
+    property int    weatherForecastDays: 5
+    property bool   weatherShowDetails: true   // sensación térmica y humedad
+    property bool   weatherShowWind: false
+    property bool   weatherShowRain: false     // % de lluvia en el pronóstico
+    property bool   weatherShowSun: false      // amanecer y atardecer
+    property bool   weatherShowInBar: false    // píldora de clima en la barra
 
     // Notificaciones
     property bool   notifPopupsEnabled: true
@@ -304,6 +316,17 @@ Singleton {
     // (localizada, p. ej. ~/Imágenes) al arrancar; no se persiste ni se edita.
     property var    wallpaperDirs: [home + "/.config/wallpapers"]
     property string wallpaperCurrent: ""  // último fondo aplicado (ruta absoluta)
+
+    // Paleta dinámica generada desde el fondo de pantalla activo (tema base
+    // "dynamic"). La calcula el extractor de la barra (ver Bar.qml) y se
+    // persiste para que un arranque nuevo pinte con ella al instante, sin
+    // esperar al análisis de imagen.
+    property var dynamicPalette: ({})
+
+    // Última respuesta buena del clima (con su marca de tiempo): al arrancar
+    // o recargar, el panel pinta al instante desde aquí y solo consulta la
+    // API si el dato ya caducó.
+    property var weatherCache: ({})
 
     // Avatar del usuario: ruta absoluta a una imagen (vacío = inicial en
     // círculo tonal). Se muestra recortado en círculo en el perfil de Ajustes,
@@ -331,8 +354,11 @@ Singleton {
         "showTray", "showSysmon", "showBattery", "showClipboard", "showNotifications", "showPowerProfile", "showCaffeine",
         "clock24h", "clockShowSeconds", "clockShowDate",
         "weatherEnabled", "weatherLocation", "weatherMetric", "weatherRefreshMin",
+        "weatherShowForecast", "weatherForecastDays", "weatherShowDetails", "weatherShowWind",
+        "weatherShowRain", "weatherShowSun", "weatherShowInBar",
         "notifPopupsEnabled", "notifTimeout", "notifMaxVisible", "notifPosition", "mutedNotificationApps",
         "wallpaperTransition", "wallpaperTransitionDuration", "wallpaperCurrent", "avatarPath",
+        "dynamicPalette", "weatherCache",
         "terminalApp", "terminalFont", "terminalFontSize", "terminalOpacity", "terminalPadding",
         "terminalCursorShape", "terminalCursorBlink", "terminalLineHeight", "terminalTabStyle", "terminalLigatures",
         "screenCapture"]
@@ -358,9 +384,12 @@ Singleton {
         "showNotifications": true, "showPowerProfile": true, "showCaffeine": false,
         "clock24h": true, "clockShowSeconds": false, "clockShowDate": true,
         "weatherEnabled": true, "weatherLocation": "", "weatherMetric": true, "weatherRefreshMin": 30,
+        "weatherShowForecast": true, "weatherForecastDays": 5, "weatherShowDetails": true, "weatherShowWind": false,
+        "weatherShowRain": false, "weatherShowSun": false, "weatherShowInBar": false,
         "notifPopupsEnabled": true, "notifTimeout": 5, "notifMaxVisible": 4, "notifPosition": "tr",
         "mutedNotificationApps": [],
         "wallpaperTransition": "fade", "wallpaperTransitionDuration": 1.0, "wallpaperCurrent": "", "avatarPath": "",
+        "dynamicPalette": ({}), "weatherCache": ({}),
         "terminalApp": "kitty", "terminalFont": "", "terminalFontSize": 11.5, "terminalOpacity": 0.80,
         "terminalPadding": 12, "terminalCursorShape": "beam", "terminalCursorBlink": true,
         "terminalLineHeight": 2, "terminalTabStyle": "powerline", "terminalLigatures": true,
@@ -375,7 +404,7 @@ Singleton {
         "customAnimationDuration": [50, 3000], "barOpacity": [0.0, 1.0],
         "popupOpacity": [0.0, 1.0], "widgetOpacity": [0.0, 1.0],
         "cornerScale": [0.0, 2.0],
-        "barScale": [0.5, 2.0], "fontScale": [0.5, 2.0], "weatherRefreshMin": [1, 1440],
+        "barScale": [0.5, 2.0], "fontScale": [0.5, 2.0], "weatherRefreshMin": [1, 1440], "weatherForecastDays": [3, 7],
         "notifTimeout": [1, 120], "notifMaxVisible": [1, 20],
         "wallpaperTransitionDuration": [0.1, 5.0]
     })
@@ -389,7 +418,7 @@ Singleton {
     })
     // Claves que deben ser enteros (se redondean tras recortar).
     readonly property var _intKeys: ["animationSpeed", "customAnimationDuration",
-        "weatherRefreshMin", "notifTimeout", "notifMaxVisible"]
+        "weatherRefreshMin", "weatherForecastDays", "notifTimeout", "notifMaxVisible"]
 
     // Devuelve un valor válido para 'k', o 'undefined' si hay que descartarlo
     // (se conserva el valor por defecto). Infiere el tipo esperado del default.
@@ -404,8 +433,8 @@ Singleton {
             if (!Array.isArray(val)) return undefined
             return val.every(x => typeof x === "string") ? val : undefined
         }
-        // screenCapture: objeto JSON (el saneo fino lo hace el servicio).
-        if (k === "screenCapture")
+        // Objetos JSON anidados (el saneo fino lo hace su consumidor).
+        if (k === "screenCapture" || k === "dynamicPalette" || k === "weatherCache")
             return (val && typeof val === "object" && !Array.isArray(val)) ? val : undefined
         // Numéricos con rango: número finito recortado (y entero si procede).
         if (_numBounds[k] !== undefined) {
@@ -553,8 +582,94 @@ Singleton {
         return false
     }
 
+    // ── Paleta dinámica ──────────────────────────────────────────────────────
+
+    // HSL (h 0-360, s/l 0-1) → "#rrggbb".
+    function _hslHex(h, sat, l) {
+        h = ((h % 360) + 360) % 360
+        const c = (1 - Math.abs(2 * l - 1)) * sat
+        const x = c * (1 - Math.abs((h / 60) % 2 - 1))
+        const m = l - c / 2
+        let r = 0, g = 0, b = 0
+        if (h < 60)       { r = c; g = x }
+        else if (h < 120) { r = x; g = c }
+        else if (h < 180) { g = c; b = x }
+        else if (h < 240) { g = x; b = c }
+        else if (h < 300) { r = x; b = c }
+        else              { r = c; b = x }
+        const hx = (n) => Math.max(0, Math.min(255, Math.round((n + m) * 255)))
+            .toString(16).padStart(2, "0")
+        return "#" + hx(r) + hx(g) + hx(b)
+    }
+
+    // Recibe los píxeles RGBA de una miniatura del fondo, vota el tono
+    // dominante (ponderando saturación y luz media) y publica la paleta.
+    function computeDynamicPalette(data) {
+        const buckets = new Array(36).fill(0)
+        let voted = 0
+        for (let i = 0; i + 3 < data.length; i += 4) {
+            const r = data[i] / 255, g = data[i + 1] / 255, b = data[i + 2] / 255
+            const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn
+            if (d < 0.05)
+                continue
+            const l = (mx + mn) / 2
+            const sat = d / (1 - Math.abs(2 * l - 1))
+            let h
+            if (mx === r) h = ((g - b) / d) % 6
+            else if (mx === g) h = (b - r) / d + 2
+            else h = (r - g) / d + 4
+            h = h * 60; if (h < 0) h += 360
+            const w = sat * (1 - Math.abs(l - 0.5))
+            buckets[Math.floor(h / 10) % 36] += w
+            voted += w
+        }
+        let best = 0
+        for (let i = 1; i < 36; i++)
+            if (buckets[i] > buckets[best]) best = i
+        // Imagen casi monocroma: paleta sobria en vez de inventar color.
+        const sat = voted > 8 ? 0.55 : voted > 2 ? 0.4 : 0.22
+        setDynamicPalette(_paletteFromSeed(best * 10 + 5, sat))
+    }
+
+    // Deriva del tono semilla la paleta completa (oscura + variantes claras).
+    // Los colores semánticos conservan su matiz reconocible pero se acercan
+    // un 15% al tono base para que armonicen con el fondo.
+    function _paletteFromSeed(hue, sat) {
+        const H = (x) => ((x % 360) + 360) % 360
+        const harm = (h) => H(h + (((hue - h + 540) % 360) - 180) * 0.15)
+        const c = _hslHex
+        return {
+            label: "Dinámico",
+            bg: c(hue, sat * 0.45, 0.08), bgAlt: c(hue, sat * 0.45, 0.10),
+            surface: c(hue, sat * 0.4, 0.13), surfaceHi: c(hue, sat * 0.4, 0.17),
+            overlay: c(hue, sat * 0.35, 0.28),
+            fg: c(hue, sat * 0.25, 0.93), fgDim: c(hue, sat * 0.2, 0.72), fgMuted: c(hue, sat * 0.15, 0.52),
+            accent: c(hue, Math.min(0.8, sat + 0.15), 0.72),
+            accent2: c(H(hue + 40), Math.min(0.7, sat + 0.05), 0.68),
+            cyan: c(harm(190), 0.5, 0.68), green: c(harm(140), 0.45, 0.66),
+            yellow: c(harm(55), 0.6, 0.68), orange: c(harm(28), 0.6, 0.66),
+            red: c(harm(2), 0.6, 0.64), magenta: c(harm(310), 0.5, 0.7),
+            lightBg: c(hue, sat * 0.35, 0.94), lightBgAlt: c(hue, sat * 0.35, 0.92),
+            lightSurface: c(hue, sat * 0.3, 0.89), lightSurfaceHi: c(hue, sat * 0.3, 0.85),
+            lightOverlay: c(hue, sat * 0.3, 0.72),
+            lightFg: c(hue, sat * 0.5, 0.15), lightFgDim: c(hue, sat * 0.35, 0.32),
+            lightFgMuted: c(hue, sat * 0.25, 0.48),
+            lightAccent: c(hue, Math.min(0.75, sat + 0.1), 0.42),
+            lightAccent2: c(H(hue + 40), 0.5, 0.4),
+            lightCyan: c(harm(190), 0.55, 0.34), lightGreen: c(harm(140), 0.5, 0.32),
+            lightYellow: c(harm(55), 0.6, 0.34), lightOrange: c(harm(28), 0.6, 0.36),
+            lightRed: c(harm(2), 0.6, 0.4), lightMagenta: c(harm(310), 0.5, 0.38),
+            hyprInactive: c(hue, sat * 0.4, 0.13), hyprShadow: c(hue, sat * 0.45, 0.06)
+        }
+    }
+
+    function setDynamicPalette(p) {
+        dynamicPalette = p
+        scheduleSave()
+    }
+
     function hasThemePreset(name) {
-        return themePresets[name] !== undefined
+        return name === "dynamic" || themePresets[name] !== undefined
     }
 
     // Corrige un tema/acento guardado que ya no exista (renombrado o
@@ -966,6 +1081,13 @@ Singleton {
     onWeatherLocationChanged: scheduleSave()
     onWeatherMetricChanged: scheduleSave()
     onWeatherRefreshMinChanged: scheduleSave()
+    onWeatherShowForecastChanged: scheduleSave()
+    onWeatherForecastDaysChanged: scheduleSave()
+    onWeatherShowDetailsChanged: scheduleSave()
+    onWeatherShowWindChanged: scheduleSave()
+    onWeatherShowRainChanged: scheduleSave()
+    onWeatherShowSunChanged: scheduleSave()
+    onWeatherShowInBarChanged: scheduleSave()
     onWallpaperTransitionChanged: scheduleSave()
     onWallpaperTransitionDurationChanged: scheduleSave()
     onWallpaperCurrentChanged: scheduleSave()
@@ -980,6 +1102,7 @@ Singleton {
     onTerminalTabStyleChanged: scheduleSave()
     onTerminalLigaturesChanged: scheduleSave()
     onScreenCaptureChanged: scheduleSave()
+    onWeatherCacheChanged: scheduleSave()
 
     Timer {
         id: saveTimer
@@ -1147,16 +1270,29 @@ Singleton {
         id: fontsApply
     }
 
-    // Resuelve la carpeta de imágenes XDG (localizada) y compone wallpaperDirs:
-    // <imágenes>/Wallpapers + ~/.config/wallpapers.
+    // Carpetas XDG del usuario (localizadas), resueltas UNA vez para todo el
+    // shell: aquí componen wallpaperDirs (<imágenes>/Wallpapers +
+    // ~/.config/wallpapers) y Services/ScreenCapture.qml las consume por
+    // binding para capturas/grabaciones (antes cada uno lanzaba su proceso).
+    property string xdgPicturesDir: home + "/Pictures"
+    property string xdgVideosDir: home + "/Videos"
     Process {
         id: xdgPicturesProc
-        command: ["xdg-user-dir", "PICTURES"]
+        command: ["sh", "-c",
+            "printf 'pictures='; xdg-user-dir PICTURES 2>/dev/null || echo \"$HOME/Pictures\"; " +
+            "printf 'videos='; xdg-user-dir VIDEOS 2>/dev/null || echo \"$HOME/Videos\""]
         stdout: StdioCollector {
             onStreamFinished: {
-                const p = (text || "").trim()
-                if (p)
-                    s.wallpaperDirs = [p + "/Wallpapers", s.home + "/.config/wallpapers"]
+                const lines = (text || "").trim().split("\n")
+                for (let i = 0; i < lines.length; i++) {
+                    const p = lines[i].indexOf("=")
+                    if (p <= 0) continue
+                    const k = lines[i].substring(0, p)
+                    const v = lines[i].substring(p + 1).trim()
+                    if (k === "pictures" && v !== "") s.xdgPicturesDir = v
+                    else if (k === "videos" && v !== "") s.xdgVideosDir = v
+                }
+                s.wallpaperDirs = [s.xdgPicturesDir + "/Wallpapers", s.home + "/.config/wallpapers"]
             }
         }
     }

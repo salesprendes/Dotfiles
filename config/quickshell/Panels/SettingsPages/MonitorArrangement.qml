@@ -76,7 +76,7 @@ ColumnLayout {
         Layout.fillWidth: true
         implicitHeight: Theme.dp(190)
         radius: Theme.barRadius
-        color: Qt.rgba(Theme.surface.r, Theme.surface.g, Theme.surface.b, 0.5)
+        color: Theme.withAlpha(Theme.surface, 0.5)
         border.width: Theme.hairline
         border.color: SettingsPalette.settingsBorder
         clip: true
@@ -97,8 +97,8 @@ ColumnLayout {
                 x: canvas.pad + (p.x - arr.originX) * arr.f
                 y: canvas.pad + (p.y - arr.originY) * arr.f
                 radius: Theme.space4
-                color: dragMa.active ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.34)
-                                     : Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.16)
+                color: dragMa.active ? Theme.withAlpha(Theme.accent, 0.34)
+                                     : Theme.withAlpha(Theme.accent, 0.16)
                 border.width: Math.max(1, Theme.dp(2)); border.color: Theme.accent
                 z: dragMa.active ? 2 : 1
 

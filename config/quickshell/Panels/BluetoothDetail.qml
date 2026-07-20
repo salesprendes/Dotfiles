@@ -26,9 +26,9 @@ ColumnLayout {
         Layout.fillWidth: true
         implicitHeight: body.implicitHeight + Theme.space16 * 2
         radius: Theme.barRadius
-        color: Qt.rgba(Theme.surface.r, Theme.surface.g, Theme.surface.b, 0.62)
+        color: Theme.withAlpha(Theme.surface, 0.62)
         border.width: Theme.hairline
-        border.color: Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.34)
+        border.color: Theme.withAlpha(Theme.overlay, 0.34)
 
         ColumnLayout {
             id: body
@@ -102,8 +102,9 @@ ColumnLayout {
         }
     }
 
-    // Fila de dispositivo (mismo estilo que DeviceRow del audio / NetRow).
-    component BtRow: Rectangle {
+    // Fila de dispositivo sobre la DeviceRow compartida; aquí solo queda lo
+    // propio del Bluetooth: batería en el subtítulo y glifo a la derecha.
+    component BtRow: DeviceRow {
         id: br
         required property var modelData
         width: ListView.view ? ListView.view.width : implicitWidth
@@ -113,74 +114,31 @@ ColumnLayout {
         readonly property bool batAvail: modelData?.batteryAvailable ?? false
         readonly property int bat: Math.round((modelData?.battery ?? 0) * 100)
 
-        implicitHeight: Theme.rowL
-        radius: Theme.pillRadius
-        color: conn ? Qt.rgba(Theme.accent2.r, Theme.accent2.g, Theme.accent2.b, 0.16)
-                    : brMa.containsMouse ? Theme.surfaceHi : Qt.rgba(Theme.surface.r, Theme.surface.g, Theme.surface.b, 0.36)
-        border.width: conn ? Math.max(1, Theme.dp(2)) : Theme.hairline
-        border.color: conn ? Theme.accent2 : Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.28)
-        Behavior on color { ColorAnimation { duration: Theme.animFast } }
+        active: conn
+        accent: Theme.accent2
+        icon: conn ? "󰂱" : "󰂯"
+        // Nombre del dispositivo (limitado si es muy largo).
+        title: modelData?.name ?? modelData?.deviceName ?? I18n.tr("Device")
+        // Batería si hay dato; si no "conectado", o "emparejado" para los
+        // recordados que no están conectados.
+        subtitle: batAvail ? (bat + "%")
+            : conn ? I18n.tr("connected")
+            : paired ? I18n.tr("paired")
+            : ""
+        subtitleColor: (batAvail || conn) ? Theme.green : Theme.fgMuted
 
-        RowLayout {
-            anchors.fill: parent
-            anchors.leftMargin: Theme.space10
-            anchors.rightMargin: Theme.space10
-            spacing: Theme.space8
-
-            Text {
-                text: br.conn ? "󰂱" : "󰂯"
-                color: br.conn ? Theme.accent2 : Theme.fgDim
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.iconSize
-            }
-            ColumnLayout {
-                Layout.fillWidth: true
-                spacing: 0
-                // Nombre del dispositivo (limitado si es muy largo).
-                Text {
-                    Layout.fillWidth: true
-                    text: br.modelData?.name ?? br.modelData?.deviceName ?? I18n.tr("Device")
-                    color: br.conn ? Theme.fg : Theme.fgDim
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSize - 1
-                    font.bold: br.conn
-                    elide: Text.ElideRight
-                }
-                // Batería si hay dato; si no "conectado", o "emparejado"
-                // para los recordados que no están conectados.
-                Text {
-                    Layout.fillWidth: true
-                    visible: br.batAvail || br.conn || br.paired
-                    text: br.batAvail ? (br.bat + "%")
-                        : br.conn ? I18n.tr("connected")
-                        : I18n.tr("paired")
-                    color: br.batAvail ? Theme.green
-                        : br.conn ? Theme.green
-                        : Theme.fgMuted
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSize - 4
-                    elide: Text.ElideRight
-                }
-            }
-            // Glifo de batería a la derecha cuando hay nivel disponible.
-            Text {
-                visible: br.batAvail
-                text: br.bat >= 80 ? "󰁹" : br.bat >= 60 ? "󰂀" : br.bat >= 40 ? "󰁾" : br.bat >= 20 ? "󰁻" : "󰁺"
-                color: br.bat <= 20 ? Theme.red : Theme.green
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.iconSize
-            }
+        // Glifo de batería a la derecha cuando hay nivel disponible.
+        Text {
+            visible: br.batAvail
+            text: br.bat >= 80 ? "󰁹" : br.bat >= 60 ? "󰂀" : br.bat >= 40 ? "󰁾" : br.bat >= 20 ? "󰁻" : "󰁺"
+            color: br.bat <= 20 ? Theme.red : Theme.green
+            font.family: Theme.fontFamily
+            font.pixelSize: Theme.iconSize
         }
 
-        MouseArea {
-            id: brMa
-            anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: {
-                if (br.conn) br.modelData.disconnect()
-                else br.modelData.connect()
-            }
+        onClicked: {
+            if (conn) modelData.disconnect()
+            else modelData.connect()
         }
     }
 }

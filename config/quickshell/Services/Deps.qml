@@ -16,7 +16,11 @@ Singleton {
         "hyprshot", "grim", "slurp", "gpu-screen-recorder", "ffmpeg",
         "notify-send", "jq", "hyprctl", "pactl",
         "kitty", "alacritty", "foot",
-        "powerprofilesctl", "brightnessctl", "ddcutil", "xdg-user-dir"
+        "powerprofilesctl", "brightnessctl", "ddcutil", "xdg-user-dir",
+        // Apps de las plantillas (Config/AppTemplates.qml): detectarlas aquí
+        // evita el Instantiator que lanzaba un 'which' por app al arrancar.
+        "qt6ct", "plasmashell", "ghostty", "wezterm", "starship", "hx",
+        "emacs", "labwc", "niri", "mango", "scroll", "sway", "cava", "btop"
     ]
     property var _found: ({})
     property bool ready: false
@@ -28,15 +32,18 @@ Singleton {
 
     Process {
         running: true
-        command: ["sh", "-c",
-            "for b in \"$@\"; do command -v \"$b\" >/dev/null 2>&1 && echo \"$b\"; done",
-            "deps"].concat(root._bins)
+        // 'which' imprime por stdout la ruta de cada binario encontrado (los
+        // ausentes solo van a stderr): el nombre base de cada ruta identifica
+        // el binario, sin necesidad de shell.
+        command: ["which"].concat(root._bins)
         stdout: StdioCollector {
             onStreamFinished: {
                 const f = {}
-                for (const b of (this.text || "").split("\n"))
-                    if (b.trim() !== "")
-                        f[b.trim()] = true
+                for (const b of (this.text || "").split("\n")) {
+                    const path = b.trim()
+                    if (path !== "")
+                        f[path.substring(path.lastIndexOf("/") + 1)] = true
+                }
                 root._found = f
                 root.ready = true
                 root.loaded()

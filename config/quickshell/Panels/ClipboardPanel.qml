@@ -10,41 +10,18 @@ Popout {
     cardWidth: 420
     cardMinWidth: 320
     shown: Globals.clipboardOpen
-    property bool clearing: false
-    property bool emptyMessageReady: true
-    property bool showingClearedState: false
-    property real listClearOpacity: 1
-    property real listClearOffset: 0
-    property bool freezeListHeight: false
-    property real frozenListHeight: 0
-    property real emptyBodyHeight: 120
-    property real bodyHeight: emptyBodyHeight
     property int selectedIndex: 0
 
-    Behavior on bodyHeight { NumberAnimation { duration: 240; easing.type: Easing.OutCubic } }
-
-    function refreshBodyHeight() {
-        if (freezeListHeight || showingClearedState)
-            return
-
-        bodyHeight = Clipboard.filteredEntries.length > 0 ? Math.max(emptyBodyHeight, Math.min(Theme.dp(430), historyList.contentHeight))
-                                                          : emptyBodyHeight
-    }
-
-    function clearAnimated() {
-        if (clearing)
-            return
-        if (Clipboard.filteredEntries.length === 0) {
-            Clipboard.clear()
-            return
-        }
-        clearing = true
-        showingClearedState = false
-        refreshBodyHeight()
-        frozenListHeight = historyBody.height
-        bodyHeight = frozenListHeight
-        freezeListHeight = true
-        clearAnim.restart()
+    // Estado y animación del vaciado (alto del cuerpo incluido), compartidos
+    // con el centro de notificaciones.
+    ClearableListState {
+        id: clearState
+        itemCount: () => Clipboard.filteredEntries.length
+        clearAll: () => Clipboard.clear()
+        body: historyBody
+        list: historyList
+        emptyBodyHeight: 120
+        maxContentHeight: Theme.dp(430)
     }
 
     function moveSelection(delta) {
@@ -66,7 +43,7 @@ Popout {
             searchInput.text = ""
             selectedIndex = 0
             Clipboard.refresh()
-            refreshBodyHeight()
+            clearState.refreshBodyHeight()
             focusTimer.restart()
         }
     }
@@ -78,7 +55,7 @@ Popout {
                 ? Math.min(panel.selectedIndex, Clipboard.filteredEntries.length - 1)
                 : -1
             historyList.currentIndex = panel.selectedIndex
-            panel.refreshBodyHeight()
+            clearState.refreshBodyHeight()
         }
     }
 
@@ -95,52 +72,7 @@ Popout {
         onTriggered: Clipboard.search = searchInput.text
     }
 
-    SequentialAnimation {
-        id: clearAnim
-        ScriptAction {
-            script: {
-                panel.emptyMessageReady = false
-            }
-        }
-        ParallelAnimation {
-            NumberAnimation {
-                target: panel
-                property: "listClearOpacity"
-                to: 0
-                duration: 260
-                easing.type: Easing.OutCubic
-            }
-
-            NumberAnimation {
-                target: panel
-                property: "listClearOffset"
-                to: 18
-                duration: 260
-                easing.type: Easing.OutCubic
-            }
-        }
-        ScriptAction {
-            script: {
-                panel.emptyMessageReady = true
-                panel.showingClearedState = true
-                Clipboard.clear()
-                panel.freezeListHeight = false
-                panel.bodyHeight = panel.emptyBodyHeight
-            }
-        }
-        PauseAnimation { duration: 80 }
-        ScriptAction {
-            script: {
-                panel.showingClearedState = false
-                panel.clearing = false
-                panel.listClearOpacity = 1
-                panel.listClearOffset = 0
-                panel.refreshBodyHeight()
-            }
-        }
-    }
-
-    Component.onCompleted: refreshBodyHeight()
+    Component.onCompleted: clearState.refreshBodyHeight()
 
     RowLayout {
         Layout.fillWidth: true
@@ -182,12 +114,12 @@ Popout {
         }
 
         IconButton {
-            visible: Clipboard.filteredEntries.length > 0 && !panel.clearing
+            visible: Clipboard.filteredEntries.length > 0 && !clearState.clearing
             icon: "󰆴"
             iconColor: Theme.red
             hoverIconColor: Theme.red
-            hoverColor: Qt.rgba(Theme.red.r, Theme.red.g, Theme.red.b, 0.22)
-            onClicked: panel.clearAnimated()
+            hoverColor: Theme.withAlpha(Theme.red, 0.22)
+            onClicked: clearState.clearAnimated()
         }
     }
 
@@ -217,9 +149,9 @@ Popout {
         visible: !Clipboard.available
         implicitHeight: Theme.dp(58)
         radius: Theme.pillRadius
-        color: Qt.rgba(Theme.orange.r, Theme.orange.g, Theme.orange.b, 0.12)
+        color: Theme.withAlpha(Theme.orange, 0.12)
         border.width: Theme.hairline
-        border.color: Qt.rgba(Theme.orange.r, Theme.orange.g, Theme.orange.b, 0.35)
+        border.color: Theme.withAlpha(Theme.orange, 0.35)
 
         Text {
             anchors.fill: parent
@@ -237,12 +169,12 @@ Popout {
         id: historyBody
 
         Layout.fillWidth: true
-        Layout.preferredHeight: panel.bodyHeight
+        Layout.preferredHeight: clearState.bodyHeight
         clip: true
 
         Text {
             anchors.centerIn: parent
-            visible: Clipboard.available && (Clipboard.filteredEntries.length === 0 || panel.showingClearedState) && panel.emptyMessageReady
+            visible: Clipboard.available && (Clipboard.filteredEntries.length === 0 || clearState.showingClearedState) && clearState.emptyMessageReady
             opacity: visible ? 1 : 0
             text: Clipboard.search === "" ? I18n.tr("No history yet") : I18n.tr("No results")
             color: Theme.fgMuted
@@ -255,8 +187,8 @@ Popout {
         ListView {
             id: historyList
             anchors.fill: parent
-            visible: (Clipboard.filteredEntries.length > 0 || panel.clearing) && !panel.showingClearedState
-            enabled: !panel.clearing
+            visible: (Clipboard.filteredEntries.length > 0 || clearState.clearing) && !clearState.showingClearedState
+            enabled: !clearState.clearing
             clip: true
             spacing: Theme.space4
             reuseItems: true
@@ -264,9 +196,9 @@ Popout {
             model: Clipboard.filteredEntries
             boundsBehavior: Flickable.StopAtBounds
             currentIndex: panel.selectedIndex
-            opacity: panel.listClearOpacity
-            transform: Translate { y: panel.listClearOffset }
-            onContentHeightChanged: panel.refreshBodyHeight()
+            opacity: clearState.listClearOpacity
+            transform: Translate { y: clearState.listClearOffset }
+            onContentHeightChanged: clearState.refreshBodyHeight()
 
             // Al borrar una entrada, las filas de debajo suben deslizándose
             // en vez de dar un salto seco.
@@ -288,7 +220,7 @@ Popout {
                 readonly property bool selected: ListView.isCurrentItem
                 color: rowMa.containsMouse || selected ? Theme.surfaceHi : Theme.surface
                 border.width: selected ? Theme.focusWidth : Theme.hairline
-                border.color: selected ? Theme.focusRing : Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.28)
+                border.color: selected ? Theme.focusRing : Theme.withAlpha(Theme.overlay, 0.28)
                 Behavior on color { ColorAnimation { duration: Theme.animFast } }
                 Behavior on border.color { ColorAnimation { duration: Theme.animFast } }
                 Behavior on x { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
@@ -317,7 +249,7 @@ Popout {
                 MouseArea {
                     id: rowMa
                     anchors.fill: parent
-                    enabled: !row.deleting && !panel.clearing
+                    enabled: !row.deleting && !clearState.clearing
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
                     acceptedButtons: Qt.LeftButton
@@ -336,8 +268,8 @@ Popout {
                         implicitHeight: Theme.controlM
                         radius: height / 2
                         color: modelData.type === "image"
-                            ? Qt.rgba(Theme.magenta.r, Theme.magenta.g, Theme.magenta.b, 0.20)
-                            : Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.16)
+                            ? Theme.withAlpha(Theme.magenta, 0.20)
+                            : Theme.withAlpha(Theme.accent, 0.16)
                         Text {
                             anchors.centerIn: parent
                             text: modelData.type === "image" ? "󰋩" : "󰉿"
@@ -363,7 +295,7 @@ Popout {
                         implicitWidth: Theme.controlS
                         implicitHeight: Theme.controlS
                         radius: height / 2
-                        color: deleteMa.containsMouse ? Qt.rgba(Theme.red.r, Theme.red.g, Theme.red.b, 0.22) : "transparent"
+                        color: deleteMa.containsMouse ? Theme.withAlpha(Theme.red, 0.22) : "transparent"
                         Text {
                             anchors.centerIn: parent
                             text: "󰆴"
@@ -374,7 +306,7 @@ Popout {
                         MouseArea {
                             id: deleteMa
                             anchors.fill: parent
-                            enabled: !row.deleting && !panel.clearing
+                            enabled: !row.deleting && !clearState.clearing
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
                             onClicked: deleteAnim.restart()

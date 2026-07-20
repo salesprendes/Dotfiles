@@ -8,22 +8,53 @@ import qs.Services
 Popout {
     id: launcher
     ns: "qs-launcher"
-    cardWidth: 380
-    cardMinWidth: 300
+    cardWidth: 470
+    cardMinWidth: 360
     alignLeft: true
     shown: Globals.launcherOpen
 
     property string search: ""
     property var apps: []
     property int selectedIndex: 0
+    // Filtro por categoría freedesktop ("" = todas). Cada chip agrupa las
+    // categorías afines de la spec bajo un solo icono.
+    property string selectedCat: ""
+    readonly property var catDefs: [
+        { key: "Music",       glyph: "\u{f075a}", match: ["Audio", "Music", "Player", "Midi", "Mixer"] },
+        { key: "Video",       glyph: "\u{f0567}", match: ["Video", "AudioVideo", "TV", "VideoEditor", "Recorder"] },
+        { key: "Web",         glyph: "\u{f059f}", match: ["WebBrowser", "Network"] },
+        { key: "Chat",        glyph: "\u{f0361}", match: ["Chat", "InstantMessaging", "Email", "Messaging", "P2P", "IRCClient"] },
+        { key: "Development", glyph: "\u{f018d}", match: ["Development", "IDE", "TextEditor", "TerminalEmulator"] },
+        { key: "Graphics",    glyph: "\u{f02e9}", match: ["Graphics", "Photography", "Viewer", "2DGraphics", "RasterGraphics", "VectorGraphics"] },
+        { key: "Game",        glyph: "\u{f0297}", match: ["Game", "Emulator"] },
+        { key: "Office",      glyph: "\u{f0219}", match: ["Office", "WordProcessor", "Spreadsheet", "Presentation", "Documentation", "Calendar", "ContactManagement"] },
+        { key: "Education",   glyph: "\u{f0474}", match: ["Education", "Languages"] },
+        { key: "Science",     glyph: "\u{f0093}", match: ["Science", "Math", "Electronics", "Engineering", "Astronomy"] },
+        { key: "System",      glyph: "\u{f0493}", match: ["System", "Settings", "Utility", "Monitor", "FileManager", "FileTools", "Archiving", "Security"] }
+    ]
+
+    function entryInCat(entry, def) {
+        const cats = entry.categories ?? []
+        for (let i = 0; i < cats.length; i++)
+            if (def.match.indexOf(cats[i]) >= 0)
+                return true
+        return false
+    }
+
+    onSelectedCatChanged: applySearch()
     // Acciones de sesión del pie + etiqueta de la que está bajo el cursor.
     property bool powerOpen: false
     property string hoverAction: ""
 
     function applySearch() {
         const q = search.trim().toLowerCase()
-        const catalog = AppCatalog.entries
-        apps = q === "" ? catalog : catalog.filter(a => a.searchText.includes(q))
+        let base = AppCatalog.entries
+        if (selectedCat !== "") {
+            const def = catDefs.find(d => d.key === selectedCat)
+            if (def)
+                base = base.filter(a => entryInCat(a.entry, def))
+        }
+        apps = q === "" ? base : base.filter(a => a.searchText.includes(q))
         selectedIndex = apps.length > 0 ? Math.min(selectedIndex, apps.length - 1) : -1
         appList.currentIndex = selectedIndex
     }
@@ -34,6 +65,7 @@ Popout {
             searchInput.text = ""
             powerOpen = false
             hoverAction = ""
+            selectedCat = ""
             apps = AppCatalog.entries
             focusTimer.restart()
         }
@@ -97,6 +129,52 @@ Popout {
         onUpPressed: launcher.moveSelection(-1)
     }
 
+    // Filtros por categoría dentro de su propio recuadro: chips cuadrados de
+    // solo icono, con "todas" primero.
+    Rectangle {
+        Layout.fillWidth: true
+        implicitHeight: chipRow.implicitHeight + Theme.space6 * 2
+        radius: Theme.pillRadius
+        color: Theme.withAlpha(Theme.surface, 0.45)
+        border.width: Theme.hairline
+        border.color: Theme.withAlpha(Theme.overlay, 0.25)
+
+        RowLayout {
+            id: chipRow
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.leftMargin: Theme.space6
+            anchors.rightMargin: Theme.space6
+            // Reparte el hueco sobrante entre los chips para que la fila
+            // llene el recuadro de lado a lado. Se calcula de los hijos
+            // reales (suma de anchos y recuento), sin duplicar aquí ni el
+            // tamaño del chip ni cuántos hay: añadir o quitar categorías, o
+            // cambiar el tamaño en CatChip, reequilibra solo.
+            spacing: {
+                let total = 0, n = 0
+                const kids = visibleChildren
+                for (let i = 0; i < kids.length; i++) {
+                    if (kids[i].implicitWidth > 0) {
+                        total += kids[i].implicitWidth
+                        n++
+                    }
+                }
+                return n > 1 ? Math.max(Theme.space4, (width - total) / (n - 1)) : 0
+            }
+
+            CatChip { catKey: ""; glyph: "\u{f056e}" }
+            Repeater {
+                model: launcher.catDefs
+                delegate: CatChip {
+                    required property var modelData
+                    catKey: modelData.key
+                    glyph: modelData.glyph
+                }
+            }
+        }
+    }
+
     // Lista de aplicaciones
     ListView {
         id: appList
@@ -128,9 +206,9 @@ Popout {
             Rectangle {
                 anchors.fill: parent
                 radius: parent.radius
-                color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.16)
+                color: Theme.withAlpha(Theme.accent, 0.16)
                 border.width: Math.max(1, Theme.hairline)
-                border.color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.5)
+                border.color: Theme.withAlpha(Theme.accent, 0.5)
                 opacity: appRow.selected ? 1 : 0
                 Behavior on opacity { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutQuad } }
             }
@@ -148,9 +226,9 @@ Popout {
                 Rectangle {
                     implicitWidth: Theme.dp(34); implicitHeight: Theme.dp(34)
                     radius: Theme.dp(10)
-                    color: Qt.rgba(Theme.surface.r, Theme.surface.g, Theme.surface.b, 0.6)
+                    color: Theme.withAlpha(Theme.surface, 0.6)
                     border.width: Theme.hairline
-                    border.color: Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.25)
+                    border.color: Theme.withAlpha(Theme.overlay, 0.25)
                     Image {
                         anchors.centerIn: parent
                         width: Theme.dp(24); height: Theme.dp(24)
@@ -180,12 +258,14 @@ Popout {
                         color: Theme.fg
                         font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontSize
+                        font.bold: true
                         elide: Text.ElideRight
                     }
                     Text {
                         Layout.fillWidth: true
-                        visible: (modelData.entry?.genericName ?? "") !== ""
-                        text: modelData.entry?.genericName ?? ""
+                        readonly property string desc: modelData.entry?.comment || modelData.entry?.genericName || ""
+                        visible: desc !== ""
+                        text: desc
                         color: Theme.fgMuted
                         font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontSize - 3
@@ -193,13 +273,20 @@ Popout {
                     }
                 }
 
-                // Flecha de "lanzar" en la fila seleccionada.
-                Text {
+                // Botón de "lanzar" en la fila seleccionada.
+                Rectangle {
                     visible: appRow.selected
-                    text: "󰌑"
+                    implicitWidth: Theme.dp(26)
+                    implicitHeight: Theme.dp(26)
+                    radius: Theme.dp(8)
                     color: Theme.accent
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSize - 1
+                    Text {
+                        anchors.centerIn: parent
+                        text: "󰌑"
+                        color: Theme.bg
+                        font.family: Theme.fontFamily
+                        font.pixelSize: Theme.fontSize - 1
+                    }
                 }
             }
 
@@ -242,7 +329,7 @@ Popout {
     Rectangle {
         Layout.fillWidth: true
         implicitHeight: Math.max(1, Theme.hairline)
-        color: Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.3)
+        color: Theme.withAlpha(Theme.overlay, 0.3)
     }
 
     RowLayout {
@@ -277,24 +364,22 @@ Popout {
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: Theme.space6
                 Repeater {
-                    model: [
-                        { ic: "󰍁", label: I18n.tr("Lock"),      action: "lock",     col: Theme.accent },
-                        { ic: "󰤄", label: I18n.tr("Suspend"),   action: "suspend",  col: Theme.accent },
-                        { ic: "󰜉", label: I18n.tr("Restart"),   action: "reboot",   col: Theme.accent },
-                        { ic: "󰐥", label: I18n.tr("Shut down"), action: "poweroff", col: Theme.red }
-                    ]
+                    id: powerActions
+                    // Modelo compartido con el centro de control
+                    // (Config/PowerActions.qml).
+                    model: PowerActions.model
                     delegate: Rectangle {
                         id: pbtn
                         required property var modelData
                         required property int index
                         readonly property real rp: Math.max(0, Math.min(1,
-                            (powerTray.prog - (3 - index) * 0.1) / 0.6))
+                            (powerTray.prog - (powerActions.count - 1 - index) * 0.1) / 0.6))
                         width: Theme.controlM; height: Theme.controlM
                         radius: width / 2
                         color: pbMa.containsMouse ? pbtn.modelData.col : Theme.surface
                         border.width: Theme.hairline
                         border.color: pbMa.containsMouse ? pbtn.modelData.col
-                                    : Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.4)
+                                    : Theme.withAlpha(Theme.overlay, 0.4)
                         opacity: rp
                         scale: 0.6 + 0.4 * rp
                         Behavior on color { ColorAnimation { duration: Theme.animFast } }
@@ -323,11 +408,11 @@ Popout {
         Rectangle {
             implicitWidth: Theme.controlM; implicitHeight: Theme.controlM
             radius: width / 2
-            color: launcher.powerOpen ? Qt.rgba(Theme.red.r, Theme.red.g, Theme.red.b, 0.16)
+            color: launcher.powerOpen ? Theme.withAlpha(Theme.red, 0.16)
                  : ptMa.containsMouse ? Theme.surfaceHi : Theme.surface
             border.width: Theme.hairline
-            border.color: launcher.powerOpen ? Qt.rgba(Theme.red.r, Theme.red.g, Theme.red.b, 0.55)
-                        : Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.4)
+            border.color: launcher.powerOpen ? Theme.withAlpha(Theme.red, 0.55)
+                        : Theme.withAlpha(Theme.overlay, 0.4)
             Behavior on color { ColorAnimation { duration: Theme.animFast } }
             Behavior on border.color { ColorAnimation { duration: Theme.animFast } }
             Text {
@@ -352,4 +437,40 @@ Popout {
             }
         }
     }
+
+    // Chip de categoría: cuadrado redondeado de solo icono; el activo se tiñe
+    // de acento. Pulsar el activo vuelve a "todas".
+    component CatChip: Rectangle {
+        id: chip
+        property string catKey: ""
+        property string glyph: ""
+        readonly property bool sel: launcher.selectedCat === chip.catKey
+        implicitWidth: Theme.dp(30)
+        implicitHeight: Theme.dp(30)
+        radius: Theme.dp(9)
+        color: sel ? Theme.withAlpha(Theme.accent, Theme.isDark ? 0.24 : 0.3)
+             : chipMa.containsMouse ? Theme.surfaceHi
+             : Theme.withAlpha(Theme.surface, 0.6)
+        border.width: Theme.hairline
+        border.color: sel ? Theme.withAlpha(Theme.accent, 0.55)
+                          : Theme.withAlpha(Theme.overlay, 0.25)
+        Behavior on color { ColorAnimation { duration: Theme.animFast } }
+
+        Text {
+            anchors.centerIn: parent
+            text: chip.glyph
+            color: chip.sel ? Theme.accent : Theme.fgDim
+            font.family: Theme.fontFamily
+            font.pixelSize: Theme.iconSize
+            Behavior on color { ColorAnimation { duration: Theme.animFast } }
+        }
+        MouseArea {
+            id: chipMa
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: launcher.selectedCat = chip.sel ? "" : chip.catKey
+        }
+    }
 }
+

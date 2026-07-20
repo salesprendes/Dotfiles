@@ -60,7 +60,7 @@ PanelWindow {
         radius: Theme.barRadius + Theme.space2
         color: Theme.bgAlt
         border.width: Theme.hairline
-        border.color: Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.5)
+        border.color: Theme.withAlpha(Theme.overlay, 0.5)
 
         opacity: modal.visible ? 1 : 0
         scale: modal.visible ? 1 : 0.96
@@ -217,10 +217,10 @@ PanelWindow {
         Layout.fillWidth: true
         implicitHeight: Theme.dp(32)
         radius: Theme.pillRadius
-        color: on ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.18)
+        color: on ? Theme.withAlpha(Theme.accent, 0.18)
                   : mbMa.containsMouse ? Theme.surfaceHi : Theme.surface
         border.width: on ? Math.max(1, Theme.dp(2)) : Theme.hairline
-        border.color: on ? Theme.accent : Qt.rgba(Theme.overlay.r, Theme.overlay.g, Theme.overlay.b, 0.34)
+        border.color: on ? Theme.accent : Theme.withAlpha(Theme.overlay, 0.34)
         Behavior on color { ColorAnimation { duration: Theme.animFast } }
         Text {
             anchors.centerIn: parent

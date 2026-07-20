@@ -131,11 +131,15 @@ Singleton {
     readonly property int tileM: dp(54)
     readonly property int tileL: dp(64)
 
-    readonly property int   barHeight:   dp(Math.round(38 * Settings.barScale))
-    // barMargin conserva la geometría interna original de las pills.
+    readonly property int   barHeight:   dp(Math.round(36 * Settings.barScale))
+    // barMargin controla el hueco lateral de la barra respecto al monitor.
     // barTopMargin controla únicamente la posición vertical de la barra.
     readonly property int   barMargin:      dp(8)
     readonly property int   barTopMargin:   dp(4)
+    // Alto de las píldoras de la barra: casi a sangre con la barra (deja un
+    // respiro de space8 en total). Un alto propio en vez de derivarlo del
+    // margen lateral hace las píldoras más presentes sin engordar la barra.
+    readonly property int   barPillHeight:  barHeight - space8
     // Factor de redondeo amplificado: por debajo del 100% es lineal
     // (de casi-cuadrado a normal); por encima crece x2.2 para que subir
     // hasta el 160% se note claramente más redondeado (≈ doble de radio).
@@ -159,7 +163,7 @@ Singleton {
     // alrededor sobre monitores grandes; un multiplicador fijo sobre iconSize
     // los hace notoriamente más grandes mientras siguen escalando con
     // 'scale' (resolución/densidad), en vez de quedar en un tamaño fijo.
-    readonly property int    barIconSize: Math.round(iconSize * 1.2)
+    readonly property int    barIconSize: Math.round(iconSize * 1.4)
 
     readonly property int   animFast:   Settings.animFastMs
     readonly property int   animNormal: Settings.animNormalMs

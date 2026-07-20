@@ -36,7 +36,10 @@ Pill {
         property int tick: 0
         Timer {
             interval: 140
-            running: root.playing
+            // visible además de playing: un reproductor sin metadatos deja la
+            // píldora oculta (hasMedia false) con playing true, y el tick
+            // seguía reevaluando las barras de un widget que no se ve.
+            running: root.playing && root.visible
             repeat: true
             onTriggered: eq.tick++
         }
@@ -85,6 +88,8 @@ Pill {
             opacity: cbtn.can ? 1 : 0.4
             font.family: Theme.fontFamily
             font.pixelSize: Theme.barIconSize
+            scale: cma.containsMouse && cbtn.can ? 1.2 : 1
+            Behavior on scale { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
             Behavior on color { ColorAnimation { duration: Theme.animFast } }
         }
         MouseArea {

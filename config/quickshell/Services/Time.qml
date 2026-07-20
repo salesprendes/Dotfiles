@@ -12,6 +12,12 @@ Singleton {
 
     readonly property date now: clock.date
 
+    // Formato de hora según ajustes (24h/12h y segundos), compartido por los
+    // consumidores que pintan la hora para no repetir la expresión.
+    readonly property string clockFormat: (Settings.clock24h ? "HH:mm" : "hh:mm")
+        + (Settings.clockShowSeconds ? ":ss" : "")
+        + (Settings.clock24h ? "" : " AP")
+
     // Fecha "estable": solo se reasigna al cambiar de día, para que
     // los bindings que dependen del día (calendario, resaltado de
     // hoy…) no se re-evalúen en cada tick del reloj.

@@ -115,7 +115,10 @@ PanelWindow {
 
                 SequentialAnimation on opacity {
                     id: pulse
-                    running: ScreenCapture.isRecording && !ScreenCapture.isPaused
+                    // win.shown (incluye onThisScreen) y no isRecording a
+                    // secas: la píldora existe por pantalla y solo una se ve;
+                    // sin esto, las copias desmapeadas latían toda la grabación.
+                    running: win.shown && !ScreenCapture.isPaused
                     loops: Animation.Infinite
                     NumberAnimation { to: 0.42; duration: 720; easing.type: Easing.InOutSine }
                     NumberAnimation { to: 1.0; duration: 720; easing.type: Easing.InOutSine }
