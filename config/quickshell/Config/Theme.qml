@@ -133,9 +133,11 @@ Singleton {
 
     readonly property int   barHeight:   dp(Math.round(36 * Settings.barScale))
     // barMargin controla el hueco lateral de la barra respecto al monitor.
-    // barTopMargin controla únicamente la posición vertical de la barra.
-    readonly property int   barMargin:      dp(8)
-    readonly property int   barTopMargin:   dp(4)
+    // barTopMargin controla únicamente la separación de la barra con su borde
+    // (superior o inferior según Settings.barPosition). Con la barra pegada
+    // (no flotante), ambos colapsan a 0: a sangre de borde a borde.
+    readonly property int   barMargin:      Settings.barFloating ? dp(8) : 0
+    readonly property int   barTopMargin:   Settings.barFloating ? dp(4) : 0
     // Alto de las píldoras de la barra: casi a sangre con la barra (deja un
     // respiro de space8 en total). Un alto propio en vez de derivarlo del
     // margen lateral hace las píldoras más presentes sin engordar la barra.
@@ -169,19 +171,24 @@ Singleton {
     readonly property int   animNormal: Settings.animNormalMs
     readonly property int   animSlow:   Settings.animSlowMs
 
-    // Todo lo que aparece entra con OutCubic y sale con InQuad, en
+    // Todo lo que aparece entra con OutQuint y sale con InQuad, en
     // animNormal. No hay muelles ni curvas bezier: se anima un único
     // escalar 'reveal' 0→1 y se deriva de él la geometria (un barrido de
     // recorte desde el borde anclado, no un escalado) y la opacidad.
-    readonly property int enterEasing: Easing.OutCubic
+    // OutQuint (no OutCubic): cubre casi todo el recorrido enseguida y
+    // dedica el resto a asentarse — misma duración, sensación más fluida.
+    readonly property int enterEasing: Easing.OutQuint
     readonly property int exitEasing:  Easing.InQuad
-    // Reacomodos (pilas que se recolocan, cambios de pestaña).
-    readonly property int reflowEasing: Easing.InOutQuad
+    // Reacomodos (pilas que se recolocan, cambios de pestaña). InOutCubic:
+    // arranque y frenada más redondos que InOutQuad, sin cambiar el ritmo.
+    readonly property int reflowEasing: Easing.InOutCubic
 
-    // Opacidad del contenido en funcion del reveal: se mantiene invisible
-    // hasta el 15% y funde en el 85% restante — la tarjeta se abre primero
-    // y el contenido aparece dentro, con retardo.
+    // Opacidad del contenido en funcion del reveal: invisible hasta el 15%
+    // y fundido en el resto — la tarjeta se abre primero y el contenido
+    // aparece dentro, con retardo. La rampa es un smoothstep, no lineal:
+    // el fundido nace y aterriza suave en vez de cortarse en los extremos.
     function revealOpacity(reveal) {
-        return Math.max(0, Math.min(1, (reveal - 0.15) / 0.85))
+        const t = Math.max(0, Math.min(1, (reveal - 0.15) / 0.85))
+        return t * t * (3 - 2 * t)
     }
 }

@@ -193,8 +193,10 @@ Singleton {
                                   connection: conn === "--" ? "" : conn })
                     })
                 root.interfaces = out
+                // Autoselección con la lista ya cargada (selectActive() desde
+                // fuera llega antes de que nmcli termine y no ve nada).
                 if (out.length > 0 && (root.selectedIface === "" || !out.find(i => i.device === root.selectedIface)))
-                    root.selectIface(out[0].device)
+                    root.selectActive()
                 else if (out.length === 0) {
                     root.selectedIface = ""; root.ifaceType = ""; root.ifaceConn = ""
                 }

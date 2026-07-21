@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Layouts
 import Quickshell.Services.Pipewire
 import qs.Components
 import qs.Config

@@ -8,6 +8,14 @@ import qs.Services
 ColumnLayout {
     spacing: Theme.space12
 
+    // NetConfig no carga nada al arrancar el shell (ahorra 2 nmcli): los
+    // datos se piden al entrar en esta página. El Loader de secciones nos
+    // re-crea en cada visita, así que esto también refresca al volver.
+    Component.onCompleted: {
+        NetConfig.refreshAll()
+        NetConfig.selectActive()
+    }
+
     // Interfaz/adaptador: WiFi + selección de interfaz cuyos parámetros IP
     // se editan abajo.
     SettingsCard {

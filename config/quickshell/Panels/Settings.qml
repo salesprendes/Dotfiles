@@ -31,8 +31,14 @@ FloatingWindow {
     //    margen; los controles quedan como iconos, el de cerrar incluido.
     //  · navCompact — la barra lateral pasa a riel de iconos: avatar solo,
     //    buscador fuera y pestañas sin etiqueta.
+    //  · headerTight / headerMicro — la cabecera suelta controles por orden
+    //    de prioridad (primero el interruptor "solo modificados", después
+    //    Restablecer), plegándose con animación en vez de desbordar por la
+    //    derecha. El botón de cerrar es SIEMPRE el último que queda.
     readonly property bool headerCompact: width < Theme.dp(1000)
     readonly property bool navCompact: width < Theme.dp(860)
+    readonly property bool headerTight: width < Theme.dp(720)
+    readonly property bool headerMicro: width < Theme.dp(640)
 
     visible: Globals.settingsOpen
 
@@ -79,6 +85,16 @@ FloatingWindow {
     property real navSelH: controlHeightSm
     property bool navSelAnimate: false
     readonly property bool navSelShown: cat !== "about"
+
+    // Píldora de HOVER: también única para toda la barra. Antes cada pestaña
+    // fundía su propio resaltado y, al pasar rápido, varios parpadeaban a la
+    // vez; ahora una sola píldora persigue al cursor deslizándose. Se cuenta
+    // cuántas pestañas tienen el ratón encima (al cruzar de una a otra el
+    // "salir" y el "entrar" no llegan en orden fijo) y la píldora se ve
+    // mientras haya alguna.
+    property real navHovY: 0
+    property real navHovH: controlHeightSm
+    property int  navHovCount: 0
     Timer { id: navSettle; interval: 60; onTriggered: cfg.navSelAnimate = true }
     onVisibleChanged: {
         if (visible) {
@@ -406,6 +422,14 @@ FloatingWindow {
                         // Un solo sentido (campo → filtro). Enlazar también el
                         // sentido contrario haría un bucle de bindings.
                         onTextChanged: SettingsFilter.query = text
+                        // Enter: si la página visible se quedó sin coincidencias
+                        // pero hay resultados en otra sección, salta a la primera.
+                        onAccepted: {
+                            const pageEmpty = pageLoader.item
+                                && pageLoader.item.implicitHeight < Theme.dp(8)
+                            if (pageEmpty && cfg.crossGroups.length > 0)
+                                cfg.goCat(cfg.crossGroups[0].cat)
+                        }
                         onEscapePressed: (e) => {
                             if (search.text !== "") {
                                 search.clear()
@@ -466,6 +490,26 @@ FloatingWindow {
                                 NumberAnimation { duration: Theme.animNormal; easing.type: Theme.reflowEasing }
                             }
                             Behavior on opacity { NumberAnimation { duration: Theme.animFast } }
+                        }
+
+                        // Píldora de HOVER (más tenue que la selección): sigue
+                        // al cursor deslizándose de pestaña en pestaña. Cuando
+                        // no se ve, la posición salta sin animar: al reaparecer
+                        // debe nacer bajo el cursor, no "viajar" desde donde se
+                        // quedó la última vez.
+                        NavHighlight {
+                            id: navHovPill
+                            x: navCol.x
+                            width: navCol.width
+                            height: cfg.navHovH
+                            y: cfg.navHovY
+                            color: Theme.withAlpha(Theme.accent, Theme.isDark ? 0.13 : 0.16)
+                            opacity: cfg.navHovCount > 0 ? 1 : 0
+                            Behavior on y {
+                                enabled: navHovPill.opacity > 0.01
+                                NumberAnimation { duration: 190; easing.type: Easing.OutCubic }
+                            }
+                            Behavior on opacity { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutQuad } }
                         }
 
                         ColumnLayout {
@@ -566,70 +610,160 @@ FloatingWindow {
 
                     // "Solo modificados": mismo lenguaje que "Activar
                     // plantillas" (etiqueta + interruptor deslizante). En
-                    // estrecho se queda solo el interruptor.
-                    RowLayout {
-                        spacing: cfg.spaceXs + Theme.dp(4)
-                        Text {
-                            visible: !cfg.headerCompact
-                            text: I18n.tr("Modified only")
-                            color: SettingsFilter.modifiedOnly ? Theme.fg : Theme.fgDim
-                            font.family: Theme.fontFamily
-                            font.pixelSize: Theme.sp(14)
-                            font.bold: SettingsFilter.modifiedOnly
+                    // estrecho se queda solo el interruptor; en muy estrecho
+                    // (headerTight) se pliega entero deslizándose bajo el
+                    // recorte, en vez de empujar a los botones fuera.
+                    Item {
+                        id: modOnlyWrap
+                        readonly property bool shownCtl: !cfg.headerTight
+                        Layout.preferredWidth: shownCtl ? modOnlyRow.implicitWidth : 0
+                        implicitHeight: modOnlyRow.implicitHeight
+                        opacity: shownCtl ? 1 : 0
+                        visible: opacity > 0.01 || Layout.preferredWidth > 0.5
+                        clip: true
+                        Behavior on Layout.preferredWidth {
+                            NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic }
                         }
-                        Switch {
-                            checked: SettingsFilter.modifiedOnly
-                            offColor: cfg.settingsControl
-                            offBorderColor: cfg.settingsBorder
-                            onToggled: SettingsFilter.modifiedOnly = !SettingsFilter.modifiedOnly
+                        Behavior on opacity {
+                            NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutQuad }
+                        }
+                        RowLayout {
+                            id: modOnlyRow
+                            // Anclado a la derecha: al plegarse, la etiqueta
+                            // desaparece primero bajo el recorte y el
+                            // interruptor es lo último en irse.
+                            anchors.right: parent.right
+                            anchors.verticalCenter: parent.verticalCenter
+                            spacing: cfg.spaceXs + Theme.dp(4)
+                            Text {
+                                visible: !cfg.headerCompact
+                                text: I18n.tr("Modified only")
+                                color: SettingsFilter.modifiedOnly ? Theme.fg : Theme.fgDim
+                                font.family: Theme.fontFamily
+                                font.pixelSize: Theme.sp(14)
+                                font.bold: SettingsFilter.modifiedOnly
+                            }
+                            Switch {
+                                enabled: modOnlyWrap.shownCtl
+                                checked: SettingsFilter.modifiedOnly
+                                offColor: cfg.settingsControl
+                                offBorderColor: cfg.settingsBorder
+                                onToggled: SettingsFilter.modifiedOnly = !SettingsFilter.modifiedOnly
+                            }
                         }
                     }
 
                     // Restablecer TODO: sin sentido si no hay nada que
                     // restablecer. En estrecho colapsa a solo el icono (botón
                     // cuadrado), como el resto de la cabecera.
+                    // Resaltado en pareja con el botón de cerrar: tinte rojo
+                    // suave que funde (fondo, borde y texto a la vez), leve
+                    // crecida al posarse y encogida al pulsar; la flecha de
+                    // reinicio da una vuelta completa al entrar el puntero.
                     Rectangle {
-                        visible: Settings.anyModified
-                        implicitWidth: cfg.headerCompact ? cfg.controlHeightSm
+                        id: resetBtn
+                        // En headerMicro se pliega también: por prioridad, el
+                        // último superviviente de la cabecera es Cerrar.
+                        readonly property bool shownBtn: Settings.anyModified && !cfg.headerMicro
+                        visible: opacity > 0.01 || implicitWidth > 0.5
+                        implicitWidth: !shownBtn ? 0
+                                     : cfg.headerCompact ? cfg.controlHeightSm
                                                          : resetRow.implicitWidth + cfg.spaceMd * 2
                         implicitHeight: cfg.controlHeightSm
                         radius: cfg.radiusMd
-                        color: resetMa.containsMouse ? Theme.withAlpha(Theme.red, 0.18)
-                                                     : cfg.settingsControl
-                        border.width: Theme.hairline
-                        border.color: resetMa.containsMouse ? Theme.red : cfg.settingsBorder
-                        Behavior on color { ColorAnimation { duration: Theme.animFast } }
+                        clip: true
+                        opacity: shownBtn ? 1 : 0
+                        Behavior on implicitWidth {
+                            NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic }
+                        }
+                        Behavior on opacity {
+                            NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutQuad }
+                        }
+                        readonly property bool hot: resetMa.containsMouse || activeFocus
+                        activeFocusOnTab: shownBtn
+                        Keys.onReturnPressed: Settings.reset()
+                        Keys.onEnterPressed: Settings.reset()
+                        Keys.onSpacePressed: Settings.reset()
+                        color: resetMa.pressed ? Theme.withAlpha(Theme.red, 0.28)
+                             : hot ? Theme.withAlpha(Theme.red, 0.16)
+                             : cfg.settingsControl
+                        border.width: activeFocus ? Theme.focusWidth : Theme.hairline
+                        border.color: activeFocus ? Theme.focusRing
+                                    : hot ? Theme.withAlpha(Theme.red, 0.85) : cfg.settingsBorder
+                        scale: resetMa.pressed ? 0.95 : (hot ? 1.04 : 1.0)
+                        Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+                        Behavior on border.color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+                        Behavior on scale { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutBack; easing.overshoot: 2.2 } }
+
                         RowLayout {
                             id: resetRow
                             anchors.centerIn: parent
                             spacing: cfg.spaceXs + Theme.dp(2)
                             Text {
+                                id: resetGlyph
                                 text: "󰜉"; color: Theme.red
                                 font.family: Theme.fontFamily; font.pixelSize: Theme.sp(16)
+                                Behavior on rotation { NumberAnimation { duration: 520; easing.type: Easing.OutCubic } }
                             }
                             Text {
                                 visible: !cfg.headerCompact
                                 text: I18n.tr("Reset")
-                                color: resetMa.containsMouse ? Theme.red : Theme.fgDim
+                                color: resetBtn.hot ? Theme.red : Theme.fgDim
                                 font.family: Theme.fontFamily; font.pixelSize: Theme.sp(14)
                                 font.bold: true
+                                Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
                             }
                         }
                         MouseArea {
                             id: resetMa
                             anchors.fill: parent; hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
+                            // Giro anti-horario: el mismo sentido que "deshacer".
+                            onEntered: resetGlyph.rotation -= 360
                             onClicked: Settings.reset()
                         }
                     }
 
-                    IconButton {
-                        icon: "󰅖"
-                        diameter: cfg.controlHeightSm
-                        iconPixelSize: Theme.sp(18)
-                        baseColor: cfg.settingsControl
-                        hoverColor: Theme.red
-                        onClicked: Globals.settingsOpen = false
+                    // Cerrar: círculo con el mismo lenguaje que Restablecer
+                    // (tinte, borde y escala fundidos); la cruz gira un cuarto
+                    // de vuelta al posarse.
+                    Rectangle {
+                        id: closeBtn
+                        implicitWidth: cfg.controlHeightSm
+                        implicitHeight: cfg.controlHeightSm
+                        radius: height / 2
+                        readonly property bool hot: closeMa.containsMouse || activeFocus
+                        activeFocusOnTab: true
+                        Keys.onReturnPressed: Globals.settingsOpen = false
+                        Keys.onEnterPressed: Globals.settingsOpen = false
+                        Keys.onSpacePressed: Globals.settingsOpen = false
+                        color: closeMa.pressed ? Theme.withAlpha(Theme.red, 0.30)
+                             : hot ? Theme.withAlpha(Theme.red, 0.18)
+                             : cfg.settingsControl
+                        border.width: activeFocus ? Theme.focusWidth : Theme.hairline
+                        border.color: activeFocus ? Theme.focusRing
+                                    : hot ? Theme.withAlpha(Theme.red, 0.85) : cfg.settingsBorder
+                        scale: closeMa.pressed ? 0.92 : (hot ? 1.06 : 1.0)
+                        Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+                        Behavior on border.color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+                        Behavior on scale { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutBack; easing.overshoot: 2.2 } }
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: "󰅖"
+                            color: closeBtn.hot ? Theme.red : Theme.fgDim
+                            font.family: Theme.fontFamily
+                            font.pixelSize: Theme.sp(18)
+                            rotation: closeBtn.hot ? 90 : 0
+                            Behavior on rotation { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutBack; easing.overshoot: 1.6 } }
+                            Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+                        }
+                        MouseArea {
+                            id: closeMa
+                            anchors.fill: parent; hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: Globals.settingsOpen = false
+                        }
                     }
                 }
 
@@ -898,13 +1032,27 @@ FloatingWindow {
             visible: tab.selfHighlight && tab.sel
         }
 
-        // Capa de HOVER, en su sitio (no se desliza): aparece bajo el cursor sin
-        // tocar el resaltado de selección. No se pinta sobre la seleccionada
-        // (ahí ya está su píldora), para no doblar el tono. Mismo distintivo que
-        // la selección, con fundido de entrada/salida.
+        // HOVER: las pestañas del carril global no pintan nada propio — avisan
+        // a la píldora deslizante de dónde está el cursor. No se pinta sobre la
+        // seleccionada (ahí ya está su píldora), para no doblar el tono.
+        // hovPaints centraliza la condición: el contador global se mantiene
+        // equilibrado ante cualquier cambio (hover, selección, clic en caliente).
+        readonly property bool hovPaints: !tab.selfHighlight && tab.hovered && !tab.sel
+        onHovPaintsChanged: {
+            if (hovPaints && cfg.navContent) {
+                const p = tab.mapToItem(cfg.navContent, 0, 0)
+                cfg.navHovY = p.y
+                cfg.navHovH = tab.height
+            }
+            cfg.navHovCount += hovPaints ? 1 : -1
+        }
+
+        // Capa de HOVER local SOLO para pestañas sueltas (selfHighlight), que
+        // viven fuera del carril de la píldora.
         NavHighlight {
             anchors.fill: parent
-            opacity: tab.hovered && !tab.sel ? 1 : 0
+            visible: tab.selfHighlight
+            opacity: tab.selfHighlight && tab.hovered && !tab.sel ? 1 : 0
             Behavior on opacity { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutQuad } }
         }
 

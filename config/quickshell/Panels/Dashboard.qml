@@ -152,11 +152,14 @@ Popout {
     Item {
         id: pages
         Layout.fillWidth: true
-        // Altura ÚNICA para todas las pestañas: la de la página más alta.
-        // Así el panel no cambia de tamaño al cambiar de pestaña y el riel
-        // (con el botón de Ajustes abajo) nunca se queda sin sitio.
-        Layout.preferredHeight: Math.max(overviewPage.implicitHeight, systemPage.implicitHeight,
-                                         musicPage.implicitHeight, wallpaperPage.implicitHeight)
+        // Altura ÚNICA para todas las pestañas: la que pida la página de
+        // RESUMEN, que es la referencia del panel (la anchura ya la fija la
+        // tarjeta con cardWidth, y todas las páginas se adaptan a ella). Las
+        // demás pestañas no participan: sistema y música se quedan cortas o
+        // se recortan si difieren, y la de fondos (anclada arriba y abajo)
+        // reparte el hueco entre héroe y rejilla. Ninguna pestaña salvo el
+        // resumen puede cambiar el tamaño del panel, por construcción.
+        Layout.preferredHeight: overviewPage.implicitHeight
         Behavior on Layout.preferredHeight {
             NumberAnimation { duration: dash.tabAnim; easing.type: Easing.InOutCubic }
         }
@@ -196,8 +199,14 @@ Popout {
                         implicitHeight: Theme.dp(92)
                         gradient: Gradient {
                             orientation: Gradient.Horizontal
-                            GradientStop { position: 0.0; color: Theme.withAlpha(Theme.accent, Theme.isDark ? 0.16 : 0.20) }
-                            GradientStop { position: 1.0; color: Theme.withAlpha(Theme.surface, 0.42) }
+                            // Tinte de acento compuesto sobre la misma base densa que
+                            // el resto de tarjetas: el degradado colorea, no transparenta.
+                            GradientStop {
+                                position: 0.0
+                                color: Qt.tint(Theme.withAlpha(Theme.surface, 0.85),
+                                               Theme.withAlpha(Theme.accent, Theme.isDark ? 0.16 : 0.20))
+                            }
+                            GradientStop { position: 1.0; color: Theme.withAlpha(Theme.surface, 0.85) }
                         }
 
                         RowLayout {
@@ -744,7 +753,10 @@ Popout {
         // Página: música
         ColumnLayout {
             id: musicPage
-            anchors { left: parent.left; right: parent.right; top: parent.top }
+            // Anclada arriba Y abajo (la altura la fija la página de resumen):
+            // así el contenido puede centrarse verticalmente y la página se
+            // adapta si el resumen crece o encoge.
+            anchors { left: parent.left; right: parent.right; top: parent.top; bottom: parent.bottom }
             spacing: Theme.space12
             opacity: dash.tab === "music" ? 1 : 0
             visible: opacity > 0.01
@@ -758,28 +770,24 @@ Popout {
             }
             Behavior on opacity { NumberAnimation { duration: dash.tabAnim; easing.type: Easing.OutCubic } }
 
-            // Sin reproducción.
-            ColumnLayout {
+            // Sin reproducción: solo el glifo, enorme y centrado en la página.
+            // Sin texto: el icono se explica solo.
+            Item {
                 Layout.fillWidth: true
-                Layout.topMargin: Theme.space18; Layout.bottomMargin: Theme.space18
+                Layout.fillHeight: true
                 visible: !dash.hasMedia
-                spacing: Theme.space8
                 Text {
-                    Layout.fillWidth: true
-                    horizontalAlignment: Text.AlignHCenter
-                    text: "󰝛"; color: Theme.fgMuted
-                    font.family: Theme.fontFamily; font.pixelSize: Theme.sp(48)
-                }
-                Text {
-                    Layout.fillWidth: true
-                    horizontalAlignment: Text.AlignHCenter
-                    text: I18n.tr("No active playback")
-                    color: Theme.fgMuted
-                    font.family: Theme.fontFamily; font.pixelSize: Theme.fontSize
+                    anchors.centerIn: parent
+                    text: "󰝛"
+                    color: Theme.withAlpha(Theme.fgMuted, 0.55)
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.sp(110)
                 }
             }
 
-            // Reproductor grande.
+            // Reproductor grande, centrado verticalmente entre dos huecos
+            // elásticos (colapsan si el contenido llena la página).
+            Item { Layout.fillHeight: true; visible: dash.hasMedia }
             ColumnLayout {
                 Layout.fillWidth: true
                 visible: dash.hasMedia
@@ -869,9 +877,9 @@ Popout {
                     spacing: Theme.space2
                     Rectangle {
                         Layout.fillWidth: true
-                        implicitHeight: 6; radius: 3; color: Theme.surface
+                        implicitHeight: Theme.dp(6); radius: height / 2; color: Theme.surface
                         Rectangle {
-                            height: parent.height; radius: 3
+                            height: parent.height; radius: parent.radius
                             width: parent.width * Math.max(0, Math.min(1,
                                 dash.displayPos / Math.max(1, dash.player?.length ?? 1)))
                             color: Theme.accent
@@ -915,13 +923,16 @@ Popout {
                     }
                 }
             }
+            Item { Layout.fillHeight: true; visible: dash.hasMedia }
         }
 
         // Página: fondos — tarjeta héroe con el fondo en uso (velo degradado,
         // nombre y chip "Activo") y rejilla con zoom al pasar el ratón.
         ColumnLayout {
             id: wallpaperPage
-            anchors { left: parent.left; right: parent.right; top: parent.top }
+            // Anclada arriba Y abajo: su altura la fija la página de resumen
+            // (ver Layout.preferredHeight de 'pages'), nunca esta página.
+            anchors { left: parent.left; right: parent.right; top: parent.top; bottom: parent.bottom }
             spacing: Theme.space8
             opacity: dash.tab === "wallpaper" ? 1 : 0
             visible: opacity > 0.01
@@ -949,6 +960,7 @@ Popout {
             // Cabecera: título con contador debajo y recarga a la derecha
             // (el icono gira mientras se escanean las carpetas).
             RowLayout {
+                id: wpHeader
                 Layout.fillWidth: true
                 spacing: Theme.space8
 
@@ -1002,9 +1014,15 @@ Popout {
             // El pie va sobre un velo oscuro fijo (no tonal) para leerse
             // sobre cualquier imagen.
             ClippingRectangle {
+                id: wpHero
                 Layout.fillWidth: true
                 visible: Wallpaper.current !== ""
-                implicitHeight: Theme.dp(104)
+                // Altura natural compacta; fillHeight hace que el layout le
+                // entregue además todo el resto que la rejilla no convierte
+                // en filas completas. El reparto lo resuelve el motor de
+                // layout: aquí no hay ningún cálculo que mantener.
+                implicitHeight: wpGrid.heroBase
+                Layout.fillHeight: true
                 radius: Theme.dp(16)
                 color: Theme.bgAlt
 
@@ -1012,8 +1030,10 @@ Popout {
                     anchors.fill: parent
                     // Atado a shown para no decodificar con el panel cerrado,
                     // y a thumbsArmed para no hacerlo antes de visitar la pestaña.
+                    // Miniatura en disco (640px) en vez del original: mismo
+                    // recorte a la vista, decodificación decenas de veces menor.
                     source: dash.shown && wallpaperPage.thumbsArmed && Wallpaper.current !== ""
-                            ? "file://" + Wallpaper.current : ""
+                            ? "file://" + Wallpaper.thumb(Wallpaper.current) : ""
                     fillMode: Image.PreserveAspectCrop
                     sourceSize.width: Theme.dp(640); sourceSize.height: Theme.dp(220)
                     asynchronous: true
@@ -1097,7 +1117,18 @@ Popout {
                 id: wpGrid
                 Layout.fillWidth: true
                 visible: Wallpaper.list.length > 0
-                implicitHeight: Math.min(Theme.dp(190), contentHeight)
+                // La altura de la página viene dada desde fuera (anclada
+                // arriba y abajo; la fija la página de resumen). La rejilla
+                // convierte su hueco en filas COMPLETAS —ninguna asoma
+                // cortada— y el sobrante lo estira el héroe (fillHeight).
+                // heroBase es la única constante compartida con el héroe:
+                // nada aquí depende de alturas renderizadas, así que no hay
+                // realimentación posible con el tamaño del panel.
+                readonly property int heroBase: Theme.dp(104)
+                readonly property int staticH: wpHeader.implicitHeight + wallpaperPage.spacing
+                                               + (wpHero.visible ? heroBase + wallpaperPage.spacing : 0)
+                readonly property int fitRows: Math.max(1, Math.floor((wallpaperPage.height - staticH) / cellHeight))
+                implicitHeight: Math.min(fitRows * cellHeight, contentHeight)
                 cellWidth: Math.floor(width / 4)
                 cellHeight: Math.floor(cellWidth * 0.62)
                 cacheBuffer: cellHeight * 2
@@ -1121,7 +1152,8 @@ Popout {
                         Image {
                             id: wpImg
                             anchors.fill: parent
-                            source: wallpaperPage.thumbsArmed ? "file://" + wpCell.modelData : ""
+                            source: wallpaperPage.thumbsArmed
+                                    ? "file://" + Wallpaper.thumb(wpCell.modelData) : ""
                             fillMode: Image.PreserveAspectCrop
                             sourceSize.width: Theme.dp(150); sourceSize.height: Theme.dp(94)
                             asynchronous: true
@@ -1207,7 +1239,9 @@ Popout {
     component OverviewCard: Rectangle {
         Layout.fillWidth: true
         radius: Theme.dp(18)
-        color: Theme.withAlpha(Theme.surface, 0.5)
+        color: Theme.withAlpha(Theme.surface, 0.85)
+        border.width: Theme.hairline
+        border.color: Theme.withAlpha(Theme.overlay, 0.35)
     }
 
     // Celda de estado: anillo con el porcentaje DENTRO y debajo el icono con
@@ -1316,7 +1350,9 @@ Popout {
         Layout.preferredWidth: 100
         implicitHeight: Theme.dp(108)
         radius: Theme.dp(18)
-        color: Theme.withAlpha(Theme.surface, 0.5)
+        color: Theme.withAlpha(Theme.surface, 0.85)
+        border.width: Theme.hairline
+        border.color: Theme.withAlpha(Theme.overlay, 0.35)
 
         ColumnLayout {
             anchors.fill: parent

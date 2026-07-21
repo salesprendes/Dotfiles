@@ -36,7 +36,16 @@ Rectangle {
         y: Theme.dp(3)
         x: sw.checked ? parent.width - width - Theme.dp(3) : Theme.dp(3)
         color: sw.checked ? Theme.bg : Theme.fgDim
-        Behavior on x { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+        // OutBack suave: la bolita llega y asienta con un pelín de rebote,
+        // en vez de frenar en seco. El sobreimpulso es corto para que no
+        // parezca elástica.
+        Behavior on x {
+            NumberAnimation {
+                duration: Theme.animNormal
+                easing.type: Easing.OutBack
+                easing.overshoot: 1.2
+            }
+        }
     }
 
     MouseArea {

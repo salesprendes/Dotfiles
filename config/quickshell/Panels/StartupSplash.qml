@@ -16,6 +16,11 @@ PanelWindow {
     property real displayedProgress: 0
     property bool ready: false
     property bool minHoldDone: false
+    // Coreografía de entrada en dos tiempos: primero el conjunto del logo
+    // (entered), un instante después la barra y el pie (trailIn). Ninguno
+    // toca el diseño del logo ni de la barra: solo cuándo y cómo aparecen.
+    property bool entered: false
+    property bool trailIn: false
 
     // Cuando esto ya no se ve, avisamos para que shell.qml lo tire a la basura.
     // Solo sale al arrancar; no pinta nada ocupando memoria por cada monitor
@@ -71,7 +76,23 @@ PanelWindow {
         advanceTo(loadProgress)
         minHoldTimer.start()
         maxHoldTimer.start()
+        enterTimer.start()
         finishIfReady(false)
+    }
+
+    // Dispara la entrada escalonada un frame después de mapear: así los
+    // Behaviors ven el cambio y animan desde el estado inicial.
+    Timer {
+        id: enterTimer
+        interval: 60
+        repeat: false
+        onTriggered: { splash.entered = true; trailTimer.start() }
+    }
+    Timer {
+        id: trailTimer
+        interval: 260
+        repeat: false
+        onTriggered: splash.trailIn = true
     }
 
     Timer {
@@ -119,14 +140,52 @@ PanelWindow {
         anchors.centerIn: parent
         width: Math.min(parent.width * 0.82, Theme.dp(760))
         height: Math.max(Theme.dp(260), Math.min(parent.height * 0.38, Theme.dp(360)))
-        opacity: splash.shown ? 1 : 0
-        scale: splash.shown ? 1 : 1.025
+        // Entrada: sube unos puntos mientras funde y asienta la escala.
+        // Salida: sigue el mismo camino hacia arriba, con una leve crecida.
+        opacity: !splash.shown ? 0 : (splash.entered ? 1 : 0)
+        scale: !splash.shown ? 1.03 : (splash.entered ? 1 : 0.985)
+        anchors.verticalCenterOffset: !splash.shown ? -Theme.dp(10)
+                                     : (splash.entered ? 0 : Theme.dp(14))
 
         Behavior on opacity {
             NumberAnimation { duration: 420; easing.type: Easing.OutCubic }
         }
         Behavior on scale {
-            NumberAnimation { duration: 500; easing.type: Easing.OutCubic }
+            NumberAnimation { duration: 560; easing.type: Easing.OutCubic }
+        }
+        Behavior on anchors.verticalCenterOffset {
+            NumberAnimation { duration: 560; easing.type: Easing.OutCubic }
+        }
+
+        // Halo del acento respirando tras el logo: gradiente radial muy
+        // tenue con un pulso lento. Ambientación alrededor del logo, sin
+        // tocar el logo en sí.
+        Canvas {
+            id: glow
+            anchors.centerIn: logoMark
+            width: Theme.dp(430)
+            height: width
+            z: -1
+            opacity: splash.shown && splash.entered ? 1 : 0
+            Behavior on opacity { NumberAnimation { duration: 600; easing.type: Easing.OutCubic } }
+            onPaint: {
+                const ctx = getContext("2d")
+                ctx.reset()
+                const r = width / 2
+                const g = ctx.createRadialGradient(r, r, 0, r, r, r)
+                const a = Theme.accent
+                g.addColorStop(0,    Qt.rgba(a.r, a.g, a.b, Theme.isDark ? 0.14 : 0.10))
+                g.addColorStop(0.55, Qt.rgba(a.r, a.g, a.b, Theme.isDark ? 0.05 : 0.04))
+                g.addColorStop(1,    Qt.rgba(a.r, a.g, a.b, 0))
+                ctx.fillStyle = g
+                ctx.fillRect(0, 0, width, height)
+            }
+            SequentialAnimation on scale {
+                running: splash.mapped
+                loops: Animation.Infinite
+                NumberAnimation { from: 1.0; to: 1.1; duration: 2600; easing.type: Easing.InOutSine }
+                NumberAnimation { from: 1.1; to: 1.0; duration: 2600; easing.type: Easing.InOutSine }
+            }
         }
 
         AppLogo {
@@ -155,7 +214,13 @@ PanelWindow {
             fontSizeMode: Text.Fit
             minimumPixelSize: Theme.dp(42)
             font.bold: true
-            font.letterSpacing: 0
+            // El rótulo entra con el tracking abierto y lo va cerrando hasta
+            // su valor final (0): el clásico asentamiento de marca. El
+            // aspecto en reposo no cambia.
+            font.letterSpacing: splash.entered ? 0 : Theme.dp(12)
+            Behavior on font.letterSpacing {
+                NumberAnimation { duration: 700; easing.type: Easing.OutCubic }
+            }
             horizontalAlignment: Text.AlignHCenter
             verticalAlignment: Text.AlignVCenter
         }
@@ -169,7 +234,9 @@ PanelWindow {
             }
             width: wordmark.width * 0.46
             height: Math.max(3, Theme.dp(5))
-            opacity: splash.shown ? 0.94 : 0
+            // Entra un instante después del logo (trailIn) y funde suave.
+            opacity: !splash.shown ? 0 : (splash.trailIn ? 0.94 : 0)
+            Behavior on opacity { NumberAnimation { duration: 420; easing.type: Easing.OutCubic } }
             clip: true
 
             Rectangle {
@@ -212,5 +279,22 @@ PanelWindow {
             }
         }
 
+    }
+
+    // Pie discreto anclado abajo: da contexto ("algo está arrancando") sin
+    // competir con el logo. Entra con la barra y se va con todo lo demás.
+    Text {
+        anchors {
+            horizontalCenter: parent.horizontalCenter
+            bottom: parent.bottom
+            bottomMargin: Theme.dp(48)
+        }
+        text: I18n.tr("Starting the desktop…")
+        color: Theme.fgMuted
+        font.family: Theme.fontFamily
+        font.pixelSize: Theme.fontSize - 1
+        font.letterSpacing: Theme.dp(2)
+        opacity: !splash.shown ? 0 : (splash.trailIn ? 0.75 : 0)
+        Behavior on opacity { NumberAnimation { duration: 500; easing.type: Easing.OutCubic } }
     }
 }

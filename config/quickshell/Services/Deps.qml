@@ -13,7 +13,7 @@ Singleton {
 
     readonly property var _bins: [
         "cliphist", "wl-copy", "wl-paste",
-        "hyprshot", "grim", "slurp", "gpu-screen-recorder", "ffmpeg",
+        "hyprshot", "grim", "slurp", "gpu-screen-recorder", "ffmpeg", "hyprpicker",
         "notify-send", "jq", "hyprctl", "pactl",
         "kitty", "alacritty", "foot",
         "powerprofilesctl", "brightnessctl", "ddcutil", "xdg-user-dir",

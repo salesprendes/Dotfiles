@@ -73,6 +73,11 @@ ColumnLayout {
                     Layout.fillHeight: true
                     Text {
                         anchors.centerIn: parent
+                        // Acotado al ancho del segmento: con muchas opciones o
+                        // el panel estrecho, elide en vez de solaparse.
+                        width: Math.min(implicitWidth, parent.width - Theme.space4)
+                        horizontalAlignment: Text.AlignHCenter
+                        elide: Text.ElideRight
                         text: modelData.text
                         color: parent.sel ? Theme.accent : Theme.fgMuted
                         font.family: Theme.fontFamily; font.pixelSize: Theme.fontSize - 1

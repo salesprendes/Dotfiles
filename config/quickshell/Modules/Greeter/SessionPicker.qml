@@ -2,7 +2,6 @@
 //  animación fluida (fade + escala desde la base + cascada por fila).
 //  Lee /usr/share/wayland-sessions.
 import QtQuick
-import Quickshell
 import qs.Modules.Greeter
 
 Item {

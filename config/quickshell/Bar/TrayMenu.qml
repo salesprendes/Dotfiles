@@ -10,10 +10,13 @@ PopupWindow {
     property var menuHandle: null
     required property var anchorItem
 
+    // Con la barra abajo, el menú se abre hacia ARRIBA del icono.
+    readonly property bool _upward: Settings.barPosition === "bottom"
     anchor.item: anchorItem
-    anchor.edges: Edges.Bottom
-    anchor.gravity: Edges.Bottom
-    anchor.margins.top: Theme.space6
+    anchor.edges: _upward ? Edges.Top : Edges.Bottom
+    anchor.gravity: _upward ? Edges.Top : Edges.Bottom
+    anchor.margins.top: _upward ? 0 : Theme.space6
+    anchor.margins.bottom: _upward ? Theme.space6 : 0
 
     color: "transparent"
     visible: false

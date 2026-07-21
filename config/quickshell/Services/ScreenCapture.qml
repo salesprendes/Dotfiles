@@ -19,6 +19,9 @@ Singleton {
     // proceso al arrancar). Bindings reactivos: valen false hasta que termina
     // la detección y se re-evalúan solos.
     readonly property bool hyprshotAvailable: Deps.has("hyprshot")
+    // hyprshot solo congela la pantalla (-z) si hyprpicker existe; sin él lo
+    // omite en silencio. Detectarlo permite avisarlo en la toolbar.
+    readonly property bool hyprpickerAvailable: Deps.has("hyprpicker")
     readonly property bool grimAvailable: Deps.has("grim")
     readonly property bool slurpAvailable: Deps.has("slurp")
     readonly property bool wlCopyAvailable: Deps.has("wl-copy")
@@ -352,6 +355,14 @@ Singleton {
         Qt.callLater(runScreenshot)
     }
 
+    // Espera antes de disparar: en modos SIN interacción (todo/monitor) hay
+    // que dar tiempo a que la toolbar termine su animación de cierre y el
+    // fundido de capa del compositor, o sale su fantasma en la foto. En los
+    // interactivos (región/ventana) el propio selector ya da ese tiempo.
+    function captureDelay() {
+        return (captureMode === "all" || captureMode === "monitor") ? "0.45" : "0.16"
+    }
+
     function captureWhileRecording() {
         pillSuppressed = true
         pillRestoreTimer.restart()
@@ -368,8 +379,14 @@ Singleton {
             cmd += "-m window "
         } else if (captureMode === "monitor") {
             cmd += "-m output "
+            // "-m output" a secas es INTERACTIVO (hyprshot lanza slurp para
+            // elegir monitor con un clic; con ESC no sale foto y parecía que
+            // "a veces no captura"). Enfocado = "-m active": el monitor con
+            // foco, al instante y sin interacción, que es lo esperado.
             if (captureMonitor !== "focused")
                 cmd += "-m " + Utils.shellQuote(captureMonitor) + " "
+            else
+                cmd += "-m active "
         }
         // OJO: usar la forma larga --raw. La versión de hyprshot instalada define
         // el getopt corto como "r:" (con argumento), así que "-r" falla ("option
@@ -383,27 +400,41 @@ Singleton {
         return "grim " + (showPointer ? "-c " : "") + "-t png -"
     }
 
-    function regionRawCommand() {
-        // grim + slurp es la vía canónica y fiable para "región" en wlroots/
-        // Hyprland: respeta el puntero (-c) y evita las rarezas del modo raw de
-        // hyprshot. slurp -d muestra las dimensiones mientras seleccionas.
-        return "grim " + (showPointer ? "-c " : "") + "-g \"$(slurp -d)\" -t png -"
+    // Región con grim + slurp, la vía canónica y fiable en wlroots/Hyprland.
+    // slurp va en su propio paso: cancelar la selección (ESC) sale limpio y
+    // en silencio, y así un $TMP vacío DESPUÉS ya solo puede ser un fallo
+    // real de captura (que sí se notifica).
+    function regionRawSteps() {
+        return "REGION=$(slurp -d) || exit 0; [ -n \"$REGION\" ] || exit 0; "
+             + "grim " + (showPointer ? "-c " : "") + "-g \"$REGION\" -t png - > \"$TMP\" 2>/dev/null; "
     }
 
     function runScreenshot() {
         const dir = effectiveScreenshotDir()
         const out = dir + "/" + screenshotFilenameResolved()
         const mime = mimeForImageFormat()
-        const raw = captureMode === "all" ? grimRawCommand()
-                  : captureMode === "region" ? regionRawCommand()
-                  : hyprshotRawCommand()
+        // "ventana" sigue siendo interactiva (elegir con clic): ahí un vacío
+        // puede ser simplemente ESC y se mantiene silencioso. "todo" y
+        // "monitor" ya no tienen interacción: si no sale imagen es un fallo
+        // de verdad y se avisa (antes fallaban en silencio: "no hace fotos").
+        const interactive = captureMode === "region" || captureMode === "window"
 
         let script = "TMP=$(mktemp --suffix=.png); FINAL=\"$TMP\"; trap 'rm -f \"$TMP\" \"$CONVERTED\"' EXIT; CONVERTED=\"\"; "
         // No abortamos por el código de salida de la orden de captura: hyprshot
         // en modo --raw devuelve 1 aunque la captura sea correcta. Nos fiamos de
-        // que el archivo temporal no quede vacío (también cubre grim y cancelar
-        // la selección de región/ventana, que dejan $TMP vacío).
-        script += raw + " > \"$TMP\" 2>/dev/null; [ -s \"$TMP\" ] || exit 1; "
+        // que el archivo temporal no quede vacío.
+        if (captureMode === "region")
+            script += regionRawSteps()
+        else {
+            const raw = captureMode === "all" ? grimRawCommand() : hyprshotRawCommand()
+            script += raw + " > \"$TMP\" 2>/dev/null; "
+        }
+        if (interactive || !showNotify)
+            script += "[ -s \"$TMP\" ] || exit 1; "
+        else
+            script += "[ -s \"$TMP\" ] || { notify-send " + Utils.shellQuote("Captura fallida")
+                    + " " + Utils.shellQuote("La orden de captura no produjo imagen (" + modeLabel() + ").")
+                    + " 2>/dev/null || true; exit 1; }; "
 
         if (imageFormat === "jpg") {
             script += "CONVERTED=$(mktemp --suffix=.jpg); "
@@ -424,7 +455,7 @@ Singleton {
 
         lastOutputPath = saveToDisk ? out : ""
         setStatus("Captura lanzada")
-        Quickshell.execDetached(["sh", "-c", "sleep 0.16; " + script])
+        Quickshell.execDetached(["sh", "-c", "sleep " + captureDelay() + "; " + script])
     }
 
     function startRecording() {
@@ -498,7 +529,9 @@ Singleton {
             script += "run_rec -w region -region \"$REGION\"" + suffix + "; "
         } else if (captureMode === "window") {
             script += "REGION=$(hyprctl activewindow -j 2>/dev/null | jq -r 'select(.address != null) | \"\\(.size[0])x\\(.size[1])+\\(.at[0])+\\(.at[1])\"') || true; "
-            script += "[ -n \"$REGION\" ] && [ \"$REGION\" != \"null\" ] || { notify-send 'Sin ventana activa' 'No se pudo resolver la ventana para grabar.' 2>/dev/null || true; cancel_rec; exit 1; }; "
+            script += "[ -n \"$REGION\" ] && [ \"$REGION\" != \"null\" ] || { "
+                    + (showNotify ? "notify-send 'Sin ventana activa' 'No se pudo resolver la ventana para grabar.' 2>/dev/null || true; " : "")
+                    + "cancel_rec; exit 1; }; "
             script += "run_rec -w region -region \"$REGION\"" + suffix + "; "
         } else if (captureMode === "all") {
             script += "run_rec -w portal" + suffix + "; "
@@ -541,8 +574,11 @@ Singleton {
     function stopRecording() {
         Quickshell.execDetached(["sh", "-c",
             "pid=$(cat " + Utils.shellQuote(pidFile) + " 2>/dev/null || true); " +
-            "if [ -n \"$pid\" ]; then kill -INT \"$pid\" 2>/dev/null || true; " +
-            "else qs ipc --any-display call screenCapture recordingStopped >/dev/null 2>&1 || true; fi"])
+            // Si el proceso ya no existe (grabadora muerta, pidfile huérfano),
+            // limpia el pidfile y cierra el estado igualmente.
+            "if [ -n \"$pid\" ] && kill -INT \"$pid\" 2>/dev/null; then :; " +
+            "else rm -f " + Utils.shellQuote(pidFile) + "; " +
+            "qs ipc --any-display call screenCapture recordingStopped >/dev/null 2>&1 || true; fi"])
         isRecording = false
         isPaused = false
         recordingElapsed = 0
@@ -682,8 +718,28 @@ Singleton {
         }
     }
 
+    // Recuperación al arrancar: si el shell se recargó con una grabación en
+    // marcha, el pidfile sigue ahí y gpu-screen-recorder sigue grabando —
+    // antes el estado (y la píldora de grabación) se perdían y no había
+    // forma de parar desde la interfaz. Si el pid ya no vive, se limpia.
+    Process {
+        id: recoverProc
+        command: ["sh", "-c",
+            "pid=$(cat " + Utils.shellQuote(pidFile) + " 2>/dev/null) || exit 1; "
+            + "[ -n \"$pid\" ] || exit 1; "
+            + "comm=$(ps -o comm= -p \"$pid\" 2>/dev/null) || { rm -f " + Utils.shellQuote(pidFile) + "; exit 1; }; "
+            + "case \"$comm\" in gpu-screen-rec*) echo alive ;; *) rm -f " + Utils.shellQuote(pidFile) + "; exit 1 ;; esac"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                if (text.indexOf("alive") !== -1)
+                    cap.recordingStarted()
+            }
+        }
+    }
+
     Component.onCompleted: {
         applyFromSettings()
         refreshMonitors()
+        recoverProc.running = true
     }
 }

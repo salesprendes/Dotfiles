@@ -183,5 +183,12 @@ ColumnLayout {
             valueText: Math.round(Settings.effWidgetOpacity * 100) + "%"
             onMoved: (v) => Settings.setWidgetOpacity(Math.round(v * 100) / 100)
         }
+        SliderRow {
+            skey: "panelBackdropDim"
+            label: I18n.tr("Dim wallpaper behind panels"); glyph: "󰖔"
+            from: 0.0; to: 0.7; value: Settings.panelBackdropDim
+            valueText: Math.round(Settings.panelBackdropDim * 100) + "%"
+            onMoved: (v) => Settings.panelBackdropDim = Math.round(v * 100) / 100
+        }
     }
 }

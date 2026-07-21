@@ -1,6 +1,5 @@
 //  PASO 1 · Selector de usuario (teclado ↑/↓/Tab/Enter + ratón).
 import QtQuick
-import Quickshell
 import Quickshell.Widgets
 import qs.Modules.Greeter
 

@@ -94,8 +94,8 @@ ColumnLayout {
 
                     Rectangle {
                         Layout.alignment: Qt.AlignHCenter
-                        width: Theme.controlS
-                        height: Theme.controlS
+                        implicitWidth: Theme.controlS
+                        implicitHeight: Theme.controlS
                         radius: height / 2
                         color: swatch.swatchColor
                         border.width: Theme.hairline

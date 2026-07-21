@@ -77,6 +77,28 @@ ColumnLayout {
         }
     }
 
+    // ── Disposición de la barra ──────────────────────────────────────────────
+    SettingsCard {
+        title: I18n.tr("Bar layout")
+        glyph: "󰉺"
+
+        SegRow {
+            skey: "barPosition"
+            label: I18n.tr("Position on screen")
+            options: [ { text: I18n.tr("Top"), value: "top" },
+                       { text: I18n.tr("Bottom"), value: "bottom" } ]
+            current: Settings.barPosition
+            onPicked: (v) => Settings.barPosition = v
+        }
+        SwitchRow {
+            skey: "barFloating"
+            label: I18n.tr("Floating bar")
+            desc: I18n.tr("Detached with margin and rounded corners; disabled sticks it edge to edge")
+            checked: Settings.barFloating
+            onToggled: Settings.barFloating = !Settings.barFloating
+        }
+    }
+
     // ── Reloj y fecha ────────────────────────────────────────────────────────
     SettingsCard {
         title: I18n.tr("Clock and date")

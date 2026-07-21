@@ -1,6 +1,5 @@
 import QtQuick
-import QtQuick.Layouts
-import Quickshell
+import Quickshell.Hyprland
 import Quickshell.Io
 import Quickshell.Services.SystemTray
 import qs.Components
@@ -12,22 +11,14 @@ Pill {
 
     visible: Settings.showTray && SystemTray.items.values.length > 0
 
-    // Script para abrir la app del icono: enfoca su ventana si ya existe
-    // (hyprctl+jq) o la lanza con gtk-launch. Constante para no reconstruirla
-    // en un binding por cada icono.
+    // Script de respaldo para LANZAR la app del icono con gtk-launch cuando
+    // no tiene ninguna ventana abierta (la búsqueda de ventana existente se
+    // hace en QML vía Hyprland.toplevels, ver openApplication). Constante
+    // para no reconstruirla en un binding por cada icono.
     readonly property string launchScript:
-        "keys=''; " +
         "for raw in \"$@\"; do " +
         "  key=$(printf '%s' \"$raw\" | tr '[:upper:]' '[:lower:]' | sed 's/\\.desktop$//; s/[^a-z0-9._-]/-/g; s/--*/-/g; s/^-//; s/-$//'); " +
-        "  test -n \"$key\" && keys=\"$keys $key\"; " +
-        "done; " +
-        "if command -v hyprctl >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then " +
-        "  for key in $keys; do " +
-        "    addr=$(hyprctl clients -j 2>/dev/null | jq -r --arg k \"$key\" 'map(select((.class//\"\"|ascii_downcase|contains($k)) or (.initialClass//\"\"|ascii_downcase|contains($k)) or (.title//\"\"|ascii_downcase|contains($k)) or ($k|contains(.class//\"\"|ascii_downcase)) or ($k|contains(.initialClass//\"\"|ascii_downcase)))) | .[0].address // empty'); " +
-        "    test -n \"$addr\" && hyprctl dispatch focuswindow \"address:$addr\" >/dev/null 2>&1 && exit 0; " +
-        "  done; " +
-        "fi; " +
-        "for key in $keys; do " +
+        "  test -n \"$key\" || continue; " +
         "  gtk-launch \"$key\" >/dev/null 2>&1 && exit 0; " +
         "  gtk-launch \"$key.desktop\" >/dev/null 2>&1 && exit 0; " +
         "done; exit 0"
@@ -35,7 +26,64 @@ Pill {
     // Un único Process compartido; el comando se compone al hacer clic.
     Process { id: appLauncher }
 
+    // Empareja un icono de la bandeja con su ventana de Hyprland: claves del
+    // item (id/título/tooltip, normalizadas) contra clase/clase inicial/
+    // título de cada toplevel, en ambos sentidos (igual que hacía el jq).
+    function findToplevel(item) {
+        const keys = [item?.id, item?.title, item?.tooltipTitle]
+            .map(k => String(k || "").toLowerCase().replace(/\.desktop$/, "").trim())
+            .filter(k => k !== "")
+        const list = Hyprland.toplevels ? Hyprland.toplevels.values : []
+        for (let i = 0; i < list.length; i++) {
+            const tl = list[i]
+            if (!tl) continue
+            const ipc = tl.lastIpcObject
+            const cls = String(ipc?.class || "").toLowerCase()
+            const icls = String(ipc?.initialClass || "").toLowerCase()
+            const title = String(tl.title || "").toLowerCase()
+            for (let j = 0; j < keys.length; j++) {
+                const k = keys[j]
+                if ((cls !== "" && (cls.indexOf(k) !== -1 || k.indexOf(cls) !== -1))
+                    || (icls !== "" && (icls.indexOf(k) !== -1 || k.indexOf(icls) !== -1))
+                    || (title !== "" && title.indexOf(k) !== -1))
+                    return tl
+            }
+        }
+        return null
+    }
+
+    // Clic en un icono: si su app ya tiene ventana, tráela — si está en otro
+    // workspace se mueve al ACTUAL y se enfoca (mismo patrón que la ventana
+    // de Ajustes en summonOrClose; este Hyprland va en modo Lua, la sintaxis
+    // clásica de dispatchers no vale). Sin ventana, se lanza la app.
     function openApplication(item) {
+        const tl = findToplevel(item)
+        const ws = Hyprland.focusedWorkspace
+        if (tl && ws) {
+            let addr = String(tl.address)
+            if (addr.indexOf("0x") !== 0) addr = "0x" + addr
+            // Solo se TRAE la ventana al workspace actual, sin robarle el
+            // foco a la que estabas usando. window.move enfoca a la movida
+            // por defecto (y su variante silenciosa no está documentada en
+            // la API Lua), así que tras mover se DEVUELVE el foco a la
+            // ventana que lo tenía.
+            const here = tl.workspace && tl.workspace.id === ws.id
+            if (!here) {
+                const prev = Hyprland.activeToplevel
+                let prevAddr = prev ? String(prev.address) : ""
+                if (prevAddr !== "" && prevAddr.indexOf("0x") !== 0)
+                    prevAddr = "0x" + prevAddr
+                if (Hyprland.usingLua) {
+                    Hyprland.dispatch('hl.dsp.window.move({ workspace = ' + ws.id
+                        + ', window = "address:' + addr + '" })')
+                    if (prevAddr !== "" && prevAddr !== addr)
+                        Hyprland.dispatch('hl.dsp.focus({ window = "address:' + prevAddr + '" })')
+                } else {
+                    Hyprland.dispatch("movetoworkspacesilent " + ws.id + ",address:" + addr)
+                }
+            }
+            return
+        }
         appLauncher.running = false
         appLauncher.command = ["sh", "-c", root.launchScript, "tray-open",
             item?.id ?? "", item?.title ?? "", item?.tooltipTitle ?? ""]

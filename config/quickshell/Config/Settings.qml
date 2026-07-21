@@ -13,7 +13,7 @@ Singleton {
     readonly property string home: Quickshell.env("HOME") ?? ""
 
     // Apariencia
-    property string themeName: "salesprendes"
+    property string themeName: "dynamic"
     property string accentName: "theme"
     property color  accentColor: resolvedAccent
     property bool   darkMode: true      // false = variante clara de Solitude
@@ -53,6 +53,12 @@ Singleton {
     function setWidgetOpacity(v) { widgetOpacity = v }
     property real   cornerScale: 1.0    // multiplicador del redondeo
     property real   barScale: 1.0       // multiplicador de la altura de barra
+    // Disposición de la barra: borde de pantalla donde vive y si va flotante
+    // (separada con margen y esquinas) o pegada a sangre de borde a borde.
+    property string barPosition: "top"  // top | bottom
+    property bool   barFloating: true
+    // Velo que oscurece el escritorio mientras hay un panel abierto (0 = no).
+    property real   panelBackdropDim: 0.0
     property string fontFamily: "JetBrainsMono Nerd Font"
     property string monoFontFamily: "JetBrainsMono Nerd Font"
     property real   fontScale: 1.0
@@ -79,8 +85,8 @@ Singleton {
     property bool   terminalLigatures: true
 
     readonly property var themePresets: ({
-        // Paletas de temas/editores conocidos, más una propia
-        // (salesprendes). Los tonos intermedios (bgAlt/surfaceHi/fgMuted) y
+        // Paletas de temas/editores conocidos.
+        // Los tonos intermedios (bgAlt/surfaceHi/fgMuted) y
         // el naranja no existen en las paletas originales: se derivan. Los
         // colores semanticos salen de la paleta ANSI de terminal de cada
         // una, corregidos para garantizar contraste WCAG sobre el fondo de
@@ -182,18 +188,6 @@ Singleton {
             "lightCyan": "#34a0a9", "lightGreen": "#286983", "lightYellow": "#cd7f15", "lightOrange": "#cf7c4a", "lightRed": "#b4637a", "lightMagenta": "#907aa9",
             "hyprInactive": "#26233a", "hyprShadow": "#191724"
         },
-        "salesprendes": {
-            "label": "Salesprendes",
-            "bg": "#070722", "bgAlt": "#0c0c28", "surface": "#11112d", "surfaceHi": "#15153b", "overlay": "#21215f",
-            "fg": "#f3edf7", "fgDim": "#7c80b4", "fgMuted": "#535681",
-            "accent": "#fff59b", "accent2": "#a9aefe", "cyan": "#9bfece", "green": "#9bfe9b", "yellow": "#fff59b",
-            "orange": "#fea682", "red": "#fd4663", "magenta": "#fe9be5",
-            "lightBg": "#e6e8fa", "lightBgAlt": "#ebecfc", "lightSurface": "#eff0ff", "lightSurfaceHi": "#d0d3fe",
-            "lightOverlay": "#8288fc", "lightFg": "#0e0e43", "lightFgDim": "#4b55c8", "lightFgMuted": "#8188d9",
-            "lightAccent": "#5d65f5", "lightAccent2": "#797fd1",
-            "lightCyan": "#0e0e43", "lightGreen": "#0a9b0a", "lightYellow": "#9b830a", "lightOrange": "#d8620d", "lightRed": "#fd3050", "lightMagenta": "#f124be",
-            "hyprInactive": "#11112d", "hyprShadow": "#070722"
-        },
         "tokyo-night": {
             "label": "Tokyo-Night",
             "bg": "#1a1b26", "bgAlt": "#1f2230", "surface": "#24283b", "surfaceHi": "#292e43", "overlay": "#353d57",
@@ -209,7 +203,7 @@ Singleton {
     })
 
     readonly property var themeOptions: [
-        { text: "Dinámico (fondo)", value: "dynamic" },
+        { text: "Dinámico", value: "dynamic" },
         { text: "Ayu", value: "ayu" },
         { text: "Catppuccin", value: "catppuccin" },
         { text: "Dracula", value: "dracula" },
@@ -218,7 +212,6 @@ Singleton {
         { text: "Kanagawa", value: "kanagawa" },
         { text: "Nord", value: "nord" },
         { text: "Rosé Pine", value: "rose-pine" },
-        { text: "Salesprendes", value: "salesprendes" },
         { text: "Tokyo-Night", value: "tokyo-night" }
     ]
     // Acento "theme": en modo claro usa la variante lightAccent (más oscura,
@@ -240,9 +233,11 @@ Singleton {
     ]
     // Con el tema "dynamic", la paleta viene del extractor del fondo (si ya
     // hay una calculada); mientras no la haya, se pinta con el preset base.
+    // Respaldo mientras el extractor del fondo aún no ha calculado nada (o
+    // ante un nombre inválido): Tokyo-Night, la paleta de referencia.
     readonly property var currentPalette:
         themeName === "dynamic" && dynamicPalette.bg !== undefined ? dynamicPalette
-        : themePresets[themeName] || themePresets.salesprendes
+        : themePresets[themeName] || themePresets["tokyo-night"]
     readonly property color resolvedAccent: accentFor(accentName)
 
     // Base de las tres velocidades: 100 / 200 / 400 ms, moduladas por un
@@ -316,6 +311,10 @@ Singleton {
     // (localizada, p. ej. ~/Imágenes) al arrancar; no se persiste ni se edita.
     property var    wallpaperDirs: [home + "/.config/wallpapers"]
     property string wallpaperCurrent: ""  // último fondo aplicado (ruta absoluta)
+    // Rotación automática: minutos entre cambios de fondo (0 = apagada) y
+    // orden aleatorio o secuencial. La ejecuta Services/Wallpaper.qml.
+    property int    wallpaperAutoMin: 0
+    property bool   wallpaperRandom: true
 
     // Paleta dinámica generada desde el fondo de pantalla activo (tema base
     // "dynamic"). La calcula el extractor de la barra (ver Bar.qml) y se
@@ -346,7 +345,8 @@ Singleton {
     readonly property var _keys: ["themeName", "accentName", "accentColor", "darkMode",
         "uiScale", "animationSpeed", "customAnimationDuration", "barOpacity",
         "popupOpacity", "widgetOpacity",
-        "cornerScale", "barScale", "fontFamily", "monoFontFamily", "fontScale",
+        "cornerScale", "barScale", "barPosition", "barFloating", "panelBackdropDim",
+        "fontFamily", "monoFontFamily", "fontScale",
         "fontAntialias", "fontHinting", "fontHintstyle", "fontRgba", "fontLcdfilter", "fontEmbeddedbitmap",
         "language",
         "caffeine",
@@ -358,6 +358,7 @@ Singleton {
         "weatherShowRain", "weatherShowSun", "weatherShowInBar",
         "notifPopupsEnabled", "notifTimeout", "notifMaxVisible", "notifPosition", "mutedNotificationApps",
         "wallpaperTransition", "wallpaperTransitionDuration", "wallpaperCurrent", "avatarPath",
+        "wallpaperAutoMin", "wallpaperRandom",
         "dynamicPalette", "weatherCache",
         "terminalApp", "terminalFont", "terminalFontSize", "terminalOpacity", "terminalPadding",
         "terminalCursorShape", "terminalCursorBlink", "terminalLineHeight", "terminalTabStyle", "terminalLigatures",
@@ -370,10 +371,11 @@ Singleton {
     // accentColor no aparece: su default es resolvedAccent y reset() lo
     // recalcula al final.
     readonly property var _defaults: ({
-        "themeName": "salesprendes", "accentName": "theme", "darkMode": true,
+        "themeName": "dynamic", "accentName": "theme", "darkMode": true,
         "uiScale": 1.0, "animationSpeed": 2, "customAnimationDuration": 500, "barOpacity": 0.78,
         "popupOpacity": 0.85, "widgetOpacity": 0.55,
         "cornerScale": 1.0, "barScale": 1.0,
+        "barPosition": "top", "barFloating": true, "panelBackdropDim": 0.0,
         "fontFamily": "JetBrainsMono Nerd Font", "monoFontFamily": "JetBrainsMono Nerd Font", "fontScale": 1.0,
         "fontAntialias": true, "fontHinting": true, "fontHintstyle": "hintslight",
         "fontRgba": "rgb", "fontLcdfilter": "lcddefault", "fontEmbeddedbitmap": false,
@@ -389,6 +391,7 @@ Singleton {
         "notifPopupsEnabled": true, "notifTimeout": 5, "notifMaxVisible": 4, "notifPosition": "tr",
         "mutedNotificationApps": [],
         "wallpaperTransition": "fade", "wallpaperTransitionDuration": 1.0, "wallpaperCurrent": "", "avatarPath": "",
+        "wallpaperAutoMin": 0, "wallpaperRandom": true,
         "dynamicPalette": ({}), "weatherCache": ({}),
         "terminalApp": "kitty", "terminalFont": "", "terminalFontSize": 11.5, "terminalOpacity": 0.80,
         "terminalPadding": 12, "terminalCursorShape": "beam", "terminalCursorBlink": true,
@@ -406,11 +409,13 @@ Singleton {
         "cornerScale": [0.0, 2.0],
         "barScale": [0.5, 2.0], "fontScale": [0.5, 2.0], "weatherRefreshMin": [1, 1440], "weatherForecastDays": [3, 7],
         "notifTimeout": [1, 120], "notifMaxVisible": [1, 20],
-        "wallpaperTransitionDuration": [0.1, 5.0]
+        "wallpaperTransitionDuration": [0.1, 5.0],
+        "panelBackdropDim": [0.0, 0.7], "wallpaperAutoMin": [0, 1440]
     })
     readonly property var _enums: ({
         "language": ["en", "es", "ca"],
         "notifPosition": ["tl", "tr", "bl", "br"],
+        "barPosition": ["top", "bottom"],
         "wallpaperTransition": ["fade", "zoom", "slide", "push", "wipe"],
         "fontHintstyle": ["hintnone", "hintslight", "hintmedium", "hintfull"],
         "fontRgba": ["none", "rgb", "bgr", "vrgb", "vbgr"],
@@ -418,7 +423,8 @@ Singleton {
     })
     // Claves que deben ser enteros (se redondean tras recortar).
     readonly property var _intKeys: ["animationSpeed", "customAnimationDuration",
-        "weatherRefreshMin", "weatherForecastDays", "notifTimeout", "notifMaxVisible"]
+        "weatherRefreshMin", "weatherForecastDays", "notifTimeout", "notifMaxVisible",
+        "wallpaperAutoMin"]
 
     // Devuelve un valor válido para 'k', o 'undefined' si hay que descartarlo
     // (se conserva el valor por defecto). Infiere el tipo esperado del default.
@@ -516,7 +522,12 @@ Singleton {
     // contra su default literal siempre da "modificado", así que no cuentan
     // para "solo modificados" / mostrar "Restablecer" — pero 'reset()' sí
     // las restaura (vía _defaults) si de verdad se pulsa el botón.
-    readonly property var _volatileKeys: ({ "screenCapture": true, "wallpaperCurrent": true })
+    // weatherCache y dynamicPalette son cachés de runtime: se rellenan solos
+    // nada más arrancar (el clima al primer refresco, la paleta al analizar el
+    // fondo), así que compararlos contra su default vacío siempre daría
+    // "modificado" y el botón Restablecer quedaba visible permanentemente.
+    readonly property var _volatileKeys: ({ "screenCapture": true, "wallpaperCurrent": true,
+                                            "weatherCache": true, "dynamicPalette": true })
 
     // ¿Difiere esta clave de su valor por defecto? Lo usa el filtro "solo
     // modificados" de la ventana de Ajustes. accentColor queda fuera a
@@ -677,7 +688,7 @@ Singleton {
     // defecto en vez de dejar la app con una paleta inválida.
     function normalizeSavedSettings() {
         if (!hasThemePreset(themeName))
-            themeName = "salesprendes"
+            themeName = "dynamic"
         if (!hasAccentPreset(accentName))
             accentName = "theme"
     }
@@ -731,6 +742,11 @@ Singleton {
             "-- Generated by Quickshell Settings. Edit presets in ~/.config/quickshell/Config/Settings.qml.",
             "",
             "return {",
+            "    -- Interruptor de la plantilla: conf/animations.lua aplica las",
+            "    -- animaciones personalizadas solo si esto es true; en false",
+            "    -- Hyprland se queda con sus animaciones por defecto.",
+            "    animations = " + ((templatesOn && hyprlandThemingEnabled) ? "true" : "false") + ",",
+            "",
             "    accent   = \"rgba(" + accent + "ee)\",",
             "    accent2  = \"rgba(" + accent2 + "ee)\",",
             "    inactive = \"rgba(" + inactive + "cc)\",",
@@ -759,6 +775,19 @@ Singleton {
     // o esta plantilla está desactivada.
     function applyHyprlandThemeNow() {
         if (!hyprlandAvailable || !templatesOn || !hyprlandThemingEnabled)
+            return
+        hyprThemeFile.setText(hyprThemeLua())
+        if (!hyprReload.running)
+            hyprReload.running = true
+    }
+
+    // Al APAGAR la plantilla (o el maestro) no basta con dejar de
+    // sincronizar: se escribe theme.lua una última vez —con animations=false—
+    // y se recarga, para que las animaciones de la plantilla se quiten al
+    // momento. Los colores conservan su último valor: volver de golpe a los
+    // de fábrica de Hyprland a mitad de sesión sería mucho más brusco.
+    function hyprTemplateOffSync() {
+        if (!_loaded || !hyprlandAvailable)
             return
         hyprThemeFile.setText(hyprThemeLua())
         if (!hyprReload.running)
@@ -1047,6 +1076,11 @@ Singleton {
     onWidgetOpacityChanged: scheduleSave()
     onCornerScaleChanged: scheduleSave()
     onBarScaleChanged: scheduleSave()
+    onBarPositionChanged: scheduleSave()
+    onBarFloatingChanged: scheduleSave()
+    onPanelBackdropDimChanged: scheduleSave()
+    onWallpaperAutoMinChanged: scheduleSave()
+    onWallpaperRandomChanged: scheduleSave()
     onFontFamilyChanged: { scheduleSave(); scheduleFontSync() }
     onMonoFontFamilyChanged: { scheduleSave(); scheduleFontSync() }
     onFontScaleChanged: scheduleSave()
@@ -1070,9 +1104,9 @@ Singleton {
     onShowPowerProfileChanged: scheduleSave()
     onCaffeineChanged: scheduleSave()
     onShowCaffeineChanged: scheduleSave()
-    onTemplatesOnChanged: { scheduleSave(); if (templatesOn) { scheduleGtkSync(); scheduleHyprSync() } }
+    onTemplatesOnChanged: { scheduleSave(); if (templatesOn) { scheduleGtkSync(); scheduleHyprSync() } else hyprTemplateOffSync() }
     onGtkThemingEnabledChanged: { scheduleSave(); if (gtkThemingEnabled) scheduleGtkSync() }
-    onHyprlandThemingEnabledChanged: { scheduleSave(); if (hyprlandThemingEnabled) scheduleHyprSync() }
+    onHyprlandThemingEnabledChanged: { scheduleSave(); if (hyprlandThemingEnabled) scheduleHyprSync(); else hyprTemplateOffSync() }
     onTemplatesEnabledChanged: scheduleSave()
     onClock24hChanged: scheduleSave()
     onClockShowSecondsChanged: scheduleSave()
@@ -1205,12 +1239,23 @@ Singleton {
     // Crea la carpeta de destino de theme.lua una sola vez al arrancar (si
     // Hyprland está activo): FileView no crea directorios por sí solo, y
     // sin esto el primer setText() a hyprThemeFile fallaría en silencio si
-    // el usuario nunca ha tenido nada en conf/. applyHyprlandThemeNow()
-    // espera a que termine (onExited), no se dispara en paralelo.
+    // el usuario nunca ha tenido nada en conf/. La escritura espera a que
+    // termine (onExited), no se dispara en paralelo.
+    //
+    // Se escribe con la plantilla en AMBOS estados: si está apagada y
+    // theme.lua no existe (instalación limpia con la plantilla ya
+    // desactivada en settings.json), el respaldo de conf/animations.lua
+    // aplicaría las animaciones personalizadas igualmente — la escritura
+    // con animations=false mantiene la regla "sin plantilla, sin ellas".
     Process {
         id: hyprConfDirMkdir
         command: ["mkdir", "-p", s.home + "/.config/hypr/conf"]
-        onExited: (code, status) => s.applyHyprlandThemeNow()
+        onExited: (code, status) => {
+            if (s.templatesOn && s.hyprlandThemingEnabled)
+                s.applyHyprlandThemeNow()
+            else
+                s.hyprTemplateOffSync()
+        }
     }
 
     Process {

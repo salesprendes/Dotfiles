@@ -39,14 +39,20 @@ PanelWindow {
     property var modelData
     screen: modelData
 
+    // Borde de pantalla configurable (Ajustes → Shell → Disposición de la
+    // barra): arriba o abajo. El margen de separación acompaña al borde activo.
+    readonly property bool atBottom: Settings.barPosition === "bottom"
+
     anchors {
-        top: true
+        top: !bar.atBottom
+        bottom: bar.atBottom
         left: true
         right: true
     }
 
     margins {
-        top: Theme.barTopMargin
+        top: bar.atBottom ? 0 : Theme.barTopMargin
+        bottom: bar.atBottom ? Theme.barTopMargin : 0
         left: Theme.barMargin
         right: Theme.barMargin
     }
@@ -105,7 +111,8 @@ PanelWindow {
     Rectangle {
         id: barBg
         anchors.fill: parent
-        radius: Theme.barRadius
+        // Pegada al borde (no flotante) va sin redondeo: a sangre.
+        radius: Settings.barFloating ? Theme.barRadius : 0
         color: Theme.barBg
         border.width: Theme.hairline
         border.color: Theme.withAlpha(Theme.overlay, 0.35)
@@ -114,8 +121,13 @@ PanelWindow {
         Component.onCompleted: entered = true
         opacity: entered ? 1 : 0
         transform: Translate {
-            y: barBg.entered ? 0 : -(Theme.barHeight + Theme.barTopMargin + Theme.dp(6))
-            Behavior on y { NumberAnimation { duration: 420; easing.type: Easing.OutCubic } }
+            // Entra deslizándose desde su borde: desde arriba si la barra vive
+            // arriba, desde abajo si vive abajo.
+            y: barBg.entered ? 0
+               : (bar.atBottom ? 1 : -1) * (Theme.barHeight + Theme.barTopMargin + Theme.dp(6))
+            // OutQuint: recorre casi todo enseguida y dedica la cola a
+            // asentarse — la barra "aterriza" en vez de frenar.
+            Behavior on y { NumberAnimation { duration: 460; easing.type: Easing.OutQuint } }
         }
         Behavior on opacity { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
 

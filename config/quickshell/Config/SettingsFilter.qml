@@ -23,7 +23,13 @@ Singleton {
     property string query: ""
     property bool modifiedOnly: false
 
-    readonly property string _q: query.trim().toLowerCase()
+    // Pliega para comparar: minúsculas y sin diacríticos, así "posicion"
+    // encuentra "Posición" (y "connexio" → "Connexió" en catalán).
+    function fold(s) {
+        return String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    }
+
+    readonly property string _q: fold(query.trim())
     readonly property bool searching: _q !== ""
     readonly property bool active: searching || modifiedOnly
 
@@ -45,7 +51,7 @@ Singleton {
             return true
         if (modifiedOnly && !(isPersisted(skey) && Settings.isModified(skey)))
             return false
-        if (searching && String(text || "").toLowerCase().indexOf(_q) === -1)
+        if (searching && fold(text).indexOf(_q) === -1)
             return false
         return true
     }
@@ -58,6 +64,6 @@ Singleton {
             return true
         if (modifiedOnly)
             return false
-        return String(title || "").toLowerCase().indexOf(_q) !== -1
+        return fold(title).indexOf(_q) !== -1
     }
 }

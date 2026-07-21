@@ -1,6 +1,5 @@
 //  Fila de acciones de energía: reiniciar · suspender · apagar.
 import QtQuick
-import Quickshell
 import qs.Modules.Greeter
 
 Row {

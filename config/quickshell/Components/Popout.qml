@@ -29,7 +29,9 @@ PanelWindow {
     // descubriendo, y funde con retardo (ver Theme.revealOpacity).
     property real openProgress: 0
     readonly property int openAnimDuration: Settings.popoutAnimationMs
-    readonly property int closeAnimDuration: Settings.popoutAnimationMs
+    // El cierre va un punto más ágil que la apertura: lo que entra se
+    // disfruta, lo que se despide no debe hacerse esperar.
+    readonly property int closeAnimDuration: Math.round(Settings.popoutAnimationMs * 0.8)
     default property alias content: col.data
 
     // Solo en el monitor con foco AL ABRIR (Globals.openedOnMonitor, fijado al
@@ -89,6 +91,15 @@ PanelWindow {
         easing.type: Theme.exitEasing
     }
 
+    // Velo configurable (Ajustes → Tema → Transparencia): oscurece el
+    // escritorio mientras el panel está abierto, acompasado a su apertura.
+    Rectangle {
+        anchors.fill: parent
+        color: "black"
+        opacity: Settings.panelBackdropDim * win.openProgress
+        visible: opacity > 0.003
+    }
+
     // Fondo: click fuera cierra.
     MouseArea {
         anchors.fill: parent
@@ -96,12 +107,17 @@ PanelWindow {
         onClicked: Globals.closeAll()
     }
 
-    // Tarjeta flotante.
+    // Tarjeta flotante. Se ancla al borde donde vive la barra (arriba o
+    // abajo, ver Settings.barPosition): el barrido de apertura siempre
+    // se despliega DESDE la barra.
+    readonly property bool fromBottom: Settings.barPosition === "bottom"
     Rectangle {
         id: card
         width: win.effectiveCardWidth
-        anchors.top: parent.top
+        anchors.top: win.fromBottom ? undefined : parent.top
+        anchors.bottom: win.fromBottom ? parent.bottom : undefined
         anchors.topMargin: Theme.barHeight + Theme.barMargin * 2
+        anchors.bottomMargin: Theme.barHeight + Theme.barMargin * 2
         anchors.horizontalCenter: win.alignCenter ? parent.horizontalCenter : undefined
         anchors.left: (!win.alignCenter && win.alignLeft) ? parent.left : undefined
         anchors.right: (!win.alignCenter && !win.alignLeft) ? parent.right : undefined
@@ -141,7 +157,18 @@ PanelWindow {
             id: contentHost
             width: card.width
             height: card.fullHeight
+            // Fijado al borde de revelado: con la tarjeta creciendo desde
+            // abajo, el contenido se alinea al borde inferior para que el
+            // recorte lo descubra sin arrastrarlo.
+            y: win.fromBottom ? card.height - card.fullHeight : 0
             opacity: Theme.revealOpacity(win.openProgress)
+            // Paralaje sutil: el contenido llega con un pelín de retraso y
+            // se asienta siguiendo el sentido del barrido. Es un transform
+            // (no 'y'): no dispara relayout y se esfuma en el mismo escalar.
+            transform: Translate {
+                y: (1 - Theme.revealOpacity(win.openProgress))
+                   * (win.fromBottom ? 1 : -1) * Theme.dp(10)
+            }
 
             // Contenedor desplazable. Con 'scrollable' activo y contenido más alto que la
             // tarjeta (topada en cardMaxHeight), desplaza en vez de recortar: lo de abajo

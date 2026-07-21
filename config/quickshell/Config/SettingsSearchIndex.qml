@@ -104,15 +104,18 @@ Singleton {
         }
     }
 
+    // Comparación plegada (minúsculas, sin diacríticos), la misma que usa el
+    // filtro de la página activa (SettingsFilter.fold): ambos buscadores
+    // encuentran "Posición" escribiendo "posicion".
     function matches(entry, q) {
-        return (entry.label + " " + entry.desc).toLowerCase().indexOf(q) !== -1
+        return SettingsFilter.fold(entry.label + " " + entry.desc).indexOf(q) !== -1
     }
 
     // Resultados para una consulta, ya filtrados; excludeCat (opcional) deja
     // fuera una categoría (la que ya se ve filtrada debajo, para no
     // duplicarla).
     function search(query, excludeCat) {
-        const q = String(query || "").trim().toLowerCase()
+        const q = SettingsFilter.fold(String(query || "").trim())
         if (q === "")
             return []
         return root.entries.filter(e => (excludeCat === undefined || e.cat !== excludeCat) && root.matches(e, q))

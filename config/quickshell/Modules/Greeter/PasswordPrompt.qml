@@ -1,7 +1,6 @@
 //  PASO 2 · Contraseña. Puntos nítidos + caret propio, botón "ver",
 //  botón Enter, estado de error / indicador de login y selector de sesión.
 import QtQuick
-import Quickshell
 import Quickshell.Widgets
 import qs.Modules.Greeter
 

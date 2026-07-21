@@ -168,7 +168,7 @@ Column {
                         Image {
                             Layout.preferredWidth: Theme.iconSize
                             Layout.preferredHeight: Theme.iconSize
-                            visible: !!entry.modelData.icon && source != ""
+                            visible: !!entry.modelData.icon && source.toString() !== ""
                             source: entry.modelData.icon ?? ""
                             sourceSize.width: Theme.iconSize
                             sourceSize.height: Theme.iconSize

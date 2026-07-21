@@ -242,8 +242,13 @@ PanelWindow {
                                     onToggled: ScreenCapture.showNotify = !ScreenCapture.showNotify
                                 }
                                 ToggleLine {
-                                    label: "Congelar"
-                                    checked: ScreenCapture.freeze
+                                    // Sin hyprpicker, hyprshot omite el congelado en
+                                    // silencio: mejor decirlo que fingir que funciona.
+                                    label: ScreenCapture.hyprpickerAvailable
+                                           ? "Congelar" : "Congelar (falta hyprpicker)"
+                                    enabled: ScreenCapture.hyprpickerAvailable
+                                    opacity: enabled ? 1 : 0.45
+                                    checked: ScreenCapture.freeze && ScreenCapture.hyprpickerAvailable
                                     onToggled: ScreenCapture.freeze = !ScreenCapture.freeze
                                 }
                                 ToggleLine {
