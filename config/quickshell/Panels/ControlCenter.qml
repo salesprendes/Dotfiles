@@ -63,7 +63,7 @@ Popout {
 
         activeFocusOnTab: true
         Layout.fillWidth: true
-        implicitHeight: Theme.dp(38)
+        implicitHeight: Theme.dp(32)
 
         function nudge(delta) {
             const step = 0.05
@@ -103,12 +103,14 @@ Popout {
 
             Text {
                 anchors.left: parent.left
-                anchors.leftMargin: Theme.space10
+                // Margen e icono un punto menores: con la píldora más fina el
+                // glifo tiene que seguir cabiendo dentro del relleno mínimo.
+                anchors.leftMargin: Theme.space8
                 anchors.verticalCenter: parent.verticalCenter
                 text: fs.icon
                 color: Theme.bg
                 font.family: Theme.fontFamily
-                font.pixelSize: Theme.iconSize
+                font.pixelSize: Theme.iconSize - 1
             }
         }
 
@@ -143,15 +145,15 @@ Popout {
         property alias dimmed: sldr.dimmed
         signal moved(real v)
 
-        implicitHeight: scCol.implicitHeight + Theme.space12 * 2
+        implicitHeight: scCol.implicitHeight + Theme.space10 * 2
 
         ColumnLayout {
             id: scCol
             anchors.fill: parent
-            anchors.margins: Theme.space12
+            anchors.margins: Theme.space10
             anchors.leftMargin: Theme.space14
             anchors.rightMargin: Theme.space14
-            spacing: Theme.space8
+            spacing: Theme.space6
 
             RowLayout {
                 Layout.fillWidth: true
@@ -276,27 +278,51 @@ Popout {
                             required property var modelData
                             implicitWidth: Theme.controlS
                             implicitHeight: Theme.controlS
-                            // Crece un punto al pasar el ratón y se encoge al
-                            // pulsar: el anillo de progreso acompaña.
-                            scale: pwMa.pressed ? 0.92 : (pwMa.containsMouse ? 1.1 : 1.0)
-                            Behavior on scale { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+                            // Crece un punto al pasar el ratón (con un leve
+                            // rebote) y se encoge al pulsar: el anillo acompaña.
+                            scale: pwMa.pressed ? 0.9 : (pwMa.containsMouse ? 1.12 : 1.0)
+                            Behavior on scale {
+                                NumberAnimation {
+                                    duration: Theme.animNormal
+                                    easing.type: Easing.OutBack
+                                    easing.overshoot: 2.2
+                                }
+                            }
 
                             // Progreso de "mantener pulsado" (0 → 1). Al llegar a 1 ejecuta.
                             property real holdProgress: 0
                             readonly property int holdDuration: 800
 
+                            // Halo suave del color de la acción: enciende con el
+                            // hover por detrás del disco y del anillo de progreso.
+                            Rectangle {
+                                anchors.fill: parent
+                                anchors.margins: -Theme.dp(3)
+                                radius: height / 2
+                                color: btn.modelData.col
+                                opacity: pwMa.containsMouse ? 0.22 : 0
+                                Behavior on opacity { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
+                            }
+
                             Rectangle {
                                 anchors.fill: parent
                                 radius: height / 2
-                                // En reposo, transparente: la píldora ya agrupa.
-                                color: pwMa.containsMouse ? btn.modelData.col : "transparent"
-                                Behavior on color { ColorAnimation { duration: Theme.animFast } }
+                                // En reposo, el color de la acción con alfa 0 (no
+                                // "transparent", que es negro y ensuciaba el fundido);
+                                // al pulsar, un punto más oscuro para dar respuesta.
+                                color: pwMa.containsMouse
+                                     ? (pwMa.pressed ? Qt.darker(btn.modelData.col, 1.15) : btn.modelData.col)
+                                     : Theme.withAlpha(btn.modelData.col, 0)
+                                Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
                                 Text {
                                     anchors.centerIn: parent
                                     text: btn.modelData.ic
                                     color: pwMa.containsMouse ? Theme.bg : Theme.fgDim
                                     font.family: Theme.fontFamily
                                     font.pixelSize: Theme.iconSize - 1
+                                    // El glifo funde a la vez que el fondo, en vez
+                                    // de saltar de color.
+                                    Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
                                 }
                             }
 
@@ -352,7 +378,7 @@ Popout {
 
     // ── Rejilla de tiles ──
     // Un solo bloque compacto, sin etiquetas: la agrupación la da el orden de
-    // las filas (conexiones, audio, sistema, captura), como en macOS.
+    // las filas (conexiones, audio, sistema), como en macOS.
     ColumnLayout {
         Layout.fillWidth: true
         spacing: Theme.space8
@@ -500,39 +526,13 @@ Popout {
                 onToggled: Settings.darkMode = !Settings.darkMode
             }
         }
-
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: Theme.space8
-            opacity: cc.blockReveal(5)
-            transform: Translate { y: (1 - cc.blockReveal(5)) * Theme.dp(14) }
-            ControlTile {
-                Layout.fillWidth: true
-                icon: "󰄀"
-                title: "Captura"
-                subtitle: ScreenCapture.modeLabel()
-                active: Globals.screenCaptureOpen && !ScreenCapture.videoMode
-                accent: Theme.cyan
-                onToggled: ScreenCapture.openToolbar(false)
-            }
-            ControlTile {
-                Layout.fillWidth: true
-                icon: ScreenCapture.isRecording ? "󰑊" : "󰻂"
-                title: "Grabar"
-                subtitle: ScreenCapture.isRecording ? ScreenCapture.formatElapsed(ScreenCapture.recordingElapsed)
-                                                    : "Pantalla"
-                active: ScreenCapture.isRecording || (Globals.screenCaptureOpen && ScreenCapture.videoMode)
-                accent: ScreenCapture.isRecording ? Theme.red : Theme.accent
-                onToggled: ScreenCapture.openToolbar(true)
-            }
-        }
     }
 
     // ── Pantalla · brillo ──
     SliderCard {
         visible: Brightness.available
-        opacity: cc.blockReveal(6)
-        transform: Translate { y: (1 - cc.blockReveal(6)) * Theme.dp(14) }
+        opacity: cc.blockReveal(5)
+        transform: Translate { y: (1 - cc.blockReveal(5)) * Theme.dp(14) }
         title: I18n.tr("Display")
         valueText: Brightness.percent + "%"
         icon: "󰃟"
@@ -542,8 +542,8 @@ Popout {
 
     // ── Sonido · volumen ──
     SliderCard {
-        opacity: cc.blockReveal(7)
-        transform: Translate { y: (1 - cc.blockReveal(7)) * Theme.dp(14) }
+        opacity: cc.blockReveal(6)
+        transform: Translate { y: (1 - cc.blockReveal(6)) * Theme.dp(14) }
         title: I18n.tr("Sound")
         valueText: cc.audioMuted ? "off" : cc.audioPercent + "%"
         icon: cc.audioMuted ? "󰝟" : "󰕾"

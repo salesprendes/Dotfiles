@@ -1,5 +1,7 @@
 import QtQuick
+import QtQuick.Controls.Basic
 import QtQuick.Layouts
+import Quickshell
 import qs.Components
 import qs.Config
 import qs.Services
@@ -21,6 +23,10 @@ Popout {
         body: historyBody
         list: historyList
         emptyBodyHeight: 120
+        // Tope fijo del cuerpo: el panel nunca pasa de este alto. Con más
+        // contenido, la lista desplaza dentro (con barra de scroll) y al
+        // borrar una entrada las filas de debajo suben a ocupar el hueco;
+        // el panel solo encoge cuando lo que queda ya cabe bajo el tope.
         maxContentHeight: Theme.dp(430)
     }
 
@@ -56,7 +62,16 @@ Popout {
                 : -1
             historyList.currentIndex = panel.selectedIndex
             clearState.refreshBodyHeight()
+            // Remedida cuando la transición de recolocación ha asentado: con
+            // ella en marcha, contentHeight puede no ser aún el definitivo.
+            settleRefresh.restart()
         }
+    }
+
+    Timer {
+        id: settleRefresh
+        interval: Theme.animNormal + 80
+        onTriggered: clearState.refreshBodyHeight()
     }
 
     Timer {
@@ -193,17 +208,58 @@ Popout {
             spacing: Theme.space4
             reuseItems: true
             cacheBuffer: 320
-            model: Clipboard.filteredEntries
+            // ScriptModel (no el array a pelo): calcula el diff entre listas y
+            // emite altas/bajas puntuales, así borrar UNA entrada dispara las
+            // transiciones de recolocación en vez de reconstruir la lista
+            // entera (que además reseteaba el scroll). Las entradas se
+            // identifican por 'raw' (línea única de cliphist) — por valor,
+            // no por identidad: ver el aviso en Clipboard.remove().
+            model: ScriptModel { values: Clipboard.filteredEntries; objectProp: "raw" }
             boundsBehavior: Flickable.StopAtBounds
             currentIndex: panel.selectedIndex
             opacity: clearState.listClearOpacity
             transform: Translate { y: clearState.listClearOffset }
             onContentHeightChanged: clearState.refreshBodyHeight()
 
-            // Al borrar una entrada, las filas de debajo suben deslizándose
-            // en vez de dar un salto seco.
+            // ¿Hay más contenido del que el cuerpo puede llegar a mostrar?
+            // Se compara contra el TOPE de alto (no contra 'height', que va
+            // animándose al remedirse y daría falsos positivos transitorios).
+            readonly property bool scrollable: contentHeight > clearState.maxContentHeight + 1
+            // Carril para la barra: las filas acaban un poco antes de donde
+            // empieza el hilo, y solo cuando la barra existe — sin ella,
+            // ocupan el ancho completo.
+            readonly property real scrollGutter: scrollable ? Theme.dp(10) : 0
+
+            // Barra en modo overlay: un hilo fino SIN pista que flota sobre el
+            // borde derecho, separado un pelo del filo. A diferencia de las
+            // listas planas de Ajustes/desplegables, aquí las filas son
+            // tarjetas con borde: una pista a toda altura leía como una
+            // segunda línea pegada a ellas, y reservarle un carril dejaba las
+            // filas más estrechas que el buscador. Solo existe cuando sobra
+            // contenido, y se atenúa cuando no se usa.
+            ScrollBar.vertical: ScrollBar {
+                id: histScrollBar
+                policy: historyList.scrollable ? ScrollBar.AlwaysOn : ScrollBar.AlwaysOff
+                rightPadding: Theme.space2
+                topPadding: Theme.space2
+                bottomPadding: Theme.space2
+                background: null
+                contentItem: Rectangle {
+                    implicitWidth: Theme.dp(4)
+                    radius: width / 2
+                    color: Theme.accent
+                    opacity: histScrollBar.pressed ? 0.9 : (histScrollBar.active ? 0.6 : 0.35)
+                    Behavior on opacity { NumberAnimation { duration: Theme.animFast } }
+                }
+            }
+
+            // Al borrar (o filtrar) una entrada, las filas recolocadas se
+            // deslizan a su nuevo sitio en vez de dar un salto seco.
+            displaced: Transition {
+                NumberAnimation { properties: "y"; duration: Theme.animNormal; easing.type: Easing.OutCubic }
+            }
             removeDisplaced: Transition {
-                NumberAnimation { properties: "y"; duration: Theme.animFast; easing.type: Easing.OutCubic }
+                NumberAnimation { properties: "y"; duration: Theme.animNormal; easing.type: Easing.OutCubic }
             }
 
             delegate: Rectangle {
@@ -211,11 +267,11 @@ Popout {
                 required property var modelData
                 required property int index
 
-                width: ListView.view.width
+                width: ListView.view.width - ListView.view.scrollGutter
                 implicitHeight: Math.max(Theme.rowL, preview.implicitHeight + Theme.controlXS)
-                x: deleting ? 24 : 0
+                x: deleting ? Theme.dp(28) : 0
                 opacity: deleting ? 0 : 1
-                scale: deleting ? 0.96 : 1
+                scale: deleting ? 0.94 : 1
                 radius: Theme.pillRadius
                 readonly property bool selected: ListView.isCurrentItem
                 color: rowMa.containsMouse || selected ? Theme.surfaceHi : Theme.surface
@@ -223,9 +279,9 @@ Popout {
                 border.color: selected ? Theme.focusRing : Theme.withAlpha(Theme.overlay, 0.28)
                 Behavior on color { ColorAnimation { duration: Theme.animFast } }
                 Behavior on border.color { ColorAnimation { duration: Theme.animFast } }
-                Behavior on x { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
-                Behavior on opacity { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
-                Behavior on scale { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+                Behavior on x { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
+                Behavior on opacity { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
+                Behavior on scale { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
 
                 property bool deleting: false
 
@@ -236,13 +292,15 @@ Popout {
                     deleting = false
                 }
 
-                // Salida: desliza+desvanece y borra la entrada al terminar (no
-                // antes, o se ve el "pop"). La pausa va ligada a animFast para
-                // respetar la velocidad de animación del usuario.
+                // Salida: desliza+desvanece y borra la entrada casi al
+                // terminar — un pelo antes, para que el cierre del hueco
+                // (removeDisplaced) solape con el final del fundido en vez de
+                // ir por turnos. Ligada a animNormal para respetar la
+                // velocidad de animación del usuario.
                 SequentialAnimation {
                     id: deleteAnim
                     ScriptAction { script: row.deleting = true }
-                    PauseAnimation { duration: Theme.animFast }
+                    PauseAnimation { duration: Math.max(0, Theme.animNormal - 40) }
                     ScriptAction { script: Clipboard.remove(row.modelData) }
                 }
 

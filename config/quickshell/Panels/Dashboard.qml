@@ -7,8 +7,8 @@ import qs.Components
 import qs.Config
 import qs.Services
 
-// Panel resumen: clima + sistema arriba, reloj/calendario/anillos en el
-// centro y mini-reproductor abajo (solo si hay reproducción).
+// Panel resumen: reloj/clima y sistema a la izquierda, calendario a la
+// derecha con el mini-reproductor debajo (solo si hay reproducción).
 Popout {
     id: dash
     ns: "qs-dashboard"
@@ -106,7 +106,14 @@ Popout {
                         y: dash.activeIndex * (dash.railTabSize + railTabsCol.spacing)
                         radius: Theme.pillRadius - Theme.space2
                         color: Theme.surfaceHi
-                        Behavior on y { NumberAnimation { duration: dash.tabAnim; easing.type: Easing.OutCubic } }
+                        // Desliza con un leve rebote al asentarse en la pestaña.
+                        Behavior on y {
+                            NumberAnimation {
+                                duration: dash.tabAnim
+                                easing.type: Easing.OutBack
+                                easing.overshoot: 1.1
+                            }
+                        }
                     }
 
                     ColumnLayout {
@@ -182,8 +189,8 @@ Popout {
             Behavior on opacity { NumberAnimation { duration: dash.tabAnim; easing.type: Easing.OutCubic } }
 
             // Dos columnas para ganar anchura sin crecer hacia abajo: a la
-            // izquierda hora/clima, sistema, acciones rápidas y reproductor;
-            // a la derecha el calendario a toda altura.
+            // izquierda hora/clima, el tiempo y sistema; a la derecha el
+            // calendario a toda altura con el mini-reproductor debajo.
             RowLayout {
                 Layout.fillWidth: true
                 spacing: Theme.space10
@@ -196,7 +203,7 @@ Popout {
                     // Hora grande y clima (con sensación y humedad), sobre un
                     // degradado suave de acento que distingue la tarjeta.
                     OverviewCard {
-                        implicitHeight: Theme.dp(92)
+                        implicitHeight: Theme.dp(116)
                         gradient: Gradient {
                             orientation: Gradient.Horizontal
                             // Tinte de acento compuesto sobre la misma base densa que
@@ -221,7 +228,7 @@ Popout {
                                     text: Qt.formatDateTime(clock.date, Settings.clock24h ? "HH:mm" : "hh:mm")
                                     color: Theme.fg
                                     font.family: Theme.fontFamily
-                                    font.pixelSize: Theme.sp(36)
+                                    font.pixelSize: Theme.sp(46)
                                     font.bold: true
                                 }
                                 Text {
@@ -253,13 +260,13 @@ Popout {
                                         text: Weather.icon
                                         color: Theme.yellow
                                         font.family: Theme.fontFamily
-                                        font.pixelSize: Theme.sp(24)
+                                        font.pixelSize: Theme.sp(28)
                                     }
                                     Text {
                                         text: Weather.temp
                                         color: Theme.fg
                                         font.family: Theme.fontFamily
-                                        font.pixelSize: Theme.fontSize + 5
+                                        font.pixelSize: Theme.fontSize + 7
                                         font.bold: true
                                     }
                                 }
@@ -429,7 +436,7 @@ Popout {
 
             // Estado del sistema: CPU, RAM y disco en fila.
                     OverviewCard {
-                        implicitHeight: Theme.dp(92)
+                        implicitHeight: Theme.dp(124)
 
                         RowLayout {
                             anchors.fill: parent
@@ -446,32 +453,26 @@ Popout {
                         }
                     }
 
-                    // Acciones rápidas: conmutadores de un toque + captura.
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: Theme.space8
+                }
 
-                        QuickTile {
-                            glyph: "\u{f009b}"
-                            active: Globals.dnd
-                            onTapped: Globals.dnd = !Globals.dnd
-                        }
-                        QuickTile {
-                            glyph: "\u{f0176}"
-                            active: Settings.caffeine
-                            onTapped: Settings.caffeine = !Settings.caffeine
-                        }
-                        QuickTile {
-                            glyph: "\u{f0594}"
-                            active: Settings.darkMode
-                            onTapped: Settings.darkMode = !Settings.darkMode
-                        }
-                        QuickTile {
-                            glyph: "\u{f0100}"
-                            onTapped: {
-                                Globals.closeAll()
-                                ScreenCapture.openToolbar(false)
-                            }
+                // Columna derecha: el calendario a toda la altura disponible
+                // y, si hay reproducción, el mini-reproductor debajo — así el
+                // hueco bajo el calendario se aprovecha en vez de alargar la
+                // columna izquierda.
+                ColumnLayout {
+                    Layout.fillWidth: false
+                    Layout.preferredWidth: Theme.dp(300)
+                    Layout.fillHeight: true
+                    spacing: Theme.space10
+
+                    OverviewCard {
+                        Layout.fillHeight: true
+                        implicitHeight: calBox.implicitHeight + Theme.space12 * 2
+
+                        Calendar {
+                            id: calBox
+                            anchors { left: parent.left; right: parent.right; verticalCenter: parent.verticalCenter
+                                      leftMargin: Theme.space12; rightMargin: Theme.space12 }
                         }
                     }
 
@@ -555,20 +556,6 @@ Popout {
                     }
                 }
             }
-                }
-
-                // Calendario: columna derecha, a toda la altura disponible.
-                OverviewCard {
-                    Layout.fillWidth: false
-                    Layout.preferredWidth: Theme.dp(300)
-                    Layout.fillHeight: true
-                    implicitHeight: calBox.implicitHeight + Theme.space12 * 2
-
-                    Calendar {
-                        id: calBox
-                        anchors { left: parent.left; right: parent.right; verticalCenter: parent.verticalCenter
-                                  leftMargin: Theme.space12; rightMargin: Theme.space12 }
-                    }
                 }
             }
 
@@ -987,7 +974,15 @@ Popout {
                     implicitWidth: Theme.controlM; implicitHeight: Theme.controlM
                     radius: width / 2
                     color: refMa.containsMouse ? Theme.surfaceHi : Theme.withAlpha(Theme.surface, 0.6)
-                    Behavior on color { ColorAnimation { duration: Theme.animFast } }
+                    Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+                    scale: refMa.pressed ? 0.9 : (refMa.containsMouse ? 1.08 : 1.0)
+                    Behavior on scale {
+                        NumberAnimation {
+                            duration: Theme.animNormal
+                            easing.type: Easing.OutBack
+                            easing.overshoot: 2.2
+                        }
+                    }
                     Text {
                         id: refIcon
                         anchors.centerIn: parent; text: "󰑐"
@@ -1269,8 +1264,8 @@ Popout {
 
             Item {
                 Layout.alignment: Qt.AlignHCenter
-                implicitWidth: Theme.dp(46)
-                implicitHeight: Theme.dp(46)
+                implicitWidth: Theme.dp(60)
+                implicitHeight: Theme.dp(60)
 
                 StatRing {
                     anchors.fill: parent
@@ -1284,7 +1279,7 @@ Popout {
                     text: cell.percent + "%"
                     color: Theme.fg
                     font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSize - 1
+                    font.pixelSize: Theme.fontSize + 1
                     font.bold: true
                 }
             }
@@ -1296,14 +1291,14 @@ Popout {
                     text: cell.glyph
                     color: cell.loadColor
                     font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSize - 2
+                    font.pixelSize: Theme.fontSize - 1
                     Behavior on color { ColorAnimation { duration: Theme.animNormal } }
                 }
                 Text {
                     text: cell.label
                     color: Theme.fgMuted
                     font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSize - 3
+                    font.pixelSize: Theme.fontSize - 2
                     font.bold: true
                 }
             }
@@ -1326,6 +1321,16 @@ Popout {
             font.family: Theme.fontFamily
             font.pixelSize: Theme.iconSize + 3
             Behavior on color { ColorAnimation { duration: dash.tabAnim } }
+            // El glifo crece un punto con rebote bajo el puntero y se encoge
+            // al pulsar, como el resto de iconos del tema.
+            scale: tbMa.pressed ? 0.9 : (tbMa.containsMouse || parent.sel ? 1.12 : 1.0)
+            Behavior on scale {
+                NumberAnimation {
+                    duration: Theme.animNormal
+                    easing.type: Easing.OutBack
+                    easing.overshoot: 2.2
+                }
+            }
         }
         MouseArea {
             id: tbMa
@@ -1496,35 +1501,6 @@ Popout {
         hoverIconColor: Theme.accent
     }
 
-    component QuickTile: Rectangle {
-        property string glyph: ""
-        property bool active: false
-        signal tapped()
-        Layout.fillWidth: true
-        implicitHeight: Theme.dp(46)
-        radius: Theme.dp(14)
-        color: active ? Theme.withAlpha(Theme.accent, Theme.isDark ? 0.24 : 0.3)
-             : qtMa.containsMouse ? Theme.surfaceHi
-             : Theme.withAlpha(Theme.surface, 0.5)
-        Behavior on color { ColorAnimation { duration: Theme.animFast } }
-
-        Text {
-            anchors.centerIn: parent
-            text: parent.glyph
-            color: parent.active ? Theme.accent : Theme.fgDim
-            font.family: Theme.fontFamily
-            font.pixelSize: Theme.iconSize + 6
-            Behavior on color { ColorAnimation { duration: Theme.animFast } }
-        }
-        MouseArea {
-            id: qtMa
-            anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: parent.tapped()
-        }
-    }
-
     component MediaBtn: Rectangle {
         property string glyph: ""
         property int size: Theme.controlM
@@ -1533,9 +1509,20 @@ Popout {
         implicitWidth: size; implicitHeight: size
         radius: width / 2
         opacity: enabled ? 1 : 0.35
-        color: primary ? Theme.accent
+        Behavior on opacity { NumberAnimation { duration: Theme.animFast } }
+        color: primary ? (mbMa.pressed ? Qt.darker(Theme.accent, 1.12) : Theme.accent)
               : (mbMa.containsMouse ? Theme.surfaceHi : Theme.surface)
-        Behavior on color { ColorAnimation { duration: Theme.animFast } }
+        Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+        // Mismo lenguaje que los botones del centro rápido: crece con un leve
+        // rebote al pasar el ratón y se encoge al pulsar.
+        scale: mbMa.pressed ? 0.9 : (mbMa.containsMouse ? 1.1 : 1.0)
+        Behavior on scale {
+            NumberAnimation {
+                duration: Theme.animNormal
+                easing.type: Easing.OutBack
+                easing.overshoot: 2.2
+            }
+        }
         Text {
             anchors.centerIn: parent
             text: parent.glyph
@@ -1543,6 +1530,7 @@ Popout {
                   : (mbMa.containsMouse ? Theme.accent : Theme.fgDim)
             font.family: Theme.fontFamily
             font.pixelSize: parent.primary ? Theme.iconSize + 5 : Theme.iconSize + 1
+            Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
         }
         MouseArea {
             id: mbMa

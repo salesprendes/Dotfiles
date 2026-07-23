@@ -31,7 +31,7 @@ PanelWindow {
     readonly property int openAnimDuration: Settings.popoutAnimationMs
     // El cierre va un punto más ágil que la apertura: lo que entra se
     // disfruta, lo que se despide no debe hacerse esperar.
-    readonly property int closeAnimDuration: Math.round(Settings.popoutAnimationMs * 0.8)
+    readonly property int closeAnimDuration: Math.round(Settings.popoutAnimationMs * 0.7)
     default property alias content: col.data
 
     // Solo en el monitor con foco AL ABRIR (Globals.openedOnMonitor, fijado al
@@ -79,7 +79,7 @@ PanelWindow {
         from: 0
         to: 1
         duration: win.openAnimDuration
-        easing.type: Theme.enterEasing
+        easing.type: Theme.popoutEnterEasing
     }
 
     NumberAnimation {
@@ -88,7 +88,7 @@ PanelWindow {
         property: "openProgress"
         to: 0
         duration: win.closeAnimDuration
-        easing.type: Theme.exitEasing
+        easing.type: Theme.popoutExitEasing
     }
 
     // Velo configurable (Ajustes → Tema → Transparencia): oscurece el

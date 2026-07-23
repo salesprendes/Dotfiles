@@ -179,6 +179,12 @@ Singleton {
     // dedica el resto a asentarse — misma duración, sensación más fluida.
     readonly property int enterEasing: Easing.OutQuint
     readonly property int exitEasing:  Easing.InQuad
+    // Los popouts barren toda la altura de la tarjeta: OutQuint consumia ese
+    // recorrido en los primeros frames y el despliegue parecia un corte.
+    // OutCubic reparte el movimiento por toda la duracion — el barrido se VE
+    // y aun asi aterriza suave.
+    readonly property int popoutEnterEasing: Easing.OutCubic
+    readonly property int popoutExitEasing:  Easing.InCubic
     // Reacomodos (pilas que se recolocan, cambios de pestaña). InOutCubic:
     // arranque y frenada más redondos que InOutQuad, sin cambiar el ritmo.
     readonly property int reflowEasing: Easing.InOutCubic

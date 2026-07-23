@@ -45,6 +45,12 @@ QtObject {
         if (freezeListHeight || showingClearedState)
             return
 
+        // OJO: nada de forceLayout() aquí. Esta función se llama también en
+        // mitad del procesado de un borrado del modelo, y forzar el relayout
+        // síncrono en ese momento coloca las filas en su posición final
+        // ANTES de que la transición de recolocación se prepare — las filas
+        // saltaban en seco. contentHeight se pone al día solo y sus cambios
+        // ya re-lanzan esta medición (onContentHeightChanged en los paneles).
         bodyHeight = itemCount() > 0 ? Math.max(emptyBodyHeight, Math.min(maxContentHeight, list.contentHeight))
                                      : emptyExtent
     }

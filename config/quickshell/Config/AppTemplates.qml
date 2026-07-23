@@ -85,10 +85,15 @@ Singleton {
     // Marca real, guardada en el archivo — independiente del interruptor
     // maestro (Settings.templatesOn). Pausar el maestro NO toca esto: al
     // reactivarlo vuelve a aplicarse exactamente lo que ya estaba marcado.
+    // Sin preferencia guardada, las apps DETECTADAS vienen activadas por
+    // defecto (mismo criterio que GTK/Hyprland, que nacen a true); un
+    // desmarcado explícito del usuario queda guardado y se respeta.
     function isEnabled(id) {
         if (id === "gtk") return Settings.gtkThemingEnabled
         if (id === "hyprland") return Settings.hyprlandThemingEnabled
-        return !!(Settings.templatesEnabled && Settings.templatesEnabled[id])
+        const map = Settings.templatesEnabled || {}
+        if (map[id] === undefined) return isInstalled(id)
+        return !!map[id]
     }
     function setEnabled(id, val) {
         if (id === "gtk") { Settings.gtkThemingEnabled = val; return }

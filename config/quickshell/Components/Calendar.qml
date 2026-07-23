@@ -52,7 +52,10 @@ ColumnLayout {
         for (let i = startWeekday - 1; i >= 0; i--) out.push({ d: prevDim - i, cur: false })
         for (let d = 1; d <= dim; d++) out.push({ d: d, cur: true })
         let next = 1
-        while (out.length % 7 !== 0) out.push({ d: next++, cur: false })
+        // Siempre 6 filas (42 celdas), aunque el mes quepa en 5: la altura del
+        // calendario no cambia entre meses, así el panel no se redimensiona al
+        // navegar y los botones ‹ › no se mueven de debajo del puntero.
+        while (out.length < 42) out.push({ d: next++, cur: false })
         return out
     }
     // Se re-evalúa solo al cambiar viewYear/viewMonth.
@@ -134,10 +137,20 @@ ColumnLayout {
             }
         }
 
-        // Volver a hoy (solo si no estamos en el mes actual).
-        NavBtn { icon: "󰃭"; visible: !cal.onCurrentMonth; onClicked: cal.goToday() }
-        NavBtn { icon: "󰅁"; onClicked: cal.prevMonth() }
-        NavBtn { icon: "󰅂"; onClicked: cal.nextMonth() }
+        // Volver a hoy (solo si no estamos en el mes actual). Funde en vez de
+        // ocultarse: si desapareciera del layout, ‹ y › se desplazarían y el
+        // clic rápido repetido fallaría.
+        NavBtn {
+            icon: "󰃭"
+            opacity: cal.onCurrentMonth ? 0 : 1
+            enabled: !cal.onCurrentMonth
+            Behavior on opacity { NumberAnimation { duration: Theme.animNormal } }
+            onClicked: cal.goToday()
+        }
+        // Responden al instante al pulsar y repiten si se mantiene: se puede
+        // recorrer varios meses sin soltar.
+        NavBtn { icon: "󰅁"; autoRepeat: true; onClicked: cal.prevMonth() }
+        NavBtn { icon: "󰅂"; autoRepeat: true; onClicked: cal.nextMonth() }
     }
 
     // Días de la semana, con la columna de hoy en acento.
@@ -164,6 +177,9 @@ ColumnLayout {
                         font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontSize - 3
                         font.bold: true
+                        // El acento de la columna de hoy entra/sale fundido
+                        // al navegar entre meses.
+                        Behavior on color { ColorAnimation { duration: Theme.animNormal } }
                     }
                 }
             }
@@ -216,6 +232,7 @@ ColumnLayout {
                         font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontSize - 4
                         font.bold: wkCell.index === cal.todayRow
+                        Behavior on color { ColorAnimation { duration: Theme.animNormal } }
                     }
                 }
             }
@@ -235,16 +252,17 @@ ColumnLayout {
                     width: cal.cellW
                     height: cal.cellH
 
-                    // Halo suave alrededor de hoy.
+                    // Halo suave alrededor de hoy: relleno tenue + aro, para
+                    // que el acento irradie en vez de ser solo un borde.
                     Rectangle {
                         visible: dayCell.today
                         anchors.centerIn: parent
                         width: Math.min(parent.width, parent.height) + Theme.space2
                         height: width
                         radius: width / 2
-                        color: "transparent"
+                        color: Theme.withAlpha(Theme.accent, 0.14)
                         border.width: Theme.dp(2)
-                        border.color: Theme.withAlpha(Theme.accent, 0.3)
+                        border.color: Theme.withAlpha(Theme.accent, 0.35)
                     }
 
                     Rectangle {
@@ -252,9 +270,22 @@ ColumnLayout {
                         width: Math.min(parent.width, parent.height) - Theme.space4
                         height: width
                         radius: width / 2
+                        // Crece un punto con un leve rebote bajo el puntero y
+                        // se encoge al pulsar, como los botones del centro rápido.
+                        scale: dayMa.pressed ? 0.88 : (dayMa.containsMouse ? 1.12 : 1.0)
+                        Behavior on scale {
+                            NumberAnimation {
+                                duration: Theme.animNormal
+                                easing.type: Easing.OutBack
+                                easing.overshoot: 2.2
+                            }
+                        }
+                        // En reposo, surfaceHi con alfa 0 (no "transparent",
+                        // que es negro y ensuciaba el fundido del hover).
                         color: dayCell.today ? Theme.accent
-                             : dayMa.containsMouse ? Theme.surfaceHi : "transparent"
-                        Behavior on color { ColorAnimation { duration: Theme.animFast } }
+                             : dayMa.containsMouse ? Theme.surfaceHi
+                             : Theme.withAlpha(Theme.surfaceHi, 0)
+                        Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
 
                         Text {
                             anchors.centerIn: parent
@@ -266,6 +297,8 @@ ColumnLayout {
                             font.family: Theme.fontFamily
                             font.pixelSize: Theme.fontSize - 1
                             font.bold: dayCell.today
+                            // El número funde a la vez que el círculo.
+                            Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
                         }
                     }
 
@@ -295,11 +328,14 @@ ColumnLayout {
         NumberAnimation {
             target: slideT; property: "x"
             from: cal._slideDir * Theme.dp(26); to: 0
-            duration: 240; easing.type: Easing.OutCubic
+            // Atado a la velocidad de animación del tema (antes 240 ms fijos)
+            // y con un leve rebote al asentarse.
+            duration: Theme.animNormal + 40
+            easing.type: Easing.OutBack; easing.overshoot: 1.1
         }
         SequentialAnimation {
-            NumberAnimation { target: daysArea; property: "opacity"; to: 0.35; duration: 60 }
-            NumberAnimation { target: daysArea; property: "opacity"; to: 1; duration: 180; easing.type: Easing.OutCubic }
+            NumberAnimation { target: daysArea; property: "opacity"; to: 0.35; duration: Theme.animFast * 0.6 }
+            NumberAnimation { target: daysArea; property: "opacity"; to: 1; duration: Theme.animNormal - 20; easing.type: Easing.OutCubic }
         }
     }
 

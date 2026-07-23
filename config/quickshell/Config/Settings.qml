@@ -259,8 +259,14 @@ Singleton {
     readonly property int animSlowMs: normalizedAnimationSpeed === 4
         ? customAnimationDuration * 2
         : (_speedFactor === 0 ? 0 : Math.round(animBaseSlow / _speedFactor))
-    // Los paneles usan la duracion "normal": todo abre y cierra en 200 ms.
-    readonly property int popoutAnimationMs: animNormalMs
+    // Los paneles recorren mucha distancia (toda la tarjeta se despliega):
+    // con la duracion "normal" (200 ms) el barrido pasaba tan rapido que no
+    // llegaba a verse. Base propia de 360 ms, modulada por la misma velocidad
+    // global; en modo custom se respeta la duracion elegida tal cual.
+    readonly property int animBasePopout: 360
+    readonly property int popoutAnimationMs: normalizedAnimationSpeed === 4
+        ? customAnimationDuration
+        : (_speedFactor === 0 ? 0 : Math.round(animBasePopout / _speedFactor))
 
     // Cafeína: inhibe la inactividad (no se suspende ni bloquea). Vive aquí, y
     // no en Globals, para que sobreviva a los reinicios del shell: si lo dejaste

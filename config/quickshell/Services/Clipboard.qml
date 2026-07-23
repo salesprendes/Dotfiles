@@ -128,8 +128,19 @@ Singleton {
             "sh", "-c",
             "printf '%s\\n' " + Utils.shellQuote(entry.raw) + " | cliphist delete"
         ])
+        // Baja local optimista: el ScriptModel del panel ve un único borrado
+        // y las filas de debajo suben animadas (el refresh completo de antes
+        // recreaba todos los objetos y la lista se reconstruía de golpe,
+        // perdiendo además la posición de scroll). OJO: comparar por VALOR
+        // ('raw' es la línea única de cliphist), nunca por identidad — el
+        // modelData del delegate llega como copia (QVariantMap) tras pasar
+        // por ScriptModel, así que 'e !== entry' no encontraba nada y el
+        // borrado no llegaba al modelo. El watcher no emite nada con
+        // 'cliphist delete', así que el estado local queda en sincronía.
+        entries = entries.filter(e => e.raw !== entry.raw)
+        count = entries.length
+        updateFilter()
         status = I18n.tr("Entry deleted")
-        refreshLater.restart()
     }
 
     function clear() {
@@ -201,11 +212,5 @@ Singleton {
             else
                 purgeTimer.restart()
         }
-    }
-
-    Timer {
-        id: refreshLater
-        interval: 250
-        onTriggered: clip.refresh()
     }
 }
