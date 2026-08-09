@@ -11,8 +11,6 @@ import qs.Config
 Singleton {
     id: root
 
-    readonly property string home: Quickshell.env("HOME") ?? "/home"
-
     // Carpetas donde buscar fondos (configurable desde ajustes).
     property var searchDirs: Settings.wallpaperDirs
 

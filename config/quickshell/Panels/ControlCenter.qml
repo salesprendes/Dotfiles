@@ -44,8 +44,8 @@ Popout {
 
     // Slider grueso tipo píldora (como el de macOS): el icono va embebido en el
     // relleno y toda la pista es el control. Misma interacción que
-    // Components/Slider.qml: al arrastrar sigue al puntero con un valor local
-    // (dragValue) sin esperar el eco del backend, y flechas para ajuste fino.
+    // Components/Slider.qml vía la lógica compartida SliderDrag: al arrastrar
+    // sigue al puntero sin esperar el eco del backend, y flechas para ajuste fino.
     component FatSlider: Item {
         id: fs
 
@@ -55,25 +55,18 @@ Popout {
         property bool dimmed: false
         signal moved(real v)
 
-        property bool dragging: false
-        property real dragValue: 0
-        readonly property real shownValue: dragging ? dragValue : value
+        SliderDrag { id: fsDrag; control: fs }
         // Interactuando: con el puntero encima, arrastrando o con foco de teclado.
-        readonly property bool engaged: ma.containsMouse || dragging || activeFocus
+        readonly property bool engaged: ma.containsMouse || fsDrag.dragging || activeFocus
 
         activeFocusOnTab: true
         Layout.fillWidth: true
         implicitHeight: Theme.dp(32)
 
-        function nudge(delta) {
-            const step = 0.05
-            fs.moved(Math.max(0, Math.min(1, fs.value + delta * step)))
-        }
-
-        Keys.onLeftPressed: nudge(-1)
-        Keys.onDownPressed: nudge(-1)
-        Keys.onRightPressed: nudge(1)
-        Keys.onUpPressed: nudge(1)
+        Keys.onLeftPressed: fsDrag.nudge(-1)
+        Keys.onDownPressed: fsDrag.nudge(-1)
+        Keys.onRightPressed: fsDrag.nudge(1)
+        Keys.onUpPressed: fsDrag.nudge(1)
         Keys.onEscapePressed: Globals.closeAll()
 
         Rectangle {
@@ -93,12 +86,12 @@ Popout {
             Rectangle {
                 // Ancho mínimo = alto: la píldora del relleno nunca se deforma
                 // y siempre cubre el icono embebido.
-                width: Math.max(track.height, fs.shownValue * track.width)
+                width: Math.max(track.height, fsDrag.shownValue * track.width)
                 height: track.height
                 radius: track.radius
                 color: fs.dimmed ? Theme.withAlpha(Theme.fg, 0.55) : Theme.fg
                 Behavior on color { ColorAnimation { duration: Theme.animFast } }
-                Behavior on width { enabled: !fs.dragging; NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+                Behavior on width { enabled: !fsDrag.dragging; NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
             }
 
             Text {
@@ -122,15 +115,10 @@ Popout {
             hoverEnabled: true
             preventStealing: true
             cursorShape: Qt.PointingHandCursor
-            function update(mx) {
-                const v = Math.max(0, Math.min(1, mx / track.width))
-                fs.dragValue = v
-                fs.moved(v)
-            }
-            onPressed: (m) => { fs.dragging = true; update(m.x) }
-            onPositionChanged: (m) => { if (pressed) update(m.x) }
-            onReleased: fs.dragging = false
-            onCanceled: fs.dragging = false
+            onPressed: (m) => fsDrag.press(m.x / track.width)
+            onPositionChanged: (m) => { if (pressed) fsDrag.update(m.x / track.width) }
+            onReleased: fsDrag.release()
+            onCanceled: fsDrag.release()
         }
     }
 

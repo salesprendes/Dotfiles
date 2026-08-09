@@ -1,46 +1,35 @@
 import QtQuick
-import Quickshell.Services.UPower
 import qs.Components
 import qs.Config
+import qs.Services
 
-// Batería (UPower). Oculta en equipos sin batería.
+// Batería (estado en Services/Battery.qml). Oculta en equipos sin batería.
 Pill {
     id: root
 
-    readonly property var dev: UPower.displayDevice
-    readonly property bool present: dev?.isLaptopBattery ?? false
-    readonly property int percent: Math.round(dev?.percentage ?? 0)
-    readonly property bool charging: (dev?.state ?? 0) === UPowerDeviceState.Charging
-                                     || (dev?.state ?? 0) === UPowerDeviceState.PendingCharge
-
     // Solo en portátiles (con batería) y si está activado en ajustes.
-    visible: present && Settings.showBattery
+    visible: Battery.present && Settings.showBattery
 
     readonly property color levelColor:
-        percent <= 15 ? Theme.red
-      : percent <= 35 ? Theme.yellow
+        Battery.percent <= 15 ? Theme.red
+      : Battery.percent <= 35 ? Theme.yellow
       : Theme.green
 
-    Text {
-        text: root.charging ? ""
-             : root.percent <= 15 ? ""
-             : root.percent <= 35 ? ""
-             : root.percent <= 60 ? ""
-             : root.percent <= 85 ? ""
+    BarGlyph {
+        text: Battery.charging ? ""
+             : Battery.percent <= 15 ? ""
+             : Battery.percent <= 35 ? ""
+             : Battery.percent <= 60 ? ""
+             : Battery.percent <= 85 ? ""
              : ""
-        color: root.charging ? Theme.cyan : root.levelColor
-        font.family: Theme.fontFamily
-        font.pixelSize: Theme.barIconSize
+        color: Battery.charging ? Theme.cyan : root.levelColor
     }
     // El porcentaje hereda el color de nivel cuando queda poca batería, para
     // que el aviso se lea sin mirar el icono.
-    Text {
-        text: root.percent + "%"
-        color: root.charging ? Theme.fgDim
-             : root.percent <= 35 ? root.levelColor
+    BarLabel {
+        text: Battery.percent + "%"
+        color: !Battery.charging && Battery.percent <= 35 ? root.levelColor
              : Theme.fgDim
-        font.family: Theme.fontFamily
-        font.pixelSize: Theme.fontSize
-        Behavior on color { ColorAnimation { duration: Theme.animFast } }
+        animateColor: true
     }
 }

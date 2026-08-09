@@ -15,9 +15,35 @@ Rectangle {
     Layout.fillWidth: true
     implicitHeight: cardCol.implicitHeight + Theme.space16 * 2
     radius: Theme.dp(12)                    // radiusXl
-    color: SettingsPalette.settingsCard
     border.width: Theme.hairline
     border.color: SettingsPalette.settingsBorder
+    // Luz cenital: aclara arriba, oscurece abajo (ver SettingsPalette.cardTop).
+    gradient: Gradient {
+        orientation: Gradient.Vertical
+        GradientStop { position: 0.0; color: SettingsPalette.cardTop }
+        GradientStop { position: 1.0; color: SettingsPalette.cardBottom }
+    }
+
+    // Reflejo del canto superior. Va metido hacia dentro el radio de la
+    // esquina para que muera antes de doblarla, y se desvanece a los lados:
+    // una línea recta a todo lo ancho delataría el truco.
+    Rectangle {
+        anchors.top: parent.top
+        anchors.topMargin: Theme.hairline
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.leftMargin: cardRoot.radius
+        anchors.rightMargin: cardRoot.radius
+        implicitHeight: Theme.hairline
+        height: Theme.hairline
+        gradient: Gradient {
+            orientation: Gradient.Horizontal
+            GradientStop { position: 0.0;  color: "transparent" }
+            GradientStop { position: 0.35; color: SettingsPalette.cardSheen }
+            GradientStop { position: 0.65; color: SettingsPalette.cardSheen }
+            GradientStop { position: 1.0;  color: "transparent" }
+        }
+    }
 
     // La tarjeta desaparece cuando el filtro ha escondido todas sus filas: si
     // no, quedarían cabeceras vacías flotando por la página.
@@ -90,18 +116,29 @@ Rectangle {
                 text: cardRoot.title
                 color: Theme.fg
                 font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontSize + 1
+                font.pixelSize: Theme.fontSize + 2
                 font.bold: true
+                // Un pelo de tracking negativo: a cuerpo grande y en negrita,
+                // la monoespaciada se abre demasiado y el título pierde bloque.
+                font.letterSpacing: -Theme.dp(0.3)
+                elide: Text.ElideRight
             }
         }
 
-        // Filete que separa la cabecera de los controles.
+        // Filete que separa la cabecera de los controles. Nace bajo la
+        // insignia y se disuelve hacia la derecha: marca el sentido de lectura
+        // en vez de cerrar la cabecera con una línea de formulario.
         Rectangle {
             Layout.fillWidth: true
             Layout.topMargin: -Theme.space4
             visible: cardRoot.title !== ""
             implicitHeight: Theme.hairline
-            color: Theme.withAlpha(Theme.overlay, 0.22)
+            gradient: Gradient {
+                orientation: Gradient.Horizontal
+                GradientStop { position: 0.0; color: Theme.withAlpha(Theme.overlay, 0.42) }
+                GradientStop { position: 0.7; color: Theme.withAlpha(Theme.overlay, 0.10) }
+                GradientStop { position: 1.0; color: "transparent" }
+            }
         }
     }
 }

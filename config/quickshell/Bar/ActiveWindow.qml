@@ -48,20 +48,16 @@ Pill {
     }
 
     // Respaldo para aplicaciones sin icono instalable en el tema actual.
-    Text {
+    BarGlyph {
         visible: root.iconSource === ""
         text: "󰎯"
         color: Theme.accent2
-        font.family: Theme.fontFamily
-        font.pixelSize: Theme.barIconSize
     }
 
-    Text {
+    BarLabel {
         Layout.maximumWidth: Theme.dp(220)
         text: root.appName
         elide: Text.ElideRight
         color: Theme.fgDim
-        font.family: Theme.fontFamily
-        font.pixelSize: Theme.fontSize
     }
 }

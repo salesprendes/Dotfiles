@@ -15,8 +15,7 @@ ColumnLayout {
     readonly property var playbackStreams: nodes.filter(n => n.audio && n.isSink && n.isStream)
 
     function deviceName(node) {
-        return node?.description || node?.nickname || node?.properties?.["node.description"]
-            || node?.properties?.["media.name"] || node?.name || "—"
+        return Utils.pwDeviceName(node)
     }
 
     function streamName(node) {
@@ -40,13 +39,7 @@ ColumnLayout {
     function volumeIcon(audio) {
         if (!audio)
             return "󰝟"
-        if (audio.muted || audio.volume <= 0)
-            return "󰝟"
-        if (audio.volume < 0.34)
-            return "󰕿"
-        if (audio.volume < 0.67)
-            return "󰖀"
-        return "󰕾"
+        return Utils.volumeGlyph(audio.volume, audio.muted)
     }
 
     function deviceSort(a, b) {
@@ -68,7 +61,7 @@ ColumnLayout {
         }
     }
 
-    AudioCard {
+    DetailCard {
         title: I18n.tr("Audio Devices")
         icon: "󰕾"
 
@@ -129,46 +122,6 @@ ColumnLayout {
                     stream: modelData
                     title: root.streamName(modelData)
                     accent: Theme.green
-                }
-            }
-        }
-    }
-
-    component AudioCard: Rectangle {
-        id: card
-        property string title: ""
-        property string icon: ""
-        default property alias content: body.data
-
-        Layout.fillWidth: true
-        implicitHeight: body.implicitHeight + Theme.space16 * 2
-        radius: Theme.barRadius
-        color: Theme.withAlpha(Theme.surface, 0.62)
-        border.width: Theme.hairline
-        border.color: Theme.withAlpha(Theme.overlay, 0.34)
-
-        ColumnLayout {
-            id: body
-            anchors.fill: parent
-            anchors.margins: Theme.space14
-            spacing: Theme.space10
-
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: Theme.space8
-                Text {
-                    text: card.icon
-                    color: Theme.accent
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.iconSize + 1
-                }
-                Text {
-                    Layout.fillWidth: true
-                    text: card.title
-                    color: Theme.fg
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSize
-                    font.bold: true
                 }
             }
         }

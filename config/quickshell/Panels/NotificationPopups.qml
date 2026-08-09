@@ -7,6 +7,19 @@ import qs.Services
 
 // Popups transitorios: escuchan NotifService.posted, muestran la notificación
 // en una esquina y se autodescartan a los 5s (pausa al pasar el ratón).
+//
+// La pila NO es un ListView: cada tarjeta es un delegate de Repeater dueño de
+// su propia animación (entrada, salida y cuenta atrás). Con las transiciones
+// nativas del ListView el estado de animación era compartido y dos avisos
+// seguidos se pisaban: la tarjeta que aún entraba pasaba a ser "desplazada" y
+// su transición se cancelaba a medio camino, y al descartar una, el ListView
+// recolocaba el resto contra posiciones que ya tenía cacheadas (de ahí los
+// saltos y los huecos de más).
+//
+// Aquí hay un único origen del movimiento: la altura de ranura (slotHeight) de
+// cada tarjeta. La posición de una tarjeta es la suma de las ranuras de las
+// anteriores, así que desplegar una y empujar a las de abajo son literalmente
+// el MISMO valor animado — no dos animaciones que haya que mantener en sincronía.
 PanelWindow {
     id: popups
 
@@ -14,31 +27,31 @@ PanelWindow {
     screen: modelData
 
     property int nextKey: 1
-    property int activePopupCount: 0
     property var notificationsByKey: ({})
+    // Tarjetas vivas: las que no están saliendo. Manda en los límites (número
+    // máximo y altura de pantalla); las salientes ya no cuentan.
+    property int liveCount: 0
+    // Altura ocupada por la pila en este instante (suma de ranuras animadas).
+    property real contentHeight: 0
 
     // Se ocultan mientras haya cualquier panel abierto (centro rápido,
     // notificaciones, lanzador, etc.); las notificaciones siguen llegando
     // al centro de notificaciones.
-    visible: activePopupCount > 0 && Settings.notifPopupsEnabled && Globals.openPanel === ""
+    visible: popupModel.count > 0 && Settings.notifPopupsEnabled && Globals.openPanel === ""
     color: "transparent"
     exclusionMode: ExclusionMode.Ignore
     // 360 px de ancho de tarjeta.
     implicitWidth: Theme.panelWidth(screen, 360, 300, 0.94)
     // Altura con marca de agua: mientras haya popups vivos la superficie solo
-    // crece; se recompacta al ocultarse. Encogerla en caliente dejaba una
+    // crece; se recompacta al vaciarse. Encogerla en caliente dejaba una
     // banda gris en el hueco de la tarjeta saliente: Hyprland no recalcula la
     // región de blur (ignore_alpha) de una capa redimensionada hasta que
     // llega daño nuevo, y con la escena estática el frost obsoleto se quedaba
     // pegado segundos. La zona sobrante es transparente y sin input (mask).
     property int stackHeight: reservedStackHeight
-    readonly property int liveStackHeight: activePopupCount > 0
-        ? Math.max(reservedStackHeight, list.contentHeight)
-        : reservedStackHeight
-    onLiveStackHeightChanged: if (liveStackHeight > stackHeight)
-        stackHeight = Math.min(maxStackHeight, liveStackHeight)
-    onActivePopupCountChanged: if (activePopupCount === 0) stackHeight = reservedStackHeight
-    implicitHeight: activePopupCount > 0 ? stackHeight : 1
+    onContentHeightChanged: if (contentHeight > stackHeight)
+        stackHeight = Math.min(maxStackHeight, Math.ceil(contentHeight))
+    implicitHeight: popupModel.count > 0 ? stackHeight : 1
 
     // Solo las tarjetas reciben input: sin máscara, toda la superficie
     // (incluida la zona vacía bajo la pila) bloqueaba los clics al escritorio.
@@ -46,8 +59,8 @@ PanelWindow {
     Item {
         id: maskArea
         width: popups.width
-        height: Math.min(list.contentHeight, popups.height)
-        y: popups.pos.charAt(0) === "b" ? popups.height - height : 0
+        height: Math.min(popups.contentHeight, popups.stackHeight)
+        y: popups.fromBottom ? popups.stackHeight - height : 0
     }
 
     WlrLayershell.layer: WlrLayer.Overlay
@@ -56,17 +69,18 @@ PanelWindow {
     // Posición configurable: tr | tl | br | bl.
     readonly property string pos: Settings.notifPosition
 
-    // La tarjeta NO se desliza ni se escala; se
-    // descubre con un barrido de recorte desde el borde de la pantalla al que
-    // está anclada, mientras su contenido funde con retardo y se contra-desplaza
-    // 12 px. La altura reservada evita que la primera notificación de una nueva
-    // tanda nazca recortada por el primer cálculo de layout.
+    // La tarjeta no se desliza ni se escala: se DESPLIEGA desde el borde al que
+    // está anclada la pila (su ranura crece de 0 a su altura) mientras el
+    // contenido funde con retardo y entra 12 px desde el lateral. La altura
+    // reservada evita que la primera notificación de una nueva tanda nazca
+    // recortada por el primer cálculo de layout.
     readonly property int  reservedStackHeight: Theme.dp(190)
     readonly property int  enterDuration:  Theme.animNormal
     readonly property int  exitDuration:   Theme.animNormal
     readonly property int  reflowDuration: Theme.animNormal
-    // Hacia qué lado barre: el del borde al que está anclada la pila.
-    readonly property bool fromRight: pos.charAt(1) === "r"
+    // Hacia qué lado entra el contenido y a qué borde se ancla la pila.
+    readonly property bool fromRight:  pos.charAt(1) === "r"
+    readonly property bool fromBottom: pos.charAt(0) === "b"
     readonly property int  contentSlide: Theme.dp(12)   // kContentSlideOffset
     readonly property int  gap: Theme.dp(8)             // kGap
     anchors {
@@ -111,77 +125,120 @@ PanelWindow {
         map[key] = n
         notificationsByKey = map
 
-        activePopupCount++
-        popupModel.insert(0, { "key": key })
-        trimVisiblePopups()
+        liveCount++
+        popupModel.insert(0, { "key": key })   // el Repeater crea el delegate aquí
+        trimVisible()
+        enforceStackHeight()
     }
 
     function clear() {
-        activePopupCount = 0
         popupModel.clear()
         notificationsByKey = ({})
+        liveCount = 0
+        contentHeight = 0
+        stackHeight = reservedStackHeight
     }
 
-    // Al descartar se quita del modelo INMEDIATAMENTE: el ListView mantiene vivo
-    // el delegate mientras corre su transición 'remove' (la tarjeta se repliega)
-    // y a la vez desplaza las de debajo con 'removeDisplaced'. Antes se animaba
-    // la ALTURA de la fila hasta 0 para colapsar el hueco: eso rompía el binding
-    // height→implicitHeight y descolocaba las posiciones que el ListView tiene
-    // cacheadas, dejando un hueco de más entre la primera y la segunda tarjeta.
-    // La notificación en sí se olvida (_forgetQueue/forgetTimer) cuando la
-    // transición de salida ha terminado: el delegate sigue vivo hasta
-    // entonces y necesita seguir leyéndola para pintarse mientras se repliega.
-    function removeKey(key) {
+    // Marca la tarjeta como saliente y lanza SU animación de salida. Sigue en
+    // el modelo (y por tanto la ventana sigue visible) hasta que la animación
+    // termina y _drop() la retira de verdad: quitarla del modelo al instante
+    // hacía que la última notificación se esfumara sin animación, porque la
+    // ventana se ocultaba en el mismo frame.
+    function dismiss(key) {
+        const row = rowFor(key)
+        if (!row || row.dying)
+            return
+        row.dying = true
+        liveCount = Math.max(0, liveCount - 1)
+        row.startExit()
+    }
+
+    function rowFor(key) {
+        for (let i = 0; i < rep.count; i++) {
+            const it = rep.itemAt(i)
+            if (it && it.key === key)
+                return it
+        }
+        return null
+    }
+
+    // La más antigua de las vivas (índice 0 = la más nueva).
+    function oldestLive() {
+        for (let i = rep.count - 1; i >= 0; i--) {
+            const it = rep.itemAt(i)
+            if (it && !it.dying)
+                return it
+        }
+        return null
+    }
+
+    function _drop(key) {
         for (let i = 0; i < popupModel.count; i++) {
             if (popupModel.get(i).key === key) {
                 popupModel.remove(i)
-                activePopupCount = Math.max(0, activePopupCount - 1)
-                _forgetQueue.push(key)
-                forgetTimer.restart()
-                return
+                break
             }
         }
+        const map = Object.assign({}, notificationsByKey)
+        delete map[key]
+        notificationsByKey = map
+        relayout()
+        if (popupModel.count === 0)
+            stackHeight = reservedStackHeight
     }
 
-    property var _forgetQueue: []
-    Timer {
-        id: forgetTimer
-        interval: popups.exitDuration + 120
-        onTriggered: {
-            const map = Object.assign({}, popups.notificationsByKey)
-            for (const k of popups._forgetQueue)
-                delete map[k]
-            popups.notificationsByKey = map
-            popups._forgetQueue = []
+    // Coloca cada tarjeta a la distancia acumulada del borde anclado. Se llama
+    // cada vez que una ranura cambia de altura (al desplegarse, al cerrarse o
+    // al crecer una imagen que carga tarde), así el empuje de las de abajo va
+    // exactamente al ritmo de la que lo provoca.
+    function relayout() {
+        let off = 0
+        for (let i = 0; i < rep.count; i++) {
+            const it = rep.itemAt(i)
+            if (!it)
+                continue
+            it.offset = off
+            off += it.slotHeight
         }
+        contentHeight = off
     }
 
     // Alto útil de pantalla para la pila (descontando los márgenes de barra).
     readonly property int maxStackHeight: (screen ? screen.height : 1080)
                                           - margins.top - margins.bottom
 
+    // Altura que ocuparán las vivas cuando terminen de desplegarse. Se mide con
+    // la altura natural (no con la ranura animada) para que los límites de
+    // abajo no dependan del fotograma en que se consulten.
+    function liveHeight() {
+        let h = 0
+        for (let i = 0; i < rep.count; i++) {
+            const it = rep.itemAt(i)
+            if (it && !it.dying)
+                h += it.naturalHeight
+        }
+        return h
+    }
+
     // Límite en píxeles, complementario al límite en número (notifMaxVisible):
     // si la pila no cabe en pantalla (muchas tarjetas altas), se descartan las
     // más antiguas —con su animación de salida— hasta que la de abajo nunca
     // quede recortada por el borde. Siempre se conserva al menos la más nueva.
     function enforceStackHeight() {
-        let h = list.contentHeight
-        while (popupModel.count > 1 && h > maxStackHeight) {
-            const idx = popupModel.count - 1
-            const it = list.itemAtIndex(idx)
-            h -= it ? it.height : Theme.dp(128)   // la fila ya incluye su hueco
-            removeKey(popupModel.get(idx).key)
+        while (liveCount > 1 && liveHeight() > maxStackHeight) {
+            const oldest = oldestLive()
+            if (!oldest)
+                break
+            dismiss(oldest.key)
         }
     }
 
-    function trimVisiblePopups() {
-        let visibleCount = popupModel.count
-        while (visibleCount > Settings.notifMaxVisible) {
-            for (let i = popupModel.count - 1; i >= 0; i--) {
-                removeKey(popupModel.get(i).key)
-                visibleCount--
+    function trimVisible() {
+        while (liveCount > Settings.notifMaxVisible) {
+            const oldest = oldestLive()
+            if (!oldest)
                 break
-            }
+            dismiss(oldest.key)
         }
     }
 
@@ -189,121 +246,167 @@ PanelWindow {
         id: popupModel
     }
 
-    // Pila en ListView. La salida se anima dentro del propio delegate
-    // (desvanecer → colapsar hueco), así nunca hay solapes ni bandas.
-    ListView {
-        id: list
-        width: parent.width
-        height: popups.activePopupCount > 0
-            ? Math.max(contentHeight, popups.reservedStackHeight)
-            : 1
-        y: popups.pos.charAt(0) === "b" ? Math.max(0, parent.height - height) : 0
-        interactive: false
-        clip: false
-        // El hueco entre tarjetas va dentro de cada delegate (implicitHeight =
-        // tarjeta + gap), no en 'spacing'.
-        spacing: 0
-        model: popupModel
-        // Según la posición: arriba → la nueva encima; abajo → la nueva debajo.
-        verticalLayoutDirection: popups.pos.charAt(0) === "b" ? ListView.BottomToTop
-                                                              : ListView.TopToBottom
-        // Cubre tanto la entrada de tarjetas nuevas como los crecimientos
-        // tardíos (imágenes/cuerpos que se expanden al medirse).
-        onContentHeightChanged: popups.enforceStackHeight()
+    Item {
+        id: stack
+        width: popups.width
+        height: popups.stackHeight
 
-        // Transiciones NATIVAS del ListView. La altura del delegate no se toca
-        // nunca (era la causa del hueco de más): sólo se anima 'reveal' —el
-        // barrido— y la 'y' de las que se recolocan. Al entrar una tarjeta, las
-        // de debajo bajan; al salir, suben para cerrar el hueco mientras la que
-        // se va se repliega encima.
-        add: Transition {
-            NumberAnimation { property: "reveal"; from: 0; to: 1
-                duration: popups.enterDuration; easing.type: Theme.enterEasing }
-        }
-        addDisplaced: Transition {
-            NumberAnimation { properties: "y"; duration: popups.reflowDuration
-                easing.type: Theme.reflowEasing }
-        }
-        remove: Transition {
-            NumberAnimation { property: "reveal"; to: 0
-                duration: popups.exitDuration; easing.type: Theme.reflowEasing }
-        }
-        removeDisplaced: Transition {
-            NumberAnimation { properties: "y"; duration: popups.reflowDuration
-                easing.type: Theme.reflowEasing }
-        }
-        displaced: Transition {
-            NumberAnimation { properties: "y"; duration: popups.reflowDuration
-                easing.type: Theme.reflowEasing }
-        }
+        Repeater {
+            id: rep
+            model: popupModel
 
-        delegate: Item {
-            id: row
-            required property int key
-            readonly property var notification: popups.notificationFor(key)
+            delegate: Item {
+                id: row
+                required property int key
+                readonly property var notification: popups.notificationFor(key)
 
-            width: ListView.view.width
-            implicitHeight: card.implicitHeight + popups.gap
-            height: implicitHeight
-            clip: false
+                // Distancia al borde anclado; la asigna relayout().
+                property real offset: 0
 
-            // Escalar único del movimiento: de él salen recorte, contra-posición
-            // y opacidad del contenido. Lo animan las transiciones del ListView.
-            property real reveal: 0
-            // Cuenta atrás del timeout, 1 → 0. Alimenta la barra de la tarjeta.
-            property real progress: 1
+                // Apertura de la ranura, 0 (plegada) → 1 (desplegada). Es EL
+                // escalar que animan la entrada y la salida.
+                property real openProgress: 0
+                readonly property real naturalHeight: card.implicitHeight + popups.gap
+                // Altura a la que se abre: sigue a la natural con animación
+                // propia, para que una imagen que carga tarde no dé un salto.
+                property real targetHeight: 0
+                property bool ready: false
+                onNaturalHeightChanged: {
+                    targetHeight = naturalHeight
+                    popups.enforceStackHeight()
+                }
+                Behavior on targetHeight {
+                    enabled: row.ready
+                    NumberAnimation {
+                        duration: popups.reflowDuration
+                        easing.type: Theme.reflowEasing
+                    }
+                }
 
-            // Ventana de recorte: crece desde el borde anclado. La tarjeta de
-            // dentro se contra-posiciona (x: -viewport.x) para quedarse quieta:
-            // no se desliza, se descubre.
-            Item {
-                id: viewport
-                width: Math.round(row.width * row.reveal)
-                height: card.implicitHeight
-                x: popups.fromRight ? row.width - width : 0
+                // Altura que esta tarjeta ocupa en la pila (tarjeta + hueco), y
+                // de la que sale la posición de todas las de debajo. Es un
+                // BINDING, no un valor con destino congelado: animar la altura
+                // "hasta N" fijaba N al arrancar, cuando la tarjeta aún no se
+                // había medido (implicitHeight 0), y la ranura se quedaba en
+                // unos pocos píxeles —tarjeta invisible— hasta que la animación
+                // terminaba. Como producto de apertura × altura, recoge la
+                // medida real en cuanto llega, esté la animación donde esté.
+                readonly property real slotHeight: openProgress * targetHeight
+                // 0 → 1: opacidad y desplazamiento lateral del contenido.
+                property real reveal: 0
+                // Cuenta atrás del timeout, 1 → 0. Alimenta la barra de la tarjeta.
+                property real progress: 1
+                // Saliendo: ya no cuenta para los límites y no se la vuelve a tocar.
+                property bool dying: false
+
+                width: stack.width
+                height: slotHeight
                 clip: true
+                y: popups.fromBottom ? popups.stackHeight - offset - height : offset
+
+                onSlotHeightChanged: popups.relayout()
 
                 NotificationItem {
                     id: card
                     width: row.width
-                    x: -viewport.x
+                    // Anclada al borde de la pila: al crecer la ranura la
+                    // tarjeta se descubre desde ese borde, no se desliza.
+                    y: popups.fromBottom ? row.height - implicitHeight : 0
                     notif: row.notification
                     popupMode: true
                     showProgress: true
                     progress: row.progress
+                    // Al salir se funde la tarjeta entera; al entrar se descubre
+                    // opaca con el propio despliegue (fundirla también en la
+                    // entrada la hacía "aparecer dos veces").
+                    opacity: row.dying ? Theme.revealOpacity(row.reveal) : 1
                     // El fondo se descubre opaco; sólo el contenido funde (con
-                    // retardo) y se contra-desplaza contra el sentido del barrido.
+                    // retardo) y entra desde el lateral anclado.
                     contentOpacity: Theme.revealOpacity(row.reveal)
                     contentOffsetX: popups.contentSlide * (1 - row.reveal)
                                     * (popups.fromRight ? 1 : -1)
-                    onCloseRequested: popups.removeKey(row.key)
+                    onCloseRequested: popups.dismiss(row.key)
                 }
-            }
 
-            // Cuenta atrás lineal y en TIEMPO REAL: se excluye a propósito
-            // del multiplicador de velocidad de animaciones, porque mide
-            // segundos de verdad, no es decoración. Arranca ya, sin esperar
-            // al barrido — se lanza al crear el toast.
-            Component.onCompleted: countdown.start()
+                // Entrada: la ranura se despliega desde el borde —empujando a
+                // las de abajo en el mismo gesto— mientras el contenido funde.
+                ParallelAnimation {
+                    id: enterAnim
+                    NumberAnimation {
+                        target: row; property: "openProgress"
+                        from: 0; to: 1
+                        duration: popups.enterDuration; easing.type: Theme.enterEasing
+                    }
+                    NumberAnimation {
+                        target: row; property: "reveal"
+                        from: 0; to: 1
+                        duration: popups.enterDuration; easing.type: Theme.enterEasing
+                    }
+                }
 
-            NumberAnimation {
-                id: countdown
-                target: row; property: "progress"; from: 1; to: 0
-                duration: Math.max(1000, Settings.notifTimeout * 1000)
-                easing.type: Easing.Linear
-                onFinished: popups.removeKey(row.key)
-            }
+                // Salida: primero se va la tarjeta, y el hueco se cierra justo
+                // detrás; las de abajo suben al ritmo exacto de ese cierre.
+                SequentialAnimation {
+                    id: exitAnim
+                    ParallelAnimation {
+                        NumberAnimation {
+                            target: row; property: "reveal"; to: 0
+                            duration: Math.round(popups.exitDuration * 0.75)
+                            easing.type: Theme.exitEasing
+                        }
+                        SequentialAnimation {
+                            PauseAnimation { duration: Math.round(popups.exitDuration * 0.35) }
+                            NumberAnimation {
+                                target: row; property: "openProgress"; to: 0
+                                duration: popups.exitDuration
+                                easing.type: Theme.reflowEasing
+                            }
+                        }
+                    }
+                    ScriptAction { script: popups._drop(row.key) }
+                }
 
-            // El ratón encima pausa la cuenta atrás (y con ella la barra, que se
-            // queda congelada donde iba). HoverHandler en vez de un MouseArea
-            // por debajo: los handlers no se roban el hover entre sí, así que
-            // sigue contando como "encima" aunque el puntero esté sobre la X o
-            // sobre un botón de acción, que tienen su propio MouseArea.
-            HoverHandler { id: hov }
-            readonly property bool hovered: hov.hovered
-            onHoveredChanged: {
-                if (row.hovered) countdown.pause()
-                else             countdown.resume()
+                function startExit() {
+                    enterAnim.stop()
+                    countdown.stop()
+                    exitAnim.start()
+                }
+
+                Component.onCompleted: {
+                    // Altura inicial sin animar (la anima 'openProgress'); a
+                    // partir de aquí, los cambios tardíos sí se suavizan.
+                    targetHeight = naturalHeight
+                    ready = true
+                    popups.relayout()
+                    enterAnim.start()
+                    // Cuenta atrás lineal y en TIEMPO REAL: se excluye a
+                    // propósito del multiplicador de velocidad de animaciones,
+                    // porque mide segundos de verdad, no es decoración. Arranca
+                    // ya, sin esperar al despliegue.
+                    countdown.start()
+                }
+
+                NumberAnimation {
+                    id: countdown
+                    target: row; property: "progress"; from: 1; to: 0
+                    duration: Math.max(1000, Settings.notifTimeout * 1000)
+                    easing.type: Easing.Linear
+                    onFinished: popups.dismiss(row.key)
+                }
+
+                // El ratón encima pausa la cuenta atrás (y con ella la barra, que se
+                // queda congelada donde iba). HoverHandler en vez de un MouseArea
+                // por debajo: los handlers no se roban el hover entre sí, así que
+                // sigue contando como "encima" aunque el puntero esté sobre la X o
+                // sobre un botón de acción, que tienen su propio MouseArea.
+                HoverHandler { id: hov }
+                readonly property bool hovered: hov.hovered
+                onHoveredChanged: {
+                    if (row.dying)
+                        return
+                    if (row.hovered) countdown.pause()
+                    else             countdown.resume()
+                }
             }
         }
     }

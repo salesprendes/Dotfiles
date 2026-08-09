@@ -3,8 +3,9 @@ set -Eeuo pipefail
 
 SCRIPT_NAME=salesprendes
 
-BASE_PACKAGES=(base-devel git linux-firmware quickshell qt6-declarative hyprland ttf-jetbrains-mono-nerd cliphist wl-clipboard hyprlock polkit hyprpolkitagent procps-ng nano networkmanager bluez bluez-utils pipewire wireplumber pipewire-pulse playerctl upower rtkit hypridle power-profiles-daemon xdg-desktop-portal xdg-desktop-portal-gtk xdg-desktop-portal-hyprland xdg-user-dirs hyprshot net-tools imv wireless-regdb nautilus kitty zsh zsh-autosuggestions zsh-syntax-highlighting starship fastfetch uwsm eza fzf zoxide bat satty gpu-screen-recorder mpv accountsservice)
+BASE_PACKAGES=(base-devel git linux-firmware quickshell qt6-declarative hyprland ttf-jetbrains-mono-nerd cliphist wl-clipboard hyprlock polkit procps-ng nano networkmanager bluez bluez-utils pipewire wireplumber pipewire-pulse playerctl upower rtkit hypridle power-profiles-daemon xdg-desktop-portal xdg-desktop-portal-gtk xdg-desktop-portal-hyprland xdg-user-dirs hyprshot net-tools imv wireless-regdb nautilus kitty zsh zsh-autosuggestions zsh-syntax-highlighting starship fastfetch uwsm eza fzf zoxide bat satty gpu-screen-recorder mpv accountsservice qt6ct qt5ct)
 AMD_PACKAGES=(mesa vulkan-radeon mesa-utils vulkan-tools libva-utils lib32-mesa lib32-vulkan-radeon libva-mesa-driver lib32-libva-mesa-driver)
+INTEL_PACKAGES=(vulkan-intel mesa intel-media-driver libva-intel-driver)
 
 BRIGHTNESSCTL_PACKAGES=(brightnessctl)
 DDC_PACKAGES=(ddcutil)
@@ -295,7 +296,33 @@ has_amd_graphics() {
     done
 
     if command -v lspci >/dev/null 2>&1; then
-      lspci -nn | grep -Ei 'VGA|3D|Display' | grep -qi 'AMD|ATI' && return 0
+      lspci -nn | grep -Ei 'VGA|3D|Display' | grep -Eqi 'AMD|ATI' && return 0
+    fi
+
+    return 1
+  )
+}
+
+has_intel_graphics() {
+  (
+    shopt -s nullglob
+    local vendor dev driver
+    for vendor in /sys/class/drm/card*/device/vendor; do
+      [[ -r "${vendor}" ]] || continue
+      [[ "$(cat "${vendor}")" == "0x8086" ]] || continue
+
+      # Solo la GPU integrada: el kernel la expone vía i915/xe.
+      dev="${vendor%/vendor}"
+      if [[ -e "${dev}/driver" ]]; then
+        driver="$(basename "$(readlink -f "${dev}/driver")")"
+        [[ "${driver}" == "i915" || "${driver}" == "xe" ]] && return 0
+      else
+        return 0
+      fi
+    done
+
+    if command -v lspci >/dev/null 2>&1; then
+      lspci -nn | grep -Ei 'VGA|3D|Display' | grep -qi 'Intel' && return 0
     fi
 
     return 1
@@ -330,6 +357,14 @@ install_amd_stack() {
     install_group "gráficos AMD" "${AMD_PACKAGES[@]}"
   else
     ok "Gráficos AMD no detectados; se omite ese grupo"
+  fi
+}
+
+install_intel_stack() {
+  if has_intel_graphics; then
+    install_group "gráficos Intel" "${INTEL_PACKAGES[@]}"
+  else
+    ok "Gráficos Intel no detectados; se omite ese grupo"
   fi
 }
 
@@ -1075,6 +1110,7 @@ main() {
   configure_wireless_regdom
   install_brightness_stack
   install_amd_stack
+  install_intel_stack
   enable_services
   post_install
   install_dotfiles

@@ -191,4 +191,10 @@ ColumnLayout {
             onMoved: (v) => Settings.panelBackdropDim = Math.round(v * 100) / 100
         }
     }
+
+    // Plantillas de aplicaciones: ya no es una sección aparte. Lo que hace es
+    // llevar ESTE tema a GTK, al terminal, a Hyprland…, así que su sitio es el
+    // final de Tema, después de haberlo elegido — no una parada suelta en la
+    // navegación a la que había que saber ir.
+    TemplatesPage { Layout.fillWidth: true }
 }

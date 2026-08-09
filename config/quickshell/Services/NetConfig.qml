@@ -93,7 +93,6 @@ Singleton {
     // solo se usan en los modales de configuración IP, y IpSettingsModal ya
     // llama a refreshAll() en cada apertura. Ahorra 2 nmcli por arranque.
     function refreshAll() { ifaceProc.running = true; wifiProc.running = true }
-    function refreshConnections() { refreshAll() }   // alias compat
 
     // Interfaz seleccionada
     function selectIface(dev) {

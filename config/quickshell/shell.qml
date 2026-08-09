@@ -7,7 +7,6 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
-import Quickshell.Services.UPower
 import qs.Background
 import qs.Bar
 import qs.Config
@@ -88,34 +87,18 @@ ShellRoot {
         onTriggered: shell.updateStartupWallpaperReady()
     }
 
-    // Aviso de batería baja (solo portátiles): 15% aviso normal, 5% crítico.
-    // Un aviso por cruce de umbral; se rearma al volver a subir del 20%
-    // (cargador conectado). En equipos sin batería no hace nada.
-    readonly property var battery: UPower.displayDevice
-    property int _battStage: 0
-    readonly property real _battPct:
-        (battery && battery.isLaptopBattery) ? battery.percentage : -1
-    readonly property bool _battDischarging:
-        battery ? battery.state === UPowerDeviceState.Discharging : false
-    on_BattPctChanged: _battCheck()
-    on_BattDischargingChanged: _battCheck()
-    function _battCheck() {
-        if (_battPct < 0 || !_battDischarging) {
-            if (_battPct >= 20) _battStage = 0
-            return
-        }
-        if (_battPct <= 5 && _battStage < 2) {
-            _battStage = 2
-            Quickshell.execDetached(["notify-send", "-u", "critical", "-a", "Quickshell",
-                I18n.tr("Critical battery"),
-                I18n.tr("%1% remaining — plug in now").arg(Math.round(_battPct))])
-        } else if (_battPct <= 15 && _battStage < 1) {
-            _battStage = 1
-            Quickshell.execDetached(["notify-send", "-u", "normal", "-a", "Quickshell",
-                I18n.tr("Low battery"),
-                I18n.tr("%1% remaining").arg(Math.round(_battPct))])
-        }
-    }
+    // El aviso de batería baja vive en Services/Battery.qml. Referenciarlo
+    // aquí crea el singleton al arrancar, aunque ningún widget lo consulte.
+    readonly property var _battery: Battery.device
+
+    // Lo mismo con las plantillas de apps (Qt, terminal, starship, btop…).
+    // AppTemplates reaplica lo activo en su Component.onCompleted, pero es un
+    // singleton y QML no crea un singleton hasta que ALGUIEN lo toca: sus
+    // únicas menciones estaban en la página de Ajustes, así que las plantillas
+    // no se escribían hasta abrir Ajustes ▸ Tema una vez por sesión. Cambiar
+    // de tema y reiniciar el shell dejaba el terminal y compañía con los
+    // colores viejos hasta pasar por esa página.
+    readonly property int _templatesAlive: AppTemplates.registry.length
 
     // Control por IPC / atajos de teclado:
     //   qs ipc call panel controlcenter | notifications | clipboard | dnd | close
@@ -178,46 +161,11 @@ ShellRoot {
             + '{ namespace = "qs-popups" }, no_anim = true })'])
     }
     Component.onCompleted: applyLayerRules()
-    // Fondo de pantalla: una ventana por monitor en la capa Background,
-    // con la transición de imagen gestionada desde QML.
-    Variants {
-        model: Quickshell.screens
-        delegate: Backdrop {
-            Component.onCompleted: shell.startupBackdropReadyCount++
-        }
-    }
 
     // Plugin autocontenido: carrusel para elegir fondo (Super+W → IPC
     // "carousel"). No modifica ningún componente; solo se instancia aquí.
     WallpaperCarousel {
         Component.onCompleted: shell.startupCarouselReady = true
-    }
-
-    // Splash breve al entrar en la sesión; tapa el salto visual entre TTY y
-    // escritorio mientras aparecen la barra y el fondo. Se usa solo al arrancar:
-    // tras la animación se libera (active=false) para no dejar una ventana por
-    // monitor residente toda la sesión.
-    Variants {
-        model: Quickshell.screens
-        delegate: LazyLoader {
-            id: splashL
-            required property var modelData
-            active: true
-            StartupSplash {
-                modelData: splashL.modelData
-                loadProgress: shell.startupLoadProgress
-                ready: shell.startupLoadReady
-                onFinished: splashL.active = false
-            }
-        }
-    }
-
-    // Una instancia de Bar por pantalla conectada.
-    Variants {
-        model: Quickshell.screens
-        delegate: Bar {
-            Component.onCompleted: shell.startupBarReadyCount++
-        }
     }
 
     // Ranura de panel con cierre animado: se construye al abrir ('open') y se
@@ -231,9 +179,9 @@ ShellRoot {
         activeAsync: open || closing
     }
 
-    // Paneles emergentes (Globals controla su visibilidad desde los widgets
-    // de la barra). Un único recorrido de pantallas aloja las seis ranuras de
-    // cada monitor; Popout anima al nacer vía Component.onCompleted.
+    // Todo lo que existe por monitor vive en este único recorrido de
+    // pantallas: fondo, splash de arranque, barra, ranuras de paneles,
+    // píldora de grabación, OSD de volumen y popups de notificación.
     Variants {
         model: Quickshell.screens
         delegate: Scope {
@@ -247,6 +195,35 @@ ShellRoot {
             readonly property bool showsPanels: Globals.openedOnMonitor === ""
                                                 || scr.modelData.name === Globals.openedOnMonitor
 
+            // Fondo de pantalla en la capa Background, con la transición de
+            // imagen gestionada desde QML.
+            Backdrop {
+                modelData: scr.modelData
+                Component.onCompleted: shell.startupBackdropReadyCount++
+            }
+
+            // Splash breve al entrar en la sesión; tapa el salto visual entre
+            // TTY y escritorio mientras aparecen la barra y el fondo. Tras la
+            // animación se libera (active=false) para no dejar una ventana por
+            // monitor residente toda la sesión.
+            LazyLoader {
+                id: splashL
+                active: true
+                StartupSplash {
+                    modelData: scr.modelData
+                    loadProgress: shell.startupLoadProgress
+                    ready: shell.startupLoadReady
+                    onFinished: splashL.active = false
+                }
+            }
+
+            Bar {
+                modelData: scr.modelData
+                Component.onCompleted: shell.startupBarReadyCount++
+            }
+
+            // Paneles emergentes (Globals controla su visibilidad desde los
+            // widgets de la barra); Popout anima al nacer vía Component.onCompleted.
             PanelSlot {
                 id: ccS
                 open: Globals.controlCenterOpen && scr.showsPanels
@@ -277,6 +254,15 @@ ShellRoot {
                 open: Globals.dashboardOpen && scr.showsPanels
                 Dashboard { modelData: scr.modelData; onVisibleChanged: dashS.closing = visible }
             }
+
+            // La píldora de grabación solo existe mientras se graba.
+            LazyLoader {
+                active: ScreenCapture.isRecording
+                RecordingPill { modelData: scr.modelData }
+            }
+
+            VolumeOSD { modelData: scr.modelData }
+            NotificationPopups { modelData: scr.modelData }
         }
     }
 
@@ -289,48 +275,26 @@ ShellRoot {
         ScreenCaptureToolbar { onVisibleChanged: sctS.closing = visible }
     }
 
-    // La píldora de grabación solo existe mientras se graba.
-    Variants {
-        model: Quickshell.screens
-        delegate: LazyLoader {
-            id: pillL
-            required property var modelData
-            active: ScreenCapture.isRecording
-            RecordingPill { modelData: pillL.modelData }
-        }
-    }
+    // Agente de polkit: el diálogo de "se requiere autenticación". Único para
+    // toda la sesión (no por pantalla) y sin coste mientras nadie lo pide.
+    PolkitDialog {}
+
     // Ventana de ajustes: una sola ventana real (toplevel de Hyprland). Carga
     // perezosa: no se construye hasta el primer uso y se libera al cerrarla.
     LazyLoader {
         active: Globals.settingsOpen
         Settings {}
     }
-    // Modales de red: casos raros, se construyen solo al abrirse y se liberan al
-    // cerrar.
-    Variants {
-        model: Quickshell.screens
-        delegate: LazyLoader {
-            id: wifiL
-            required property var modelData
-            active: Net.promptNetwork !== null
-            WifiPasswordModal { modelData: wifiL.modelData }
-        }
+
+    // Modales de red: casos raros, se construyen solo al abrirse y se liberan
+    // al cerrar. UNA sola instancia en el monitor con foco: piden teclado
+    // exclusivo, y una copia por monitor eran N ventanas compitiendo por él.
+    LazyLoader {
+        active: Net.promptNetwork !== null
+        WifiPasswordModal { modelData: Globals.focusedScreen() }
     }
-    Variants {
-        model: Quickshell.screens
-        delegate: LazyLoader {
-            id: ipL
-            required property var modelData
-            active: Net.ipConfigOpen
-            IpSettingsModal { modelData: ipL.modelData }
-        }
-    }
-    Variants {
-        model: Quickshell.screens
-        delegate: VolumeOSD {}
-    }
-    Variants {
-        model: Quickshell.screens
-        delegate: NotificationPopups {}
+    LazyLoader {
+        active: Net.ipConfigOpen
+        IpSettingsModal { modelData: Globals.focusedScreen() }
     }
 }

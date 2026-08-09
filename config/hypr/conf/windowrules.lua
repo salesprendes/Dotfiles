@@ -31,12 +31,3 @@ hl.window_rule({
 
     float = true,
 })
-
--- Diálogo de polkit: popup centrado, con el borde/acento global de conf/theme.lua.
-hl.window_rule({
-    name  = "polkit-auth-dialog",
-    match = { class = "^(hyprpolkitagent)$" },
-
-    float     = true,
-    center    = true
-})

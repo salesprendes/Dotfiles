@@ -9,11 +9,10 @@ Pill {
     active: Globals.launcherOpen
     onClicked: Globals.toggleLauncher()
 
-    Text {
+    BarGlyph {
         text: SysMon.distroGlyph
         color: Globals.launcherOpen ? Theme.accent2 : Theme.accent
-        font.family: Theme.fontFamily
-        font.pixelSize: Theme.barIconSize + 3
-        Behavior on color { ColorAnimation { duration: Theme.animFast } }
+        sizeDelta: 3
+        animateColor: true
     }
 }

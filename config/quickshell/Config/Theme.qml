@@ -67,27 +67,11 @@ Singleton {
     // escala = densityScale × uiScale.
     // Lado corto: 1080p→~1.00 · 1440p→~1.15 · 4K→~1.45
     readonly property real uiScale: Settings.uiScale
-    readonly property real densityScale: autoDensity()
+    // Densidad automática compartida con el greeter: fórmula en
+    // Config/Scale.qml, instanciada aquí (ver el comentario de ese archivo).
+    readonly property Scale _densitySource: Scale {}
+    readonly property real densityScale: _densitySource.density
     readonly property real scale: clamp(uiScale * densityScale, 0.7, 1.9)
-
-    // Densidad automática a partir del monitor de mayor resolución.
-    // El binding se recalcula al conectar/desconectar o cambiar de modo
-    // (lee Quickshell.screens y width/height, que QML rastrea).
-    function autoDensity() {
-        const list = Quickshell.screens
-        let best = null
-        for (let i = 0; i < list.length; i++) {
-            const sc = list[i]
-            if (!sc)
-                continue
-            if (!best || (sc.width * sc.height) > (best.width * best.height))
-                best = sc
-        }
-        if (!best)
-            return 1.0
-        const shortSide = Math.min(best.width || 1920, best.height || 1080)
-        return clamp(1.0 + (shortSide / 1080 - 1) * 0.45, 0.85, 1.6)
-    }
 
     function dp(value) {
         return Math.round(value * scale)
@@ -170,6 +154,12 @@ Singleton {
     readonly property int   animFast:   Settings.animFastMs
     readonly property int   animNormal: Settings.animNormalMs
     readonly property int   animSlow:   Settings.animSlowMs
+    // Periodo de los indicadores CONTINUOS (spinners, latidos). Sigue la
+    // velocidad de Ajustes como el resto, pero con un suelo: a diferencia de
+    // una transición, un bucle no puede durar 0 — giraría sin avanzar,
+    // repintando cada frame. Con la velocidad por defecto da los 1200 ms de
+    // siempre.
+    readonly property int   animLoop:   Math.max(900, animSlow * 3)
 
     // Todo lo que aparece entra con OutQuint y sale con InQuad, en
     // animNormal. No hay muelles ni curvas bezier: se anima un único

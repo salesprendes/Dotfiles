@@ -28,10 +28,6 @@ Singleton {
     property string currentProfileKey: keyFor(profile)
     onProfileChanged: currentProfileKey = keyFor(profile)
 
-    readonly property bool isSaver: currentProfileKey === "power-saver"
-    readonly property bool isBalanced: currentProfileKey === "balanced"
-    readonly property bool isPerformance: currentProfileKey === "performance"
-
     function keyFor(p) {
         if (p === PowerProfile.PowerSaver || Number(p) === Number(PowerProfile.PowerSaver))
             return "power-saver"

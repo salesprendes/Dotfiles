@@ -21,84 +21,48 @@ ColumnLayout {
         return arr
     }
 
-    // Caja única.
-    Rectangle {
-        Layout.fillWidth: true
-        implicitHeight: body.implicitHeight + Theme.space16 * 2
-        radius: Theme.barRadius
-        color: Theme.withAlpha(Theme.surface, 0.62)
-        border.width: Theme.hairline
-        border.color: Theme.withAlpha(Theme.overlay, 0.34)
-
-        ColumnLayout {
-            id: body
-            anchors.fill: parent
-            anchors.margins: Theme.space14
-            spacing: Theme.space10
-
-            // Cabecera: icono + estado + spinner de búsqueda + interruptor.
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: Theme.space8
-                Text {
-                    text: BT.icon
-                    color: Theme.accent2
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.iconSize + 1
-                }
-                Text {
-                    Layout.fillWidth: true
-                    text: !BT.available ? I18n.tr("No adapter")
-                        : !BT.enabled ? I18n.tr("Bluetooth disabled")
-                        : BT.discovering ? I18n.tr("Searching...")
-                        : I18n.tr("Bluetooth enabled")
-                    color: Theme.fg
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSize
-                    font.bold: true
-                    elide: Text.ElideRight
-                }
-                Text {
-                    visible: BT.enabled && BT.discovering
-                    text: "󰑮"
-                    color: Theme.accent2
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSize
-                    RotationAnimation on rotation {
-                        from: 0; to: 360; duration: 1200
-                        loops: Animation.Infinite; running: parent.visible
-                    }
-                }
-                Switch {
-                    checked: BT.enabled
-                    onColor: Theme.accent2
-                    onToggled: BT.toggle()
-                }
+    // Caja única: DetailCard compartida con cabecera de estado + extras.
+    DetailCard {
+        icon: BT.icon
+        iconColor: Theme.accent2
+        title: !BT.available ? I18n.tr("No adapter")
+            : !BT.enabled ? I18n.tr("Bluetooth disabled")
+            : BT.discovering ? I18n.tr("Searching...")
+            : I18n.tr("Bluetooth enabled")
+        header: [
+            Spinner {
+                visible: BT.enabled && BT.discovering
+                color: Theme.accent2
+            },
+            Switch {
+                checked: BT.enabled
+                onColor: Theme.accent2
+                onToggled: BT.toggle()
             }
+        ]
 
-            // Estado vacío.
-            Text {
-                Layout.fillWidth: true
-                Layout.topMargin: Theme.space2
-                Layout.bottomMargin: Theme.space2
-                visible: BT.enabled && root.devList.length === 0
-                horizontalAlignment: Text.AlignHCenter
-                text: BT.discovering ? I18n.tr("Searching...") : I18n.tr("No devices found")
-                color: Theme.fgMuted
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontSize - 2
-            }
+        // Estado vacío.
+        Text {
+            Layout.fillWidth: true
+            Layout.topMargin: Theme.space2
+            Layout.bottomMargin: Theme.space2
+            visible: BT.enabled && root.devList.length === 0
+            horizontalAlignment: Text.AlignHCenter
+            text: BT.discovering ? I18n.tr("Searching...") : I18n.tr("No devices found")
+            color: Theme.fgMuted
+            font.family: Theme.fontFamily
+            font.pixelSize: Theme.fontSize - 2
+        }
 
-            // Lista de dispositivos (capada + scroll), conectado resaltado.
-            ListView {
-                Layout.fillWidth: true
-                Layout.preferredHeight: Math.min(Theme.dp(248), contentHeight)
-                visible: BT.enabled && root.devList.length > 0
-                clip: true
-                spacing: Theme.space6
-                model: root.devList
-                delegate: BtRow {}
-            }
+        // Lista de dispositivos (capada + scroll), conectado resaltado.
+        ListView {
+            Layout.fillWidth: true
+            Layout.preferredHeight: Math.min(Theme.dp(248), contentHeight)
+            visible: BT.enabled && root.devList.length > 0
+            clip: true
+            spacing: Theme.space6
+            model: root.devList
+            delegate: BtRow {}
         }
     }
 

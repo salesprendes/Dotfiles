@@ -69,7 +69,12 @@ ColumnLayout {
         spacing: Theme.space8
         Repeater {
             model: cr.visibleSwatches
-            delegate: Rectangle {
+            // El color es la muestra: sin caja alrededor. Cada color es un
+            // disco desnudo y la selección se marca con un anillo del propio
+            // color que se ciñe al elegirlo. Encajar cada color en un botón
+            // gris hacía que la fila se leyera como seis controles en vez de
+            // como una paleta, y el gris competía con lo único que importa.
+            delegate: Item {
                 id: swatch
                 required property var modelData
                 readonly property string swatchName: cr._nameOf(modelData)
@@ -77,46 +82,65 @@ ColumnLayout {
                 readonly property color swatchColor: (modelData && modelData.color !== undefined) ? modelData.color
                                                    : ((modelData !== undefined && modelData !== null) ? modelData : Theme.accent)
                 readonly property bool sel: cr._isSel(modelData)
-                width: Theme.dp(76)
-                height: Theme.dp(62)
-                radius: Theme.pillRadius
-                color: sel ? Qt.rgba(swatchColor.r, swatchColor.g, swatchColor.b, 0.22)
-                           : swMa.containsMouse ? SettingsPalette.settingsHover : SettingsPalette.settingsControl
-                border.width: sel ? Math.max(1, Theme.dp(2)) : Theme.hairline
-                border.color: sel ? swatchColor : SettingsPalette.settingsBorder
-                scale: swMa.containsMouse ? 1.08 : 1
-                Behavior on color { ColorAnimation { duration: Theme.animFast } }
-                Behavior on scale { NumberAnimation { duration: Theme.animFast } }
+                width: Theme.dp(64)
+                height: Theme.dp(60)
 
                 ColumnLayout {
                     anchors.centerIn: parent
                     spacing: Theme.space4
 
-                    Rectangle {
+                    Item {
                         Layout.alignment: Qt.AlignHCenter
-                        implicitWidth: Theme.controlS
-                        implicitHeight: Theme.controlS
-                        radius: height / 2
-                        color: swatch.swatchColor
-                        border.width: Theme.hairline
-                        border.color: Theme.withAlpha(Theme.fg, 0.45)
-                        Text {
+                        implicitWidth: Theme.dp(38)
+                        implicitHeight: Theme.dp(38)
+
+                        // Anillo de "elegido": entra ciñéndose desde fuera.
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: width / 2
+                            color: "transparent"
+                            border.width: Math.max(1, Theme.dp(2))
+                            border.color: swatch.swatchColor
+                            opacity: swatch.sel ? 1 : 0
+                            scale: swatch.sel ? 1 : 1.18
+                            Behavior on opacity { NumberAnimation { duration: Theme.animFast } }
+                            Behavior on scale {
+                                NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutBack; easing.overshoot: 2.2 }
+                            }
+                        }
+
+                        Rectangle {
                             anchors.centerIn: parent
-                            visible: swatch.sel
-                            text: "󰄬"; color: Theme.bg
-                            font.family: Theme.fontFamily; font.pixelSize: Theme.iconSize - 2
+                            implicitWidth: Theme.controlM
+                            implicitHeight: Theme.controlM
+                            radius: height / 2
+                            color: swatch.swatchColor
+                            border.width: Theme.hairline
+                            border.color: Theme.withAlpha(Theme.fg, 0.30)
+                            scale: swMa.containsMouse ? 1.09 : 1
+                            Behavior on scale { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+                            // La marca no es decorativa: distingue el elegido
+                            // sin depender solo del color.
+                            Text {
+                                anchors.centerIn: parent
+                                visible: swatch.sel
+                                text: "󰄬"; color: Theme.bg
+                                font.family: Theme.fontFamily; font.pixelSize: Theme.iconSize - 2
+                            }
                         }
                     }
 
                     Text {
-                        Layout.preferredWidth: swatch.width - Theme.space8
+                        Layout.preferredWidth: swatch.width - Theme.space4
                         Layout.alignment: Qt.AlignHCenter
                         text: I18n.tr(swatch.swatchLabel)
                         color: swatch.sel ? Theme.fg : Theme.fgMuted
                         font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontSize - 5
+                        font.bold: swatch.sel
                         horizontalAlignment: Text.AlignHCenter
                         elide: Text.ElideRight
+                        Behavior on color { ColorAnimation { duration: Theme.animFast } }
                     }
                 }
 

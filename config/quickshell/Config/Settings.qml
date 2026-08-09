@@ -348,34 +348,17 @@ Singleton {
     // Persistencia
     property bool _loaded: false
 
-    readonly property var _keys: ["themeName", "accentName", "accentColor", "darkMode",
-        "uiScale", "animationSpeed", "customAnimationDuration", "barOpacity",
-        "popupOpacity", "widgetOpacity",
-        "cornerScale", "barScale", "barPosition", "barFloating", "panelBackdropDim",
-        "fontFamily", "monoFontFamily", "fontScale",
-        "fontAntialias", "fontHinting", "fontHintstyle", "fontRgba", "fontLcdfilter", "fontEmbeddedbitmap",
-        "language",
-        "caffeine",
-        "templatesOn", "gtkThemingEnabled", "hyprlandThemingEnabled", "templatesEnabled",
-        "showTray", "showSysmon", "showBattery", "showClipboard", "showNotifications", "showPowerProfile", "showCaffeine",
-        "clock24h", "clockShowSeconds", "clockShowDate",
-        "weatherEnabled", "weatherLocation", "weatherMetric", "weatherRefreshMin",
-        "weatherShowForecast", "weatherForecastDays", "weatherShowDetails", "weatherShowWind",
-        "weatherShowRain", "weatherShowSun", "weatherShowInBar",
-        "notifPopupsEnabled", "notifTimeout", "notifMaxVisible", "notifPosition", "mutedNotificationApps",
-        "wallpaperTransition", "wallpaperTransitionDuration", "wallpaperCurrent", "avatarPath",
-        "wallpaperAutoMin", "wallpaperRandom",
-        "dynamicPalette", "weatherCache",
-        "terminalApp", "terminalFont", "terminalFontSize", "terminalOpacity", "terminalPadding",
-        "terminalCursorShape", "terminalCursorBlink", "terminalLineHeight", "terminalTabStyle", "terminalLigatures",
-        "screenCapture"]
+    // Claves persistidas: las de _defaults más accentColor, que no tiene
+    // default estático (se deriva de accentName; ver comentario de _defaults).
+    readonly property var _keys: Object.keys(_defaults).concat(["accentColor"])
 
-    // Valores por defecto de todas las claves persistidas (_keys).
-    // Copiados de las declaraciones de arriba (no capturados en runtime: tras
-    // load() las propiedades ya tienen los valores del JSON). reset() itera
-    // este mapa; al añadir un ajuste, añádelo a la declaración, a _keys y aquí.
-    // accentColor no aparece: su default es resolvedAccent y reset() lo
-    // recalcula al final.
+    // Valores por defecto de todas las claves persistidas — la única lista a
+    // mantener: _keys se deriva de aquí y el guardado automático se conecta en
+    // Component.onCompleted recorriéndola. Copiados de las declaraciones de
+    // arriba (no capturados en runtime: tras load() las propiedades ya tienen
+    // los valores del JSON). reset() itera este mapa; al añadir un ajuste,
+    // añádelo a la declaración y aquí. accentColor no aparece: su default es
+    // resolvedAccent y reset() lo recalcula al final.
     readonly property var _defaults: ({
         "themeName": "dynamic", "accentName": "theme", "darkMode": true,
         "uiScale": 1.0, "animationSpeed": 2, "customAnimationDuration": 500, "barOpacity": 0.78,
@@ -601,82 +584,186 @@ Singleton {
 
     // ── Paleta dinámica ──────────────────────────────────────────────────────
 
-    // HSL (h 0-360, s/l 0-1) → "#rrggbb".
-    function _hslHex(h, sat, l) {
-        h = ((h % 360) + 360) % 360
-        const c = (1 - Math.abs(2 * l - 1)) * sat
-        const x = c * (1 - Math.abs((h / 60) % 2 - 1))
-        const m = l - c / 2
-        let r = 0, g = 0, b = 0
-        if (h < 60)       { r = c; g = x }
-        else if (h < 120) { r = x; g = c }
-        else if (h < 180) { g = c; b = x }
-        else if (h < 240) { g = x; b = c }
-        else if (h < 300) { r = x; b = c }
-        else              { r = c; b = x }
-        const hx = (n) => Math.max(0, Math.min(255, Math.round((n + m) * 255)))
-            .toString(16).padStart(2, "0")
-        return "#" + hx(r) + hx(g) + hx(b)
+    // El color se trabaja en OKLCh (claridad · croma · tono), no en HSL. En HSL
+    // la "L" NO es claridad percibida: un amarillo y un azul con la misma L se
+    // ven con brillos muy distintos, así que una paleta a claridades fijas
+    // salía luminosa con unos fondos y apagada con otros, y había que elegir
+    // números de compromiso que no quedaban bien con ninguno. En OKLab la
+    // claridad sí es perceptual: cada papel de la paleta (fondo, superficie,
+    // texto, acento) conserva el MISMO peso visual salga el tono que salga.
+    // Es lo que hacen los generadores tipo matugen con CAM16/HCT, en cuarenta
+    // líneas y sin dependencias.
+
+    function _srgbToLinear(v) {
+        return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)
+    }
+    function _linearToSrgb(v) {
+        return v <= 0.0031308 ? 12.92 * v : 1.055 * Math.pow(v, 1 / 2.4) - 0.055
     }
 
-    // Recibe los píxeles RGBA de una miniatura del fondo, vota el tono
-    // dominante (ponderando saturación y luz media) y publica la paleta.
-    function computeDynamicPalette(data) {
-        const buckets = new Array(36).fill(0)
-        let voted = 0
-        for (let i = 0; i + 3 < data.length; i += 4) {
-            const r = data[i] / 255, g = data[i + 1] / 255, b = data[i + 2] / 255
-            const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn
-            if (d < 0.05)
-                continue
-            const l = (mx + mn) / 2
-            const sat = d / (1 - Math.abs(2 * l - 1))
-            let h
-            if (mx === r) h = ((g - b) / d) % 6
-            else if (mx === g) h = (b - r) / d + 2
-            else h = (r - g) / d + 4
-            h = h * 60; if (h < 0) h += 360
-            const w = sat * (1 - Math.abs(l - 0.5))
-            buckets[Math.floor(h / 10) % 36] += w
-            voted += w
+    function _rgbToOklab(r, g, b) {
+        const R = _srgbToLinear(r), G = _srgbToLinear(g), B = _srgbToLinear(b)
+        const l = Math.cbrt(0.4122214708 * R + 0.5363325363 * G + 0.0514459929 * B)
+        const m = Math.cbrt(0.2119034982 * R + 0.6806995451 * G + 0.1073969566 * B)
+        const s = Math.cbrt(0.0883024619 * R + 0.2817188376 * G + 0.6299787005 * B)
+        return {
+            L: 0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s,
+            a: 1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s,
+            b: 0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s
         }
-        let best = 0
-        for (let i = 1; i < 36; i++)
-            if (buckets[i] > buckets[best]) best = i
-        // Imagen casi monocroma: paleta sobria en vez de inventar color.
-        const sat = voted > 8 ? 0.55 : voted > 2 ? 0.4 : 0.22
-        setDynamicPalette(_paletteFromSeed(best * 10 + 5, sat))
     }
 
-    // Deriva del tono semilla la paleta completa (oscura + variantes claras).
-    // Los colores semánticos conservan su matiz reconocible pero se acercan
-    // un 15% al tono base para que armonicen con el fondo.
-    function _paletteFromSeed(hue, sat) {
+    function _oklabToRgb(L, a, b) {
+        const l_ = L + 0.3963377774 * a + 0.2158037573 * b
+        const m_ = L - 0.1055613458 * a - 0.0638541728 * b
+        const s_ = L - 0.0894841775 * a - 1.2914855480 * b
+        const l = l_ * l_ * l_, m = m_ * m_ * m_, s = s_ * s_ * s_
+        return {
+            r: _linearToSrgb( 4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s),
+            g: _linearToSrgb(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s),
+            b: _linearToSrgb(-0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s)
+        }
+    }
+
+    // OKLCh → "#rrggbb". Si el color pedido no cabe en sRGB se le baja el
+    // croma (búsqueda binaria) hasta que quepa, en vez de recortar cada canal
+    // por separado: recortar canales TUERCE el tono, y un acento que vira al
+    // recortarse deja de armonizar con la paleta de la que salió.
+    function _okHex(L, C, hueDeg) {
+        const hr = hueDeg * Math.PI / 180
+        const ca = Math.cos(hr), sa = Math.sin(hr)
+        const fits = (c) => c.r >= -0.0005 && c.r <= 1.0005
+                         && c.g >= -0.0005 && c.g <= 1.0005
+                         && c.b >= -0.0005 && c.b <= 1.0005
+        let rgb = _oklabToRgb(L, C * ca, C * sa)
+        if (!fits(rgb)) {
+            let lo = 0, hi = C
+            for (let i = 0; i < 14; i++) {
+                const mid = (lo + hi) / 2
+                if (fits(_oklabToRgb(L, mid * ca, mid * sa))) lo = mid
+                else hi = mid
+            }
+            rgb = _oklabToRgb(L, lo * ca, lo * sa)
+        }
+        const hx = (v) => Math.max(0, Math.min(255, Math.round(v * 255)))
+            .toString(16).padStart(2, "0")
+        return "#" + hx(rgb.r) + hx(rgb.g) + hx(rgb.b)
+    }
+
+    // Recibe los píxeles RGBA de una miniatura del fondo y saca de ella el tono
+    // y el croma con los que se construye la paleta.
+    function computeDynamicPalette(data) {
+        const N = 36                       // cubos de 10°
+        const vx = new Array(N).fill(0)    // componentes del voto circular
+        const vy = new Array(N).fill(0)
+        const vw = new Array(N).fill(0)
+        let chromaSum = 0, weightSum = 0, colored = 0, total = 0
+
+        for (let i = 0; i + 3 < data.length; i += 4) {
+            if (data[i + 3] < 128)
+                continue
+            total++
+            const lab = _rgbToOklab(data[i] / 255, data[i + 1] / 255, data[i + 2] / 255)
+            const C = Math.sqrt(lab.a * lab.a + lab.b * lab.b)
+            if (C < 0.02)                  // gris: no tiene tono que votar
+                continue
+            colored++
+            // Pesa por croma y por cercanía a la media luz: lo casi negro y lo
+            // casi blanco apenas definen el carácter cromático de una imagen.
+            const lw = Math.max(0, 1 - Math.pow((lab.L - 0.60) / 0.45, 2))
+            const w = C * lw
+            if (w <= 0)
+                continue
+            let h = Math.atan2(lab.b, lab.a) * 180 / Math.PI
+            if (h < 0) h += 360
+            const k = Math.floor(h / 10) % N
+            const hr = h * Math.PI / 180
+            vx[k] += Math.cos(hr) * w
+            vy[k] += Math.sin(hr) * w
+            vw[k] += w
+            chromaSum += C * w
+            weightSum += w
+        }
+
+        // Fondo sin color (blanco y negro, escala de grises): paleta sobria
+        // en un azul frío neutro, en vez de inventarse un tono a partir del
+        // ruido de compresión.
+        if (weightSum <= 0) {
+            setDynamicPalette(_paletteFromSeed(250, 0.02))
+            return
+        }
+
+        // El pico se busca sumando cada cubo con sus dos vecinos: un tono
+        // repartido a caballo entre dos cubos perdía antes contra otro peor
+        // pero mejor centrado, por puro azar de dónde cae la frontera.
+        let best = 0, bestScore = -1
+        for (let i = 0; i < N; i++) {
+            const s = vw[(i + N - 1) % N] + vw[i] + vw[(i + 1) % N]
+            if (s > bestScore) { bestScore = s; best = i }
+        }
+        // Media circular del pico y sus vecinos: precisión de grados, no de
+        // cubo (antes se usaba el centro del cubo ganador, hasta 5° de error).
+        let cx = 0, cy = 0
+        for (let d = -1; d <= 1; d++) {
+            const k = (best + d + N) % N
+            cx += vx[k]; cy += vy[k]
+        }
+        let hue = Math.atan2(cy, cx) * 180 / Math.PI
+        if (hue < 0) hue += 360
+
+        // El croma sale del croma REAL de la imagen, no de una escalera de tres
+        // peldaños: un fondo pastel da paleta pastel y uno saturado, paleta
+        // viva. Si el color es solo una pincelada sobre una imagen casi gris
+        // ('share' bajo), se rebaja para no teñir todo el shell por un detalle.
+        const share = colored / Math.max(1, total)
+        const imgC = chromaSum / weightSum
+        setDynamicPalette(_paletteFromSeed(hue, imgC * (share < 0.12 ? 0.55 : 1.0)))
+    }
+
+    // Deriva la paleta completa (oscura + variantes claras) del tono semilla.
+    // Las claridades van en OKLab, así que son las mismas para cualquier tono.
+    // 'cf' es lo colorido que es el fondo (croma medio de sus píxeles con
+    // color). Las rectas de abajo están calibradas midiendo fondos reales: van
+    // de ~0.02 (un tema desaturado tipo Nord) a ~0.13 (uno muy vivo tipo
+    // Gruvbox), y reparten ese recorrido de verdad — con la escala anterior la
+    // mayoría de los fondos topaba con el mínimo y acababa con el mismo acento
+    // exacto, que era justo lo que la paleta dinámica debía evitar.
+    function _paletteFromSeed(hue, cf) {
         const H = (x) => ((x % 360) + 360) % 360
+        // Armoniza un tono fijo (rojo, verde…) acercándolo un 15% al semilla:
+        // siguen siendo reconocibles, pero pertenecen a la misma familia que
+        // el resto de la paleta.
         const harm = (h) => H(h + (((hue - h + 540) % 360) - 180) * 0.15)
-        const c = _hslHex
+        const k = (L, C, h) => _okHex(L, C, h === undefined ? hue : h)
+        const ac = Math.max(0.085, Math.min(0.210, 0.060 + cf * 1.15))   // acentos
+        const sc = Math.max(0.080, Math.min(0.170, 0.055 + cf * 0.95))   // semánticos
+        const nc = Math.max(0.004, Math.min(0.020, cf * 0.14))           // neutros teñidos
         return {
             label: "Dinámico",
-            bg: c(hue, sat * 0.45, 0.08), bgAlt: c(hue, sat * 0.45, 0.10),
-            surface: c(hue, sat * 0.4, 0.13), surfaceHi: c(hue, sat * 0.4, 0.17),
-            overlay: c(hue, sat * 0.35, 0.28),
-            fg: c(hue, sat * 0.25, 0.93), fgDim: c(hue, sat * 0.2, 0.72), fgMuted: c(hue, sat * 0.15, 0.52),
-            accent: c(hue, Math.min(0.8, sat + 0.15), 0.72),
-            accent2: c(H(hue + 40), Math.min(0.7, sat + 0.05), 0.68),
-            cyan: c(harm(190), 0.5, 0.68), green: c(harm(140), 0.45, 0.66),
-            yellow: c(harm(55), 0.6, 0.68), orange: c(harm(28), 0.6, 0.66),
-            red: c(harm(2), 0.6, 0.64), magenta: c(harm(310), 0.5, 0.7),
-            lightBg: c(hue, sat * 0.35, 0.94), lightBgAlt: c(hue, sat * 0.35, 0.92),
-            lightSurface: c(hue, sat * 0.3, 0.89), lightSurfaceHi: c(hue, sat * 0.3, 0.85),
-            lightOverlay: c(hue, sat * 0.3, 0.72),
-            lightFg: c(hue, sat * 0.5, 0.15), lightFgDim: c(hue, sat * 0.35, 0.32),
-            lightFgMuted: c(hue, sat * 0.25, 0.48),
-            lightAccent: c(hue, Math.min(0.75, sat + 0.1), 0.42),
-            lightAccent2: c(H(hue + 40), 0.5, 0.4),
-            lightCyan: c(harm(190), 0.55, 0.34), lightGreen: c(harm(140), 0.5, 0.32),
-            lightYellow: c(harm(55), 0.6, 0.34), lightOrange: c(harm(28), 0.6, 0.36),
-            lightRed: c(harm(2), 0.6, 0.4), lightMagenta: c(harm(310), 0.5, 0.38),
-            hyprInactive: c(hue, sat * 0.4, 0.13), hyprShadow: c(hue, sat * 0.45, 0.06)
+            bg:        k(0.185, nc),       bgAlt:     k(0.215, nc),
+            surface:   k(0.255, nc * 1.1), surfaceHi: k(0.305, nc * 1.2),
+            overlay:   k(0.440, nc * 1.6),
+            fg:        k(0.955, nc * 0.5), fgDim:     k(0.790, nc * 0.9),
+            fgMuted:   k(0.635, nc * 1.1),
+            accent:    k(0.800, ac),
+            accent2:   k(0.760, ac * 0.92, H(hue + 42)),
+            cyan:      k(0.800, sc, harm(195)),       green:   k(0.790, sc, harm(145)),
+            yellow:    k(0.850, sc, harm(105)),       orange:  k(0.780, sc, harm(60)),
+            red:       k(0.690, sc * 1.1, harm(29)),  magenta: k(0.740, sc, harm(345)),
+            lightBg:        k(0.965, nc * 0.8), lightBgAlt:     k(0.945, nc * 0.9),
+            lightSurface:   k(0.905, nc * 1.1), lightSurfaceHi: k(0.865, nc * 1.2),
+            lightOverlay:   k(0.735, nc * 1.6),
+            lightFg:        k(0.255, nc * 1.4), lightFgDim:     k(0.420, nc * 1.3),
+            // 0.540 y no más claro: es el punto donde el texto secundario
+            // sobre fondo claro cruza el 4.5:1 de WCAG AA (a 0.560 se quedaba
+            // en 4.21:1). En oscuro el equivalente ya iba sobrado.
+            lightFgMuted:   k(0.540, nc * 1.2),
+            lightAccent:    k(0.520, ac * 1.05),
+            lightAccent2:   k(0.500, ac * 0.95, H(hue + 42)),
+            lightCyan:      k(0.520, sc * 1.05, harm(195)), lightGreen:   k(0.510, sc * 1.05, harm(145)),
+            lightYellow:    k(0.560, sc * 1.05, harm(105)), lightOrange:  k(0.540, sc * 1.05, harm(60)),
+            lightRed:       k(0.480, sc * 1.15, harm(29)),  lightMagenta: k(0.500, sc * 1.05, harm(345)),
+            hyprInactive: k(0.255, nc * 1.1), hyprShadow: k(0.130, nc * 0.8)
         }
     }
 
@@ -800,18 +887,18 @@ Singleton {
             hyprReload.running = true
     }
 
-    // Blanco o casi-negro según la luminancia del color, para roles sin
+    // Blanco o casi-negro según la claridad del color, para roles sin
     // convención previa en el shell (destructive/error/warning/success): el
     // acento y la paleta ya tienen su fg pensado a mano, pero red/yellow/green
-    // sueltos no. Fórmula de luminancia relativa estándar (coeficientes
-    // Rec. 709).
+    // sueltos no. Usa la claridad PERCIBIDA (OKLab), no la luminancia Rec.709:
+    // esa pondera tanto el verde que ponía texto negro sobre verdes y cianes
+    // medios donde el blanco se lee mejor.
     function readableOn(hex) {
         hex = String(hex).replace("#", "")
         const r = parseInt(hex.substring(0, 2), 16) / 255
         const g = parseInt(hex.substring(2, 4), 16) / 255
         const b = parseInt(hex.substring(4, 6), 16) / 255
-        const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b
-        return lum > 0.5 ? "#1a1a1a" : "#ffffff"
+        return _rgbToOklab(r, g, b).L > 0.62 ? "#1a1a1a" : "#ffffff"
     }
 
     // Mezcla lineal de dos colores hex (t=0 → a, t=1 → b). Para derivar los
@@ -883,22 +970,6 @@ Singleton {
             terminalBrightBlue: mix(accent2, white, 0.18), terminalBrightMagenta: mix(magenta, white, 0.18),
             terminalBrightCyan: mix(cyan, white, 0.18), terminalBrightWhite: fg
         }
-    }
-
-    // Añade automáticamente, por cada token hex de materialTokens(), las
-    // variantes que algunas plantillas necesitan: '<token>Stripped' (sin #,
-    // para formatos "0xRRGGBB") y '<token>Rgb' (r,g,b decimal, para KDE).
-    function expandTokenVariants(tokens) {
-        const out = Object.assign({}, tokens)
-        for (const k in tokens) {
-            const hex = String(tokens[k]).replace("#", "")
-            out[k + "Stripped"] = hex
-            const r = parseInt(hex.substring(0, 2), 16)
-            const g = parseInt(hex.substring(2, 4), 16)
-            const b = parseInt(hex.substring(4, 6), 16)
-            out[k + "Rgb"] = r + "," + g + "," + b
-        }
-        return out
     }
 
     // Mapa de tokens que consumen Templates/gtk/gtk3.css y gtk4.css.
@@ -1067,82 +1138,48 @@ Singleton {
             fontSyncTimer.restart()
     }
 
-    onThemeNameChanged: notifyAppearanceChanged()
-    onAccentNameChanged: notifyAppearanceChanged()
-    onAccentColorChanged: scheduleSave()
-    onDarkModeChanged: notifyAppearanceChanged()
-    onUiScaleChanged: scheduleSave()
-    onAnimationSpeedChanged: scheduleSave()
-    onCustomAnimationDurationChanged: scheduleSave()
+    // Guardado automático: en vez de un handler onXChanged por clave (75
+    // declaraciones que había que mantener a mano, y donde faltar una —pasó
+    // con avatarPath y dynamicPalette— significa un ajuste que no se guarda),
+    // Component.onCompleted conecta la señal <clave>Changed de TODAS las
+    // claves persistidas a este despachador. El caso por defecto es guardar;
+    // aquí solo se enumeran las claves con efectos adicionales.
     // Las opacidades solo afectan al shell (el CSS de GTK va siempre opaco),
     // así que no disparan scheduleGtkSync: reescribiría gtk.css idéntico y
     // reiniciaría Nautilus sin efecto visible.
-    onBarOpacityChanged: scheduleSave()
-    onPopupOpacityChanged: scheduleSave()
-    onWidgetOpacityChanged: scheduleSave()
-    onCornerScaleChanged: scheduleSave()
-    onBarScaleChanged: scheduleSave()
-    onBarPositionChanged: scheduleSave()
-    onBarFloatingChanged: scheduleSave()
-    onPanelBackdropDimChanged: scheduleSave()
-    onWallpaperAutoMinChanged: scheduleSave()
-    onWallpaperRandomChanged: scheduleSave()
-    onFontFamilyChanged: { scheduleSave(); scheduleFontSync() }
-    onMonoFontFamilyChanged: { scheduleSave(); scheduleFontSync() }
-    onFontScaleChanged: scheduleSave()
-    onFontAntialiasChanged: { scheduleSave(); scheduleFontSync() }
-    onFontHintingChanged: { scheduleSave(); scheduleFontSync() }
-    onFontHintstyleChanged: { scheduleSave(); scheduleFontSync() }
-    onFontRgbaChanged: { scheduleSave(); scheduleFontSync() }
-    onFontLcdfilterChanged: { scheduleSave(); scheduleFontSync() }
-    onFontEmbeddedbitmapChanged: { scheduleSave(); scheduleFontSync() }
-    onLanguageChanged: scheduleSave()
-    onNotifPopupsEnabledChanged: scheduleSave()
-    onNotifTimeoutChanged: scheduleSave()
-    onNotifMaxVisibleChanged: scheduleSave()
-    onNotifPositionChanged: scheduleSave()
-    onMutedNotificationAppsChanged: scheduleSave()
-    onShowTrayChanged: scheduleSave()
-    onShowSysmonChanged: scheduleSave()
-    onShowBatteryChanged: scheduleSave()
-    onShowClipboardChanged: scheduleSave()
-    onShowNotificationsChanged: scheduleSave()
-    onShowPowerProfileChanged: scheduleSave()
-    onCaffeineChanged: scheduleSave()
-    onShowCaffeineChanged: scheduleSave()
-    onTemplatesOnChanged: { scheduleSave(); if (templatesOn) { scheduleGtkSync(); scheduleHyprSync() } else hyprTemplateOffSync() }
-    onGtkThemingEnabledChanged: { scheduleSave(); if (gtkThemingEnabled) scheduleGtkSync() }
-    onHyprlandThemingEnabledChanged: { scheduleSave(); if (hyprlandThemingEnabled) scheduleHyprSync(); else hyprTemplateOffSync() }
-    onTemplatesEnabledChanged: scheduleSave()
-    onClock24hChanged: scheduleSave()
-    onClockShowSecondsChanged: scheduleSave()
-    onClockShowDateChanged: scheduleSave()
-    onWeatherEnabledChanged: scheduleSave()
-    onWeatherLocationChanged: scheduleSave()
-    onWeatherMetricChanged: scheduleSave()
-    onWeatherRefreshMinChanged: scheduleSave()
-    onWeatherShowForecastChanged: scheduleSave()
-    onWeatherForecastDaysChanged: scheduleSave()
-    onWeatherShowDetailsChanged: scheduleSave()
-    onWeatherShowWindChanged: scheduleSave()
-    onWeatherShowRainChanged: scheduleSave()
-    onWeatherShowSunChanged: scheduleSave()
-    onWeatherShowInBarChanged: scheduleSave()
-    onWallpaperTransitionChanged: scheduleSave()
-    onWallpaperTransitionDurationChanged: scheduleSave()
-    onWallpaperCurrentChanged: scheduleSave()
-    onTerminalAppChanged: scheduleSave()
-    onTerminalFontChanged: scheduleSave()
-    onTerminalFontSizeChanged: scheduleSave()
-    onTerminalOpacityChanged: scheduleSave()
-    onTerminalPaddingChanged: scheduleSave()
-    onTerminalCursorShapeChanged: scheduleSave()
-    onTerminalCursorBlinkChanged: scheduleSave()
-    onTerminalLineHeightChanged: scheduleSave()
-    onTerminalTabStyleChanged: scheduleSave()
-    onTerminalLigaturesChanged: scheduleSave()
-    onScreenCaptureChanged: scheduleSave()
-    onWeatherCacheChanged: scheduleSave()
+    function _settingChanged(k) {
+        switch (k) {
+        case "themeName":
+        case "accentName":
+        case "darkMode":
+            notifyAppearanceChanged()   // incluye scheduleSave()
+            return
+        case "fontFamily":
+        case "monoFontFamily":
+        case "fontAntialias":
+        case "fontHinting":
+        case "fontHintstyle":
+        case "fontRgba":
+        case "fontLcdfilter":
+        case "fontEmbeddedbitmap":
+            scheduleSave(); scheduleFontSync()
+            return
+        case "templatesOn":
+            scheduleSave()
+            if (templatesOn) { scheduleGtkSync(); scheduleHyprSync() } else hyprTemplateOffSync()
+            return
+        case "gtkThemingEnabled":
+            scheduleSave()
+            if (gtkThemingEnabled) scheduleGtkSync()
+            return
+        case "hyprlandThemingEnabled":
+            scheduleSave()
+            if (hyprlandThemingEnabled) scheduleHyprSync(); else hyprTemplateOffSync()
+            return
+        default:
+            scheduleSave()
+        }
+    }
 
     Timer {
         id: saveTimer
@@ -1349,6 +1386,12 @@ Singleton {
     }
 
     Component.onCompleted: {
+        // Conecta el guardado automático de cada clave persistida ANTES de
+        // load(): mismo comportamiento que tenían los handlers declarativos
+        // (durante la carga scheduleSave/schedule*Sync se descartan por
+        // _loaded aún false).
+        for (const k of _keys)
+            s[k + "Changed"].connect(() => s._settingChanged(k))
         load()
         if (hyprlandAvailable)
             hyprConfDirMkdir.running = true

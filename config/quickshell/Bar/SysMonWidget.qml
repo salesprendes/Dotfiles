@@ -10,37 +10,25 @@ Pill {
     active: Globals.sysMonOpen
     onClicked: Globals.toggleSysMon()
 
-    Text {
-        text: "󰻠"   // cpu
-        color: Theme.accent
-        font.family: Theme.fontFamily
-        font.pixelSize: Theme.barIconSize
-    }
     // Los porcentajes avisan por color al acercarse al límite (90% ámbar,
     // 97% rojo), sin cambiar de tamaño ni mover la píldora.
-    Text {
+    function loadColor(pct) {
+        return pct >= 97 ? Theme.red
+             : pct >= 90 ? Theme.yellow
+             : Theme.fgDim
+    }
+
+    BarGlyph { text: "󰻠"; color: Theme.accent }   // cpu
+    BarLabel {
         text: Math.round(SysMon.cpu) + "%"
-        color: SysMon.cpu >= 97 ? Theme.red
-             : SysMon.cpu >= 90 ? Theme.yellow
-             : Theme.fgDim
-        font.family: Theme.fontFamily
-        font.pixelSize: Theme.fontSize
-        Behavior on color { ColorAnimation { duration: Theme.animFast } }
+        color: root.loadColor(SysMon.cpu)
+        animateColor: true
     }
-    Rectangle { implicitWidth: Theme.hairline; implicitHeight: Theme.dp(14); color: Theme.overlay }
-    Text {
-        text: "󰍛"   // ram
-        color: Theme.accent
-        font.family: Theme.fontFamily
-        font.pixelSize: Theme.barIconSize
-    }
-    Text {
+    PillSeparator {}
+    BarGlyph { text: "󰍛"; color: Theme.accent }   // ram
+    BarLabel {
         text: Math.round(SysMon.memPercent) + "%"
-        color: SysMon.memPercent >= 97 ? Theme.red
-             : SysMon.memPercent >= 90 ? Theme.yellow
-             : Theme.fgDim
-        font.family: Theme.fontFamily
-        font.pixelSize: Theme.fontSize
-        Behavior on color { ColorAnimation { duration: Theme.animFast } }
+        color: root.loadColor(SysMon.memPercent)
+        animateColor: true
     }
 }

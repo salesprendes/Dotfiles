@@ -128,17 +128,36 @@ ColumnLayout {
         }
     }
 
-    Text {
-        text: root.label
-        visible: root.label !== ""
-        color: Theme.fg
-        font.family: Theme.fontFamily
-        font.pixelSize: Theme.fontSize
-    }
+    // Etiqueta y selector en la MISMA línea (el selector se ciñe a su valor y
+    // se alinea a la derecha), no apilados: un valor de diez caracteres no
+    // necesita una caja de ancho completo debajo de su etiqueta, y apilarlos
+    // gastaba dos renglones por ajuste. Sin etiqueta (usos fuera de Ajustes)
+    // el selector recupera el ancho completo.
+    RowLayout {
+        Layout.fillWidth: true
+        spacing: Theme.space12
+
+        Text {
+            Layout.fillWidth: true
+            text: root.label
+            visible: root.label !== ""
+            color: Theme.fg
+            font.family: Theme.fontFamily
+            font.pixelSize: Theme.fontSize
+            elide: Text.ElideRight
+        }
 
     Rectangle {
         id: selector
-        Layout.fillWidth: true
+        readonly property bool inline: root.label !== ""
+        Layout.fillWidth: !inline
+        // Se ciñe al contenido, con un mínimo para que un valor corto no
+        // encoja la caja hasta parecer un botón, y un techo para que uno largo
+        // no se coma la etiqueta.
+        Layout.minimumWidth: inline ? Theme.dp(112) : 0
+        Layout.preferredWidth: inline
+            ? Math.min(root.width * 0.55, selRow.implicitWidth + Theme.space12 * 2)
+            : -1
         implicitHeight: Theme.rowM
         activeFocusOnTab: enabled
         radius: Theme.pillRadius
@@ -157,6 +176,7 @@ ColumnLayout {
         Keys.onEscapePressed: root.closeKeyboard()
 
         RowLayout {
+            id: selRow
             anchors.fill: parent
             anchors.leftMargin: Theme.space12
             anchors.rightMargin: Theme.space12
@@ -197,10 +217,15 @@ ColumnLayout {
             }
         }
     }
+    }   // fin de la fila etiqueta + selector
 
     Item {
         id: dropdownClip
-        Layout.fillWidth: true
+        // El panel cuelga justo debajo del selector y con su mismo ancho: si
+        // se abriera a lo ancho de la tarjeta parecería de otro control.
+        Layout.fillWidth: !selector.inline
+        Layout.preferredWidth: selector.inline ? selector.width : -1
+        Layout.alignment: Qt.AlignRight
         clip: true
         readonly property int optionHeight: Theme.rowM
         readonly property int panelHeight: Math.min(

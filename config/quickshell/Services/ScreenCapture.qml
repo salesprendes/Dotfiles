@@ -13,7 +13,6 @@ Singleton {
     readonly property string home: Quickshell.env("HOME") ?? ""
     readonly property string runtimeDir: Quickshell.env("XDG_RUNTIME_DIR") ?? "/tmp"
     readonly property string pidFile: runtimeDir + "/qs-screen-recording.pid"
-    readonly property bool loaded: _loaded
 
     // Disponibilidad de binarios vía Deps (detección centralizada, un solo
     // proceso al arrancar). Bindings reactivos: valen false hasta que termina
@@ -24,12 +23,10 @@ Singleton {
     readonly property bool hyprpickerAvailable: Deps.has("hyprpicker")
     readonly property bool grimAvailable: Deps.has("grim")
     readonly property bool slurpAvailable: Deps.has("slurp")
-    readonly property bool wlCopyAvailable: Deps.has("wl-copy")
     readonly property bool notifyAvailable: Deps.has("notify-send")
     readonly property bool gsrAvailable: Deps.has("gpu-screen-recorder")
     readonly property bool jqAvailable: Deps.has("jq")
     readonly property bool hyprctlAvailable: Deps.has("hyprctl")
-    readonly property bool pactlAvailable: Deps.has("pactl")
     readonly property bool ffmpegAvailable: Deps.has("ffmpeg")
 
     // Carpetas XDG localizadas (Imágenes, Bilder…), resueltas una sola vez
@@ -78,7 +75,6 @@ Singleton {
     property bool _loaded: false
     property bool _applying: false
     property bool _persisting: false
-    property bool _savingPillPosition: false
 
     readonly property var modeOptions: [
         { text: "Región",  value: "region",  icon: "󰩭" },

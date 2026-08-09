@@ -12,32 +12,19 @@ Pill {
     onClicked: Globals.toggleDashboard()
 
 
-    Text {
+    BarGlyph {
         text: "󰅐"
         color: Globals.dashboardOpen ? Theme.accent2 : Theme.accent
-        font.family: Theme.fontFamily
-        font.pixelSize: Theme.barIconSize
-        Behavior on color { ColorAnimation { duration: Theme.animFast } }
+        animateColor: true
     }
-    Text {
+    BarLabel {
         text: Qt.formatDateTime(Time.now, Time.clockFormat)
-        color: Theme.fg
-        font.family: Theme.fontFamily
-        font.pixelSize: Theme.fontSize
         font.bold: true
     }
-    Rectangle {
-        visible: Settings.clockShowDate
-        implicitWidth: Theme.hairline
-        implicitHeight: Theme.dp(14)
-        color: Theme.overlay
-    }
-    Text {
+    PillSeparator { visible: Settings.clockShowDate }
+    BarLabel {
         visible: Settings.clockShowDate
         text: Time.dateString   // precalculada en el singleton, una vez al día
-        color: Theme.fg
-        font.family: Theme.fontFamily
-        font.pixelSize: Theme.fontSize
         font.bold: true
     }
 }

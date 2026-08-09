@@ -1,11 +1,4 @@
--- Monitores
--- https://wiki.hypr.land/Configuring/Basics/Monitors/
+-- ── Monitores ──────────────────────────────────────────
+-- Generado por Quickshell (Ajustes → Pantallas).
 
-hl.monitor({
-    output   = "",
-    -- highres = resolución nativa (2560x1440). No uso highrr porque este panel
-    -- solo da 75 Hz a 1024x768 y a 1440p baja a ~60 Hz; no compensa perder resolución.
-    mode     = "highres",
-    position = "auto",
-    scale    = "auto",
-})
+hl.monitor({ output = "DP-1", mode = "2560x1440@144.00", position = "0x0", scale = 1 })

@@ -46,7 +46,6 @@ Singleton {
     function toggleLauncher()      { toggle("launcher") }
     function toggleClipboard()     { toggle("clipboard") }
     function toggleDashboard()     { toggle("dashboard") }
-    function toggleScreenCapture()  { toggle("capture") }
     // Si está cerrada, ábrela. Si ya está abierta, deja que la propia ventana
     // decida: cerrarla (si está en este workspace) o traerla al actual.
     signal settingsResummon()
@@ -56,6 +55,18 @@ Singleton {
     }
     // Cierra solo los popups (la ventana de Ajustes es independiente).
     function closeAll()            { openPanel = "" }
+
+    // Pantalla con foco, para ventanas únicas (modales) que deben aparecer una
+    // sola vez y en el monitor activo — no una copia por monitor compitiendo
+    // por el teclado exclusivo. Sin Hyprland cae a la primera pantalla.
+    function focusedScreen() {
+        const name = Hyprland.focusedMonitor?.name ?? ""
+        const list = Quickshell.screens
+        for (let i = 0; i < list.length; i++)
+            if (list[i].name === name)
+                return list[i]
+        return list.length > 0 ? list[0] : null
+    }
 
     // Acciones de sesión/energía compartidas (lanzador y centro de control).
     // La pausa del bloqueo deja que el popout se cierre y SUELTE el teclado

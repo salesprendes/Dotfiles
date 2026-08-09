@@ -79,11 +79,7 @@ PanelWindow {
             spacing: Theme.space12
 
             Text {
-                text: osd.muted ? "󰝟"
-                     : osd.volume === 0 ? "󰖁"
-                     : osd.volume < 34 ? "󰕿"
-                     : osd.volume < 67 ? "󰖀"
-                     : "󰕾"
+                text: Utils.volumeGlyph(osd.volume / 100, osd.muted)
                 color: osd.muted ? Theme.fgMuted : Theme.accent
                 font.family: Theme.fontFamily
                 font.pixelSize: Theme.iconSize + 6

@@ -20,19 +20,8 @@ PanelWindow {
         active: Globals.dashboardOpen
         onClicked: Globals.toggleDashboard()
 
-        Text {
-            text: Weather.icon
-            color: Theme.yellow
-            font.family: Theme.fontFamily
-            font.pixelSize: Theme.barIconSize
-        }
-        Text {
-            text: Weather.temp
-            color: Theme.fg
-            font.family: Theme.fontFamily
-            font.pixelSize: Theme.fontSize
-            font.bold: true
-        }
+        BarGlyph { text: Weather.icon; color: Theme.yellow }
+        BarLabel { text: Weather.temp; font.bold: true }
     }
 
     // modelData lo inyecta Variants: es el QsScreen de este monitor.

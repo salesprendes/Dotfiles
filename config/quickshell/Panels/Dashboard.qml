@@ -528,15 +528,15 @@ Popout {
                             }
                         }
                         MediaBtn {
-                            glyph: (dash.player?.isPlaying ?? false) ? "󰏤" : "󰐊"
-                            size: Theme.controlM; primary: true
+                            icon: (dash.player?.isPlaying ?? false) ? "󰏤" : "󰐊"
+                            diameter: Theme.controlM; primary: true
                             enabled: dash.player?.canTogglePlaying ?? false
-                            onTapped: dash.player?.togglePlaying()
+                            onClicked: dash.player?.togglePlaying()
                         }
                         MediaBtn {
-                            glyph: "󰒭"; size: Theme.controlM
+                            icon: "󰒭"; diameter: Theme.controlM
                             enabled: dash.player?.canGoNext ?? false
-                            onTapped: dash.player?.next()
+                            onClicked: dash.player?.next()
                         }
                     }
 
@@ -893,20 +893,20 @@ Popout {
                     Layout.alignment: Qt.AlignHCenter
                     spacing: Theme.space18
                     MediaBtn {
-                        glyph: "󰒮"; size: Theme.controlL
+                        icon: "󰒮"; diameter: Theme.controlL
                         enabled: dash.player?.canGoPrevious ?? false
-                        onTapped: dash.player?.previous()
+                        onClicked: dash.player?.previous()
                     }
                     MediaBtn {
-                        glyph: (dash.player?.isPlaying ?? false) ? "󰏤" : "󰐊"
-                        size: Theme.controlL + Theme.dp(12); primary: true
+                        icon: (dash.player?.isPlaying ?? false) ? "󰏤" : "󰐊"
+                        diameter: Theme.controlL + Theme.dp(12); primary: true
                         enabled: dash.player?.canTogglePlaying ?? false
-                        onTapped: dash.player?.togglePlaying()
+                        onClicked: dash.player?.togglePlaying()
                     }
                     MediaBtn {
-                        glyph: "󰒭"; size: Theme.controlL
+                        icon: "󰒭"; diameter: Theme.controlL
                         enabled: dash.player?.canGoNext ?? false
-                        onTapped: dash.player?.next()
+                        onClicked: dash.player?.next()
                     }
                 }
             }
@@ -1501,43 +1501,16 @@ Popout {
         hoverIconColor: Theme.accent
     }
 
-    component MediaBtn: Rectangle {
-        property string glyph: ""
-        property int size: Theme.controlM
+    // Botón de media sobre IconButton: 'primary' es el botón sólido de acento
+    // (play/pausa); el resto son superficies neutras que se tiñen al pasar.
+    component MediaBtn: IconButton {
         property bool primary: false
-        signal tapped()
-        implicitWidth: size; implicitHeight: size
-        radius: width / 2
+        iconPixelSize: primary ? Theme.iconSize + 5 : Theme.iconSize + 1
+        baseColor: primary ? Theme.accent : Theme.surface
+        hoverColor: primary ? Theme.accent : Theme.surfaceHi
+        iconColor: primary ? Theme.bg : Theme.fgDim
+        hoverIconColor: primary ? Theme.bg : Theme.accent
         opacity: enabled ? 1 : 0.35
         Behavior on opacity { NumberAnimation { duration: Theme.animFast } }
-        color: primary ? (mbMa.pressed ? Qt.darker(Theme.accent, 1.12) : Theme.accent)
-              : (mbMa.containsMouse ? Theme.surfaceHi : Theme.surface)
-        Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
-        // Mismo lenguaje que los botones del centro rápido: crece con un leve
-        // rebote al pasar el ratón y se encoge al pulsar.
-        scale: mbMa.pressed ? 0.9 : (mbMa.containsMouse ? 1.1 : 1.0)
-        Behavior on scale {
-            NumberAnimation {
-                duration: Theme.animNormal
-                easing.type: Easing.OutBack
-                easing.overshoot: 2.2
-            }
-        }
-        Text {
-            anchors.centerIn: parent
-            text: parent.glyph
-            color: parent.primary ? Theme.bg
-                  : (mbMa.containsMouse ? Theme.accent : Theme.fgDim)
-            font.family: Theme.fontFamily
-            font.pixelSize: parent.primary ? Theme.iconSize + 5 : Theme.iconSize + 1
-            Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
-        }
-        MouseArea {
-            id: mbMa
-            anchors.fill: parent
-            enabled: parent.enabled
-            hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-            onClicked: parent.tapped()
-        }
     }
 }

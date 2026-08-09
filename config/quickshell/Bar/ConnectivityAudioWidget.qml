@@ -9,7 +9,6 @@ Pill {
     id: root
     spacing: Theme.space10
     interactive: true
-    hoverHighlight: true
     active: Globals.controlCenterOpen
 
     readonly property var audio: Pipewire.defaultAudioSink?.audio ?? null
@@ -48,30 +47,20 @@ Pill {
         root.audio.volume = Math.max(0, Math.min(1, root.audio.volume + dir * 0.05))
     }
 
-    Text {
+    BarGlyph {
         text: Net.icon
         color: Net.online ? Theme.accent : Theme.fgMuted
-        font.family: Theme.fontFamily
-        font.pixelSize: Theme.barIconSize
     }
 
-    Text {
+    BarGlyph {
         visible: BT.available
         text: BT.icon
         color: BT.enabled ? Theme.accent : Theme.fgMuted
-        font.family: Theme.fontFamily
-        font.pixelSize: Theme.barIconSize
     }
 
-    Text {
+    BarGlyph {
         id: volumeIcon
-        text: root.muted ? "󰝟"
-             : root.volume === 0 ? "󰖁"
-             : root.volume < 34 ? "󰕿"
-             : root.volume < 67 ? "󰖀"
-             : "󰕾"
+        text: Utils.volumeGlyph(root.volume / 100, root.muted)
         color: root.audio && !root.muted && root.volume > 0 ? Theme.accent : Theme.fgMuted
-        font.family: Theme.fontFamily
-        font.pixelSize: Theme.barIconSize
     }
 }

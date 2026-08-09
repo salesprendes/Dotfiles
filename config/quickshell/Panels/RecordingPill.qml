@@ -32,18 +32,14 @@ PanelWindow {
     // a la píldora al moverse o cambiar de tamaño (usa su geometría, x/y incl.).
     mask: Region { item: pill }
 
-    function clamp(value, minValue, maxValue) {
-        return Math.max(minValue, Math.min(maxValue, value))
-    }
-
     function pillX() {
         const def = Math.max(Theme.space4, win.width - pill.width - Theme.space12)
         const x = ScreenCapture.recordPillX >= 0 ? ScreenCapture.recordPillX : def
-        return clamp(x, Theme.space4, Math.max(Theme.space4, win.width - pill.width - Theme.space4))
+        return Theme.clamp(x, Theme.space4, Math.max(Theme.space4, win.width - pill.width - Theme.space4))
     }
 
     function pillY() {
-        return clamp(ScreenCapture.recordPillY, Theme.space4, Math.max(Theme.space4, win.height - pill.height - Theme.space4))
+        return Theme.clamp(ScreenCapture.recordPillY, Theme.space4, Math.max(Theme.space4, win.height - pill.height - Theme.space4))
     }
 
     Rectangle {
@@ -87,10 +83,10 @@ PanelWindow {
                 const dy = mouse.y - startMouseY
                 if (Math.abs(dx) > 2 || Math.abs(dy) > 2)
                     moved = true
-                ScreenCapture.recordPillX = win.clamp(Math.round(startPillX + dx), Theme.space4,
-                                                       Math.max(Theme.space4, win.width - pill.width - Theme.space4))
-                ScreenCapture.recordPillY = win.clamp(Math.round(startPillY + dy), Theme.space4,
-                                                       Math.max(Theme.space4, win.height - pill.height - Theme.space4))
+                ScreenCapture.recordPillX = Theme.clamp(Math.round(startPillX + dx), Theme.space4,
+                                                        Math.max(Theme.space4, win.width - pill.width - Theme.space4))
+                ScreenCapture.recordPillY = Theme.clamp(Math.round(startPillY + dy), Theme.space4,
+                                                        Math.max(Theme.space4, win.height - pill.height - Theme.space4))
             }
             onReleased: {
                 cursorShape = Qt.OpenHandCursor

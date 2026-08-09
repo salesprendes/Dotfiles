@@ -20,13 +20,11 @@ Singleton {
         "theme":     "../Panels/SettingsPages/ThemePage.qml",
         "font":      "../Panels/SettingsPages/FontPage.qml",
         "terminal":  "../Panels/SettingsPages/TerminalPage.qml",
-        "templates": "../Panels/SettingsPages/TemplatesPage.qml",
         "wallpaper": "../Panels/SettingsPages/WallpaperPage.qml",
         "bar":       "../Panels/SettingsPages/BarPage.qml",
         "clock":     "../Panels/SettingsPages/ShellPage.qml",
         "displays":  "../Panels/SettingsPages/DisplaysPage.qml",
         "network":   "../Panels/SettingsPages/NetworkPage.qml",
-        "weather":   "../Panels/SettingsPages/WeatherPage.qml",
         "notif":     "../Panels/SettingsPages/NotifPage.qml"
     })
     readonly property var _catKeys: Object.keys(pageSources)

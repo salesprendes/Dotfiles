@@ -55,7 +55,10 @@ ColumnLayout {
             width: segBox.segW
             x: Theme.space4 + segBox.selIndex * (segBox.segW + Theme.space4)
             radius: Theme.pillRadius - Theme.space2
-            color: SettingsPalette.settingsHover
+            // Mismo tinte de acento que la píldora de la nav: "lo elegido" se
+            // dice igual en toda la ventana. En gris, la píldora contradecía
+            // al texto seleccionado, que ya iba de acento.
+            color: Theme.withAlpha(Theme.accent, Theme.isDark ? 0.26 : 0.32)
             Behavior on x { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
             Behavior on width { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
         }

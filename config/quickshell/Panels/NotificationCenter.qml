@@ -40,14 +40,6 @@ Popout {
     // `groups`, los delegados se recrean pero releen este mapa.
     property var _expandedGroups: ({})
 
-    function appNameFor(n) {
-        if (n && n.appName && n.appName !== "")
-            return n.appName
-        if (n && n.desktopEntry && n.desktopEntry !== "")
-            return n.desktopEntry
-        return "Sistema"
-    }
-
     function appIconFor(group) {
         if (!group || !group.items || group.items.length === 0)
             return ""
@@ -70,7 +62,7 @@ Popout {
 
         for (let i = 0; i < newest.length; i++) {
             const n = newest[i]
-            const title = appNameFor(n)
+            const title = NotifService.appNameFor(n)
             if (!byApp[title]) {
                 byApp[title] = { "title": title, "items": [] }
                 out.push(byApp[title])

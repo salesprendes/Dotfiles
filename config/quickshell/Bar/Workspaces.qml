@@ -11,7 +11,6 @@ Pill {
     id: root
     property var screen
     interactive: true
-    hoverCursor: true
 
     // Workspaces de ESTA pantalla, ordenados por id. Lo comparten el Repeater
     // y el recorrido con la rueda; filtrar en el origen evita crear delegates

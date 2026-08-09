@@ -6,7 +6,6 @@ import qs.Config
 
 Pill {
     id: root
-    interactive: false
     spacing: Theme.space4
 
     readonly property var players: Mpris.players?.values ?? []
@@ -71,68 +70,42 @@ Pill {
         }
     }
 
-    // Botón de icono reutilizable.
-    component CtrlButton: Item {
-        id: cbtn
-        property string glyph: ""
-        property bool can: true
-        signal tapped()
-        implicitWidth: Theme.barIconSize + Theme.space4
-        implicitHeight: Theme.barIconSize + Theme.space4
+    // Botón de control compacto: IconButton transparente donde solo el glifo
+    // reacciona al ratón; se atenúa cuando el reproductor no admite la acción.
+    component CtrlButton: IconButton {
         Layout.alignment: Qt.AlignVCenter
-
-        Text {
-            anchors.centerIn: parent
-            text: cbtn.glyph
-            color: cma.containsMouse && cbtn.can ? Theme.accent : Theme.fgDim
-            opacity: cbtn.can ? 1 : 0.4
-            font.family: Theme.fontFamily
-            font.pixelSize: Theme.barIconSize
-            scale: cma.containsMouse && cbtn.can ? 1.2 : 1
-            Behavior on scale { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
-            Behavior on color { ColorAnimation { duration: Theme.animFast } }
-        }
-        MouseArea {
-            id: cma
-            anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: if (cbtn.can) cbtn.tapped()
-        }
+        diameter: Theme.barIconSize + Theme.space4
+        iconPixelSize: Theme.barIconSize
+        baseColor: "transparent"
+        hoverColor: "transparent"
+        iconColor: Theme.fgDim
+        hoverIconColor: Theme.accent
+        opacity: enabled ? 1 : 0.4
     }
 
     CtrlButton {
-        glyph: "󰒮"
-        can: root.player?.canGoPrevious ?? false
-        onTapped: root.player?.previous()
+        icon: "󰒮"
+        enabled: root.player?.canGoPrevious ?? false
+        onClicked: root.player?.previous()
     }
     CtrlButton {
-        glyph: (root.player?.isPlaying ?? false) ? "󰏤" : "󰐊"
-        can: root.player?.canTogglePlaying ?? false
-        onTapped: root.player?.togglePlaying()
+        icon: (root.player?.isPlaying ?? false) ? "󰏤" : "󰐊"
+        enabled: root.player?.canTogglePlaying ?? false
+        onClicked: root.player?.togglePlaying()
     }
     CtrlButton {
-        glyph: "󰒭"
-        can: root.player?.canGoNext ?? false
-        onTapped: root.player?.next()
+        icon: "󰒭"
+        enabled: root.player?.canGoNext ?? false
+        onClicked: root.player?.next()
     }
 
-    // Separador fino.
-    Rectangle {
-        Layout.alignment: Qt.AlignVCenter
-        implicitWidth: Theme.hairline
-        implicitHeight: Theme.dp(14)
-        color: Theme.overlay
-    }
+    PillSeparator {}
 
     // Título, solo informativo.
-    Text {
+    BarLabel {
         Layout.alignment: Qt.AlignVCenter
         Layout.maximumWidth: Theme.dp(170)
         text: root.player?.trackTitle || root.player?.trackArtist || ""
-        color: Theme.fg
-        font.family: Theme.fontFamily
-        font.pixelSize: Theme.fontSize
         elide: Text.ElideRight
     }
 }

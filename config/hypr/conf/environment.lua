@@ -9,6 +9,8 @@ hl.env("QT_QPA_PLATFORM", "wayland;xcb")            -- wayland, con respaldo xcb
 hl.env("QT_WAYLAND_DISABLE_WINDOWDECORATION", "1")  -- sin doble barra de título
 hl.env("QT_AUTO_SCREEN_SCALE_FACTOR", "1")          -- escalado HiDPI
 
+hl.env("QT_QPA_PLATFORMTHEME", "qt6ct")
+
 -- Electron (VSCode, Discord…): backend Wayland.
 hl.env("ELECTRON_OZONE_PLATFORM_HINT", "auto")
 
