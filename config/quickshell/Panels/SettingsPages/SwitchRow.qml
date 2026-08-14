@@ -9,43 +9,51 @@ import qs.Panels.SettingsPages
 // la bolita) y se resalta sutilmente al pasar el ratón: el panel entero
 // comparte así el mismo lenguaje táctil que la nav.
 //
-// Root es un Item, no un RowLayout: así puede haber un fondo de hover DETRÁS
-// del contenido sin que la fila intente gestionarlo como si fuera otro campo
-// de la columna. Los consumidores («SwitchRow { Layout.fillWidth: ... }» en
-// cada página) no notan el cambio: Layout.fillWidth funciona igual sobre
-// cualquier Item.
-Item {
+// Root es un Item (SettingsRow), no un RowLayout: así puede haber un fondo de
+// hover DETRÁS del contenido sin que la fila intente gestionarlo como si fuera
+// otro campo de la columna. El filtro del buscador y la marca de fila los pone
+// la base (ver Components/SettingsRow.qml); aquí solo se declara qué texto ve
+// el buscador.
+SettingsRow {
     id: sr
     property string label: ""
     property string desc: ""
+    // Glifo de la insignia que abre la fila. Sin él no se dibuja nada, así
+    // que el componente sigue sirviendo fuera de una tarjeta de ajustes.
+    property string glyph: ""
     property bool checked: false
     signal toggled()
 
-    // Filtro de la ventana de Ajustes (buscador + "solo modificados").
-    // OPT-IN: sin 'skey' la fila no se filtra nunca, así el mismo componente
-    // sigue funcionando fuera de Ajustes. 'shown' es la condición propia de la
-    // página (p. ej. "solo si hay batería"), que se combina con el filtro.
-    property string skey: ""
-    property string cardTitle: ""
-    property bool shown: true
-    readonly property bool matches: SettingsFilter.accepts(
-        sr.label + " " + sr.desc + " " + sr.cardTitle, sr.skey)
-    visible: sr.shown && sr.matches
-
-    Layout.fillWidth: true
-    implicitHeight: Math.max(row.implicitHeight, Theme.dp(36))
+    filterText: sr.label + " " + sr.desc
+    // Alto de fila de ChromeOS: sus listas respiran más que una fila de 36.
+    implicitHeight: Math.max(row.implicitHeight, Theme.dp(46))
 
     // Fondo de hover: solo opacidad, sin color propio, para no imponer un tono
-    // que desentone con el tema activo. Sangra un poco fuera del alto de la
-    // fila para que la franja realzada respire, sin invadir la fila vecina
-    // (el hueco entre filas, Theme.space14 en las páginas, es mayor que esto).
+    // que desentone con el tema activo. Sangra fuera de la fila para que la
+    // franja realzada respire; menos por arriba y abajo que por los lados, que
+    // es donde hay sitio (el hueco entre filas es de Theme.space12).
     Rectangle {
         anchors.fill: parent
-        anchors.margins: -Theme.space6
-        radius: Theme.dp(8)
+        anchors.leftMargin: -Theme.space8
+        anchors.rightMargin: -Theme.space8
+        anchors.topMargin: -Theme.space4
+        anchors.bottomMargin: -Theme.space4
+        radius: Theme.dp(10)
         color: SettingsPalette.settingsHover
         opacity: rowMa.containsMouse ? 1 : 0
         Behavior on opacity { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutQuad } }
+    }
+
+    // Onda de pulsación (ver Components/Ripple.qml). Toda la fila es el área
+    // de toque, pero hasta ahora pulsar no devolvía NADA hasta que el
+    // interruptor terminaba de deslizarse: el clic caía en el vacío. La onda
+    // nace donde pinchas y responde en el mismo fotograma.
+    //
+    // Va detrás del contenido a propósito: en Material la onda corre por la
+    // superficie, por debajo del texto y del control, no por encima.
+    Ripple {
+        id: rowRipple
+        color: Theme.withAlpha(Theme.fg, Theme.isDark ? 0.10 : 0.08)
     }
 
     // Área de toque de la fila entera. Va ANTES del contenido (más abajo en
@@ -56,6 +64,7 @@ Item {
         anchors.fill: parent
         hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
+        onPressed: (m) => rowRipple.press(m.x, m.y)
         onClicked: sr.toggled()
     }
 
@@ -65,22 +74,36 @@ Item {
         anchors.right: parent.right
         anchors.verticalCenter: parent.verticalCenter
         spacing: Theme.space10
+
+        // Se enciende con el interruptor (ver Components/RowBadge.qml).
+        RowBadge {
+            Layout.alignment: Qt.AlignVCenter
+            glyph: sr.glyph
+            active: sr.checked
+            offColor: SettingsPalette.settingsControl
+            offBorderColor: SettingsPalette.settingsBorder
+        }
+
         ColumnLayout {
-            Layout.fillWidth: true; spacing: 0
+            Layout.fillWidth: true
+            spacing: 0
             Text {
                 Layout.fillWidth: true
                 text: sr.label; color: Theme.fg
                 font.family: Theme.fontFamily; font.pixelSize: Theme.fontSize
+                elide: Text.ElideRight
             }
             Text {
                 Layout.fillWidth: true
                 visible: sr.desc !== ""
                 text: sr.desc; color: Theme.fgMuted
-                font.family: Theme.fontFamily; font.pixelSize: Theme.fontSize - 3
+                font.family: Theme.fontFamily; font.pixelSize: Theme.typeBodySmall
                 wrapMode: Text.WordWrap
             }
         }
+
         Switch {
+            Layout.alignment: Qt.AlignVCenter
             checked: sr.checked
             offColor: SettingsPalette.settingsControl
             offBorderColor: SettingsPalette.settingsBorder

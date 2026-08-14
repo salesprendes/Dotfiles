@@ -119,7 +119,13 @@ PanelWindow {
                 // Tamaño fijo del monitor (no se encoge con el Holder en 'wipe').
                 width: stage.width
                 height: stage.height
-                fillMode: Image.PreserveAspectCrop
+                // Encaje elegido en Ajustes ▸ Fondo de pantalla. "fit" deja
+                // franjas del color de fondo a los lados en vez de recortar,
+                // que es lo que quieres con una imagen cuya composición no
+                // sobrevive al recorte (un póster, una foto vertical).
+                fillMode: Settings.wallpaperFillMode === "fit" ? Image.PreserveAspectFit
+                        : Settings.wallpaperFillMode === "stretch" ? Image.Stretch
+                        : Image.PreserveAspectCrop
                 asynchronous: true
                 cache: false
                 sourceSize: stage.texSize()

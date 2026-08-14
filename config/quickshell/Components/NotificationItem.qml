@@ -20,6 +20,10 @@ Rectangle {
     // Progreso del timeout (1 → 0). Lo mueve el popup; el centro no lo usa.
     property real progress: 0
     property bool showProgress: false
+    // Modo compacto: solo título, sin el cuerpo del mensaje. Sirve para que
+    // una tanda de avisos ocupe una franja fina en vez de media pantalla.
+    // No afecta al centro de notificaciones, donde sí quieres leerlo entero.
+    property bool compact: false
 
     // Primer plano (todo menos el fondo de la tarjeta). El barrido de entrada
     // descubre el fondo YA OPACO y sólo el contenido funde con retardo y se
@@ -35,7 +39,7 @@ Rectangle {
     readonly property string appName: NotifService.appNameFor(notif)
     readonly property string summary: notif && notif.summary ? notif.summary : ""
     readonly property string body: notif && notif.body ? notif.body : ""
-    readonly property bool hasBody: body !== ""
+    readonly property bool hasBody: body !== "" && !compact
     readonly property int actionCount: countActions()
     readonly property bool hasActions: actionCount > 0
 

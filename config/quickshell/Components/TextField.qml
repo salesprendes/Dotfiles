@@ -36,21 +36,49 @@ ColumnLayout {
     Text {
         visible: field.label !== ""
         text: field.label
-        color: Theme.fgMuted
+        // Etiqueta del campo: en M3 es un 'label', no un texto de lectura, y
+        // se tiñe de acento cuando el campo tiene el foco — así el ojo sabe
+        // qué está editando sin buscar el cursor.
+        color: field.invalid ? Theme.red
+             : input.activeFocus ? Theme.accent : Theme.fgMuted
         font.family: Theme.fontFamily
-        font.pixelSize: Theme.fontSize - 3
+        font.pixelSize: Theme.typeLabelMedium
+        Behavior on color { ColorAnimation { duration: Theme.animFast } }
     }
 
     Rectangle {
+        id: box
         Layout.fillWidth: true
         implicitHeight: Theme.rowM
         radius: Theme.pillRadius
         color: Theme.surface
-        border.width: Theme.hairline
+        // El borde ENGORDA al enfocar (1 → 2 px), no solo cambia de color.
+        // Es la diferencia entre "este campo está resaltado" y "este campo
+        // está recibiendo lo que escribes": con solo el color, en un tema de
+        // acento apagado el foco casi no se distinguía del reposo.
+        border.width: (input.activeFocus || field.invalid)
+            ? Math.max(2, Theme.dp(2)) : Theme.hairline
         border.color: field.invalid ? Theme.red
                      : input.activeFocus ? Theme.accent
                      : Theme.withAlpha(Theme.overlay, 0.4)
         Behavior on border.color { ColorAnimation { duration: Theme.animFast } }
+        Behavior on border.width { NumberAnimation { duration: Theme.animFast } }
+
+        // Capa de estado al pasar el ratón (ver Theme.stateHover).
+        Rectangle {
+            anchors.fill: parent
+            radius: parent.radius
+            color: Theme.fg
+            opacity: boxMa.containsMouse && !input.activeFocus ? Theme.stateHover : 0
+            Behavior on opacity { NumberAnimation { duration: Theme.animFast } }
+        }
+        MouseArea {
+            id: boxMa
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.IBeamCursor
+            onPressed: input.forceActiveFocus()
+        }
 
         RowLayout {
             anchors.fill: parent

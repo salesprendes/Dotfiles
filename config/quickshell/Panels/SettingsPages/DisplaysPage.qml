@@ -4,8 +4,7 @@ import qs.Config
 import qs.Services
 
 // Pantallas
-ColumnLayout {
-    spacing: Theme.space12
+SettingsPage {
 
     // Orden / alineación (con 2+ monitores).
     SettingsCard {
@@ -23,12 +22,8 @@ ColumnLayout {
         }
     }
 
-    Text {
-        Layout.fillWidth: true
+    EmptyNote {
         visible: Displays.monitors.length === 0
         text: I18n.tr("No displays found")
-        color: Theme.fgMuted
-        horizontalAlignment: Text.AlignHCenter
-        font.family: Theme.fontFamily; font.pixelSize: Theme.fontSize - 2
     }
 }

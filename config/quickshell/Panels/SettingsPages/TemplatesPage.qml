@@ -20,9 +20,8 @@ import qs.Config
 // como instalado y aparece como una casilla más en "Sistema". Cada plantilla
 // activa se aplica sin pasos manuales: el archivo de config de la app se
 // edita solo (ver Config/AppTemplates.qml).
-ColumnLayout {
+SettingsPage {
     id: page
-    spacing: Theme.space14
 
     readonly property var categoryOrder: ["system", "terminal", "editor", "compositor", "audio", "misc"]
     function categoryLabel(cat) {
@@ -52,12 +51,13 @@ ColumnLayout {
 
     SettingsCard {
         title: I18n.tr("Templates"); glyph: "󰈔"
-
-        Hint {
-            text: I18n.tr("Built-in templates render this theme's colors into other apps' config files, fully automatically — no extra steps.")
-        }
+        // Va como subtítulo del rótulo, fuera de la tarjeta (ver
+        // SettingsCard.description): dentro era un párrafo suelto sin insignia
+        // ni control que rompía la retícula de filas en la primera línea.
+        description: I18n.tr("Built-in templates render this theme's colors into other apps' config files, fully automatically — no extra steps.")
 
         SwitchRow {
+            glyph: "󰈙"
             skey: "templatesOn"
             label: I18n.tr("Enable templates")
             desc: I18n.tr("Turns the whole feature on or off. Your picks below stay saved either way.")
@@ -89,14 +89,16 @@ ColumnLayout {
                     Layout.topMargin: Theme.space8
                     spacing: Theme.space8
 
+                    // Rótulo de categoría, en caja normal. Iba en versalitas
+                    // espaciadas, que es justo el gesto que se quitó de los
+                    // rótulos de sección: dejarlo aquí hacía que dentro de una
+                    // misma página convivieran las dos tipografías de rótulo.
                     Text {
                         text: page.categoryLabel(catGroup.modelData.category)
-                        color: Theme.fgMuted
+                        color: Theme.fgDim
                         font.family: Theme.fontFamily
-                        font.pixelSize: Theme.sp(11)
-                        font.bold: true
-                        font.capitalization: Font.AllUppercase
-                        font.letterSpacing: 1
+                        font.pixelSize: Theme.typeLabelMedium
+                        font.weight: Font.Medium
                     }
 
                     GridLayout {

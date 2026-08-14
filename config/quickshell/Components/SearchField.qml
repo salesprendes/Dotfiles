@@ -29,10 +29,12 @@ Rectangle {
     implicitHeight: Theme.rowM
     radius: Theme.pillRadius
     color: Theme.surface
-    border.width: Theme.hairline
+    // Borde que engorda al enfocar, como el resto de campos (ver TextField).
+    border.width: input.activeFocus ? Math.max(2, Theme.dp(2)) : Theme.hairline
     border.color: input.activeFocus ? Theme.accent
                  : Theme.withAlpha(Theme.overlay, 0.4)
     Behavior on border.color { ColorAnimation { duration: Theme.animFast } }
+    Behavior on border.width { NumberAnimation { duration: Theme.animFast } }
 
     // Toda la píldora enfoca el campo, no solo la franja del texto: el
     // TextInput mide lo que mide su fuente y clicar el relleno de alrededor
@@ -40,9 +42,20 @@ Rectangle {
     // al abrirse; en una ventana normal dejaba el buscador "muerto").
     // Declarado ANTES de la fila: el botón de limpiar queda encima y gana.
     MouseArea {
+        id: boxMa
         anchors.fill: parent
+        hoverEnabled: true
         cursorShape: Qt.IBeamCursor
         onPressed: input.forceActiveFocus()
+    }
+
+    // Capa de estado (ver Theme.stateHover).
+    Rectangle {
+        anchors.fill: parent
+        radius: parent.radius
+        color: Theme.fg
+        opacity: boxMa.containsMouse && !input.activeFocus ? Theme.stateHover : 0
+        Behavior on opacity { NumberAnimation { duration: Theme.animFast } }
     }
 
     RowLayout {

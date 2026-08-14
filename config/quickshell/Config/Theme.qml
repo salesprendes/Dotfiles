@@ -50,6 +50,12 @@ Singleton {
     readonly property color popupBg:    withAlpha(bg, Settings.effPopupOpacity)
     readonly property color pillBg:     withAlpha(surface, Settings.effWidgetOpacity)
     readonly property color panelBorder: withAlpha(overlay, 0.5)
+    // Acento LEGIBLE para TEXTO. Sobre superficie clara —y sobre todo sobre un
+    // tinte del propio acento, como la píldora de la barra o el segmento
+    // elegido— el acento puro no tiene contraste: en modo claro, texto verde
+    // sobre verde al 32 % es casi invisible. Es el equivalente al
+    // 'on_primary_container' de Material 3, que nunca es el color base.
+    readonly property color accentText: isDark ? accent : Qt.darker(accent, 1.85)
     readonly property color focusRing:  withAlpha(accent, 0.92)
     readonly property color focusBg:    withAlpha(accent, 0.14)
 
@@ -69,8 +75,10 @@ Singleton {
     readonly property real uiScale: Settings.uiScale
     // Densidad automática compartida con el greeter: fórmula en
     // Config/Scale.qml, instanciada aquí (ver el comentario de ese archivo).
+    // El zoom automático se puede apagar (Ajustes → Tema): entonces la
+    // densidad es neutra y manda solo la escala del usuario.
     readonly property Scale _densitySource: Scale {}
-    readonly property real densityScale: _densitySource.density
+    readonly property real densityScale: Settings.autoDensity ? _densitySource.density : 1
     readonly property real scale: clamp(uiScale * densityScale, 0.7, 1.9)
 
     function dp(value) {
@@ -104,6 +112,50 @@ Singleton {
     readonly property int space14: dp(14)
     readonly property int space16: dp(16)
     readonly property int space18: dp(18)
+
+    // ── Material 3 ───────────────────────────────────────────────────────────
+    // Capas de estado: en M3 un control no cambia de color al interactuar,
+    // sino que se le superpone una capa del color de su contenido con una
+    // opacidad fija. Tenerlas como tokens es lo que hace que un interruptor,
+    // un botón y una pestaña reaccionen con la MISMA intensidad — que es de
+    // dónde sale la sensación de que todo pertenece al mismo sistema.
+    readonly property real stateHover: 0.08
+    readonly property real stateFocus: 0.10
+    readonly property real statePressed: 0.12
+
+    // Escala de formas de M3. No sustituye a pillRadius/barRadius (que siguen
+    // el ajuste de redondeo del usuario): son los radios FIJOS de los
+    // controles, que en M3 no dependen del tema sino de su tamaño.
+    readonly property int shapeXs: dp(4)
+    readonly property int shapeSm: dp(8)
+    readonly property int shapeMd: dp(12)
+    readonly property int shapeLg: dp(16)
+    readonly property int shapeXl: dp(28)
+
+    // Escala tipográfica de Material 3. Sustituye a los "fontSize − 3" que
+    // había repartidos por el código: dos textos del mismo papel acababan con
+    // tamaños distintos según quién los escribiera, y no había forma de saber
+    // si una diferencia de 1 px era intencionada o un descuido.
+    //
+    // Los tres papeles de M3, de dentro afuera:
+    //   label → texto DE un control (rótulos, pestañas, botones)
+    //   body  → texto que se lee seguido (descripciones, ayudas)
+    //   title → encabezados
+    // Todos pasan por sp(), así que siguen el ajuste de tamaño de fuente.
+    readonly property int typeLabelSmall:    sp(11)
+    readonly property int typeLabelMedium:   sp(12)
+    readonly property int typeLabelLarge:    sp(14)
+    readonly property int typeBodySmall:     sp(12)
+    readonly property int typeBodyMedium:    sp(14)
+    readonly property int typeBodyLarge:     sp(16)
+    readonly property int typeTitleSmall:    sp(14)
+    readonly property int typeTitleMedium:   sp(16)
+    readonly property int typeTitleLarge:    sp(22)
+    readonly property int typeHeadlineSmall: sp(24)
+    readonly property int typeHeadlineMedium: sp(28)
+    // Tracking de las versalitas: a cuerpo pequeño y en mayúsculas, la
+    // monoespaciada necesita aire para no leerse como un bloque macizo.
+    readonly property real typeLabelTracking: dp(1.4)
 
     readonly property int controlXS: dp(22)
     readonly property int controlS: dp(26)

@@ -314,7 +314,11 @@ PanelWindow {
                     y: popups.fromBottom ? row.height - implicitHeight : 0
                     notif: row.notification
                     popupMode: true
-                    showProgress: true
+                    // Sin cuenta atrás no hay barra que enseñar: con lifetime 0
+                    // el aviso no se va solo, así que una barra congelada al
+                    // 100% mentiría sobre lo que va a pasar.
+                    showProgress: Settings.notifShowProgress && row.lifetime > 0
+                    compact: Settings.notifCompact
                     progress: row.progress
                     // Al salir se funde la tarjeta entera; al entrar se descubre
                     // opaca con el propio despliegue (fundirla también en la
@@ -383,13 +387,31 @@ PanelWindow {
                     // propósito del multiplicador de velocidad de animaciones,
                     // porque mide segundos de verdad, no es decoración. Arranca
                     // ya, sin esperar al despliegue.
-                    countdown.start()
+                    //
+                    // Con lifetime 0 (urgencia crítica configurada a "nunca")
+                    // no se arranca siquiera: la animación tiene un suelo de
+                    // 1000 ms, así que dejarla correr descartaría el aviso al
+                    // segundo — justo lo contrario de lo que se ha pedido.
+                    if (row.lifetime > 0)
+                        countdown.start()
+                }
+
+                // Duración según la urgencia que declaró la app (0 baja,
+                // 1 normal, 2 crítica). Con 0 segundos el aviso NO expira: se
+                // queda hasta que lo descartes, que es lo que manda la
+                // especificación de freedesktop para lo crítico.
+                readonly property int lifetime: {
+                    const u = row.notification && row.notification.urgency !== undefined
+                        ? row.notification.urgency : 1
+                    return u === 2 ? Settings.notifTimeoutCritical
+                         : u === 0 ? Settings.notifTimeoutLow
+                                   : Settings.notifTimeout
                 }
 
                 NumberAnimation {
                     id: countdown
                     target: row; property: "progress"; from: 1; to: 0
-                    duration: Math.max(1000, Settings.notifTimeout * 1000)
+                    duration: Math.max(1000, row.lifetime * 1000)
                     easing.type: Easing.Linear
                     onFinished: popups.dismiss(row.key)
                 }

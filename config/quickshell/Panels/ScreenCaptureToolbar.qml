@@ -197,6 +197,10 @@ PanelWindow {
                                 Layout.fillWidth: true
                                 spacing: Theme.space12
                                 DropdownRow {
+                                    // Aquí el panel empuja en vez de flotar: la
+                                    // barra es pequeña y recorta su contenido, así
+                                    // que un panel flotante saldría cortado.
+                                    floatingPanel: false
                                     group: settingsDropdowns
                                     Layout.fillWidth: true
                                     label: "Modo"
@@ -205,6 +209,10 @@ PanelWindow {
                                     onPicked: (v) => ScreenCapture.captureMode = v
                                 }
                                 DropdownRow {
+                                    // Aquí el panel empuja en vez de flotar: la
+                                    // barra es pequeña y recorta su contenido, así
+                                    // que un panel flotante saldría cortado.
+                                    floatingPanel: false
                                     group: settingsDropdowns
                                     Layout.fillWidth: true
                                     visible: ScreenCapture.captureMode === "monitor"
@@ -263,6 +271,10 @@ PanelWindow {
                                 visible: !ScreenCapture.videoMode
                                 spacing: Theme.space12
                                 DropdownRow {
+                                    // Aquí el panel empuja en vez de flotar: la
+                                    // barra es pequeña y recorta su contenido, así
+                                    // que un panel flotante saldría cortado.
+                                    floatingPanel: false
                                     group: settingsDropdowns
                                     Layout.fillWidth: true
                                     label: "Formato"
@@ -307,6 +319,10 @@ PanelWindow {
                                 visible: ScreenCapture.videoMode
                                 spacing: Theme.space12
                                 DropdownRow {
+                                    // Aquí el panel empuja en vez de flotar: la
+                                    // barra es pequeña y recorta su contenido, así
+                                    // que un panel flotante saldría cortado.
+                                    floatingPanel: false
                                     group: settingsDropdowns
                                     Layout.fillWidth: true
                                     label: "Formato"
@@ -315,6 +331,10 @@ PanelWindow {
                                     onPicked: (v) => ScreenCapture.videoFormat = v
                                 }
                                 DropdownRow {
+                                    // Aquí el panel empuja en vez de flotar: la
+                                    // barra es pequeña y recorta su contenido, así
+                                    // que un panel flotante saldría cortado.
+                                    floatingPanel: false
                                     group: settingsDropdowns
                                     Layout.fillWidth: true
                                     label: "FPS"
@@ -323,6 +343,10 @@ PanelWindow {
                                     onPicked: (v) => ScreenCapture.videoFps = v
                                 }
                                 DropdownRow {
+                                    // Aquí el panel empuja en vez de flotar: la
+                                    // barra es pequeña y recorta su contenido, así
+                                    // que un panel flotante saldría cortado.
+                                    floatingPanel: false
                                     group: settingsDropdowns
                                     Layout.fillWidth: true
                                     label: "Calidad"
@@ -336,6 +360,10 @@ PanelWindow {
                                 visible: ScreenCapture.videoMode
                                 spacing: Theme.space12
                                 DropdownRow {
+                                    // Aquí el panel empuja en vez de flotar: la
+                                    // barra es pequeña y recorta su contenido, así
+                                    // que un panel flotante saldría cortado.
+                                    floatingPanel: false
                                     group: settingsDropdowns
                                     Layout.fillWidth: true
                                     label: "Códec vídeo"
@@ -344,6 +372,10 @@ PanelWindow {
                                     onPicked: (v) => ScreenCapture.videoCodec = v
                                 }
                                 DropdownRow {
+                                    // Aquí el panel empuja en vez de flotar: la
+                                    // barra es pequeña y recorta su contenido, así
+                                    // que un panel flotante saldría cortado.
+                                    floatingPanel: false
                                     group: settingsDropdowns
                                     Layout.fillWidth: true
                                     label: "Códec audio"

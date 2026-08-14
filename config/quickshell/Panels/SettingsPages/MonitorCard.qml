@@ -26,12 +26,14 @@ SettingsCard {
     }
 
     DropdownRow {
+        glyph: "󰍹"
         label: I18n.tr("Resolution")
         options: mc.modes
         current: mc.selMode
         onPicked: (v) => mc.selMode = v
     }
     DropdownRow {
+        glyph: "󰩨"
         label: I18n.tr("Scale")
         options: [ { text: "100%", value: 1 }, { text: "125%", value: 1.25 },
                    { text: "150%", value: 1.5 }, { text: "175%", value: 1.75 },
@@ -40,6 +42,7 @@ SettingsCard {
         onPicked: (v) => mc.selScale = v
     }
     SegRow {
+        glyph: "󰑥"
         label: I18n.tr("Rotation")
         options: [ { text: "0°", value: 0 }, { text: "90°", value: 1 },
                    { text: "180°", value: 2 }, { text: "270°", value: 3 } ]
@@ -48,6 +51,7 @@ SettingsCard {
     }
     // Activar/desactivar solo con 2+ monitores (no apagar la única pantalla).
     SwitchRow {
+        glyph: "󰍹"
         visible: Displays.monitors.length > 1
         label: I18n.tr("Enabled")
         checked: mc.selEnabled

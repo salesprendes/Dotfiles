@@ -7,9 +7,8 @@ import qs.Config
 
 // Página "Shell": preferencias del propio shell — reloj/fecha y el avatar del
 // usuario. Cada bloque en su propia tarjeta.
-ColumnLayout {
+SettingsPage {
     id: shellPage
-    spacing: Theme.space14
 
     readonly property string userName: Quickshell.env("USER") || "usuario"
     readonly property string userInitial: userName.charAt(0).toUpperCase()
@@ -25,22 +24,18 @@ ColumnLayout {
         stdout: StdioCollector { onStreamFinished: shellPage.uid = (this.text || "").trim() }
     }
 
-    // Selector de imagen (zenity): imprime la ruta elegida por stdout; cancelar
-    // sale con código ≠0 y stdout vacío. Al elegir, se aplica solo al greeter.
-    Process {
+    // Selector de imágenes propio (ver Components/ImagePickerSheet.qml). Antes
+    // lanzaba 'zenity', que en este equipo NO está instalado (ni yad, ni
+    // kdialog): el botón no abría nada. Y el diálogo de Qt, que sí funcionaba,
+    // era una lista de nombres con tamaños y fechas — para elegir una foto hay
+    // que verla, no leer cómo se llama.
+    ImagePickerSheet {
         id: avatarPicker
-        command: ["zenity", "--file-selection",
-                  "--title=" + I18n.tr("Choose avatar image"),
-                  "--file-filter=" + I18n.tr("Images") + " | *.png *.jpg *.jpeg *.webp *.bmp *.gif"]
-        stdout: StdioCollector {
-            onStreamFinished: {
-                const p = (this.text || "").trim()
-                if (p !== "") {
-                    Settings.avatarPath = p
-                    shellPage.greeterStatus = ""
-                    greeterApply.running = true
-                }
-            }
+        circularCrop: true      // el avatar se recorta en círculo
+        onPicked: (p) => {
+            Settings.avatarPath = p
+            shellPage.greeterStatus = ""
+            greeterApply.running = true
         }
     }
 
@@ -83,6 +78,7 @@ ColumnLayout {
         glyph: "󰉺"
 
         SegRow {
+            glyph: "󰉺"
             skey: "barPosition"
             label: I18n.tr("Position on screen")
             options: [ { text: I18n.tr("Top"), value: "top" },
@@ -91,6 +87,7 @@ ColumnLayout {
             onPicked: (v) => Settings.barPosition = v
         }
         SwitchRow {
+            glyph: "󰕰"
             skey: "barFloating"
             label: I18n.tr("Floating bar")
             desc: I18n.tr("Detached with margin and rounded corners; disabled sticks it edge to edge")
@@ -99,16 +96,31 @@ ColumnLayout {
         }
     }
 
+    // ── Teclado ──────────────────────────────────────────────────────────────
+    SettingsCard {
+        title: I18n.tr("Keyboard")
+        glyph: "󰌌"
+
+        SwitchRow {
+            glyph: "󰎠"
+            skey: "numlockOn"
+            label: I18n.tr("Num Lock on")
+            desc: I18n.tr("Turns it on now and on every shell start")
+            checked: Settings.numlockOn
+            onToggled: Settings.numlockOn = !Settings.numlockOn
+        }
+    }
+
     // ── Reloj y fecha ────────────────────────────────────────────────────────
     SettingsCard {
         title: I18n.tr("Clock and date")
         glyph: "󰥔"
 
-        SwitchRow { skey: "clock24h"; label: I18n.tr("24-hour format"); desc: I18n.tr("Disabled uses AM/PM")
+        SwitchRow { glyph: "󰥔"; skey: "clock24h"; label: I18n.tr("24-hour format"); desc: I18n.tr("Disabled uses AM/PM")
             checked: Settings.clock24h; onToggled: Settings.clock24h = !Settings.clock24h }
-        SwitchRow { skey: "clockShowSeconds"; label: I18n.tr("Show seconds"); checked: Settings.clockShowSeconds
+        SwitchRow { glyph: "󰔛"; skey: "clockShowSeconds"; label: I18n.tr("Show seconds"); checked: Settings.clockShowSeconds
             onToggled: Settings.clockShowSeconds = !Settings.clockShowSeconds }
-        SwitchRow { skey: "clockShowDate"; label: I18n.tr("Show date in the bar"); checked: Settings.clockShowDate
+        SwitchRow { glyph: "󰃭"; skey: "clockShowDate"; label: I18n.tr("Show date in the bar"); checked: Settings.clockShowDate
             onToggled: Settings.clockShowDate = !Settings.clockShowDate }
     }
 
@@ -120,56 +132,75 @@ ColumnLayout {
         // Mismo patrón que el resto de filas: contenido a la izquierda (avatar +
         // nombre + pista) y los controles a la derecha, en vez de un bloque
         // suelto. Así encaja con el lenguaje del resto de la página.
-        RowLayout {
+        //
+        // GridLayout, no RowLayout: en una columna estrecha los dos botones no
+        // caben al lado del nombre y un RowLayout los sacaba por el borde de
+        // la tarjeta. Aquí, cuando la fila ya no da para todo (medido contra
+        // SU ancho, no contra la ventana — misma idea que SegRow.stacked),
+        // pasa a una columna y los botones bajan a su propio renglón,
+        // alineados a la derecha.
+        GridLayout {
+            id: avatarRow
             Layout.fillWidth: true
-            spacing: Theme.space12
+            columnSpacing: Theme.space12
+            rowSpacing: Theme.space8
+            readonly property bool stacked: width > 0 && width < Theme.dp(460)
+            columns: stacked ? 1 : 2
 
-            Avatar {
-                Layout.alignment: Qt.AlignVCenter
-                diameter: Theme.dp(48)
-                source: Settings.avatarPath
-                initial: shellPage.userInitial
-                initialPixelSize: Theme.sp(20)
-            }
-
-            ColumnLayout {
+            RowLayout {
                 Layout.fillWidth: true
-                spacing: Theme.dp(1)
-                Text {
-                    Layout.fillWidth: true
-                    text: shellPage.userName
-                    color: Theme.fg
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSize + 1
-                    font.bold: true
-                    elide: Text.ElideRight
+                spacing: Theme.space12
+
+                Avatar {
+                    Layout.alignment: Qt.AlignVCenter
+                    diameter: Theme.dp(48)
+                    source: Settings.avatarPath
+                    initial: shellPage.userInitial
+                    initialPixelSize: Theme.sp(20)
                 }
-                Text {
+
+                ColumnLayout {
                     Layout.fillWidth: true
-                    text: shellPage.greeterStatus !== ""
-                        ? shellPage.greeterStatus
-                        : I18n.tr("Round image, applied to the login screen")
-                    color: Theme.fgMuted
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSize - 2
-                    elide: Text.ElideRight
+                    spacing: Theme.dp(1)
+                    Text {
+                        Layout.fillWidth: true
+                        text: shellPage.userName
+                        color: Theme.fg
+                        font.family: Theme.fontFamily
+                        font.pixelSize: Theme.fontSize + 1
+                        font.bold: true
+                        elide: Text.ElideRight
+                    }
+                    Text {
+                        Layout.fillWidth: true
+                        text: shellPage.greeterStatus !== ""
+                            ? shellPage.greeterStatus
+                            : I18n.tr("Round image, applied to the login screen")
+                        color: Theme.fgMuted
+                        font.family: Theme.fontFamily
+                        font.pixelSize: Theme.fontSize - 2
+                        elide: Text.ElideRight
+                    }
                 }
             }
 
-            TextButton {
-                Layout.alignment: Qt.AlignVCenter
-                text: I18n.tr("Choose image…")
-                primary: true
-                onClicked: avatarPicker.running = true
-            }
-            TextButton {
-                Layout.alignment: Qt.AlignVCenter
-                text: I18n.tr("Remove")
-                enabled: Settings.avatarPath !== ""
-                onClicked: {
-                    Settings.avatarPath = ""
-                    shellPage.greeterStatus = ""
-                    greeterRemove.running = true    // quitar también del login
+            RowLayout {
+                Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
+                spacing: Theme.space8
+
+                TextButton {
+                    text: I18n.tr("Choose image…")
+                    primary: true
+                    onClicked: avatarPicker.present(Settings.avatarPath)
+                }
+                TextButton {
+                    text: I18n.tr("Remove")
+                    enabled: Settings.avatarPath !== ""
+                    onClicked: {
+                        Settings.avatarPath = ""
+                        shellPage.greeterStatus = ""
+                        greeterRemove.running = true    // quitar también del login
+                    }
                 }
             }
         }

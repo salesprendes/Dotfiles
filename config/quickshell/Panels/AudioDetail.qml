@@ -196,7 +196,6 @@ ColumnLayout {
 
             Slider {
                 Layout.fillWidth: true
-                icon: ""
                 accent: streamRow.accent
                 value: streamRow.stream?.audio?.volume ?? 0
                 onMoved: (v) => {

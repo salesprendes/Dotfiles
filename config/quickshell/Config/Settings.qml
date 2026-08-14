@@ -31,12 +31,60 @@ Singleton {
     property bool   gtkThemingEnabled: true
     // Tematizado Hyprland (ver Ajustes → Plantillas y applyHyprlandThemeNow).
     property bool   hyprlandThemingEnabled: true
+    // Bloq Núm encendido: se aplica al arrancar el shell y al conmutarlo,
+    // vía la opción numlock_by_default de Hyprland (API Lua).
+    property bool   numlockOn: false
     // Resto de plantillas (ver Ajustes → Plantillas y Config/AppTemplates.qml):
     // mapa id → activada/no, todas apagadas por defecto (cada plantilla se
     // activa a mano). GTK/Hyprland quedan aparte, arriba: ya tenían su
     // propio interruptor antes de que existiera este mecanismo.
     property var    templatesEnabled: ({})
+    // ── Asistente IA (Modules/IA) ────────────────────────────────────────────
+    // Proveedor activo ("gemini" | "openrouter" | "ollama") y, por proveedor,
+    // el modelo y su credencial. Las claves se guardan en settings.json en
+    // claro, como el resto de ajustes: es un archivo local del usuario.
+    property bool   showAi: true        // icono del asistente en la barra
+    property string aiProvider: "gemini"
+    property string aiModelGemini: "gemini-2.5-flash"
+    property string aiModelOpenrouter: "qwen/qwen3-30b-a3b:free"
+    property string aiModelOllama: "qwen3"
+    property string aiKeyGemini: ""
+    property string aiKeyOpenrouter: ""
+    property string aiOllamaUrl: "http://127.0.0.1:11434"
+    // Proveedor "LLM": cualquier servidor OpenAI-compatible local o remoto
+    // (llama.cpp, LM Studio, vLLM…). La URL es la base /v1; la clave es
+    // opcional (algunos servidores locales piden token).
+    property string aiCustomUrl: "http://127.0.0.1:8080/v1"
+    property string aiModelCustom: "local"
+    property string aiKeyCustom: ""
+    // Estilo de respuesta: "normal" | "concise" | "teacher" | "reviewer".
+    property string aiPersona: "normal"
+    // Modo del asistente: "chat" (solo conversación) | "agent" (herramientas
+    // con aprobación, al estilo plan/build de opencode).
+    property string aiMode: "chat"
+    // Instrucciones extra del usuario, añadidas al prompt de sistema.
+    property string aiCustomPrompt: ""
+    // Auto-aprobar las herramientas de SOLO LECTURA (leer archivo, listar
+    // carpeta). Las que escriben o ejecutan siempre piden aprobación.
+    property bool   aiAutoRead: false
+    // Política por herramienta (estilo aisuite): mapa nombre → "ask" (pedir
+    // aprobación, el defecto) | "auto" (ejecutar sin preguntar) | "off" (el
+    // modelo ni la ve). Vacío = todo en "ask".
+    property var    aiToolPolicies: ({})
+    // Temperatura del modelo (parámetro universal del contrato).
+    property real   aiTemperature: 0.7
+    // Compactación del contexto: "manual" (solo /compactar) | "warn" (avisa
+    // al llenarse) | "auto" (se compacta solo al llenarse).
+    property string aiAutoCompact: "warn"
+    // Turnos recientes (pregunta+respuesta) que sobreviven a la compactación.
+    property int    aiCompactKeep: 1
+
     property real   uiScale: 1.0
+    // Zoom automático: deriva la densidad de la resolución del monitor (lado
+    // corto respecto a 1080p; ver Config/Scale.qml). Apagado, manda solo
+    // uiScale — para quien prefiere que un 100% sea un 100% en cualquier
+    // pantalla.
+    property bool   autoDensity: true
     property int    animationSpeed: 2   // 0 none | 1 short | 2 medium | 3 long | 4 custom
     property int    customAnimationDuration: 500
     property real   barOpacity: 0.78    // opacidad del fondo de la barra
@@ -303,10 +351,36 @@ Singleton {
 
     // Notificaciones
     property bool   notifPopupsEnabled: true
-    property int    notifTimeout: 5            // segundos
+    // Duración en pantalla por urgencia. Las tres apps que envían avisos no
+    // pesan lo mismo: un "canción cambiada" (baja) estorba si dura lo mismo
+    // que un "batería crítica". notifTimeout es la urgencia NORMAL — conserva
+    // el nombre viejo para no invalidar los settings.json ya guardados.
+    property int    notifTimeoutLow: 4          // segundos
+    property int    notifTimeout: 5             // segundos (urgencia normal)
+    // 0 = no expira: se queda hasta que la descartes. Es el comportamiento
+    // que espera la especificación de freedesktop para lo crítico.
+    property int    notifTimeoutCritical: 0     // segundos (0 = nunca)
     property int    notifMaxVisible: 4
     property string notifPosition: "tr"        // tr | tl | br | bl
+    // Barra de cuenta atrás en el popup: enseña cuánto le queda antes de
+    // irse solo. Con timeouts largos ayuda; a algunos les parece ruido.
+    property bool   notifShowProgress: true
+    // Modo compacto: solo el título, sin el cuerpo del mensaje.
+    property bool   notifCompact: false
     property var    mutedNotificationApps: []
+
+    // Avisos de batería (Services/Battery.qml). Los umbrales estaban fijos en
+    // 15% y 5%; con una batería grande eso son horas, y con una gastada,
+    // minutos, así que quien lo sufre debe poder moverlos.
+    property bool   batteryNotifyLow: true
+    property int    batteryLowThreshold: 15      // %
+    property bool   batteryNotifyCritical: true
+    property int    batteryCriticalThreshold: 5  // %
+
+    // OSD: el aviso flotante de volumen.
+    property bool   osdEnabled: true
+    property string osdPosition: "bottom"      // top | bottom
+    property real   osdTimeout: 1.6            // segundos en pantalla
 
     // Fondos
     // Transición visual que aplica Background/Backdrop.qml al cambiar de fondo:
@@ -321,6 +395,10 @@ Singleton {
     // orden aleatorio o secuencial. La ejecuta Services/Wallpaper.qml.
     property int    wallpaperAutoMin: 0
     property bool   wallpaperRandom: true
+    // Encaje de la imagen en la pantalla cuando su proporción no coincide:
+    // crop recorta lo que sobra (por defecto), fit deja franjas y muestra la
+    // imagen entera, stretch la deforma hasta llenar.
+    property string wallpaperFillMode: "crop"   // crop | fit | stretch
 
     // Paleta dinámica generada desde el fondo de pantalla activo (tema base
     // "dynamic"). La calcula el extractor de la barra (ver Bar.qml) y se
@@ -361,7 +439,15 @@ Singleton {
     // resolvedAccent y reset() lo recalcula al final.
     readonly property var _defaults: ({
         "themeName": "dynamic", "accentName": "theme", "darkMode": true,
-        "uiScale": 1.0, "animationSpeed": 2, "customAnimationDuration": 500, "barOpacity": 0.78,
+        "showAi": true,
+        "aiProvider": "gemini", "aiModelGemini": "gemini-2.5-flash",
+        "aiModelOpenrouter": "qwen/qwen3-30b-a3b:free", "aiModelOllama": "qwen3",
+        "aiKeyGemini": "", "aiKeyOpenrouter": "", "aiOllamaUrl": "http://127.0.0.1:11434",
+        "aiCustomUrl": "http://127.0.0.1:8080/v1", "aiModelCustom": "local", "aiKeyCustom": "",
+        "aiPersona": "normal", "aiMode": "chat", "aiCustomPrompt": "", "aiAutoRead": false,
+        "aiToolPolicies": {}, "aiTemperature": 0.7,
+        "aiAutoCompact": "warn", "aiCompactKeep": 1,
+        "uiScale": 1.0, "autoDensity": true, "animationSpeed": 2, "customAnimationDuration": 500, "barOpacity": 0.78,
         "popupOpacity": 0.85, "widgetOpacity": 0.55,
         "cornerScale": 1.0, "barScale": 1.0,
         "barPosition": "top", "barFloating": true, "panelBackdropDim": 0.0,
@@ -372,15 +458,21 @@ Singleton {
         "showTray": true, "showSysmon": true, "showBattery": true, "showClipboard": true,
         "caffeine": false,
         "templatesOn": true, "gtkThemingEnabled": true, "hyprlandThemingEnabled": true, "templatesEnabled": ({}),
+        "numlockOn": false,
         "showNotifications": true, "showPowerProfile": true, "showCaffeine": false,
         "clock24h": true, "clockShowSeconds": false, "clockShowDate": true,
         "weatherEnabled": true, "weatherLocation": "", "weatherMetric": true, "weatherRefreshMin": 30,
         "weatherShowForecast": true, "weatherForecastDays": 5, "weatherShowDetails": true, "weatherShowWind": false,
         "weatherShowRain": false, "weatherShowSun": false, "weatherShowInBar": false,
-        "notifPopupsEnabled": true, "notifTimeout": 5, "notifMaxVisible": 4, "notifPosition": "tr",
+        "notifPopupsEnabled": true, "notifTimeout": 5, "notifTimeoutLow": 4, "notifTimeoutCritical": 0,
+        "notifMaxVisible": 4, "notifPosition": "tr",
+        "notifShowProgress": true, "notifCompact": false,
         "mutedNotificationApps": [],
+        "batteryNotifyLow": true, "batteryLowThreshold": 15,
+        "batteryNotifyCritical": true, "batteryCriticalThreshold": 5,
+        "osdEnabled": true, "osdPosition": "bottom", "osdTimeout": 1.6,
         "wallpaperTransition": "fade", "wallpaperTransitionDuration": 1.0, "wallpaperCurrent": "", "avatarPath": "",
-        "wallpaperAutoMin": 0, "wallpaperRandom": true,
+        "wallpaperAutoMin": 0, "wallpaperRandom": true, "wallpaperFillMode": "crop",
         "dynamicPalette": ({}), "weatherCache": ({}),
         "terminalApp": "kitty", "terminalFont": "", "terminalFontSize": 11.5, "terminalOpacity": 0.80,
         "terminalPadding": 12, "terminalCursorShape": "beam", "terminalCursorBlink": true,
@@ -397,15 +489,20 @@ Singleton {
         "popupOpacity": [0.0, 1.0], "widgetOpacity": [0.0, 1.0],
         "cornerScale": [0.0, 2.0],
         "barScale": [0.5, 2.0], "fontScale": [0.5, 2.0], "weatherRefreshMin": [1, 1440], "weatherForecastDays": [3, 7],
-        "notifTimeout": [1, 120], "notifMaxVisible": [1, 20],
+        "notifTimeout": [1, 120], "notifTimeoutLow": [1, 120], "notifTimeoutCritical": [0, 120],
+        "notifMaxVisible": [1, 20],
+        "batteryLowThreshold": [5, 50], "batteryCriticalThreshold": [1, 30],
+        "osdTimeout": [0.5, 6.0],
         "wallpaperTransitionDuration": [0.1, 5.0],
         "panelBackdropDim": [0.0, 0.7], "wallpaperAutoMin": [0, 1440]
     })
     readonly property var _enums: ({
         "language": ["en", "es", "ca"],
         "notifPosition": ["tl", "tr", "bl", "br"],
+        "osdPosition": ["top", "bottom"],
         "barPosition": ["top", "bottom"],
         "wallpaperTransition": ["fade", "zoom", "slide", "push", "wipe"],
+        "wallpaperFillMode": ["crop", "fit", "stretch"],
         "fontHintstyle": ["hintnone", "hintslight", "hintmedium", "hintfull"],
         "fontRgba": ["none", "rgb", "bgr", "vrgb", "vbgr"],
         "fontLcdfilter": ["none", "lcddefault", "lcdlight", "lcdlegacy"]
@@ -462,6 +559,12 @@ Singleton {
             }
         }
         _loaded = true
+        // Bloq Núm: la opción de Hyprland no persiste entre sesiones por sí
+        // sola — se re-aplica en cada arranque del shell. Solo si el usuario
+        // lo pidió: con el ajuste apagado no se toca nada (quizá lo gestiona
+        // él en su config de Hyprland).
+        if (numlockOn)
+            applyNumlock()
         // Reescribe siempre tras cargar. normalizeSavedSettings() corrige en
         // memoria lo que ya no existe (un tema retirado, p.ej.), pero corre con
         // _loaded aún en false, así que su scheduleSave() se descarta y el
@@ -1147,6 +1250,15 @@ Singleton {
     // Las opacidades solo afectan al shell (el CSS de GTK va siempre opaco),
     // así que no disparan scheduleGtkSync: reescribiría gtk.css idéntico y
     // reiniciaría Nautilus sin efecto visible.
+    // Enciende/apaga Bloq Núm vía Hyprland (numlock_by_default por la API
+    // Lua: el `hyprctl keyword` clásico no funciona con el parser Lua).
+    // Cambiarla en caliente re-aplica el estado del LED a los teclados.
+    function applyNumlock() {
+        Quickshell.execDetached(["hyprctl", "eval",
+            'hl.config({ input = { numlock_by_default = '
+            + (numlockOn ? "true" : "false") + ' } })'])
+    }
+
     function _settingChanged(k) {
         switch (k) {
         case "themeName":
@@ -1163,6 +1275,10 @@ Singleton {
         case "fontLcdfilter":
         case "fontEmbeddedbitmap":
             scheduleSave(); scheduleFontSync()
+            return
+        case "numlockOn":
+            scheduleSave()
+            applyNumlock()
             return
         case "templatesOn":
             scheduleSave()
@@ -1301,9 +1417,32 @@ Singleton {
         }
     }
 
+    // Cinturón del Bloq Núm: ráfaga de re-applies tras el arranque (a los
+    // 3, 6, 9 y 12 s). El apply de load() pierde la carrera contra el
+    // hyprctl reload de la plantilla, y el listener de configreloaded
+    // (shell.qml) puede perderse el evento si cae antes de que el socket de
+    // eventos conecte — medido: un solo disparo tardío no bastaba. Cuatro
+    // tiros idempotentes cubren toda la ventana y luego se callan; a partir
+    // de ahí manda el listener.
+    property int _numlockShots: 0
+    Timer {
+        interval: 3000
+        repeat: true
+        running: s._loaded && s.numlockOn && s._numlockShots < 4
+        onTriggered: {
+            s._numlockShots++
+            s.applyNumlock()
+        }
+    }
+
     Process {
         id: hyprReload
         command: ["hyprctl", "reload"]
+        // La recarga relee la config Lua y PISA las opciones puestas en
+        // caliente; lo que dependa de ellas se re-aplica al terminar. En el
+        // arranque, el listener de 'configreloaded' (shell.qml) aún no
+        // existe cuando esta recarga dispara — este onExited sí.
+        onExited: if (s.numlockOn) s.applyNumlock()
     }
 
     Timer {
@@ -1364,11 +1503,16 @@ Singleton {
     // binding para capturas/grabaciones (antes cada uno lanzaba su proceso).
     property string xdgPicturesDir: home + "/Pictures"
     property string xdgVideosDir: home + "/Videos"
+    // Las usa el selector de imágenes para su lista de sitios.
+    property string xdgDownloadDir: home + "/Downloads"
+    property string xdgDesktopDir: home + "/Desktop"
     Process {
         id: xdgPicturesProc
         command: ["sh", "-c",
             "printf 'pictures='; xdg-user-dir PICTURES 2>/dev/null || echo \"$HOME/Pictures\"; " +
-            "printf 'videos='; xdg-user-dir VIDEOS 2>/dev/null || echo \"$HOME/Videos\""]
+            "printf 'videos='; xdg-user-dir VIDEOS 2>/dev/null || echo \"$HOME/Videos\"; " +
+            "printf 'download='; xdg-user-dir DOWNLOAD 2>/dev/null || echo \"$HOME/Downloads\"; " +
+            "printf 'desktop='; xdg-user-dir DESKTOP 2>/dev/null || echo \"$HOME/Desktop\""]
         stdout: StdioCollector {
             onStreamFinished: {
                 const lines = (text || "").trim().split("\n")
@@ -1379,6 +1523,8 @@ Singleton {
                     const v = lines[i].substring(p + 1).trim()
                     if (k === "pictures" && v !== "") s.xdgPicturesDir = v
                     else if (k === "videos" && v !== "") s.xdgVideosDir = v
+                    else if (k === "download" && v !== "") s.xdgDownloadDir = v
+                    else if (k === "desktop" && v !== "") s.xdgDesktopDir = v
                 }
                 s.wallpaperDirs = [s.xdgPicturesDir + "/Wallpapers", s.home + "/.config/wallpapers"]
             }

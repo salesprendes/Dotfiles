@@ -24,6 +24,34 @@ Rectangle {
 
     Behavior on color { ColorAnimation { duration: Theme.animFast } }
     Behavior on border.color { ColorAnimation { duration: Theme.animFast } }
+    // Se hunde al pulsar, como el resto de controles de la ventana.
+    scale: chipMa.pressed ? 0.96 : 1
+    Behavior on scale { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+
+    // Marca de activada. El estado lo decía SOLO el tono, y con todas las
+    // plantillas encendidas —que es lo normal— no había con qué comparar: la
+    // parrilla entera se veía teñida y no había forma de saber si eso
+    // significaba activa o simplemente "es una casilla". La marca lo dice sin
+    // depender de comparar unas con otras.
+    Text {
+        anchors.top: parent.top
+        anchors.right: parent.right
+        anchors.margins: Theme.space6
+        text: "󰄬"
+        color: Theme.accent
+        font.family: Theme.fontFamily
+        font.pixelSize: Theme.sp(12)
+        opacity: chip.active ? 1 : 0
+        // Entra creciendo desde el centro de su esquina, no aparece de golpe.
+        scale: chip.active ? 1 : 0.4
+        Behavior on opacity { NumberAnimation { duration: Theme.animFast } }
+        Behavior on scale {
+            NumberAnimation {
+                duration: Theme.animNormal
+                easing.type: Easing.OutBack; easing.overshoot: 2.2
+            }
+        }
+    }
 
     MouseArea {
         id: chipMa

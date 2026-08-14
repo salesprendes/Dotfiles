@@ -6,11 +6,13 @@
 
 import QtQuick
 import Quickshell
+import Quickshell.Hyprland
 import Quickshell.Io
 import qs.Background
 import qs.Bar
 import qs.Config
 import qs.Modules.Carousel
+import qs.Modules.IA
 import qs.Panels
 import qs.Services
 
@@ -73,11 +75,13 @@ ShellRoot {
             startupWallpaperReady = true
     }
 
+    // Solo escucha lo que la función LEE (scanning y list): también escuchaba
+    // onCurrentChanged, pero con las mismas entradas la función da el mismo
+    // resultado — era una reevaluación de más por cada cambio de fondo.
     Connections {
         target: Wallpaper
         function onScanningChanged() { shell.updateStartupWallpaperReady() }
         function onListChanged() { shell.updateStartupWallpaperReady() }
-        function onCurrentChanged() { shell.updateStartupWallpaperReady() }
     }
 
     Timer {
@@ -113,6 +117,7 @@ ShellRoot {
         function capture(): void { ScreenCapture.openToolbar(false) }
         function record(): void { ScreenCapture.openToolbar(true) }
         function settings(): void { Globals.toggleSettings() }
+        function ai(): void { Globals.toggleAi() }
         function dnd(): void { Globals.dnd = !Globals.dnd }
         function caffeine(): void { Settings.caffeine = !Settings.caffeine }
         function close(): void { Globals.closeAll() }
@@ -155,12 +160,23 @@ ShellRoot {
     // desmapear y el redimensionado de la capa), lo que producía una entrada
     // doble "forzada" y una franja gris residual al desvanecer la instantánea
     // del último búfer tras cerrar.
-    function applyLayerRules() {
-        Quickshell.execDetached(["hyprctl", "eval",
-            'hl.layer_rule({ name = "qs-noanim-popups", match = '
-            + '{ namespace = "qs-popups" }, no_anim = true })'])
+    Component.onCompleted: Quickshell.execDetached(["hyprctl", "eval",
+        'hl.layer_rule({ name = "qs-noanim-popups", match = '
+        + '{ namespace = "qs-popups" }, no_anim = true })'])
+
+    // Bloq Núm sobrevive a las recargas de Hyprland. Un `hyprctl reload`
+    // relee la config Lua —que no sabe del ajuste— y resetea la opción; y el
+    // propio shell recarga Hyprland al arrancar (plantilla de tema), pisando
+    // en carrera lo que Settings acababa de aplicar. En vez de intentar ganar
+    // esa carrera, se re-aplica cada vez que Hyprland anuncia que recargó —
+    // incluidas las recargas que el usuario haga a mano.
+    Connections {
+        target: Hyprland
+        function onRawEvent(event) {
+            if (event.name === "configreloaded" && Settings.numlockOn)
+                Settings.applyNumlock()
+        }
     }
-    Component.onCompleted: applyLayerRules()
 
     // Plugin autocontenido: carrusel para elegir fondo (Super+W → IPC
     // "carousel"). No modifica ningún componente; solo se instancia aquí.
@@ -169,14 +185,37 @@ ShellRoot {
     }
 
     // Ranura de panel con cierre animado: se construye al abrir ('open') y se
-    // libera cuando termina la animación de cierre — 'closing' mantiene el
-    // loader activo mientras la ventana siga visible (openProgress > 0), así
-    // el cierre anima completo antes de destruir. Toda la maquinaria vive
-    // aquí; cada uso declara solo su bandera 'open' y el panel que aloja.
+    // libera cuando termina la animación de cierre — mientras la ventana siga
+    // visible, la ranura se mantiene viva aunque 'open' ya sea false, así el
+    // cierre anima completo antes de destruir.
+    //
+    // La vigilancia del cierre vive AQUÍ, observando 'visible' del item que el
+    // loader cargó: antes cada uso tenía que darse un id y cablear su propio
+    // «onVisibleChanged: X.closing = visible», siete veces el mismo renglón —
+    // el comentario prometía "cada uso declara solo su bandera 'open'" y no
+    // era verdad. Ahora sí: PanelSlot { open: …; MiPanel {} }.
     component PanelSlot: LazyLoader {
+        id: slot
         property bool open: false
         property bool closing: false
         activeAsync: open || closing
+
+        // El cierre animado se RESERVA al abrir, no cuando el panel avisa: la
+        // primera señal de 'visible' puede dispararse mientras el loader aún
+        // no ha publicado 'item' (carga asíncrona), y de perderla el panel se
+        // destruiría a mitad de la animación de cierre.
+        onOpenChanged: if (open) closing = true
+
+        // Con el loader inactivo 'item' es null y Connections simplemente no
+        // escucha; al cargar, el target se reengancha solo. El guard cubre la
+        // emisión durante el desmontaje, con 'item' ya retirado.
+        readonly property Connections _closeWatch: Connections {
+            target: slot.item
+            function onVisibleChanged() {
+                if (slot.item)
+                    slot.closing = slot.item.visible
+            }
+        }
     }
 
     // Todo lo que existe por monitor vive en este único recorrido de
@@ -225,34 +264,32 @@ ShellRoot {
             // Paneles emergentes (Globals controla su visibilidad desde los
             // widgets de la barra); Popout anima al nacer vía Component.onCompleted.
             PanelSlot {
-                id: ccS
                 open: Globals.controlCenterOpen && scr.showsPanels
-                ControlCenter { modelData: scr.modelData; onVisibleChanged: ccS.closing = visible }
+                ControlCenter { modelData: scr.modelData }
             }
             PanelSlot {
-                id: ncS
                 open: Globals.notifCenterOpen && scr.showsPanels
-                NotificationCenter { modelData: scr.modelData; onVisibleChanged: ncS.closing = visible }
+                NotificationCenter { modelData: scr.modelData }
             }
             PanelSlot {
-                id: smS
                 open: Globals.sysMonOpen && scr.showsPanels
-                SystemMonitor { modelData: scr.modelData; onVisibleChanged: smS.closing = visible }
+                SystemMonitor { modelData: scr.modelData }
             }
             PanelSlot {
-                id: alS
                 open: Globals.launcherOpen && scr.showsPanels
-                AppLauncher { modelData: scr.modelData; onVisibleChanged: alS.closing = visible }
+                AppLauncher { modelData: scr.modelData }
             }
             PanelSlot {
-                id: clipS
                 open: Globals.clipboardOpen && scr.showsPanels
-                ClipboardPanel { modelData: scr.modelData; onVisibleChanged: clipS.closing = visible }
+                ClipboardPanel { modelData: scr.modelData }
             }
             PanelSlot {
-                id: dashS
                 open: Globals.dashboardOpen && scr.showsPanels
-                Dashboard { modelData: scr.modelData; onVisibleChanged: dashS.closing = visible }
+                Dashboard { modelData: scr.modelData }
+            }
+            PanelSlot {
+                open: Globals.aiOpen && scr.showsPanels
+                AiPanel { modelData: scr.modelData }
             }
 
             // La píldora de grabación solo existe mientras se graba.
@@ -270,9 +307,8 @@ ShellRoot {
     // controlar la grabación y ScreenCapture (singleton) conserva el estado.
     // Si se reabre mientras graba, se reconstruye al momento.
     PanelSlot {
-        id: sctS
         open: Globals.screenCaptureOpen
-        ScreenCaptureToolbar { onVisibleChanged: sctS.closing = visible }
+        ScreenCaptureToolbar {}
     }
 
     // Agente de polkit: el diálogo de "se requiere autenticación". Único para

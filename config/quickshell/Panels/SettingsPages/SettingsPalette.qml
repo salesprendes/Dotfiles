@@ -22,9 +22,28 @@ Singleton {
     // Reflejo especular del canto superior (1 px), lo que da el "peso" de
     // cristal. Se difumina a los lados para no chocar con las esquinas.
     readonly property color cardSheen: Theme.withAlpha(Theme.fg, Theme.isDark ? 0.10 : 0.16)
+
+    // ── Grupo de ajustes (SettingsCard) ──────────────────────────────────────
+    // Superficie PLANA. Antes cada grupo llevaba degradado cenital + reflejo
+    // especular + filete bajo la cabecera + insignia de icono con su propio
+    // degradado y su propio borde: cinco recursos para decir «esto es un
+    // bloque». Apilados seis veces en una página, el ojo no distinguía un
+    // grupo de otro y la página entera se leía como relieve estampado.
+    //
+    // Ahora el grupo dice lo suyo con dos cosas: un tono y un borde. Todo lo
+    // demás (el acento, el movimiento) se gasta en las FILAS, que es donde
+    // está el trabajo del usuario.
+    readonly property color groupFill: Theme.withAlpha(Theme.surfaceHi, Theme.isDark ? 0.42 : 0.62)
+    readonly property color groupBorder: Theme.withAlpha(Theme.overlay, Theme.isDark ? 0.22 : 0.26)
     // Fondo tintado de los distintivos (badges) de icono. En modo claro sube
     // el alfa para que el acento se lea sobre superficies claras.
     readonly property color accentSoft: Theme.withAlpha(Theme.accent, Theme.isDark ? 0.16 : 0.24)
+
+    // Tinte de "esto es lo elegido": lo comparten la píldora de la nav, la
+    // ficha de cuenta seleccionada y el segmento activo de un SegRow. La misma
+    // fórmula estaba calculada en dos ficheros; con dos copias, cambiar la
+    // intensidad en uno habría dejado al otro diciendo lo mismo en otro tono.
+    readonly property color selectedTint: Theme.withAlpha(Theme.accent, Theme.isDark ? 0.26 : 0.32)
 
     // Degradado acento→acento2 de los "distintivos": la pestaña activa de la
     // nav, la cabecera de cada tarjeta y el icono de la ventana lo comparten,

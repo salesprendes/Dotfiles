@@ -5,8 +5,7 @@ import qs.Config
 import qs.Services
 
 // Red
-ColumnLayout {
-    spacing: Theme.space12
+SettingsPage {
 
     // NetConfig no carga nada al arrancar el shell (ahorra 2 nmcli): los
     // datos se piden al entrar en esta página. El Loader de secciones nos
@@ -21,12 +20,14 @@ ColumnLayout {
     SettingsCard {
         title: I18n.tr("Interface"); glyph: "󰛳"
         SwitchRow {
+            glyph: "󰖩"
             skey: "@wifi"
             label: I18n.tr("WiFi")
             checked: Net.wifiEnabled
             onToggled: Net.toggleWifi()
         }
         DropdownRow {
+            glyph: "󰛳"
             skey: "@interface"
             label: I18n.tr("Interface")
             options: NetConfig.interfaces.map(i => ({
@@ -36,14 +37,12 @@ ColumnLayout {
             current: NetConfig.selectedIface
             onPicked: (v) => NetConfig.selectIface(v)
         }
-        Text {
-            Layout.fillWidth: true
-            visible: NetConfig.selectedIface !== "" && !NetConfig.hasConn
+        Hint {
+            shown: NetConfig.selectedIface !== "" && !NetConfig.hasConn
             text: I18n.tr("Interface not connected. Connect it to edit its settings.")
-            color: Theme.fgMuted; wrapMode: Text.WordWrap
-            font.family: Theme.fontFamily; font.pixelSize: Theme.fontSize - 2
         }
         SwitchRow {
+            glyph: "󰕇"
             skey: "@connect-automatically"
             shown: NetConfig.hasConn
             label: I18n.tr("Connect automatically")
@@ -65,6 +64,7 @@ ColumnLayout {
         shown: NetConfig.hasConn
         title: "IPv4"; glyph: "󰩟"
         SegRow {
+            glyph: "󰚠"
             skey: "@method"
             label: I18n.tr("Method")
             options: [ { text: I18n.tr("Automatic (DHCP)"), value: "auto" },
@@ -110,6 +110,7 @@ ColumnLayout {
         shown: NetConfig.hasConn
         title: "IPv6"; glyph: "󰩟"
         SegRow {
+            glyph: "󰚠"
             skey: "@method"
             label: I18n.tr("Method")
             options: [ { text: I18n.tr("Automatic (DHCP)"), value: "auto" },
@@ -125,6 +126,7 @@ ColumnLayout {
         shown: NetConfig.hasConn
         title: I18n.tr("Privacy and advanced"); glyph: "󰒃"
         DropdownRow {
+            glyph: "󰙀"
             skey: "@mac-address"
             label: I18n.tr("MAC address")
             options: [ { text: I18n.tr("Default"), value: "default" },
@@ -142,14 +144,11 @@ ColumnLayout {
         }
     }
 
-    // Error.
-    Text {
-        Layout.fillWidth: true
-        visible: NetConfig.error !== ""
+    // Error: un consejo en rojo, no un tercer estilo de texto suelto.
+    Hint {
+        shown: NetConfig.error !== ""
         text: NetConfig.error
         color: Theme.red
-        font.family: Theme.fontFamily; font.pixelSize: Theme.fontSize - 2
-        wrapMode: Text.WordWrap
     }
 
     // Aplicar cambios de la interfaz seleccionada.
@@ -166,13 +165,9 @@ ColumnLayout {
         }
     }
 
-    Text {
-        Layout.fillWidth: true
+    EmptyNote {
         visible: NetConfig.interfaces.length === 0
         text: I18n.tr("No network interfaces found.")
-        color: Theme.fgMuted
-        horizontalAlignment: Text.AlignHCenter
-        font.family: Theme.fontFamily; font.pixelSize: Theme.fontSize - 2
     }
 
     // Gestión de wifis guardadas
@@ -246,13 +241,9 @@ ColumnLayout {
             }
         }
 
-        Text {
-            Layout.fillWidth: true
+        EmptyNote {
             visible: NetConfig.savedWifis.length === 0
             text: I18n.tr("No saved networks.")
-            color: Theme.fgMuted
-            horizontalAlignment: Text.AlignHCenter
-            font.family: Theme.fontFamily; font.pixelSize: Theme.fontSize - 2
         }
     }
 }

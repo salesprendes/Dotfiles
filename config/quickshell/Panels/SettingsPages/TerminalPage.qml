@@ -5,8 +5,7 @@ import qs.Config
 import qs.Services
 
 // Terminal
-ColumnLayout {
-    spacing: Theme.space12
+SettingsPage {
 
     // Las fuentes (fc-list) se cargan al entrar en esta página, no al arrancar.
     Component.onCompleted: Fonts.refresh()
@@ -15,6 +14,7 @@ ColumnLayout {
     SettingsCard {
         title: I18n.tr("Terminal"); glyph: "󰆍"
         DropdownRow {
+            glyph: "󰆍"
             skey: "terminalApp"
             label: I18n.tr("Terminal")
             options: Terminal.available
@@ -38,6 +38,7 @@ ColumnLayout {
         shown: Terminal.canConfigure(Settings.terminalApp)
 
         DropdownRow {
+            glyph: "󰛖"
             skey: "terminalFont"
             label: I18n.tr("Font")
             options: Fonts.monoList.map(f => ({ text: f, value: f, font: f }))
@@ -54,6 +55,7 @@ ColumnLayout {
             onMoved: (v) => Settings.terminalFontSize = Math.round(v * 2) / 2
         }
         SliderRow {
+            glyph: "󰠦"
             skey: "terminalOpacity"
             label: I18n.tr("Opacity")
             from: 0.5; to: 1.0; value: Settings.terminalOpacity
@@ -61,6 +63,7 @@ ColumnLayout {
             onMoved: (v) => Settings.terminalOpacity = Math.round(v * 20) / 20
         }
         SliderRow {
+            glyph: "󰉞"
             skey: "terminalPadding"
             label: I18n.tr("Padding")
             from: 0; to: 30; value: Settings.terminalPadding
@@ -68,6 +71,7 @@ ColumnLayout {
             onMoved: (v) => Settings.terminalPadding = Math.round(v)
         }
         SliderRow {
+            glyph: "󰘡"
             skey: "terminalLineHeight"
             label: I18n.tr("Line spacing")
             from: 0; to: 6; value: Settings.terminalLineHeight
@@ -75,6 +79,7 @@ ColumnLayout {
             onMoved: (v) => Settings.terminalLineHeight = Math.round(v)
         }
         SegRow {
+            glyph: "󰗧"
             skey: "terminalCursorShape"
             label: I18n.tr("Cursor")
             options: [ { text: I18n.tr("Beam"), value: "beam" },
@@ -84,18 +89,21 @@ ColumnLayout {
             onPicked: (v) => Settings.terminalCursorShape = v
         }
         SwitchRow {
+            glyph: "󰛐"
             skey: "terminalCursorBlink"
             label: I18n.tr("Cursor blink")
             checked: Settings.terminalCursorBlink
             onToggled: Settings.terminalCursorBlink = !Settings.terminalCursorBlink
         }
         SwitchRow {
+            glyph: "󰡱"
             skey: "terminalLigatures"
             label: I18n.tr("Ligatures")
             checked: Settings.terminalLigatures
             onToggled: Settings.terminalLigatures = !Settings.terminalLigatures
         }
         SegRow {
+            glyph: "󰓩"
             skey: "terminalTabStyle"
             shown: Settings.terminalApp === "kitty"
             label: I18n.tr("Tabs")

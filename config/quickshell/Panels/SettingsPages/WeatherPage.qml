@@ -4,15 +4,15 @@ import qs.Components
 import qs.Config
 
 // Clima — opciones agrupadas en una tarjeta, como el resto de páginas.
-ColumnLayout {
-    spacing: Theme.space14
+SettingsPage {
 
     SettingsCard {
         title: I18n.tr("Weather widget"); glyph: "󰖕"
 
-        SwitchRow { skey: "weatherEnabled"; label: I18n.tr("Enable weather"); checked: Settings.weatherEnabled
+        SwitchRow { glyph: "󰖐"; skey: "weatherEnabled"; label: I18n.tr("Enable weather"); checked: Settings.weatherEnabled
             onToggled: Settings.weatherEnabled = !Settings.weatherEnabled }
         SegRow {
+            glyph: "󰔏"
             skey: "weatherMetric"
             label: I18n.tr("Temperature unit")
             options: [ { text: "°C", value: true }, { text: "°F", value: false } ]
@@ -20,6 +20,7 @@ ColumnLayout {
             onPicked: (v) => Settings.weatherMetric = v
         }
         SegRow {
+            glyph: "󰑖"
             skey: "weatherRefreshMin"
             label: I18n.tr("Refresh interval")
             options: [ { text: "15 min", value: 15 }, { text: "30 min", value: 30 },
@@ -27,17 +28,17 @@ ColumnLayout {
             current: Settings.weatherRefreshMin
             onPicked: (v) => Settings.weatherRefreshMin = v
         }
-        SwitchRow { skey: "weatherShowDetails"; label: I18n.tr("Feels like and humidity")
+        SwitchRow { glyph: "󰖎"; skey: "weatherShowDetails"; label: I18n.tr("Feels like and humidity")
             checked: Settings.weatherShowDetails
             onToggled: Settings.weatherShowDetails = !Settings.weatherShowDetails }
-        SwitchRow { skey: "weatherShowWind"; label: I18n.tr("Wind")
+        SwitchRow { glyph: "󰖝"; skey: "weatherShowWind"; label: I18n.tr("Wind")
             desc: I18n.tr("Adds current wind speed")
             checked: Settings.weatherShowWind
             onToggled: Settings.weatherShowWind = !Settings.weatherShowWind }
-        SwitchRow { skey: "weatherShowSun"; label: I18n.tr("Sunrise and sunset")
+        SwitchRow { glyph: "󰖙"; skey: "weatherShowSun"; label: I18n.tr("Sunrise and sunset")
             checked: Settings.weatherShowSun
             onToggled: Settings.weatherShowSun = !Settings.weatherShowSun }
-        SwitchRow { skey: "weatherShowInBar"; label: I18n.tr("Show in the bar")
+        SwitchRow { glyph: "󰕰"; skey: "weatherShowInBar"; label: I18n.tr("Show in the bar")
             desc: I18n.tr("Keeps the weather updated with the panel closed")
             checked: Settings.weatherShowInBar
             onToggled: Settings.weatherShowInBar = !Settings.weatherShowInBar }
@@ -57,10 +58,11 @@ ColumnLayout {
     SettingsCard {
         title: I18n.tr("Forecast"); glyph: "󰨳"
 
-        SwitchRow { skey: "weatherShowForecast"; label: I18n.tr("Show forecast")
+        SwitchRow { glyph: "󰼶"; skey: "weatherShowForecast"; label: I18n.tr("Show forecast")
             checked: Settings.weatherShowForecast
             onToggled: Settings.weatherShowForecast = !Settings.weatherShowForecast }
         SegRow {
+            glyph: "󰃭"
             skey: "weatherForecastDays"
             label: I18n.tr("Forecast days")
             shown: Settings.weatherShowForecast
@@ -68,7 +70,7 @@ ColumnLayout {
             current: Settings.weatherForecastDays
             onPicked: (v) => Settings.weatherForecastDays = v
         }
-        SwitchRow { skey: "weatherShowRain"; label: I18n.tr("Chance of rain")
+        SwitchRow { glyph: "󰖗"; skey: "weatherShowRain"; label: I18n.tr("Chance of rain")
             desc: I18n.tr("Daily precipitation probability")
             shown: Settings.weatherShowForecast
             checked: Settings.weatherShowRain

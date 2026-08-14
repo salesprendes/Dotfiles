@@ -25,18 +25,27 @@ FloatingWindow {
     implicitHeight: Theme.dp(600)
     minimumSize: Qt.size(Theme.dp(600), Theme.dp(400))
 
-    // Puntos de corte responsive, del más ancho al más estrecho:
-    //  · headerCompact — la cabecera suelta el texto accesorio ("Solo
-    //    modificados", el rótulo de Restablecer) y el contenido pierde
-    //    margen; los controles quedan como iconos, el de cerrar incluido.
-    //  · navCompact — la barra lateral pasa a riel de iconos: avatar solo
-    //    y pestañas sin etiqueta (el buscador vive en la cabecera global).
-    //  · headerTight / headerMicro — la cabecera suelta controles por orden
-    //    de prioridad (primero el interruptor "solo modificados", después
-    //    Restablecer), plegándose con animación en vez de desbordar por la
-    //    derecha. El botón de cerrar es SIEMPRE el último que queda.
+    // Clases de tamaño de ventana de Material 3. Son los mismos cortes que usa
+    // M3 para decidir la forma de la navegación, y le dan nombre a lo que
+    // antes eran cuatro números sueltos:
+    //
+    //   compacta (<600)   una sola columna; la navegación se reduce al mínimo
+    //   media   (600-839) riel de iconos
+    //   expandida (840+)  riel con etiquetas
+    //   grande  (1200+)   además, sitio de sobra en la cabecera
+    readonly property int sizeClass: width < Theme.dp(600) ? 0
+                                   : width < Theme.dp(840) ? 1
+                                   : width < Theme.dp(1200) ? 2 : 3
+    readonly property bool sizeCompact: sizeClass === 0
+    readonly property bool sizeMedium: sizeClass <= 1
+
+    // Cortes propios de la cabecera, escalonados por debajo de las clases:
+    // suelta controles por orden de prioridad en vez de desbordar por la
+    // derecha — primero el texto accesorio, luego el interruptor "solo
+    // modificados", luego Restablecer. El botón de cerrar es SIEMPRE el
+    // último que queda. navCompact pasa la barra lateral a riel de iconos.
     readonly property bool headerCompact: width < Theme.dp(1000)
-    readonly property bool navCompact: width < Theme.dp(860)
+    readonly property bool navCompact: sizeMedium
     readonly property bool headerTight: width < Theme.dp(720)
     readonly property bool headerMicro: width < Theme.dp(640)
 
@@ -55,6 +64,10 @@ FloatingWindow {
     // Hueco alrededor y entre las tarjetas; deja ver el fondo de la ventana.
     readonly property int cardGap: Theme.dp(14)
     readonly property int controlHeightSm: Theme.dp(36)
+    // Padding interno de la tarjeta de la barra lateral. Lo comparten la
+    // columna de pestañas y su barra de desplazamiento, que necesita saberlo
+    // para calcular cuánto le falta para librar la esquina redondeada.
+    readonly property int navPad: navCompact ? Theme.dp(6) : Theme.dp(10)
     readonly property int sidebarWidth: navCompact ? Theme.dp(72)
         : width < Theme.dp(1080) ? Theme.dp(240) : Theme.dp(264)
 
@@ -78,10 +91,52 @@ FloatingWindow {
     // coordenadas del contenido del Flickable) y una única píldora se DESLIZA
     // hasta ahí, cruzando de un grupo a otro sin desaparecer. navSelAnimate se
     // apaga al abrir para colocarla sin animar (si no, "viajaría" desde 0).
+    // Tinte de "estás aquí", en un solo sitio: lo comparten la píldora de la
+    // barra y la ficha de cuenta, que es un destino más de la navegación.
+    // Estaban en 0.26/0.32 y 0.20/0.24 respectivamente — el mismo significado
+    // pintado con dos fuerzas, y ninguna razón para la diferencia.
+    readonly property color navSelTint: SettingsPalette.selectedTint
+    readonly property color navHovTint: Theme.withAlpha(Theme.accent, Theme.isDark ? 0.13 : 0.16)
     property Item navContent: null
-    property real navSelY: 0
-    property real navSelH: controlHeightSm
+    // La pestaña seleccionada, NO sus coordenadas. Antes cada pestaña escribía
+    // aquí su 'y' calculado con mapToItem al cambiar su propio alto o posición;
+    // eso es una caché, y toda caché se queda vieja: al cambiar la resolución
+    // (que mueve Theme.scale y con él CADA dp) el aviso saltaba con la
+    // disposición a medio resolver, guardaba una posición intermedia y nadie
+    // volvía a mirarla — el resaltado quedaba clavado a 90 px de su pestaña.
+    // Guardando el elemento, la posición se DERIVA, y se recalcula sola ante
+    // cualquier cambio de geometría: resolución, tamaño de ventana, escala de
+    // interfaz, aparición de la barra desplazable o reflujo de la nav.
+    property Item navSelItem: null
+    // Suma de 'y' desde el elemento hasta el contenedor. Se recorre a mano en
+    // vez de usar mapToItem porque QML apunta como dependencia cada propiedad
+    // que se LEE al evaluar un vínculo: al leer 'y' de cada ancestro, este
+    // vínculo se reevalúa solo cuando cualquiera de ellos se mueve. mapToItem
+    // devuelve un número suelto y no crea dependencia de nada.
+    function yWithin(item, root) {
+        let acc = 0
+        let it = item
+        for (let d = 0; d < 24 && it && it !== root; d++) {
+            acc += it.y
+            it = it.parent
+        }
+        return acc
+    }
+    readonly property real navSelY: navSelItem && navContent
+        ? yWithin(navSelItem, navContent) : 0
+    readonly property real navSelH: navSelItem ? navSelItem.height : controlHeightSm
+    // La píldora se DESLIZA solo cuando eliges otra pestaña. Ante un cambio de
+    // geometría —resolución, tamaño de ventana, escala— tiene que aparecer ya
+    // colocada: animar ahí se vería como si el resaltado se hubiera soltado y
+    // fuera persiguiendo a su pestaña. Antes esto se apañaba con un plazo de
+    // 60 ms al abrir; ahora la ventana de animación la abre el propio cambio de
+    // categoría y se cierra al terminar el recorrido.
     property bool navSelAnimate: false
+    Timer {
+        id: navSelSettle
+        interval: Math.round(Theme.animNormal * 1.9) + 60   // el borde más lento + margen
+        onTriggered: cfg.navSelAnimate = false
+    }
     readonly property bool navSelShown: cat !== "about"
 
     // Píldora de HOVER: también única para toda la barra. Antes cada pestaña
@@ -90,17 +145,31 @@ FloatingWindow {
     // cuántas pestañas tienen el ratón encima (al cruzar de una a otra el
     // "salir" y el "entrar" no llegan en orden fijo) y la píldora se ve
     // mientras haya alguna.
-    property real navHovY: 0
-    property real navHovH: controlHeightSm
+    property Item navHovItem: null
+    readonly property real navHovY: navHovItem && navContent
+        ? yWithin(navHovItem, navContent) : 0
+    readonly property real navHovH: navHovItem ? navHovItem.height : controlHeightSm
+    // Cuenta con suelo en 0: si una pestaña desaparece con el ratón encima
+    // (filtro, reflujo, recarga) su "he salido" no llega nunca, y un contador
+    // sin suelo se quedaba en positivo con la píldora de hover encendida sobre
+    // una pestaña que ya no está.
     property int  navHovCount: 0
-    Timer { id: navSettle; interval: 60; onTriggered: cfg.navSelAnimate = true }
+    function navHovEnter(tab) {
+        cfg.navHovItem = tab
+        cfg.navHovCount = cfg.navHovCount + 1
+    }
+    function navHovLeave() {
+        cfg.navHovCount = Math.max(0, cfg.navHovCount - 1)
+    }
+
     onVisibleChanged: {
         if (visible) {
             pageOut.stop()
             pageIn.stop()
             const already = (shownCat === "theme")
             pageOpacity = 0
-            pageOffset = Theme.dp(10)
+            pageOffset = Theme.dp(6)
+            SettingsMotion.pageEnter = 0
             swapping = true
             shownCat = "theme"
             cat = "theme"
@@ -113,10 +182,11 @@ FloatingWindow {
             // El campo recibe el foco al abrir, salvo en ventanas tan
             // estrechas que la cabecera ha soltado el buscador.
             if (!headerMicro) search.input.forceActiveFocus()
-            // La píldora de la nav se coloca sin animar al abrir; tras un
-            // instante se habilita el deslizamiento para los clics siguientes.
+            // Al abrir, la píldora se coloca sin animar: 'cat' ya se ha puesto
+            // en "theme" más arriba, así que se cancela la ventana que ese
+            // cambio acaba de abrir.
+            navSelSettle.stop()
             navSelAnimate = false
-            navSettle.restart()
         }
         else if (Globals.settingsOpen) Globals.settingsOpen = false   // cerrada por Hyprland
     }
@@ -134,15 +204,29 @@ FloatingWindow {
     // reenganchan desde donde estaban en vez de saltar a cero.
     ParallelAnimation {
         id: pageIn
+        // Duraciones derivadas de la velocidad de animación de Ajustes (nunca
+        // fijas): a "Sin animación" valen 0 y la página aparece de golpe, que
+        // es lo que ha pedido quien apaga las animaciones.
         NumberAnimation {
             target: cfg; property: "pageOpacity"
-            to: 1; duration: 300; easing.type: Easing.OutCubic
+            to: 1; duration: Math.round(Theme.animSlow * 0.75); easing.type: Easing.OutCubic
         }
-        // La página sube y se asienta con un ligero rebote (OutBack suave).
+        // La página sube y se asienta. Sin rebote: el rebote lo ponían antes
+        // estas dos líneas, y ahora lo pone el escalonamiento de las tarjetas
+        // (ver abajo). Dos muelles a la vez no se leen como uno más rico, se
+        // leen como un temblor.
         NumberAnimation {
             target: cfg; property: "pageOffset"
-            to: 0; duration: 420
-            easing.type: Easing.OutBack; easing.overshoot: 1.1
+            to: 0; duration: Theme.animSlow; easing.type: Easing.OutCubic
+        }
+        // Reloj del escalonamiento de las tarjetas (ver SettingsMotion). Va
+        // LINEAL a propósito: la curva la pone cada tarjeta en su smoothstep,
+        // y encadenar dos suavizados deja el arranque plano. Dura más que el
+        // resto porque tiene que repartir varias entradas dentro.
+        NumberAnimation {
+            target: SettingsMotion; property: "pageEnter"
+            to: 1; duration: Math.round(Theme.animSlow * 1.7)
+            easing.type: Easing.Linear
         }
     }
 
@@ -172,11 +256,16 @@ FloatingWindow {
         if (!swapping) return
         swapping = false
         pageOpacity = 0
-        pageOffset = Theme.dp(10)
+        pageOffset = Theme.dp(6)
+        SettingsMotion.pageEnter = 0
         pageIn.restart()
     }
 
     onCatChanged: {
+        // Ventana de animación de la píldora de la nav (ver navSelAnimate).
+        cfg.navSelAnimate = true
+        navSelSettle.restart()
+
         if (cat === shownCat) {
             // Has vuelto a la página que aún se estaba yendo: la traemos de
             // vuelta. Si ya hay una en camino, que siga su curso.
@@ -324,7 +413,7 @@ FloatingWindow {
                 text: I18n.tr("Settings")
                 color: Theme.fg
                 font.family: Theme.fontFamily
-                font.pixelSize: Theme.sp(21)
+                font.pixelSize: Theme.typeTitleLarge
                 font.bold: true
                 font.letterSpacing: -Theme.dp(0.3)
                 visible: !cfg.headerTight
@@ -349,7 +438,7 @@ FloatingWindow {
                 Layout.preferredHeight: cfg.controlHeightSm
                 Layout.alignment: Qt.AlignVCenter
                 placeholder: I18n.tr("Search settings…")
-                textPixelSize: Theme.sp(15)
+                textPixelSize: Theme.typeBodyLarge
                 accentIconOnFocus: true
                 // Un solo sentido (campo → filtro). Enlazar también el
                 // sentido contrario haría un bucle de bindings.
@@ -404,7 +493,7 @@ FloatingWindow {
                         text: I18n.tr("Modified only")
                         color: SettingsFilter.modifiedOnly ? Theme.fg : Theme.fgDim
                         font.family: Theme.fontFamily
-                        font.pixelSize: Theme.sp(14)
+                        font.pixelSize: Theme.typeLabelLarge
                         font.bold: SettingsFilter.modifiedOnly
                     }
                     Switch {
@@ -448,16 +537,26 @@ FloatingWindow {
                 Keys.onReturnPressed: Settings.reset()
                 Keys.onEnterPressed: Settings.reset()
                 Keys.onSpacePressed: Settings.reset()
-                color: resetMa.pressed ? Theme.withAlpha(Theme.red, 0.28)
-                     : hot ? Theme.withAlpha(Theme.red, 0.16)
-                     : cfg.settingsControl
+                // Restablecer CONSERVA el rojo: destruye lo que hayas
+                // configurado, y el color es la advertencia. Pero el fondo ya
+                // no se recolorea a mano en tres estados: lleva la capa de
+                // estado de M3, con la misma intensidad que el resto.
+                color: cfg.settingsControl
                 border.width: activeFocus ? Theme.focusWidth : Theme.hairline
                 border.color: activeFocus ? Theme.focusRing
                             : hot ? Theme.withAlpha(Theme.red, 0.85) : cfg.settingsBorder
-                scale: resetMa.pressed ? 0.95 : (hot ? 1.04 : 1.0)
-                Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+                scale: resetMa.pressed ? 0.95 : 1.0
                 Behavior on border.color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
-                Behavior on scale { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutBack; easing.overshoot: 2.2 } }
+                Behavior on scale { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+
+                Rectangle {
+                    anchors.fill: parent
+                    radius: parent.radius
+                    color: Theme.red
+                    opacity: resetMa.pressed ? Theme.statePressed * 1.6
+                           : resetBtn.hot ? Theme.stateHover * 1.6 : 0
+                    Behavior on opacity { NumberAnimation { duration: Theme.animFast } }
+                }
 
                 RowLayout {
                     id: resetRow
@@ -467,13 +566,13 @@ FloatingWindow {
                         id: resetGlyph
                         text: "󰜉"; color: Theme.red
                         font.family: Theme.fontFamily; font.pixelSize: Theme.sp(16)
-                        Behavior on rotation { NumberAnimation { duration: 520; easing.type: Easing.OutCubic } }
+                        Behavior on rotation { NumberAnimation { duration: Theme.animSlow; easing.type: Easing.OutCubic } }
                     }
                     Text {
                         visible: !cfg.headerCompact
                         text: I18n.tr("Reset")
                         color: resetBtn.hot ? Theme.red : Theme.fgDim
-                        font.family: Theme.fontFamily; font.pixelSize: Theme.sp(14)
+                        font.family: Theme.fontFamily; font.pixelSize: Theme.typeLabelLarge
                         font.bold: true
                         Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
                     }
@@ -488,9 +587,13 @@ FloatingWindow {
                 }
             }
 
-            // Cerrar: círculo con el mismo lenguaje que Restablecer
-            // (tinte, borde y escala fundidos); la cruz gira un cuarto
-            // de vuelta al posarse.
+            // Cerrar: botón de icono de M3. NEUTRO, no rojo.
+            //
+            // Iba en rojo, a juego con Restablecer, y eso era un error de
+            // vocabulario: el rojo promete "esto destruye algo". Restablecer
+            // sí borra tu configuración; cerrar una ventana no pierde nada.
+            // Pintarlos igual enseñaba a desconfiar del aspa — o, peor, a
+            // perderle el miedo al botón que sí es peligroso.
             Rectangle {
                 id: closeBtn
                 implicitWidth: cfg.controlHeightSm
@@ -501,21 +604,28 @@ FloatingWindow {
                 Keys.onReturnPressed: Globals.settingsOpen = false
                 Keys.onEnterPressed: Globals.settingsOpen = false
                 Keys.onSpacePressed: Globals.settingsOpen = false
-                color: closeMa.pressed ? Theme.withAlpha(Theme.red, 0.30)
-                     : hot ? Theme.withAlpha(Theme.red, 0.18)
-                     : cfg.settingsControl
+                color: cfg.settingsControl
                 border.width: activeFocus ? Theme.focusWidth : Theme.hairline
                 border.color: activeFocus ? Theme.focusRing
-                            : hot ? Theme.withAlpha(Theme.red, 0.85) : cfg.settingsBorder
-                scale: closeMa.pressed ? 0.92 : (hot ? 1.06 : 1.0)
-                Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+                            : hot ? Theme.withAlpha(Theme.fg, 0.45) : cfg.settingsBorder
+                scale: closeMa.pressed ? 0.92 : 1.0
                 Behavior on border.color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
-                Behavior on scale { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutBack; easing.overshoot: 2.2 } }
+                Behavior on scale { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+
+                // Capa de estado neutra (ver Theme.stateHover).
+                Rectangle {
+                    anchors.fill: parent
+                    radius: parent.radius
+                    color: Theme.fg
+                    opacity: closeMa.pressed ? Theme.statePressed
+                           : closeBtn.hot ? Theme.stateHover : 0
+                    Behavior on opacity { NumberAnimation { duration: Theme.animFast } }
+                }
 
                 Text {
                     anchors.centerIn: parent
                     text: "󰅖"
-                    color: closeBtn.hot ? Theme.red : Theme.fgDim
+                    color: closeBtn.hot ? Theme.fg : Theme.fgDim
                     font.family: Theme.fontFamily
                     font.pixelSize: Theme.sp(18)
                     rotation: closeBtn.hot ? 90 : 0
@@ -552,7 +662,7 @@ FloatingWindow {
 
             ColumnLayout {
                 anchors.fill: parent
-                anchors.margins: cfg.navCompact ? Theme.dp(6) : Theme.dp(10)    // padding de la nav
+                anchors.margins: cfg.navPad    // padding de la nav
                 spacing: Theme.dp(2)             // gap entre pestañas
 
                     // Tarjeta de perfil (avatar + usuario + equipo): es la
@@ -571,7 +681,7 @@ FloatingWindow {
                         // hacía que la ficha gritara más que la navegación. Al
                         // seleccionarse sí se tiñe (es una página más) y se
                         // enmarca; el hover va aparte, en capa de estado.
-                        color: sel ? Theme.withAlpha(Theme.accent, Theme.isDark ? 0.20 : 0.24)
+                        color: sel ? cfg.navSelTint
                                    : Theme.withAlpha(Theme.surfaceHi, Theme.isDark ? 0.45 : 0.55)
                         border.width: Theme.hairline
                         border.color: sel ? Theme.withAlpha(Theme.accent, 0.45)
@@ -643,7 +753,7 @@ FloatingWindow {
                                     text: cfg.userName
                                     color: Theme.fg
                                     font.family: Theme.fontFamily
-                                    font.pixelSize: Theme.sp(16)
+                                    font.pixelSize: Theme.typeTitleMedium
                                     font.bold: true
                                     elide: Text.ElideRight
                                 }
@@ -652,7 +762,7 @@ FloatingWindow {
                                     text: SysMon.hostname !== "" ? SysMon.hostname : SysMon.distroName
                                     color: profileTab.sel ? Theme.fgDim : Theme.fgMuted
                                     font.family: Theme.fontFamily
-                                    font.pixelSize: Theme.sp(12)
+                                    font.pixelSize: Theme.typeLabelMedium
                                     elide: Text.ElideRight
                                     Behavior on color { ColorAnimation { duration: Theme.animFast } }
                                 }
@@ -664,7 +774,7 @@ FloatingWindow {
                             Text {
                                 visible: !cfg.navCompact
                                 text: "󰅂"
-                                color: profileTab.sel ? Theme.accent : Theme.fgMuted
+                                color: profileTab.sel ? Theme.accentText : Theme.fgMuted
                                 opacity: profileTab.sel || profileMa.containsMouse ? 1 : 0.4
                                 font.family: Theme.fontFamily
                                 font.pixelSize: Theme.iconSize
@@ -711,98 +821,55 @@ FloatingWindow {
                         // Barra deslizable fina, del mismo lenguaje que la de
                         // los desplegables (ver Components/DropdownRow.qml):
                         // solo aparece cuando hace falta.
-                        ScrollBar.vertical: ScrollBar {
-                            id: navScrollBar
+                        ScrollBar.vertical: ThinScrollBar {
                             policy: navFlick.scrollable ? ScrollBar.AlwaysOn : ScrollBar.AlwaysOff
-                            contentItem: Rectangle {
-                                implicitWidth: Theme.dp(5)
-                                radius: width / 2
-                                color: Theme.accent
-                                opacity: navScrollBar.pressed ? 0.9 : (navScrollBar.active ? 0.65 : 0.4)
-                                Behavior on opacity { NumberAnimation { duration: Theme.animFast } }
-                            }
-                            background: Rectangle {
-                                implicitWidth: Theme.dp(5)
-                                radius: width / 2
-                                color: Theme.sliderTrack
-                                opacity: 0.35
-                            }
+                            // Separada del canto y, abajo, retranqueada JUSTO
+                            // lo que le falta para librar el redondeo de la
+                            // esquina de la tarjeta: en los extremos del
+                            // recorrido el tirador se metía en la curva, donde
+                            // ya no hay superficie, y parecía colgar fuera.
+                            // Sale de la resta (radio − padding de la nav), no
+                            // de un número a ojo. Arriba no hace falta tanto:
+                            // ahí no hay esquina, está la ficha de cuenta.
+                            rightPadding: Theme.dp(3)
+                            topPadding: Theme.dp(2)
+                            bottomPadding: Math.max(Theme.dp(2), cfg.radiusCard - cfg.navPad)
                         }
 
                         // Píldora ÚNICA de selección (detrás de las pestañas):
                         // se desliza a la posición absoluta de la seleccionada,
                         // de un grupo a otro sin cortes. Declarada antes que
                         // navCol para quedar por debajo.
-                        NavHighlight {
+                        //
+                        // No se anima mientras no se ve. Al pasar por la ficha
+                        // de cuenta la píldora se apaga, y si el trayecto
+                        // siguiera corriendo por debajo, al volver a una
+                        // categoría reaparecería a medio vuelo. Debe nacer ya
+                        // puesta en su pestaña.
+                        ElasticPill {
                             id: navSelPill
-                            x: navCol.x
-                            width: navCol.width
-                            // 'py' es la posición animada. De lo que le queda
-                            // por recorrer sale un estirón EN EL SENTIDO DE LA
-                            // MARCHA, que se recompone al llegar: el resaltado
-                            // se mueve como una gota, no como una caja que
-                            // salta de sitio. No necesita animación propia —
-                            // se deriva de 'py', que ya va animada.
-                            property real leadY: cfg.navSelY
-                            property real trailY: cfg.navSelY
-                            y: Math.min(leadY, trailY)
-                            height: Math.abs(trailY - leadY) + cfg.navSelH
+                            targetY: cfg.navSelY
+                            targetH: cfg.navSelH
+                            animate: cfg.navSelAnimate && cfg.navSelShown
                             opacity: cfg.navSelShown ? 1 : 0
-                            Behavior on leadY {
-                                enabled: cfg.navSelAnimate
-                                NumberAnimation {
-                                    duration: Math.max(1, Math.round(Theme.animNormal * 0.65))
-                                    easing.type: Easing.OutSine
-                                }
-                            }
-                            Behavior on trailY {
-                                enabled: cfg.navSelAnimate
-                                NumberAnimation {
-                                    duration: Math.max(1, Math.round(Theme.animNormal * 1.9))
-                                    easing.type: Easing.OutCubic
-                                }
-                            }
                             Behavior on opacity { NumberAnimation { duration: Theme.animFast } }
                         }
 
                         // Píldora de HOVER (más tenue que la selección): sigue
-                        // al cursor deslizándose de pestaña en pestaña. Cuando
-                        // no se ve, la posición salta sin animar: al reaparecer
-                        // debe nacer bajo el cursor, no "viajar" desde donde se
-                        // quedó la última vez.
-                        NavHighlight {
+                        // al cursor deslizándose de pestaña en pestaña, con el
+                        // mismo elástico algo más rápido — tiene que ir con el
+                        // cursor. Cuando no se ve, la posición salta sin
+                        // animar: al reaparecer debe nacer bajo el cursor, no
+                        // "viajar" desde donde se quedó la última vez.
+                        ElasticPill {
                             id: navHovPill
-                            x: navCol.x
-                            width: navCol.width
-                            color: Theme.withAlpha(Theme.accent, Theme.isDark ? 0.13 : 0.16)
+                            color: cfg.navHovTint
+                            targetY: cfg.navHovY
+                            targetH: cfg.navHovH
+                            animate: navHovPill.opacity > 0.01
+                            leadFactor: 0.5
+                            trailFactor: 1.5
                             opacity: cfg.navHovCount > 0 ? 1 : 0
-                            // Mismo elástico de dos bordes que la selección,
-                            // algo más rápido: el hover tiene que ir con el
-                            // cursor. Antes iba con una curva de salida corta y
-                            // fija (190 ms, ni siquiera salía de Ajustes), que
-                            // la pegaba al ratón: arrancaba de golpe y frenaba
-                            // en seco en cada pestaña.
-                            property real leadY: cfg.navHovY
-                            property real trailY: cfg.navHovY
-                            y: Math.min(leadY, trailY)
-                            height: Math.abs(trailY - leadY) + cfg.navHovH
-                            // Sin animar mientras no se ve: al reaparecer debe
-                            // nacer bajo el cursor, no viajar desde donde se
-                            // quedó la última vez.
-                            Behavior on leadY {
-                                enabled: navHovPill.opacity > 0.01
-                                NumberAnimation {
-                                    duration: Math.max(1, Math.round(Theme.animNormal * 0.5))
-                                    easing.type: Easing.OutSine
-                                }
-                            }
-                            Behavior on trailY {
-                                enabled: navHovPill.opacity > 0.01
-                                NumberAnimation {
-                                    duration: Math.max(1, Math.round(Theme.animNormal * 1.5))
-                                    easing.type: Easing.OutCubic
-                                }
-                            }
                             Behavior on opacity { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutQuad } }
                         }
 
@@ -838,6 +905,44 @@ FloatingWindow {
                 border.width: Theme.hairline
                 border.color: cfg.settingsBorder
 
+                // Luz que entra por el canto superior de la tarjeta: un halo
+                // radial muy tenue del color de acento, centrado arriba y
+                // apagándose hacia abajo. Es lo que hace que la tarjeta se lea
+                // como una superficie iluminada y no como un rectángulo de
+                // color plano — y es el único sitio de la ventana donde el
+                // acento aparece como LUZ en vez de como tinta.
+                //
+                // Va en Canvas y no en un Gradient de Rectangle porque QML
+                // solo sabe hacer degradados lineales de forma declarativa;
+                // el contexto 2D sí tiene createRadialGradient. Se repinta
+                // solo cuando cambia el tamaño o el acento, no por fotograma.
+                Canvas {
+                    id: bloom
+                    anchors.fill: parent
+                    // El acento se lee aquí (y no dentro de onPaint) para que
+                    // el cambio de tema dispare el repintado.
+                    property color tint: Theme.accent
+                    onTintChanged: requestPaint()
+                    onWidthChanged: requestPaint()
+                    onHeightChanged: requestPaint()
+                    onPaint: {
+                        const ctx = getContext("2d")
+                        ctx.reset()
+                        if (width <= 0 || height <= 0)
+                            return
+                        const cx = width * 0.5
+                        const cy = -height * 0.04
+                        const r = width * 0.62
+                        const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r)
+                        const peak = Theme.isDark ? 0.13 : 0.10
+                        g.addColorStop(0.0, Qt.rgba(tint.r, tint.g, tint.b, peak))
+                        g.addColorStop(0.5, Qt.rgba(tint.r, tint.g, tint.b, peak * 0.30))
+                        g.addColorStop(1.0, Qt.rgba(tint.r, tint.g, tint.b, 0))
+                        ctx.fillStyle = g
+                        ctx.fillRect(0, 0, width, height)
+                    }
+                }
+
                 // Firma de la ventana: el glifo de la categoría activa, enorme
                 // y casi invisible, sangrando por la esquina superior derecha.
                 // Es gratis (ya tenemos cfg.catGlyph) y cambia con cada página:
@@ -855,13 +960,41 @@ FloatingWindow {
                     opacity: cfg.pageOpacity * (Theme.isDark ? 0.07 : 0.05)
                     font.family: Theme.fontFamily
                     font.pixelSize: Theme.sp(150)
+                    // Paralaje: al desplazar la página, la marca de agua se va
+                    // más despacio que el contenido. Es lo que le da a la
+                    // tarjeta una segunda profundidad — la marca deja de ser un
+                    // dibujo pegado al cristal y pasa a estar detrás. Acotada:
+                    // pasado un punto ya se ha ido y seguir moviéndola solo
+                    // gastaría repintados.
+                    transform: Translate {
+                        y: -Math.min(Math.max(0, flick.contentY) * 0.14, Theme.dp(56))
+                    }
                 }
 
                 ColumnLayout {
+                id: contentCol
                 anchors.fill: parent
                 anchors.margins: cfg.headerCompact ? cfg.spaceMd : cfg.spaceLg
                 anchors.leftMargin: cfg.headerCompact ? cfg.spaceSm : cfg.spaceMd
+                // Margen derecho corto a propósito: es el carril por el que
+                // baja la barra de desplazamiento de la página, y una barra de
+                // página va pegada al canto. La columna de texto no se descentra
+                // por esto — va centrada por 'inset', que absorbe la diferencia.
+                anchors.rightMargin: cfg.spaceSm
                 spacing: cfg.spaceSm
+
+                // Medida de la columna de contenido. Un ajuste es una línea de
+                // texto seguida de su control: pasado cierto ancho, estirarla
+                // no añade nada y sí separa la etiqueta de lo que gobierna.
+                // Con la ventana maximizada en un monitor de 2560 px la fila
+                // llegaba a medir metro y medio de vacío.
+                //
+                // El tope solo entra en juego en pantalla grande: al tamaño de
+                // referencia (1280 px) la tarjeta ya mide menos que esto, así
+                // que la vista normal no cambia — lo que cambia es que
+                // maximizar deja de estropear la lectura.
+                readonly property int inset:
+                    Math.max(0, Math.round((width - Theme.dp(760)) / 2))
 
                 // Cabecera de la página: título a la izquierda y acciones
                 // globales ("solo modificados", Restablecer, cerrar) a la
@@ -870,35 +1003,84 @@ FloatingWindow {
                 // de quedarse pegado al borde.
                 RowLayout {
                     Layout.fillWidth: true
-                    Layout.rightMargin: cfg.navCompact ? Theme.dp(24)
-                                      : cfg.headerCompact ? Theme.dp(12) : 0
+                    // Mismo eje que las tarjetas de ajustes de debajo: el
+                    // título y la primera fila de la primera tarjeta arrancan
+                    // de la misma vertical.
+                    Layout.leftMargin: contentCol.inset
+                    Layout.rightMargin: contentCol.inset
+                    // En compacto la cabecera respiraba menos justo cuando
+                    // menos sitio hay alrededor: un punto MÁS de aire, no menos
+                    // — es lo que separa "compacto" de "apretado".
+                    Layout.topMargin: cfg.headerCompact ? cfg.spaceXs : 0
+                    Layout.bottomMargin: cfg.spaceSm
                     spacing: cfg.headerCompact ? cfg.spaceXs : cfg.spaceSm
 
                     // Título de la página. Va con la que SE VE (shownCat), no
                     // con la pulsada: si no, cambiaría antes que el contenido.
                     ColumnLayout {
                         Layout.fillWidth: true
-                        spacing: 0
+                        spacing: Theme.space2
                         opacity: cfg.pageOpacity
+                        // Baja mientras las tarjetas suben. El movimiento
+                        // contrario hace que la página se lea como algo que se
+                        // ABRE por el medio; con todo yendo en el mismo sentido
+                        // solo se ve un bloque deslizándose.
+                        transform: Translate {
+                            y: -Math.round((1 - SettingsMotion.reveal(0)) * Theme.dp(8))
+                        }
+
+                        // Miga del grupo ("Personalización", "Sistema"). SOLO
+                        // cuando la barra se ha plegado a riel de iconos: con
+                        // las etiquetas de la nav a la vista repetirlo era
+                        // ruido (por eso se quitó el antetítulo), pero el riel
+                        // las esconde — y entonces la miga es la única pista
+                        // de en qué grupo estás.
                         Text {
-                            Layout.fillWidth: true
+                            visible: cfg.navCompact && cfg.catGroupLabel !== ""
                             text: cfg.catGroupLabel
-                            color: Theme.accent
+                            color: Theme.fgMuted
                             font.family: Theme.fontFamily
-                            font.pixelSize: Theme.sp(12)
-                            font.bold: true
-                            font.capitalization: Font.AllUppercase
-                            font.letterSpacing: Theme.dp(1.2)
+                            font.pixelSize: Theme.typeLabelMedium
+                            font.weight: Font.Medium
                             elide: Text.ElideRight
                         }
-                        Text {
+
+                        RowLayout {
                             Layout.fillWidth: true
-                            text: cfg.catLabel
-                            color: Theme.fg
-                            font.family: Theme.fontFamily
-                            font.pixelSize: Theme.sp(23)
-                            font.bold: true
-                            elide: Text.ElideRight
+                            spacing: Theme.space10
+
+                            // El glifo de la sección, plano y de acento, como
+                            // los de la nav: ancla la identidad de la página
+                            // sin contenedor. La marca de agua ya lo insinúa
+                            // arriba a la derecha, pero casi invisible y
+                            // sangrada fuera — esto es lo que se LEE.
+                            //
+                            // Crece con el reloj de entrada de la página: nace
+                            // pequeño y se asienta con las tarjetas, sin
+                            // animación propia.
+                            Text {
+                                text: cfg.catGlyph
+                                color: Theme.accentText
+                                font.family: Theme.fontFamily
+                                font.pixelSize: cfg.headerCompact ? Theme.sp(22) : Theme.sp(26)
+                                scale: 0.6 + 0.4 * SettingsMotion.reveal(0)
+                            }
+                            // Un paso más grande que antes (headline medium):
+                            // el título es la única pieza de texto grande de la
+                            // página y se quedaba corto frente a las tarjetas.
+                            // En compacto baja un escalón para no comerse el
+                            // ancho.
+                            Text {
+                                Layout.fillWidth: true
+                                text: cfg.catLabel
+                                color: Theme.fg
+                                font.family: Theme.fontFamily
+                                font.pixelSize: cfg.headerCompact
+                                    ? Theme.typeHeadlineSmall : Theme.typeHeadlineMedium
+                                font.weight: Font.Medium
+                                font.letterSpacing: -Theme.dp(0.4)
+                                elide: Text.ElideRight
+                            }
                         }
                     }
 
@@ -909,6 +1091,8 @@ FloatingWindow {
                 // más arriba). Aparece/desaparece con barrido + fundido, no
                 // de golpe (ver Components/ExpandableDetail.qml).
                 ExpandableDetail {
+                    Layout.leftMargin: contentCol.inset
+                    Layout.rightMargin: contentCol.inset
                     open: cfg.crossGroups.length > 0
                     sourceComponent: crossResultsComp
                 }
@@ -933,10 +1117,10 @@ FloatingWindow {
                                 text: I18n.tr("Results in other sections")
                                 color: Theme.fgMuted
                                 font.family: Theme.fontFamily
-                                font.pixelSize: Theme.sp(11)
+                                font.pixelSize: Theme.typeLabelSmall
                                 font.bold: true
                                 font.capitalization: Font.AllUppercase
-                                font.letterSpacing: Theme.dp(1)
+                                font.letterSpacing: Theme.typeLabelTracking
                             }
 
                             Repeater {
@@ -1025,13 +1209,43 @@ FloatingWindow {
                     contentHeight: (pageLoader.item ? pageLoader.item.implicitHeight : 0) + cfg.spaceSm * 2
                     boundsBehavior: Flickable.StopAtBounds
 
+                    // Barra de desplazamiento del contenido. La barra lateral
+                    // tenía la suya y el contenido —que es lo que de verdad se
+                    // desplaza— no tenía ninguna: en una página larga no había
+                    // forma de saber cuánto quedaba.
+                    //
+                    // Va como capa SOBRE el contenido y solo mientras se usa,
+                    // que es como la pinta ChromeOS: una barra permanente le
+                    // robaría un carril a la columna de lectura, que ya está
+                    // acotada a propósito (ver contentCol.inset).
+                    ScrollBar.vertical: ThinScrollBar {
+                        policy: flick.contentHeight > flick.height + 1
+                            ? ScrollBar.AsNeeded : ScrollBar.AlwaysOff
+                        // A ras del canto derecho: esta es la barra que baja
+                        // TODA la página, y ese es el sitio donde se busca sin
+                        // pensar. Solo se ve mientras se usa (restOpacity 0):
+                        // permanente robaría un carril a la columna de lectura.
+                        rightPadding: 0
+                        // Vertical sí: abajo está la esquina redondeada de la
+                        // tarjeta de contenido (misma cuenta que en la nav).
+                        topPadding: Theme.dp(2)
+                        bottomPadding: Math.max(Theme.dp(2), cfg.radiusCard - cfg.spaceSm)
+                        restOpacity: 0
+                    }
+
                     // Solo se instancia la página ACTIVA. Así los desplegables
                     // pesados (p. ej. options: Fonts.list.map(...)) se evalúan
                     // únicamente al entrar en su categoría.
                     Loader {
                         id: pageLoader
-                        anchors { left: parent.left; right: parent.right; top: parent.top
-                                  topMargin: cfg.spaceSm; rightMargin: cfg.spaceSm }
+                        // Columna centrada de medida acotada (ver
+                        // contentCol.inset). Nada de anclarse a los dos
+                        // bordes: en pantalla ancha las filas se estiraban
+                        // hasta romper la relación etiqueta ↔ control.
+                        width: Math.max(Theme.dp(200), flick.width - contentCol.inset * 2)
+                        x: Math.round((flick.width - width) / 2)
+                        anchors.top: parent.top
+                        anchors.topMargin: cfg.spaceSm
                         // Sin esto, montar la página congela el hilo justo cuando
                         // está corriendo la animación y se nota el tirón.
                         asynchronous: true
@@ -1070,16 +1284,65 @@ FloatingWindow {
                             : I18n.tr("No settings match your search")
                         color: Theme.fgMuted
                         font.family: Theme.fontFamily
-                        font.pixelSize: Theme.sp(13)
+                        font.pixelSize: Theme.typeBodyMedium
                     }
                 }
                 }   // fin ColumnLayout interna (título + Flickable)
+
+                // Filete de desplazamiento bajo la cabecera. Aparece en cuanto
+                // el contenido deja de estar arriba del todo y dice lo único
+                // que el borde superior no puede decir por sí solo: que hay
+                // algo por encima de lo que se ve. Es un detalle de ChromeOS —
+                // y de casi cualquier lista con cabecera fija— que aquí faltaba:
+                // al desplazar, las tarjetas se cortaban a media altura contra
+                // el título sin nada que marcara el corte.
+                //
+                // Se coloca por coordenadas (no por anclas) porque el Flickable
+                // vive dentro de contentCol y no es hermano de esta capa; las
+                // anclas de QML solo llegan al padre y a los hermanos.
+                Item {
+                    id: headerScrim
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    y: contentCol.y + flick.y
+                    height: Theme.dp(10)
+                    // Un umbral, no una rampa sobre contentY: así el fundido lo
+                    // hace la animación (con la duración de Ajustes) y no el
+                    // dedo, fotograma a fotograma.
+                    opacity: flick.contentY > Theme.dp(2) ? 1 : 0
+                    visible: opacity > 0.01
+                    Behavior on opacity {
+                        NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutQuad }
+                    }
+
+                    Rectangle {
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.top: parent.top
+                        height: Theme.hairline
+                        color: Theme.withAlpha(Theme.overlay, Theme.isDark ? 0.7 : 0.45)
+                    }
+                    // Caída de sombra muy corta bajo el filete: sin ella el
+                    // filete parece un separador dibujado, no un borde por
+                    // debajo del cual pasa el contenido.
+                    Rectangle {
+                        anchors.fill: parent
+                        anchors.topMargin: Theme.hairline
+                        gradient: Gradient {
+                            GradientStop {
+                                position: 0.0
+                                color: Qt.rgba(0, 0, 0, Theme.isDark ? 0.22 : 0.08)
+                            }
+                            GradientStop { position: 1.0; color: "transparent" }
+                        }
+                    }
+                }
             }   // fin Item "Contenido"
         }       // fin de la fila barra lateral | contenido
     }
 
     // Componentes de la ventana. Los bloques que reutilizan las páginas
-    // (SettingsCard, SwitchRow, SegRow, ColorRow, Hint, MonitorCard,
+    // (SettingsCard, SwitchRow, SegRow, Hint, MonitorCard,
     // MonitorArrangement) viven en Panels/SettingsPages/; aquí solo la nav lateral.
 
     // Distintivo de "aquí estás": píldora estadio con tinte de acento suave,
@@ -1089,7 +1352,56 @@ FloatingWindow {
     // usa la coloca a su manera, para poder tanto deslizarla como anclarla.
     component NavHighlight: Rectangle {
         radius: height / 2
-        color: Theme.withAlpha(Theme.accent, Theme.isDark ? 0.26 : 0.32)
+        color: cfg.navSelTint
+    }
+
+    // Píldora elástica de la nav: persigue 'targetY' con dos bordes a
+    // velocidades distintas. La misma pieza pinta la selección y el hover
+    // (antes eran dos copias de esta lógica, una por píldora).
+    //
+    // El borde que va delante corre (leadFactor) y la cola remolonea
+    // (trailFactor): de la diferencia entre ambos sale un estirón EN EL
+    // SENTIDO DE LA MARCHA que se recompone al llegar — el resaltado se mueve
+    // como una gota, no como una caja que salta de sitio.
+    //
+    // El estirón se ACOTA a un 90 % del alto de una pestaña. Sin tope, saltar
+    // de la primera a la última estiraba la píldora ocho pestañas: deja de
+    // leerse como una gota y pasa a ser un borrón que cruza la barra.
+    component ElasticPill: NavHighlight {
+        id: pill
+        property real targetY: 0
+        property real targetH: cfg.controlHeightSm
+        property bool animate: false
+        // Duración de cada borde, en múltiplos de animNormal.
+        property real leadFactor: 0.65
+        property real trailFactor: 1.9
+
+        property real leadY: pill.targetY
+        property real trailY: pill.targetY
+        readonly property real stretch:
+            Math.min(Math.abs(trailY - leadY), pill.targetH * 0.9)
+
+        x: navCol.x
+        width: navCol.width
+        // El borde que va DELANTE manda: la cola es la que se recorta al
+        // llegar al tope.
+        y: leadY >= trailY ? leadY - stretch : leadY
+        height: stretch + pill.targetH
+
+        Behavior on leadY {
+            enabled: pill.animate
+            NumberAnimation {
+                duration: Math.max(1, Math.round(Theme.animNormal * pill.leadFactor))
+                easing.type: Easing.OutSine
+            }
+        }
+        Behavior on trailY {
+            enabled: pill.animate
+            NumberAnimation {
+                duration: Math.max(1, Math.round(Theme.animNormal * pill.trailFactor))
+                easing.type: Easing.OutCubic
+            }
+        }
     }
 
     // Sección de la nav: solo sus pestañas, sin cabecera de grupo. Como ya no
@@ -1145,25 +1457,15 @@ FloatingWindow {
         // por defecto de la ventana; con nueve, entra entero.
         implicitHeight: Theme.dp(48)
 
-        // Cuando esta pestaña es la seleccionada, informa a la píldora global
-        // de su posición (en coordenadas del contenido del Flickable) para que
-        // se deslice hasta aquí. Se reevalúa si cambia la selección o si el
-        // layout mueve la pestaña (ancho, riel, reflujo).
-        function reportSel() {
-            if (!tab.sel || !cfg.navContent || tab.selfHighlight)
-                return
-            const p = tab.mapToItem(cfg.navContent, 0, 0)
-            cfg.navSelY = p.y
-            cfg.navSelH = tab.height
+        // Al seleccionarse, la pestaña se ENTREGA a la píldora global. Solo eso:
+        // la posición la deriva cfg.navSelY de la jerarquía viva, así que no
+        // hay nada que volver a informar cuando el layout se mueve.
+        function claimSel() {
+            if (tab.sel && !tab.selfHighlight)
+                cfg.navSelItem = tab
         }
-        onSelChanged: reportSel()
-        onYChanged: reportSel()
-        onHeightChanged: reportSel()
-        Component.onCompleted: reportSel()
-        Connections {
-            target: cfg
-            function onNavContentChanged() { tab.reportSel() }
-        }
+        onSelChanged: claimSel()
+        Component.onCompleted: claimSel()
 
         // Distintivo de SELECCIÓN propio SOLO para pestañas sueltas
         // (selfHighlight); las de sección las pinta la píldora global.
@@ -1179,13 +1481,14 @@ FloatingWindow {
         // equilibrado ante cualquier cambio (hover, selección, clic en caliente).
         readonly property bool hovPaints: !tab.selfHighlight && tab.hovered && !tab.sel
         onHovPaintsChanged: {
-            if (hovPaints && cfg.navContent) {
-                const p = tab.mapToItem(cfg.navContent, 0, 0)
-                cfg.navHovY = p.y
-                cfg.navHovH = tab.height
-            }
-            cfg.navHovCount += hovPaints ? 1 : -1
+            if (hovPaints)
+                cfg.navHovEnter(tab)
+            else
+                cfg.navHovLeave()
         }
+        // Red de seguridad: al desaparecer con el ratón encima, devuelve su
+        // cuenta. Sin esto la píldora de hover se quedaba encendida.
+        Component.onDestruction: if (tab.hovPaints) cfg.navHovLeave()
 
         // Capa de HOVER local SOLO para pestañas sueltas (selfHighlight), que
         // viven fuera del carril de la píldora.
@@ -1212,7 +1515,7 @@ FloatingWindow {
                 Layout.fillWidth: cfg.navCompact
                 horizontalAlignment: Text.AlignHCenter
                 text: tab.glyph
-                color: tab.active ? Theme.accent : Theme.fgDim
+                color: tab.active ? Theme.accentText : Theme.fgDim
                 font.family: Theme.fontFamily
                 font.pixelSize: Theme.sp(22)
                 // El glifo de la pestaña activa crece un punto: en Material el
@@ -1232,9 +1535,9 @@ FloatingWindow {
                 text: tab.label
                 // Acento donde está la píldora; la negrita marca la SELECCIÓN
                 // (no el simple hover), para distinguirla del paso del ratón.
-                color: tab.active ? Theme.accent : Theme.fg
+                color: tab.active ? Theme.accentText : Theme.fg
                 font.family: Theme.fontFamily
-                font.pixelSize: Theme.sp(15)
+                font.pixelSize: Theme.typeLabelLarge
                 font.bold: tab.sel
                 elide: Text.ElideRight
                 Behavior on color { ColorAnimation { duration: Theme.animFast } }

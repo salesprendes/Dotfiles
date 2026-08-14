@@ -157,7 +157,6 @@ ColumnLayout {
             }
             Slider {
                 Layout.fillWidth: true
-                icon: ""
                 accent: row.accent
                 value: row.value
                 onMoved: (v) => row.moved(v)

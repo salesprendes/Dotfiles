@@ -8,7 +8,8 @@ import Quickshell.Hyprland
 Singleton {
     id: g
 
-    // "", "control", "notif", "sysmon", "launcher", "clipboard", "dashboard", "capture"
+    // "", "control", "notif", "sysmon", "launcher", "clipboard", "dashboard",
+    // "capture", "ai"
     property string openPanel: ""
 
     // Monitor con foco al abrir el panel. Se captura aquí (en open(), ANTES de
@@ -34,6 +35,7 @@ Singleton {
     readonly property bool clipboardOpen:      openPanel === "clipboard"
     readonly property bool dashboardOpen:      openPanel === "dashboard"
     readonly property bool screenCaptureOpen:  openPanel === "capture"
+    readonly property bool aiOpen:             openPanel === "ai"
 
     function open(p) {
         openedOnMonitor = Hyprland.focusedMonitor?.name ?? ""
@@ -46,6 +48,7 @@ Singleton {
     function toggleLauncher()      { toggle("launcher") }
     function toggleClipboard()     { toggle("clipboard") }
     function toggleDashboard()     { toggle("dashboard") }
+    function toggleAi()            { toggle("ai") }
     // Si está cerrada, ábrela. Si ya está abierta, deja que la propia ventana
     // decida: cerrarla (si está en este workspace) o traerla al actual.
     signal settingsResummon()

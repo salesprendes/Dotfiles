@@ -158,6 +158,7 @@ PanelWindow {
             ConnectivityAudioWidget {}
             PowerWidget {}
             CaffeineWidget { visible: Settings.showCaffeine }
+            AiWidget { visible: Settings.showAi }
             BatteryWidget {}
             ClipboardWidget { visible: Settings.showClipboard }
             NotificationsWidget { visible: Settings.showNotifications }

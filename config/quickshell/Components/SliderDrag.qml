@@ -15,9 +15,17 @@ QtObject {
     property real dragValue: 0
     readonly property real shownValue: dragging ? dragValue : control.value
 
-    function nudge(delta) {
-        const step = 0.05
-        control.moved(Math.max(0, Math.min(1, control.value + delta * step)))
+    // Paso de teclado/rueda. 'step' es opcional (5% por defecto) para que
+    // quien quiera afinar pueda pedir un paso más fino sin duplicar la
+    // lógica de recorte; los usos antiguos con un solo argumento siguen igual.
+    function nudge(delta, step) {
+        const s = (step === undefined) ? 0.05 : step
+        control.moved(Math.max(0, Math.min(1, control.value + delta * s)))
+    }
+
+    // Salto directo a un valor absoluto (Inicio / Fin).
+    function jumpTo(v01) {
+        control.moved(Math.max(0, Math.min(1, v01)))
     }
 
     function update(v01) {

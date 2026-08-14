@@ -1,42 +1,159 @@
 import QtQuick
 import QtQuick.Layouts
+import qs.Components
 import qs.Config
 import qs.Panels.SettingsPages
 
-// Selector segmentado: etiqueta + fila de opciones con píldora deslizante.
-ColumnLayout {
+// Selector segmentado: etiqueta a la izquierda y píldora de opciones a la
+// derecha, en la MISMA línea — igual que una fila de interruptor, para que una
+// página no parezca dos formularios distintos según el control.
+//
+// La píldora se CIÑE a sus opciones. Antes ocupaba todo el ancho de la
+// tarjeta: en una ventana ancha, «Compacta | Normal | Grande» se convertía en
+// tres pancartas de 300 px cada una, con la palabra perdida en medio. Un
+// selector de tres opciones cortas es un objeto pequeño; hacerlo enorme no lo
+// hace más legible, solo más difícil de apuntar (ley de Fitts: el ancho útil
+// de un botón es el que separa su centro del siguiente, y estirarlos aleja
+// todos los destinos entre sí).
+// El filtro del buscador y la marca de fila vienen de la base (ver
+// Components/SettingsRow.qml).
+SettingsRow {
     id: seg
     property string label: ""
+    // Glifo de la insignia que abre la fila (ver Components/RowBadge.qml).
+    property string glyph: ""
     property var options: []
     property var current
     signal picked(var v)
 
-    // Filtro de la ventana de Ajustes (buscador + "solo modificados").
-    // OPT-IN: sin 'skey' la fila no se filtra nunca, así el mismo componente
-    // sigue funcionando fuera de Ajustes. 'shown' es la condición propia de la
-    // página (p. ej. "solo si hay batería"), que se combina con el filtro.
-    property string skey: ""
-    property string cardTitle: ""
-    property bool shown: true
-    readonly property bool matches: SettingsFilter.accepts(
-        seg.label + " " + seg.cardTitle, seg.skey)
-    visible: seg.shown && seg.matches
-    Layout.fillWidth: true
-    spacing: Theme.space6
-    Text {
-        text: seg.label; color: Theme.fg
-        font.family: Theme.fontFamily; font.pixelSize: Theme.fontSize
+    filterText: seg.label
+
+    readonly property int optCount: options ? options.length : 0
+
+    // ── Responsive por CONTENEDOR, no por ventana ────────────────────────────
+    // Cuando la fila se estrecha hasta que la etiqueta y la píldora ya no
+    // conviven, la píldora se baja a su propio renglón y ocupa todo el ancho.
+    //
+    // La decisión se toma con el ancho de ESTA fila, no con el de la ventana:
+    // la misma fila puede vivir en una tarjeta ancha o en una columna
+    // estrecha, y lo que decide si cabe es el sitio que tiene delante, no el
+    // tamaño del monitor. Es el equivalente a una container query.
+    // Lo que ocupa la fila en una sola línea: insignia + etiqueta + píldora.
+    // Se mide de verdad (implicitWidth de la etiqueta, ancho natural de la
+    // píldora) en vez de con un umbral inventado, así que el salto ocurre
+    // exactamente cuando deja de caber — ni antes, dejando hueco de sobra, ni
+    // después, recortando la etiqueta.
+    readonly property real inlineNeed: Theme.dp(28) + Theme.space10
+        + lbl.implicitWidth + Theme.space10 + seg.naturalWidth
+    readonly property bool stacked:
+        seg.label !== "" && seg.width > 0 && seg.width < seg.inlineNeed + Theme.space8
+
+    // Apilada, el alto es la CABECERA COMPLETA (insignia incluida) más la
+    // píldora. Se contaba solo el alto de la etiqueta, y la insignia —que es
+    // más alta que el texto— se comía la diferencia: la píldora acababa
+    // dibujada encima de la fila siguiente.
+    implicitHeight: stacked
+        ? row.implicitHeight + Theme.space6 + Theme.rowS
+        : Math.max(row.implicitHeight, Theme.dp(46))
+
+    // Ancho natural de la píldora. La interfaz va en monoespaciada, así que
+    // el número de CARACTERES de la opción más larga da su ancho exacto sin
+    // tener que medir cada texto por separado. Con una fuente proporcional la
+    // "M" sobreestima un poco, que es el lado seguro del error: la píldora
+    // sale algo holgada, nunca recortada.
+    readonly property int maxChars: {
+        let m = 1
+        for (let i = 0; i < optCount; i++)
+            m = Math.max(m, String(options[i].text).length)
+        return m
     }
+    TextMetrics {
+        id: segTm
+        font.family: Theme.fontFamily
+        font.pixelSize: Theme.fontSize - 1
+        font.bold: true
+        text: "M".repeat(Math.max(1, seg.maxChars))
+    }
+    readonly property real naturalWidth: optCount > 0
+        ? optCount * (segTm.advanceWidth + Theme.space16) + (optCount + 1) * Theme.space4
+        : 0
+
+    // Apilada, la píldora baja a su renglón y la cabecera se queda arriba.
+    //
+    // La posición VERTICAL va por 'y', no por anclas condicionales. Aquí había
+    // «anchors.top: stacked ? row.bottom : undefined» y compañía, y un ancla
+    // enlazada a undefined para soltarla NO siempre se suelta: medido en vivo,
+    // una fila que pasó por apilada durante el primer pase de disposición se
+    // quedaba con la píldora colgada de row.bottom para siempre (boxY=50 con
+    // el centro en 7), pintada encima de la fila siguiente. Un 'y' es un
+    // vínculo normal: se reevalúa siempre, sin estado que soltar.
+    RowLayout {
+        id: row
+        anchors.left: parent.left
+        anchors.right: parent.right
+        y: seg.stacked ? 0 : Math.round((seg.height - height) / 2)
+        // Sin apilar, la cabecera se detiene antes de la píldora; apilada,
+        // llega hasta el borde porque la píldora ya no comparte renglón.
+        anchors.rightMargin: seg.stacked ? 0 : segBox.width + Theme.space10
+        spacing: Theme.space10
+
+        // Neutra siempre: elegir un valor no es "encender" nada.
+        RowBadge {
+            Layout.alignment: Qt.AlignVCenter
+            glyph: seg.glyph
+            offColor: SettingsPalette.settingsControl
+            offBorderColor: SettingsPalette.settingsBorder
+        }
+
+        Text {
+            id: lbl
+            visible: seg.label !== ""
+            Layout.fillWidth: true
+            Layout.alignment: Qt.AlignVCenter
+            text: seg.label; color: Theme.fg
+            font.family: Theme.fontFamily; font.pixelSize: Theme.fontSize
+            elide: Text.ElideRight
+        }
+
+    }
+
+    // La píldora vive FUERA de la fila de cabecera y se coloca por anclas: es
+    // lo que le permite estar a la derecha en una línea o debajo a lo ancho
+    // sin necesitar dos árboles distintos.
     Rectangle {
         id: segBox
-        Layout.fillWidth: true
-        implicitHeight: Theme.rowS
+        // Por coordenadas, no por anclas condicionales (ver la nota de 'row').
+        // Apilada arranca en el eje de texto y baja bajo la cabecera; en línea
+        // se pega a la derecha, centrada en el alto de la fila.
+        x: seg.stacked ? Theme.dp(28) + Theme.space10 : seg.width - width
+        y: seg.stacked ? row.y + row.height + Theme.space6
+                       : Math.round((seg.height - height) / 2)
+        // Apilada arranca en el eje de texto de las filas (tras la insignia) y
+        // llega al borde; en línea se ciñe EXACTAMENTE a sus opciones.
+        //
+        // Aquí había un techo — «como mucho el 62 % de la fila» — y era el
+        // único camino por el que la píldora podía acabar más estrecha que su
+        // propio contenido: con la fila aún sin medir, ese Math.min la dejaba
+        // en nada y las tres opciones se amontonaban en un punto ("CNopmdta" en
+        // pantalla). Se intentó tapar comprobando que el ancho ya se conociera,
+        // pero el fallo volvió a verse: un ancho pequeño y NO nulo pasa el
+        // guardia igual de bien.
+        //
+        // El techo sobraba de todos modos. Quien decide si la píldora cabe al
+        // lado de la etiqueta es 'stacked', y su cuenta (inlineNeed) ya incluye
+        // el ancho natural: si no cabe, la fila se apila y la píldora se lleva
+        // su propio renglón entero. Sin el techo, el caso "más estrecha que su
+        // contenido" deja de existir en vez de quedar vigilado.
+        width: seg.stacked
+            ? Math.max(0, seg.width - (Theme.dp(28) + Theme.space10))
+            : (seg.label === "" ? seg.width : seg.naturalWidth)
+        height: Theme.rowS
         radius: Theme.pillRadius
         color: SettingsPalette.settingsControl
         border.width: Theme.hairline
         border.color: SettingsPalette.settingsBorder
 
-        readonly property int count: seg.options ? seg.options.length : 0
+        readonly property int count: seg.optCount
         readonly property int selIndex: {
             for (let i = 0; i < count; i++)
                 if (seg.options[i].value === seg.current) return i
@@ -58,7 +175,7 @@ ColumnLayout {
             // Mismo tinte de acento que la píldora de la nav: "lo elegido" se
             // dice igual en toda la ventana. En gris, la píldora contradecía
             // al texto seleccionado, que ya iba de acento.
-            color: Theme.withAlpha(Theme.accent, Theme.isDark ? 0.26 : 0.32)
+            color: SettingsPalette.selectedTint
             Behavior on x { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
             Behavior on width { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
         }
@@ -70,30 +187,73 @@ ColumnLayout {
             Repeater {
                 model: seg.options
                 delegate: Item {
+                    id: segItem
                     required property var modelData
+                    required property int index
                     readonly property bool sel: modelData.value === seg.current
                     Layout.fillWidth: true
                     Layout.fillHeight: true
+
+                    // Capa de estado (M3) de las opciones NO elegidas. Faltaba:
+                    // la única señal de que un segmento era pulsable era el
+                    // cursor, y la píldora solo se entera al SOLTAR — hasta
+                    // entonces el control parecía muerto. Va la primera para
+                    // que el separador y el texto queden por encima.
+                    Rectangle {
+                        anchors.fill: parent
+                        anchors.margins: -Theme.space2
+                        radius: Theme.pillRadius - Theme.space2
+                        color: Theme.fg
+                        opacity: segItem.sel ? 0
+                               : segMa.pressed ? Theme.statePressed
+                               : segMa.containsMouse ? Theme.stateHover : 0
+                        Behavior on opacity { NumberAnimation { duration: Theme.animFast } }
+                    }
+
+                    // Separador entre segmentos, como en el botón segmentado de
+                    // Material 3: es lo que hace que la píldora se lea como UN
+                    // control dividido y no como varios botones sueltos pegados.
+                    // Desaparece a los lados del elegido, donde la píldora ya
+                    // marca el corte y una raya más solo ensuciaría.
+                    Rectangle {
+                        anchors.right: parent.right
+                        anchors.rightMargin: -Theme.space2
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: Theme.hairline
+                        height: Math.round(parent.height * 0.52)
+                        color: Theme.withAlpha(Theme.fg, 0.22)
+                        opacity: (segItem.index >= segBox.count - 1
+                                  || segItem.index === segBox.selIndex
+                                  || segItem.index + 1 === segBox.selIndex) ? 0 : 1
+                        Behavior on opacity { NumberAnimation { duration: Theme.animFast } }
+                    }
+
                     Text {
                         anchors.centerIn: parent
                         // Acotado al ancho del segmento: con muchas opciones o
                         // el panel estrecho, elide en vez de solaparse.
-                        width: Math.min(implicitWidth, parent.width - Theme.space4)
+                        // Nunca negativo: con un ancho negativo el elide no
+                        // recorta nada y el texto se desborda por los dos
+                        // lados — que es lo que convertía el apiñamiento en
+                        // letras superpuestas en vez de en tres huecos vacíos.
+                        width: Math.max(0, Math.min(implicitWidth, parent.width - Theme.space4))
                         horizontalAlignment: Text.AlignHCenter
                         elide: Text.ElideRight
                         text: modelData.text
-                        color: parent.sel ? Theme.accent : Theme.fgMuted
+                        color: parent.sel ? Theme.accentText : Theme.fgMuted
                         font.family: Theme.fontFamily; font.pixelSize: Theme.fontSize - 1
                         font.bold: parent.sel
                         Behavior on color { ColorAnimation { duration: Theme.animFast } }
                     }
                     MouseArea {
+                        id: segMa
                         anchors.fill: parent
+                        hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
                         onClicked: seg.picked(modelData.value)
                     }
                 }
             }
         }
+        }
     }
-}

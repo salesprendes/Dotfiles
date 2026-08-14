@@ -1,23 +1,39 @@
 import QtQuick
 import QtQuick.Layouts
+import qs.Components
 import qs.Config
 
 // Texto de ayuda bajo un control: apagado, a lo ancho, con ajuste de línea.
-Text {
+//
+// Hereda el filtro del buscador de SettingsRow (misma 'skey' que su fila →
+// aparecen y desaparecen juntos), pero NO es una fila: isSettingsRow va a
+// false para que SettingsCard no le dibuje un filete encima — un consejo
+// cuelga de su fila, no la separa de ella.
+SettingsRow {
     id: hint
 
-    // Filtro de Ajustes: un consejo va pegado al control que explica, así que se
-    // le da la MISMA 'skey' que su fila y aparecen/desaparecen juntos. Sin 'skey'
-    // no se filtra; 'shown' es la condición propia de la página.
-    property string skey: ""
-    property string cardTitle: ""
-    property bool shown: true
-    readonly property bool matches: SettingsFilter.accepts(hint.text + " " + hint.cardTitle, hint.skey)
-    visible: hint.shown && hint.matches
+    isSettingsRow: false
+    property alias text: body.text
+    // Sobreescribible: un aviso de error se pinta en rojo sin cambiar de
+    // componente (ver NetworkPage).
+    property alias color: body.color
 
-    Layout.fillWidth: true
-    color: Theme.fgMuted
-    font.family: Theme.fontFamily
-    font.pixelSize: Theme.fontSize - 3
-    wrapMode: Text.WordWrap
+    filterText: body.text
+
+    // Sangrado hasta el eje de texto de las filas (ancho de insignia + hueco):
+    // un consejo explica un control, así que cuelga de su misma vertical en
+    // vez de arrancar pegado al borde de la tarjeta.
+    Layout.leftMargin: Theme.dp(28) + Theme.space10
+    implicitHeight: body.implicitHeight
+
+    Text {
+        id: body
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
+        color: Theme.fgMuted
+        font.family: Theme.fontFamily
+        font.pixelSize: Theme.typeBodySmall
+        wrapMode: Text.WordWrap
+    }
 }

@@ -8,9 +8,8 @@ import qs.Services
 
 // La misma marca que sale al arrancar, los datos del equipo en vivo y los
 // créditos.
-ColumnLayout {
+SettingsPage {
     id: about
-    spacing: Theme.space14
 
     readonly property bool isArch: ["arch", "archlinux", "arch32"].indexOf(SysMon.distroId) !== -1
 
@@ -105,10 +104,22 @@ ColumnLayout {
         title: I18n.tr("Credits")
         glyph: "󰀄"
 
-        // Dos columnas con un filete en medio.
-        RowLayout {
+        // Dos columnas con un filete en medio. En estrecho las mitades se
+        // aplastaban hasta elidir los dos nombres a la vez; por debajo del
+        // umbral (medido contra el ancho PROPIO) se apilan y el filete
+        // vertical desaparece — dos medias tarjetas ilegibles no son mejor
+        // que dos filas.
+        GridLayout {
+            id: creditsGrid
             Layout.fillWidth: true
-            spacing: Theme.space12
+            // Corte medido en vivo: a 690 px de ventana la parrilla mide ~509
+            // y con el corte en 440 aún cabían dos columnas — con los dos
+            // subtítulos elididos. El corte va donde los subtítulos aún se
+            // leen enteros, no donde las columnas caben a secas.
+            readonly property bool stacked: width > 0 && width < Theme.dp(480)
+            columns: stacked ? 1 : 3
+            columnSpacing: Theme.space12
+            rowSpacing: Theme.space10
 
             // Quién.
             RowLayout {
@@ -157,8 +168,9 @@ ColumnLayout {
                 }
             }
 
-            // El filete.
+            // El filete. Solo cuando hay dos columnas que separar.
             Rectangle {
+                visible: !creditsGrid.stacked
                 Layout.fillHeight: true
                 Layout.topMargin: Theme.space2
                 Layout.bottomMargin: Theme.space2

@@ -6,8 +6,7 @@ import qs.Services
 import qs.Panels.SettingsPages
 
 // Tipografía
-ColumnLayout {
-    spacing: Theme.space12
+SettingsPage {
 
     // Las fuentes (fc-list) se cargan al entrar en esta página, no al arrancar.
     Component.onCompleted: Fonts.refresh()
@@ -16,6 +15,7 @@ ColumnLayout {
         title: I18n.tr("Animations and motion"); glyph: "󰓞"
 
         SegRow {
+            glyph: "󰓞"
             skey: "animationSpeed"
             label: I18n.tr("Animation Speed")
             options: [
@@ -57,18 +57,25 @@ ColumnLayout {
             border.width: Theme.hairline
             border.color: SettingsPalette.settingsBorder
 
+            // Acotada al ancho de la lápida: sin tope, en una columna
+            // estrecha la línea de muestra sobresalía por los dos lados.
             ColumnLayout {
                 anchors.centerIn: parent
+                width: Math.max(0, parent.width - Theme.space16 * 2)
                 spacing: Theme.space2
                 Text {
-                    Layout.alignment: Qt.AlignHCenter
+                    Layout.fillWidth: true
+                    horizontalAlignment: Text.AlignHCenter
+                    elide: Text.ElideRight
                     text: "AaBbCc 0123  󰋩 󰒓 󰂚"
                     color: Theme.fg
                     font.family: Settings.fontFamily
                     font.pixelSize: Theme.fontSize + 8
                 }
                 Text {
-                    Layout.alignment: Qt.AlignHCenter
+                    Layout.fillWidth: true
+                    horizontalAlignment: Text.AlignHCenter
+                    elide: Text.ElideRight
                     text: "mono: /proc/cpuinfo  0x7aa2f7"
                     color: Theme.fgMuted
                     font.family: Settings.monoFontFamily
@@ -78,6 +85,7 @@ ColumnLayout {
         }
 
         DropdownRow {
+            glyph: "󰛖"
             skey: "fontFamily"
             label: I18n.tr("Normal Font")
             options: Fonts.list.map(f => ({ text: f, value: f, font: f }))
@@ -88,6 +96,7 @@ ColumnLayout {
         }
 
         DropdownRow {
+            glyph: "󰅴"
             skey: "monoFontFamily"
             label: I18n.tr("Monospace Font")
             options: Fonts.monoList.map(f => ({ text: f, value: f, font: f }))
@@ -111,18 +120,21 @@ ColumnLayout {
         title: I18n.tr("Font rendering"); glyph: "󰚌"
 
         SwitchRow {
+            glyph: "󰊪"
             skey: "fontAntialias"
             label: I18n.tr("Antialiasing")
             checked: Settings.fontAntialias
             onToggled: Settings.fontAntialias = !Settings.fontAntialias
         }
         SwitchRow {
+            glyph: "󰘳"
             skey: "fontHinting"
             label: I18n.tr("Hinting")
             checked: Settings.fontHinting
             onToggled: Settings.fontHinting = !Settings.fontHinting
         }
         SegRow {
+            glyph: "󰘳"
             skey: "fontHintstyle"
             label: I18n.tr("Hint style")
             options: [
@@ -135,6 +147,7 @@ ColumnLayout {
             onPicked: (v) => Settings.fontHintstyle = v
         }
         DropdownRow {
+            glyph: "󰸌"
             skey: "fontRgba"
             label: I18n.tr("Subpixel order (RGBA)")
             options: [
@@ -148,6 +161,7 @@ ColumnLayout {
             onPicked: (v) => Settings.fontRgba = v
         }
         DropdownRow {
+            glyph: "󰈻"
             skey: "fontLcdfilter"
             label: I18n.tr("LCD filter")
             options: [
@@ -160,6 +174,7 @@ ColumnLayout {
             onPicked: (v) => Settings.fontLcdfilter = v
         }
         SwitchRow {
+            glyph: "󰦡"
             skey: "fontEmbeddedbitmap"
             label: I18n.tr("Embedded bitmaps")
             desc: I18n.tr("Disabled avoids pixelated bitmap fonts")

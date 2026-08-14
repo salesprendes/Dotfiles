@@ -23,9 +23,13 @@ PanelWindow {
     WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.namespace: "qs-osd-volume"
 
-    // Anclado solo abajo → el compositor lo centra horizontalmente.
-    anchors { bottom: true }
-    margins.bottom: Theme.dp(72)
+    // Anclado a un solo borde → el compositor lo centra en el otro eje.
+    // Arriba estorba menos cuando lo que miras vive en la parte baja de la
+    // pantalla (un vídeo a pantalla completa, un terminal largo).
+    readonly property bool atTop: Settings.osdPosition === "top"
+    anchors { top: osd.atTop; bottom: !osd.atTop }
+    margins.top: osd.atTop ? Theme.dp(72) : 0
+    margins.bottom: osd.atTop ? 0 : Theme.dp(72)
     implicitWidth: Theme.panelWidth(screen, 280, 240, 0.72)
     implicitHeight: Theme.dp(56)
 
@@ -39,6 +43,7 @@ PanelWindow {
 
     function reveal() {
         if (!armed) return
+        if (!Settings.osdEnabled) return        // apagado en Ajustes
         if (Globals.controlCenterOpen) return   // no, si viene del panel
         revealed = true
         hideTimer.restart()
@@ -46,7 +51,12 @@ PanelWindow {
 
     Component.onCompleted: armTimer.start()
     Timer { id: armTimer; interval: 1200; onTriggered: osd.armed = true }
-    Timer { id: hideTimer; interval: 1600; onTriggered: { osd.revealed = false; offTimer.restart() } }
+    // Tiempo real, no decoración: no lo modula la velocidad de animaciones.
+    Timer {
+        id: hideTimer
+        interval: Math.max(300, Math.round(Settings.osdTimeout * 1000))
+        onTriggered: { osd.revealed = false; offTimer.restart() }
+    }
     Timer { id: offTimer; interval: Theme.animNormal + 80 }
 
     // Detecta cambios de volumen / silencio.
