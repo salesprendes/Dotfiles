@@ -26,6 +26,9 @@ ColumnLayout {
     property bool   password: false
     property bool   invalid: false
     signal edited(string text)
+    // Vaciado programático (el alta de un servidor MCP limpia sus campos):
+    // el texto vive en el TextInput interno, no en 'value'.
+    function clear() { input.text = "" }
     signal accepted()
     signal canceled()
 

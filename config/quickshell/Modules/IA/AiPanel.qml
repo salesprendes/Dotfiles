@@ -12,12 +12,18 @@ import qs.Panels.SettingsPages
 Popout {
     id: panel
     ns: "qs-ai"
-    cardWidth: 480
+    // Dos anchos: el de leer una respuesta y el de leer CÓDIGO. El botón de
+    // la cabecera lo conmuta y el ajuste lo recuerda.
+    cardWidth: Settings.aiWide ? 660 : 480
     cardMinWidth: 340
     shown: Globals.aiOpen
+    Behavior on cardWidth {
+        NumberAnimation { duration: Theme.animNormal; easing.type: Theme.reflowEasing }
+    }
 
-    property bool configOpen: AiService.keyMissing && AiService.messages.count === 0
+    property bool configOpen: AiService.notConfigured && AiService.messages.count === 0
     property bool convOpen: false
+    property bool modelOpen: false
 
 
 
@@ -76,17 +82,21 @@ Popout {
                 font.bold: true
                 elide: Text.ElideRight
             }
-            // Selector rápido de modelo: cambiar de cerebro sin abrir la
-            // config. El proveedor sale como detalle, a la derecha del valor.
-            DropdownRow {
-                Layout.fillWidth: true
-                label: ""
-                glyph: ""
-                options: AiService.modelOptions
-                current: AiService.model
-                detailText: AiService.provider.label
-                maxVisibleItems: 5
-                onPicked: (v) => AiService.setModel(v)
+            // Selector de modelo: cambiar de cerebro sin abrir la config.
+            // Enseña el nombre, el proveedor y el semáforo de la conexión; la
+            // lista con buscador se despliega bajo la cabecera.
+            ModelChip {
+                Layout.alignment: Qt.AlignLeft
+                Layout.maximumWidth: parent.width
+                Layout.leftMargin: -Theme.space10   // alinea el texto con el título
+                open: panel.modelOpen
+                onToggled: {
+                    panel.modelOpen = !panel.modelOpen
+                    if (panel.modelOpen) {
+                        panel.convOpen = false
+                        panel.configOpen = false
+                    }
+                }
             }
         }
 
@@ -104,6 +114,13 @@ Popout {
             border.color: AiService.agentMode
                 ? Theme.withAlpha(Theme.accent, 0.5) : SettingsPalette.settingsBorder
             Behavior on color { ColorAnimation { duration: Theme.animFast } }
+            scale: modeMa.pressed ? 0.96 : 1
+            Behavior on scale {
+                NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic }
+            }
+            clip: true
+
+            Ripple { id: modeRipple }
 
             RowLayout {
                 id: modeRow
@@ -124,13 +141,26 @@ Popout {
                 }
             }
             MouseArea {
+                id: modeMa
                 anchors.fill: parent
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
-                onClicked: Settings.aiMode = AiService.agentMode ? "chat" : "agent"
+                onPressed: (e) => modeRipple.press(e.x, e.y)
+                // Dos estados: charlar o actuar. Planificar no es un modo — lo
+                // decide el agente al leer el encargo (propose_plan).
+                onClicked: panel.cycleMode()
             }
         }
 
+        // Ancho del panel: estrecho para charlar, ancho para leer código.
+        IconButton {
+            Layout.alignment: Qt.AlignTop
+            icon: Settings.aiWide ? "󰊔" : "󰊓"
+            diameter: Theme.controlM
+            baseColor: "transparent"
+            iconColor: Settings.aiWide ? Theme.accentText : Theme.fgDim
+            onClicked: Settings.aiWide = !Settings.aiWide
+        }
         // Historial de conversaciones.
         IconButton {
             Layout.alignment: Qt.AlignTop
@@ -140,7 +170,10 @@ Popout {
             iconColor: panel.convOpen ? Theme.accentText : Theme.fgDim
             onClicked: {
                 panel.convOpen = !panel.convOpen
-                if (panel.convOpen) panel.configOpen = false
+                if (panel.convOpen) {
+                    panel.configOpen = false
+                    panel.modelOpen = false
+                }
             }
         }
         // Nueva conversación.
@@ -152,16 +185,21 @@ Popout {
             visible: AiService.messages.count > 0
             onClicked: AiService.newConversation()
         }
-        // Configuración de proveedores.
+        // Configuración de proveedores. Se tiñe de rojo cuando la conexión
+        // falla: el problema se ve desde la cabecera, sin abrir nada.
         IconButton {
             Layout.alignment: Qt.AlignTop
             icon: "󰒓"
             diameter: Theme.controlM
             baseColor: panel.configOpen ? SettingsPalette.accentSoft : "transparent"
-            iconColor: panel.configOpen ? Theme.accentText : Theme.fgDim
+            iconColor: AiService.connState === "fail" && !panel.configOpen ? Theme.red
+                     : panel.configOpen ? Theme.accentText : Theme.fgDim
             onClicked: {
                 panel.configOpen = !panel.configOpen
-                if (panel.configOpen) panel.convOpen = false
+                if (panel.configOpen) {
+                    panel.convOpen = false
+                    panel.modelOpen = false
+                }
             }
         }
     }
@@ -187,6 +225,31 @@ Popout {
                  : Theme.withAlpha(Theme.accent, 0.8)
             Behavior on width { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
             Behavior on color { ColorAnimation { duration: Theme.animNormal } }
+        }
+    }
+
+    // ── Selector de modelo (lámina) ──────────────────────────────────────────
+    ExpandableDetail {
+        open: panel.modelOpen
+        sourceComponent: modelComp
+    }
+
+    Component {
+        id: modelComp
+        Rectangle {
+            Layout.fillWidth: true
+            implicitHeight: modelCol.implicitHeight + Theme.space12 * 2
+            radius: Theme.shapeMd
+            color: SettingsPalette.groupFill
+
+            ModelSheet {
+                id: modelCol
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.margins: Theme.space12
+                onChosen: panel.modelOpen = false
+            }
         }
     }
 
@@ -220,13 +283,15 @@ Popout {
                     spacing: Theme.space8
                     visible: AiService.messages.count > 0
 
-                    SuggestChip {
+                    Chip {
                         label: "󰈝 " + I18n.tr("Export")
                         onDo: () => AiService.exportMarkdown()
                     }
-                    SuggestChip {
-                        label: "󰍃 " + I18n.tr("Compact")
-                        enabled: !AiService.busy && !AiService.keyMissing
+                    Chip {
+                        label: "󰍃 " + (AiService.compacting
+                            ? I18n.tr("Compacting…") : I18n.tr("Compact"))
+                        enabled: !AiService.busy && !AiService.compacting
+                                 && !AiService.notConfigured
                         opacity: enabled ? 1 : 0.4
                         onDo: () => {
                             AiService.compact()
@@ -263,6 +328,9 @@ Popout {
                              : convMa.containsMouse ? SettingsPalette.settingsHover
                              : "transparent"
                         Behavior on color { ColorAnimation { duration: Theme.animFast } }
+                        clip: true
+
+                        Ripple { id: convRipple }
 
                         // Debajo de la fila entera; el botón de borrar,
                         // declarado después, gana los clics que le caen.
@@ -271,6 +339,7 @@ Popout {
                             anchors.fill: parent
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
+                            onPressed: (e) => convRipple.press(e.x, e.y)
                             onClicked: {
                                 AiService.switchTo(convRow.modelData.id)
                                 panel.convOpen = false
@@ -315,12 +384,9 @@ Popout {
                                     elide: Text.ElideRight
                                 }
                             }
-                            IconButton {
-                                icon: "󰩹"
+                            RowDelete {
                                 diameter: Theme.dp(24)
                                 iconPixelSize: Theme.sp(12)
-                                baseColor: "transparent"
-                                hoverColor: Theme.red
                                 onClicked: AiService.deleteConversation(convRow.modelData.id)
                             }
                         }
@@ -331,310 +397,19 @@ Popout {
     }
 
     // ── Configuración (lámina) ───────────────────────────────────────────────
+    // Vive entera en AiSettings.qml: la lámina se hizo tan larga como el resto
+    // del panel junto, y mezclar "cómo se ve una conversación" con "qué
+    // permisos tiene el agente" en un solo archivo ya no ayudaba a nadie.
     ExpandableDetail {
         open: panel.configOpen
         sourceComponent: configComp
     }
 
-    // La config en dos plantas (revelación progresiva): a la vista, SOLO lo
-    // que hace falta para arrancar — proveedor y credencial; el modelo ya se
-    // elige en la cabecera. Todo lo demás vive bajo "Ajustes avanzados",
-    // plegado: sigue ahí entero, pero ya no es una pared de doce controles
-    // para quien solo venía a pegar su clave.
     Component {
         id: configComp
-        Rectangle {
-            id: confRoot
-            property bool advOpen: false
-            Layout.fillWidth: true
-            // Con los avanzados abiertos la lámina puede superar al panel:
-            // tope de altura y DESPLAZA dentro, con su barra visible.
-            implicitHeight: Math.min(confCol.implicitHeight + Theme.space12 * 2,
-                                     Theme.dp(430))
-            radius: Theme.shapeMd
-            color: SettingsPalette.groupFill
-            clip: true
-
-            Flickable {
-                id: confFlick
-                anchors.fill: parent
-                anchors.margins: Theme.space12
-                contentWidth: width
-                contentHeight: confCol.implicitHeight
-                clip: true
-                boundsBehavior: Flickable.StopAtBounds
-                interactive: contentHeight > height + 0.5
-
-                ScrollBar.vertical: ThinScrollBar {
-                    policy: confFlick.contentHeight > confFlick.height + 1
-                        ? ScrollBar.AlwaysOn : ScrollBar.AlwaysOff
-                    rightPadding: -Theme.space8
-                    restOpacity: 0.35
-                }
-
-            ColumnLayout {
-                id: confCol
-                width: confFlick.width
-                spacing: Theme.space10
-
-                SegRow {
-                    glyph: "󰚩"
-                    label: I18n.tr("Provider")
-                    options: [ { text: "Gemini", value: "gemini" },
-                               { text: "OpenRouter", value: "openrouter" },
-                               { text: "Ollama", value: "ollama" },
-                               { text: "LLM", value: "custom" } ]
-                    current: Settings.aiProvider
-                    onPicked: (v) => Settings.aiProvider = v
-                }
-
-                TextField {
-                    shown: AiService.provider.needsKey || Settings.aiProvider === "custom"
-                    label: I18n.tr("API key")
-                    leftIcon: "󰌆"
-                    password: true
-                    placeholder: Settings.aiProvider === "gemini" ? "AIza…"
-                               : Settings.aiProvider === "custom" ? I18n.tr("optional")
-                               : "sk-or-…"
-                    value: AiService.apiKey
-                    onEdited: (t) => AiService.setKey(Settings.aiProvider, t)
-                }
-
-                TextField {
-                    shown: Settings.aiProvider === "ollama" || Settings.aiProvider === "custom"
-                    label: I18n.tr("Server URL")
-                    leftIcon: "󰒋"
-                    placeholder: Settings.aiProvider === "custom"
-                        ? "http://127.0.0.1:8080/v1" : "http://127.0.0.1:11434"
-                    value: Settings.aiProvider === "custom"
-                        ? Settings.aiCustomUrl : Settings.aiOllamaUrl
-                    onEdited: (t) => {
-                        if (Settings.aiProvider === "custom")
-                            Settings.aiCustomUrl = t.trim()
-                        else
-                            Settings.aiOllamaUrl = t.trim()
-                    }
-                }
-
-                Hint {
-                    Layout.leftMargin: 0
-                    text: Settings.aiProvider === "gemini"
-                        ? I18n.tr("Free tier with a Google AI Studio key — good for quick questions.")
-                        : Settings.aiProvider === "openrouter"
-                        ? I18n.tr("One key, many models. The :free ids (Qwen, etc.) change over time — adjust the model if one vanishes.")
-                        : Settings.aiProvider === "custom"
-                        ? I18n.tr("Any OpenAI-compatible /v1 server: llama.cpp, LM Studio, vLLM… Key only if yours asks for one.")
-                        : I18n.tr("Local and private, no key. Run Qwen or Meta's Muse Glimmer with 'ollama pull'.")
-                }
-                Hint {
-                    Layout.leftMargin: 0
-                    shown: AiService.haveKeyring && AiService.provider.needsKey
-                    text: I18n.tr("Keys are stored in the system keyring, not in settings.json.")
-                }
-
-                // La puerta a la otra planta.
-                Rectangle {
-                    Layout.fillWidth: true
-                    implicitHeight: Theme.dp(34)
-                    radius: Theme.shapeSm
-                    color: advMa.containsMouse ? SettingsPalette.settingsHover
-                                               : "transparent"
-                    Behavior on color { ColorAnimation { duration: Theme.animFast } }
-
-                    RowLayout {
-                        anchors.fill: parent
-                        anchors.leftMargin: Theme.space8
-                        anchors.rightMargin: Theme.space8
-                        spacing: Theme.space8
-                        Text {
-                            text: "󰢻"
-                            color: confRoot.advOpen ? Theme.accentText : Theme.fgMuted
-                            font.family: Theme.fontFamily
-                            font.pixelSize: Theme.sp(14)
-                        }
-                        Text {
-                            Layout.fillWidth: true
-                            text: I18n.tr("Advanced settings")
-                            color: confRoot.advOpen ? Theme.fg : Theme.fgDim
-                            font.family: Theme.fontFamily
-                            font.pixelSize: Theme.typeLabelLarge
-                            font.weight: Font.Medium
-                        }
-                        Text {
-                            text: "󰅀"
-                            rotation: confRoot.advOpen ? 180 : 0
-                            Behavior on rotation { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
-                            color: Theme.fgMuted
-                            font.family: Theme.fontFamily
-                            font.pixelSize: Theme.sp(13)
-                        }
-                    }
-                    MouseArea {
-                        id: advMa
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: confRoot.advOpen = !confRoot.advOpen
-                    }
-                }
-
-                ExpandableDetail {
-                    open: confRoot.advOpen
-                    sourceComponent: advComp
-                }
-            }
-            }
-        }
+        AiSettings {}
     }
 
-    // La planta avanzada: estilo, creatividad, compactación, instrucciones,
-    // políticas de herramientas y memoria. Nada se fue — solo bajó al sótano.
-    Component {
-        id: advComp
-        ColumnLayout {
-            spacing: Theme.space10
-
-            // Estilo de respuesta (persona): un ajuste, no un prompt a mano.
-            SegRow {
-                glyph: "󰚈"
-                label: I18n.tr("Style")
-                options: [ { text: I18n.tr("Normal"), value: "normal" },
-                           { text: I18n.tr("Concise"), value: "concise" },
-                           { text: I18n.tr("Teacher"), value: "teacher" },
-                           { text: I18n.tr("Reviewer"), value: "reviewer" } ]
-                current: Settings.aiPersona
-                onPicked: (v) => Settings.aiPersona = v
-            }
-
-            // Modelo a mano (ids exóticos, sintaxis proveedor:modelo); el día
-            // a día se elige en el desplegable de la cabecera.
-            TextField {
-                label: I18n.tr("Model")
-                leftIcon: "󰍜"
-                value: AiService.model
-                onEdited: (t) => AiService.setModel(t)
-            }
-
-            // Temperatura: el mando universal de creatividad del contrato.
-            SliderRow {
-                label: I18n.tr("Creativity"); glyph: "󰔄"
-                from: 0.0; to: 1.5; value: Settings.aiTemperature
-                valueText: Settings.aiTemperature.toFixed(1)
-                onMoved: (v) => Settings.aiTemperature = Math.round(v * 10) / 10
-            }
-
-            // Instrucciones extra: se añaden al prompt de sistema.
-            TextField {
-                label: I18n.tr("Extra instructions")
-                leftIcon: "󰚈"
-                placeholder: I18n.tr("e.g. answer always in Spanish, prefer fish over bash…")
-                value: Settings.aiCustomPrompt
-                onEdited: (t) => Settings.aiCustomPrompt = t
-            }
-
-            // Compactación: cuándo se resume el contexto y qué sobrevive.
-            SegRow {
-                glyph: "󰍃"
-                label: I18n.tr("Compact context")
-                options: [ { text: I18n.tr("Manual"), value: "manual" },
-                           { text: I18n.tr("Warn"), value: "warn" },
-                           { text: "Auto", value: "auto" } ]
-                current: Settings.aiAutoCompact
-                onPicked: (v) => Settings.aiAutoCompact = v
-            }
-            SegRow {
-                glyph: "󰆓"
-                label: I18n.tr("Keep on compact")
-                options: [ { text: I18n.tr("Nothing"), value: 0 },
-                           { text: I18n.tr("1 turn"), value: 1 },
-                           { text: I18n.tr("2 turns"), value: 2 } ]
-                current: Settings.aiCompactKeep
-                onPicked: (v) => Settings.aiCompactKeep = v
-            }
-            Hint {
-                Layout.leftMargin: 0
-                text: I18n.tr("At 85% of the context: Warn suggests /compact; Auto does it by itself.")
-            }
-
-            // Política por herramienta (las listas de aprobación de
-            // aisuite): Preguntar (defecto) · Auto · No. "No" la borra
-            // del vocabulario del modelo; "Auto" ejecuta sin tarjeta,
-            // siempre bajo el tope de pasos.
-            Text {
-                Layout.topMargin: Theme.space4
-                text: I18n.tr("Tool policies")
-                color: Theme.fgDim
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.typeLabelMedium
-                font.weight: Font.Medium
-            }
-            Repeater {
-                model: ["run_command", "write_file", "open_url",
-                        "read_file", "list_dir", "remember"]
-                delegate: SegRow {
-                    required property string modelData
-                    label: modelData
-                    options: [ { text: I18n.tr("Ask"), value: "ask" },
-                               { text: "Auto", value: "auto" },
-                               { text: I18n.tr("Off"), value: "off" } ]
-                    current: (Settings.aiToolPolicies || {})[modelData] || "ask"
-                    onPicked: (v) => {
-                        const p = Object.assign({}, Settings.aiToolPolicies)
-                        p[modelData] = v
-                        Settings.aiToolPolicies = p
-                    }
-                }
-            }
-
-            // Memoria persistente: lo que el asistente guardó (con tu
-            // aprobación) y se inyecta en cada conversación.
-            Text {
-                Layout.topMargin: Theme.space4
-                text: I18n.tr("Memory")
-                color: Theme.fgDim
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.typeLabelMedium
-                font.weight: Font.Medium
-            }
-            EmptyNote {
-                visible: AiService.memoryList.length === 0
-                text: I18n.tr("No saved notes.")
-            }
-            Repeater {
-                model: AiService.memoryList
-                delegate: RowLayout {
-                    id: memRow
-                    required property string modelData
-                    required property int index
-                    Layout.fillWidth: true
-                    spacing: Theme.space8
-                    Text {
-                        text: "󰍩"
-                        color: Theme.fgMuted
-                        font.family: Theme.fontFamily
-                        font.pixelSize: Theme.sp(12)
-                    }
-                    Text {
-                        Layout.fillWidth: true
-                        text: memRow.modelData
-                        color: Theme.fgDim
-                        font.family: Theme.fontFamily
-                        font.pixelSize: Theme.typeBodySmall
-                        elide: Text.ElideRight
-                    }
-                    IconButton {
-                        icon: "󰩹"
-                        diameter: Theme.dp(22)
-                        iconPixelSize: Theme.sp(11)
-                        baseColor: "transparent"
-                        hoverColor: Theme.red
-                        onClicked: AiService.removeMemory(memRow.index)
-                    }
-                }
-            }
-
-        }
-    }
 
     // ── Conversación ─────────────────────────────────────────────────────────
     ListView {
@@ -642,12 +417,54 @@ Popout {
         Layout.fillWidth: true
         // Alto ADAPTATIVO: se ciñe a la conversación y crece con ella hasta
         // el tope, donde empieza a desplazar.
-        Layout.preferredHeight: Math.max(Theme.dp(250),
-            Math.min(Theme.dp(460), contentHeight + Theme.space8))
+        // Con el panel ancho también se estira a lo alto: quien lo abre para
+        // leer código quiere ver más de cinco líneas.
+        // Sin conversación manda la INVITACIÓN: el saludo, el icono y los
+        // arranques piden lo que pidan, y se les da. Con 250 px fijos, el
+        // tercer chip quedaba cortado por la mitad — la primera impresión del
+        // panel era una lista recortada.
+        Layout.preferredHeight: AiService.messages.count === 0 && !AiService.busy
+            ? Math.max(Theme.dp(250), emptyCol.implicitHeight + Theme.space16 * 2)
+            : Math.max(Theme.dp(250),
+                Math.min(Settings.aiWide ? Theme.dp(560) : Theme.dp(460),
+                         contentHeight + Theme.space8))
         clip: true
         spacing: Theme.space12
         model: AiService.messages
         boundsBehavior: Flickable.StopAtBounds
+
+        // Los mensajes ENTRAN: funden y se asientan desde un pelín más
+        // pequeños. Aparecían de golpe, ya colocados, y en una conversación
+        // con herramientas —donde cada ronda añade varias tarjetas seguidas—
+        // el efecto era el de una lista que da tirones.
+        add: Transition {
+            NumberAnimation {
+                property: "opacity"; from: 0; to: 1
+                duration: Theme.animNormal; easing.type: Theme.enterEasing
+            }
+            NumberAnimation {
+                property: "scale"; from: 0.97; to: 1
+                duration: Theme.animNormal; easing.type: Theme.enterEasing
+            }
+        }
+        // Y los de al lado se APARTAN en vez de teletransportarse (al borrar
+        // una tarjeta, al rehacer una respuesta).
+        displaced: Transition {
+            NumberAnimation {
+                properties: "x,y"
+                duration: Theme.animNormal; easing.type: Theme.reflowEasing
+            }
+        }
+
+        // Volver abajo es un viaje, no un corte: el botón flotante desliza
+        // hasta el final para que se vea DE DÓNDE venías.
+        NumberAnimation {
+            id: scrollToEnd
+            target: chat
+            property: "contentY"
+            duration: Theme.animNormal
+            easing.type: Theme.reflowEasing
+        }
 
         // Visible en reposo (no solo al usarla): con conversación larga, la
         // barra dice de un vistazo cuánto hay por encima.
@@ -672,6 +489,7 @@ Popout {
             visible: AiService.messages.count === 0 && !AiService.busy
 
             ColumnLayout {
+                id: emptyCol
                 anchors.centerIn: parent
                 width: Math.min(parent.width, Theme.dp(340))
                 spacing: Theme.space12
@@ -699,7 +517,9 @@ Popout {
                 Text {
                     Layout.fillWidth: true
                     horizontalAlignment: Text.AlignHCenter
-                    text: AiService.keyMissing
+                    text: AiService.urlMissing
+                        ? I18n.tr("Point the panel at your server to start.")
+                        : AiService.keyMissing
                         ? I18n.tr("Pick a provider and add its key to start.")
                         : I18n.tr("Ask anything. Attach your clipboard or screen for context.")
                     color: Theme.fgMuted
@@ -708,14 +528,25 @@ Popout {
                     wrapMode: Text.WordWrap
                 }
 
+                // Sin configurar, un solo camino a la vista: abrir la conexión.
+                Chip {
+                    Layout.alignment: Qt.AlignHCenter
+                    visible: AiService.notConfigured
+                    label: "󰒋  " + I18n.tr("Set up the connection")
+                    onDo: () => {
+                        panel.configOpen = true
+                        panel.convOpen = false
+                    }
+                }
+
                 // Arranques que enseñan lo que el panel sabe hacer.
                 Flow {
                     Layout.alignment: Qt.AlignHCenter
                     Layout.fillWidth: true
                     spacing: Theme.space8
-                    visible: !AiService.keyMissing
+                    visible: !AiService.notConfigured
 
-                    SuggestChip {
+                    Chip {
                         label: I18n.tr("Summarize my clipboard")
                         onDo: () => {
                             AiService.attachClipboard()
@@ -723,7 +554,7 @@ Popout {
                             input.forceActiveFocus()
                         }
                     }
-                    SuggestChip {
+                    Chip {
                         label: I18n.tr("What's on my screen?")
                         onDo: () => {
                             input.text = I18n.tr("What's on my screen?")
@@ -731,7 +562,7 @@ Popout {
                             AiService.attachScreenshot()
                         }
                     }
-                    SuggestChip {
+                    Chip {
                         label: I18n.tr("Explain this command:")
                         onDo: () => {
                             input.text = I18n.tr("Explain this command:") + " "
@@ -759,6 +590,7 @@ Popout {
             toolStatus: model.toolStatus
             attachNote: model.attachNote
             ts: model.ts
+            undoPath: model.undoPath
             msgIndex: model.index
             isLast: model.index === chat.count - 1
         }
@@ -874,7 +706,9 @@ Popout {
             visible: !chat.atBottom && chat.contentHeight > chat.height
             onClicked: {
                 chat.follow = true
-                chat.contentY = chat.contentHeight - chat.height
+                scrollToEnd.from = chat.contentY
+                scrollToEnd.to = chat.contentHeight - chat.height
+                scrollToEnd.restart()
             }
         }
     }
@@ -908,6 +742,20 @@ Popout {
                     height: Theme.dp(26)
                     radius: height / 2
                     color: SettingsPalette.accentSoft
+                    // Entra creciendo: pegar el portapapeles o una captura es
+                    // una acción a ciegas (el contenido no se ve), así que el
+                    // chip tiene que ACUSAR el golpe para confirmarla.
+                    ParallelAnimation {
+                        running: true
+                        NumberAnimation {
+                            target: attChip; property: "scale"; from: 0.6; to: 1
+                            duration: Theme.animNormal; easing.type: Theme.enterEasing
+                        }
+                        NumberAnimation {
+                            target: attChip; property: "opacity"; from: 0; to: 1
+                            duration: Theme.animNormal
+                        }
+                    }
 
                     RowLayout {
                         id: attRow
@@ -938,6 +786,304 @@ Popout {
                                 onClicked: AiService.removeAttachment(attChip.index)
                             }
                         }
+                    }
+                }
+            }
+        }
+    }
+
+    // ── Subagente en marcha ──────────────────────────────────────────────────
+    // Mientras un subagente investiga, el principal está callado: esta línea
+    // dice qué está pasando y ofrece el freno de mano.
+    RevealBar {
+        id: subBar
+        want: AiService.activeSub !== null
+        barHeight: Theme.dp(36)
+        radius: Theme.shapeSm
+        color: SettingsPalette.accentSoft
+
+        RowLayout {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            height: subBar.barHeight
+            anchors.leftMargin: Theme.space10
+            anchors.rightMargin: Theme.space6
+            spacing: Theme.space8
+
+            Text {
+                id: subSpin
+                text: "󰳆"
+                color: Theme.accentText
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.sp(14)
+                RotationAnimation on rotation {
+                    running: AiService.activeSub !== null
+                    from: 0; to: 360
+                    duration: Theme.animLoop * 2
+                    loops: Animation.Infinite
+                }
+                onRotationChanged: if (!AiService.activeSub && rotation !== 0) rotation = 0
+            }
+            Text {
+                Layout.fillWidth: true
+                text: AiService.activeSub
+                    ? I18n.tr("Subagent: %1 — round %2 of %3")
+                          .arg(AiService.activeSub.label)
+                          .arg(AiService.activeSub.rounds)
+                          .arg(AiService.activeSub.maxRounds)
+                    : ""
+                color: Theme.accentText
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.typeLabelMedium
+                font.weight: Font.Medium
+                elide: Text.ElideRight
+            }
+            IconButton {
+                icon: "󰓛"
+                diameter: Theme.dp(26)
+                iconPixelSize: Theme.sp(12)
+                baseColor: "transparent"
+                iconColor: Theme.red
+                onClicked: if (AiService.activeSub) AiService.activeSub.cancel()
+            }
+        }
+    }
+
+    // ── Habilidad cargada sola ───────────────────────────────────────────────
+    // El harness ha decidido que estas instrucciones vienen a cuento y se las
+    // ha dado al modelo sin que las pidiera. Se dice: una ayuda invisible es
+    // indistinguible de un modelo que se comporta raro.
+    RevealBar {
+        id: skillBar
+        want: AiService.autoSkill !== null && AiService.agentMode
+        barHeight: Theme.dp(28)
+        radius: Theme.shapeSm
+        color: SettingsPalette.settingsControl
+
+        RowLayout {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            height: skillBar.barHeight
+            anchors.leftMargin: Theme.space10
+            anchors.rightMargin: Theme.space10
+            spacing: Theme.space8
+
+            Text {
+                text: "󰠮"
+                color: Theme.accentText
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.sp(12)
+            }
+            Text {
+                Layout.fillWidth: true
+                text: I18n.tr("Skill in use: %1")
+                    .arg(AiService.autoSkill ? AiService.autoSkill.name : "")
+                color: Theme.fgDim
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.typeLabelSmall
+                elide: Text.ElideRight
+            }
+        }
+    }
+
+    // ── El plan del agente ───────────────────────────────────────────────────
+    // La lista de todo_write, pintada donde se ve el trabajo: encima de la
+    // entrada. Se actualiza sola con cada llamada del modelo y desaparece al
+    // cambiar o limpiar la conversación.
+    RevealBar {
+        want: AiService.todos.length > 0
+        barHeight: planCol.implicitHeight + Theme.space10 * 2
+        radius: Theme.shapeMd
+        color: SettingsPalette.groupFill
+        border.width: Theme.hairline
+        border.color: SettingsPalette.settingsBorder
+
+        ColumnLayout {
+            id: planCol
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.margins: Theme.space10
+            spacing: Theme.space4
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Theme.space8
+                Text {
+                    text: "󰝖"
+                    color: Theme.accentText
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.sp(13)
+                }
+                Text {
+                    Layout.fillWidth: true
+                    text: I18n.tr("Plan")
+                    color: Theme.fgDim
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.typeLabelMedium
+                    font.weight: Font.Medium
+                }
+                Text {
+                    text: AiService.todos.filter(t => t.status === "completed").length
+                          + "/" + AiService.todos.length
+                    color: Theme.fgMuted
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.typeLabelSmall
+                }
+            }
+
+            Repeater {
+                model: AiService.todos
+                delegate: RowLayout {
+                    id: todoRow
+                    required property var modelData
+                    Layout.fillWidth: true
+                    spacing: Theme.space8
+                    Text {
+                        text: todoRow.modelData.status === "completed" ? "󰄲"
+                            : todoRow.modelData.status === "in_progress" ? "󰥔" : "󰄱"
+                        color: todoRow.modelData.status === "completed" ? Theme.green
+                             : todoRow.modelData.status === "in_progress" ? Theme.accentText
+                             : Theme.fgMuted
+                        font.family: Theme.fontFamily
+                        font.pixelSize: Theme.sp(12)
+                    }
+                    Text {
+                        Layout.fillWidth: true
+                        text: todoRow.modelData.content
+                        color: todoRow.modelData.status === "in_progress" ? Theme.fg
+                             : todoRow.modelData.status === "completed" ? Theme.fgMuted
+                             : Theme.fgDim
+                        font.family: Theme.fontFamily
+                        font.pixelSize: Theme.typeLabelMedium
+                        font.strikeout: todoRow.modelData.status === "completed"
+                        elide: Text.ElideRight
+                    }
+                }
+            }
+        }
+    }
+
+    // ── Paleta de comandos ───────────────────────────────────────────────────
+    // Al escribir "/" el panel ENSEÑA lo que hay en vez de esconderlo en un
+    // mensaje de ayuda que solo aparece cuando te equivocas. Se filtra según
+    // tecleas; Tab completa el primero y el clic lo lanza.
+    // Cada comando, entero, en una línea: cómo se llama, cómo se llama en
+    // inglés, qué icono lleva, qué dice de sí mismo y QUÉ HACE. Antes la lista
+    // que se pinta y el switch que ejecuta eran dos, y ya se habían
+    // desincronizado: la paleta ofrecía /limpiar y la ayuda hablaba de /clear.
+    readonly property var slashCommands: [
+        { cmd: "/nueva", alias: "/new", glyph: "󰐕", arg: false,
+          desc: I18n.tr("New conversation"),
+          run: () => AiService.newConversation() },
+        { cmd: "/limpiar", alias: "/clear", glyph: "󰃢", arg: false,
+          desc: I18n.tr("Wipe the conversation and its context"),
+          run: () => AiService.clearConversation() },
+        { cmd: "/compactar", alias: "/compact", glyph: "󰍃", arg: false,
+          desc: I18n.tr("Summarize the context so far"),
+          run: () => AiService.compact() },
+        { cmd: "/exportar", alias: "/export", glyph: "󰈝", arg: false,
+          desc: I18n.tr("Save the conversation as Markdown"),
+          run: () => AiService.exportMarkdown() },
+        { cmd: "/modelo", alias: "/model", glyph: "󰍜", arg: true,
+          desc: I18n.tr("Switch model (provider:model)"),
+          run: (a) => { if (a !== "") AiService.setModel(a) } },
+        { cmd: "/agente", alias: "/agent", glyph: "󰚩", arg: false,
+          desc: I18n.tr("Tools with approval"),
+          run: () => Settings.aiMode = "agent" },
+        { cmd: "/chat", alias: "/chat", glyph: "󰭹", arg: false,
+          desc: I18n.tr("Conversation only"),
+          run: () => Settings.aiMode = "chat" }
+    ]
+    readonly property var slashMatches: {
+        const t = input.text.trim().toLowerCase()
+        if (!t.startsWith("/") || t.indexOf(" ") !== -1)
+            return []
+        // También por el nombre en inglés: quien escribe /clear encuentra
+        // /limpiar en vez de quedarse mirando una lista vacía.
+        return panel.slashCommands.filter(c => c.cmd.startsWith(t)
+                                            || c.alias.startsWith(t))
+    }
+
+    Rectangle {
+        Layout.fillWidth: true
+        visible: panel.slashMatches.length > 0
+        implicitHeight: slashCol.implicitHeight + Theme.space8 * 2
+        radius: Theme.shapeMd
+        color: SettingsPalette.groupFill
+        border.width: Theme.hairline
+        border.color: SettingsPalette.settingsBorder
+        // Entra desde abajo, como si subiera de la propia entrada.
+        opacity: visible ? 1 : 0
+        Behavior on opacity { NumberAnimation { duration: Theme.animFast } }
+
+        ColumnLayout {
+            id: slashCol
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.margins: Theme.space8
+            spacing: Theme.space2
+
+            Repeater {
+                model: panel.slashMatches
+                delegate: Rectangle {
+                    id: cmdRow
+                    required property var modelData
+                    required property int index
+                    Layout.fillWidth: true
+                    implicitHeight: Theme.dp(30)
+                    radius: Theme.shapeSm
+                    color: cmdMa.containsMouse || cmdRow.index === 0
+                        ? SettingsPalette.settingsHover : "transparent"
+                    Behavior on color { ColorAnimation { duration: Theme.animFast } }
+                    clip: true
+
+                    Ripple { id: cmdRipple }
+
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: Theme.space8
+                        anchors.rightMargin: Theme.space8
+                        spacing: Theme.space8
+                        Text {
+                            text: cmdRow.modelData.glyph
+                            color: Theme.accentText
+                            font.family: Theme.fontFamily
+                            font.pixelSize: Theme.sp(13)
+                        }
+                        Text {
+                            text: cmdRow.modelData.cmd
+                            color: Theme.fg
+                            font.family: Theme.monoFontFamily
+                            font.pixelSize: Theme.typeLabelMedium
+                            font.bold: true
+                        }
+                        Text {
+                            Layout.fillWidth: true
+                            text: cmdRow.modelData.desc
+                            color: Theme.fgMuted
+                            font.family: Theme.fontFamily
+                            font.pixelSize: Theme.typeLabelSmall
+                            elide: Text.ElideRight
+                        }
+                        Text {
+                            visible: cmdRow.index === 0
+                            text: "Tab"
+                            color: Theme.fgMuted
+                            font.family: Theme.fontFamily
+                            font.pixelSize: Theme.typeLabelSmall
+                        }
+                    }
+                    MouseArea {
+                        id: cmdMa
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onPressed: (e) => cmdRipple.press(e.x, e.y)
+                        onClicked: panel.runSlash(cmdRow.modelData)
                     }
                 }
             }
@@ -994,9 +1140,14 @@ Popout {
                         else
                             e.accepted = false
                     }
-                    // Tab conmuta Chat ↔ Agente, como en opencode.
-                    Keys.onTabPressed: Settings.aiMode =
-                        AiService.agentMode ? "chat" : "agent"
+                    // Tab completa el comando resaltado si la paleta está
+                    // abierta; si no, conmuta Chat ↔ Agente (como opencode).
+                    Keys.onTabPressed: {
+                        if (panel.slashMatches.length > 0)
+                            panel.runSlash(panel.slashMatches[0])
+                        else
+                            panel.cycleMode()
+                    }
                     onTextChanged: AiService.draft = text
                     Component.onCompleted: {
                         text = AiService.draft
@@ -1052,26 +1203,65 @@ Popout {
         AiService.draft = ""
     }
 
+    // Charlar o actuar. Nada más: si la tarea merece un plan, lo propone el
+    // agente sobre la marcha, no se elige de antemano.
+    function cycleMode() {
+        Settings.aiMode = AiService.agentMode ? "chat" : "agent"
+    }
+
+    // Elegido de la paleta: los que piden argumento se quedan escritos en la
+    // entrada esperándolo; el resto se ejecutan en el acto.
+    function runSlash(c) {
+        if (c.arg) {
+            input.text = c.cmd + " "
+            input.cursorPosition = input.length
+            input.forceActiveFocus()
+            return
+        }
+        handleSlash(c.cmd)
+        input.text = ""
+        AiService.draft = ""
+        input.forceActiveFocus()
+    }
+
     // Comandos slash, al estilo opencode: acciones de sesión sin soltar el
-    // teclado. La entrada los intercepta ANTES de enviar nada al modelo.
+    // teclado. La entrada los intercepta ANTES de enviar nada al modelo. La
+    // ayuda se escribe sola con lo que hay, así que no puede mentir.
     function handleSlash(t) {
         const parts = t.split(/\s+/)
-        switch (parts[0].toLowerCase()) {
-        case "/nueva": case "/new":
-            AiService.newConversation(); break
-        case "/compactar": case "/compact":
-            AiService.compact(); break
-        case "/exportar": case "/export":
-            AiService.exportMarkdown(); break
-        case "/modelo": case "/model":
-            if (parts[1]) AiService.setModel(parts[1]); break
-        case "/agente": case "/agent":
-            Settings.aiMode = "agent"; break
-        case "/chat":
-            Settings.aiMode = "chat"; break
-        default:
-            AiService.pushInfo(I18n.tr("Commands: /new · /compact · /export · /model <id> · /agent · /chat"))
+        const name = parts[0].toLowerCase()
+        const c = panel.slashCommands.find(x => x.cmd === name || x.alias === name)
+        if (!c) {
+            AiService.pushInfo(I18n.tr("Commands:") + " "
+                + panel.slashCommands.map(x => x.cmd + (x.arg ? " <…>" : "")).join(" · "))
+            return
         }
+        c.run(parts.slice(1).join(" ").trim())
+    }
+
+    // ── Piezas propias del panel ─────────────────────────────────────────────
+    // Barra que entra y sale SIN dar un salto. Es el mismo escalar 0→1 que
+    // despliega las láminas (ver Components/ExpandableDetail.qml), aplicado a
+    // una barra de alto fijo: el alto hace de barrido y la opacidad se deriva
+    // del mismo valor. Estas tres —subagente, habilidad en uso y plan—
+    // aparecían de golpe en mitad de una respuesta y empujaban la conversación
+    // de un fotograma al siguiente, que es justo cuando peor sienta.
+    component RevealBar: Rectangle {
+        id: bar
+        property bool want: false
+        property real barHeight: Theme.dp(36)
+        property real rev: bar.want ? 1 : 0
+        Behavior on rev {
+            NumberAnimation {
+                duration: Theme.animNormal
+                easing.type: bar.want ? Theme.enterEasing : Theme.exitEasing
+            }
+        }
+        Layout.fillWidth: true
+        implicitHeight: bar.barHeight * bar.rev
+        opacity: Theme.revealOpacity(bar.rev)
+        visible: bar.rev > 0.001
+        clip: true
     }
 
     // Botón pequeño de adjuntar.
@@ -1086,33 +1276,4 @@ Popout {
         onClicked: if (onDo) onDo()
     }
 
-    // Chip de arranque del estado vacío.
-    component SuggestChip: Rectangle {
-        id: chip
-        property string label: ""
-        property var onDo: null
-        width: chipText.implicitWidth + Theme.space12 * 2
-        height: Theme.dp(30)
-        radius: height / 2
-        color: chipHov.containsMouse ? SettingsPalette.accentSoft
-                                     : SettingsPalette.settingsControl
-        border.width: Theme.hairline
-        border.color: SettingsPalette.settingsBorder
-        Behavior on color { ColorAnimation { duration: Theme.animFast } }
-        Text {
-            id: chipText
-            anchors.centerIn: parent
-            text: chip.label
-            color: chipHov.containsMouse ? Theme.accentText : Theme.fgDim
-            font.family: Theme.fontFamily
-            font.pixelSize: Theme.typeLabelMedium
-        }
-        MouseArea {
-            id: chipHov
-            anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: if (chip.onDo) chip.onDo()
-        }
-    }
 }

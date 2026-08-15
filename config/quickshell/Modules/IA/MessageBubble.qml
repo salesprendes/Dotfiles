@@ -30,6 +30,8 @@ Item {
     property string toolStatus: ""
     property string attachNote: ""
     property string ts: ""
+    // Copia de seguridad de una edición: si la hay, se puede deshacer.
+    property string undoPath: ""
     property int msgIndex: -1
     // La burbuja en vivo (streaming): sin pie ni acciones, su texto aún cambia.
     property bool live: false
@@ -46,35 +48,152 @@ Item {
     readonly property bool isInfo: role === "info"
     readonly property bool isAssistant: !isUser && !isError && !isTool && !isInfo
 
-    // Lo que pide la herramienta, ya legible, y su titular.
+    // Lo que pide la herramienta, ya legible.
     readonly property var _args: {
         if (!isTool) return ({})
         try { return JSON.parse(toolArgs) } catch (e) { return ({ raw: toolArgs }) }
     }
+
+    // ── La ficha de cada herramienta ─────────────────────────────────────────
+    // Antes esto eran CUATRO cadenas de ternarios en paralelo —icono, titular,
+    // resumen y vista previa—, cada una con sus casi cuarenta ramas. Añadir una
+    // herramienta obligaba a acertar en las cuatro, y olvidarse de una no daba
+    // error: solo una tarjeta a medio pintar. Ahora cada herramienta es UNA
+    // línea con lo que tenga que decir; lo que no diga cae en el genérico.
+    //   ico   glifo de la tarjeta
+    //   di    titular ("El asistente quiere…"), ya traducido
+    //   res   resumen de una línea, en la lápida de código
+    //   ver   lo que se va a cambiar, para leerlo ANTES de aprobar
+    // 'a' es un ACCESOR a los argumentos: a("path"). No es el objeto pelado a
+    // propósito — un campo que el modelo no mandó saldría como "undefined"
+    // pintado en la tarjeta; así lo que falta sale vacío y ya.
+    readonly property var _toolCards: ({
+        open_url:      { ico: "󰖟", di: I18n.tr("The assistant wants to open:"),
+                         res: a => a("url") },
+        run_command:   { ico: "󰆍", di: I18n.tr("The assistant wants to run:"),
+                         res: a => a("command") },
+        read_file:     { ico: "󰈙", di: I18n.tr("The assistant wants to read:"),
+                         res: a => a("path") },
+        read_files:    { ico: "󰈢", di: I18n.tr("The assistant wants to read files:"),
+                         res: a => Array.isArray(a("paths"))
+                                   ? a("paths").length + " archivos" : "",
+                         ver: a => (a("paths") || []).join("\n") },
+        list_dir:      { ico: "󰉋", di: I18n.tr("The assistant wants to list:"),
+                         res: a => a("path") },
+        write_file:    { ico: "󰷈", di: I18n.tr("The assistant wants to write:"),
+                         res: a => a("path"), ver: a => a("content") },
+        edit_file:     { ico: "󰏫", di: I18n.tr("The assistant wants to edit:"),
+                         res: a => a("path"),
+                         // El trozo saliente con - y el entrante con +, como un diff.
+                         ver: a => ("- " + String(a("old_string")).split("\n").join("\n- ")).slice(0, 600)
+                                 + "\n" + ("+ " + String(a("new_string")).split("\n").join("\n+ ")).slice(0, 600) },
+        edit_lines:    { ico: "󰗀", di: I18n.tr("The assistant wants to replace lines:"),
+                         res: a => a("path") + "  ·  líneas "
+                                   + (a("start") || "?") + "-" + (a("end") || "?"),
+                         ver: a => a("text") },
+        grep_files:    { ico: "󰱼", di: I18n.tr("The assistant wants to search:"),
+                         res: a => a("pattern") + "  ·  " + a("path") },
+        glob_files:    { ico: "󰱽", di: I18n.tr("The assistant wants to find files:"),
+                         res: a => a("pattern") + "  ·  " + a("path") },
+        fetch_url:     { ico: "󰇧", di: I18n.tr("The assistant wants to fetch:"),
+                         res: a => a("url") },
+        web_search:    { ico: "󰖟", di: I18n.tr("The assistant wants to search the web:"),
+                         res: a => a("query") },
+        notify_user:   { ico: "󰂚", di: I18n.tr("The assistant sends a notification:"),
+                         res: a => a("title") },
+        use_skill:     { ico: "󰠮", di: I18n.tr("The assistant is reading the skill:"),
+                         res: a => a("name") },
+        remember:      { ico: "󰍩", di: I18n.tr("The assistant wants to remember:"),
+                         res: a => a("note") },
+        learn:         { ico: "󱐋", di: I18n.tr("The assistant learns:"),
+                         res: a => a("lesson") },
+        memory_update: { ico: "󰏫", di: I18n.tr("The assistant corrects a memory:"),
+                         res: a => "[#" + (a("id") || "?") + "]  " + a("note") },
+        memory_forget: { ico: "󰩹", di: I18n.tr("The assistant drops a memory:"),
+                         res: a => "[#" + (a("id") || "?") + "]" },
+        todo_write:    { ico: "󰝖", di: I18n.tr("The assistant updates its plan:"),
+                         res: a => Array.isArray(a("todos")) ? a("todos").length + " pasos" : "",
+                         ver: a => (a("todos") || []).map(t =>
+                                (t.status === "completed" ? "󰄲 "
+                                 : t.status === "in_progress" ? "󰥔 " : "󰄱 ") + t.content)
+                                .join("\n") },
+        propose_plan:  { ico: "󰗀", di: I18n.tr("The assistant proposes a plan:"),
+                         res: () => "", ver: a => a("plan") },
+        ask_user:      { ico: "󰘥", di: I18n.tr("The assistant asks you:"),
+                         res: a => a("question") },
+        subagent:      { ico: "󰳆", di: I18n.tr("The assistant delegates to a subagent:"),
+                         res: a => a("label") || String(a("task")).slice(0, 80),
+                         ver: a => a("task") },
+        list_mcp_resources: { ico: "󰐱", di: I18n.tr("The assistant wants to list resources (MCP):"),
+                         res: a => a("server") },
+        read_mcp_resource:  { ico: "󰐱", di: I18n.tr("The assistant wants to read a resource (MCP):"),
+                         res: a => a("server") + "  ·  " + a("uri") },
+        // Administración local.
+        system_status: { ico: "󰄨", di: I18n.tr("The assistant checks the system"),
+                         res: () => "" },
+        journal_query: { ico: "󰌱", di: I18n.tr("The assistant reads the journal:"),
+                         res: a => [a("unit"), a("priority"), a("since"), a("grep")]
+                                   .filter(x => x).join("  ·  ") },
+        service_query: { ico: "󰒓", di: I18n.tr("The assistant queries a service:"),
+                         res: a => a("name") || a("list") },
+        service_ctl:   { ico: "󰑓", di: I18n.tr("The assistant wants to control a service:"),
+                         res: a => a("action") + "  ·  " + a("unit")
+                                   + (a("user") ? "  (usuario)" : "") },
+        process_query: { ico: "󰓅", di: I18n.tr("The assistant lists processes:"),
+                         res: a => a("filter") || a("sort") || "cpu" },
+        kill_process:  { ico: "󰚌", di: I18n.tr("The assistant wants to signal a process:"),
+                         res: a => "PID " + (a("pid") || "?") + "  ·  " + (a("signal") || "TERM") },
+        network_query: { ico: "󰛳", di: I18n.tr("The assistant inspects the network:"),
+                         res: a => a("kind") + (a("host") ? "  ·  " + a("host") : "") },
+        disk_query:    { ico: "󰋊", di: I18n.tr("The assistant checks the disks:"),
+                         res: a => a("path") },
+        package_query: { ico: "󰏖", di: I18n.tr("The assistant queries packages:"),
+                         res: a => a("op") + (a("name") ? "  ·  " + a("name") : "") },
+        // Servidores remotos.
+        server_status: { ico: "󰒋", di: I18n.tr("The assistant checks a remote server:"),
+                         res: a => a("host") },
+        server_logs:   { ico: "󰋊", di: I18n.tr("The assistant reads remote logs:"),
+                         res: a => a("host") + (a("path") ? "  ·  " + a("path")
+                                                : a("unit") ? "  ·  " + a("unit") : "") },
+        sftp_ls:       { ico: "󰉖", di: I18n.tr("The assistant lists a remote folder:"),
+                         res: a => a("host") + "  ·  " + (a("path") || ".") },
+        hosting_query: { ico: "󰌷", di: I18n.tr("The assistant queries the hosting panel:"),
+                         res: a => a("host") + "  ·  " + a("panel") + " " + a("op")
+                                   + (a("name") ? " " + a("name") : "") },
+        ssh_exec:      { ico: "󰣀", di: I18n.tr("The assistant wants to run on a server:"),
+                         res: a => a("host") + "  $  " + a("command"),
+                         ver: a => a("command") },
+        sftp_get:      { ico: "󰇚", di: I18n.tr("The assistant wants to download from a server:"),
+                         res: a => a("host") + ":" + a("remote_path")
+                                   + "  →  " + a("local_path") },
+        sftp_put:      { ico: "󰕒", di: I18n.tr("The assistant wants to upload to a server:"),
+                         res: a => a("local_path") + "  →  " + a("host")
+                                   + ":" + a("remote_path") }
+    })
+
+    // La ficha de ESTA tarjeta. Las herramientas MCP no están en la tabla
+    // —nacen del servidor que las publica—, así que llevan la suya al vuelo, y
+    // un nombre desconocido cae en la genérica en vez de dejar la tarjeta muda.
+    readonly property var _card:
+        _toolCards[toolName] ? _toolCards[toolName]
+      : toolName.startsWith("mcp__")
+            ? ({ ico: "󰐱", di: I18n.tr("The assistant wants to use (MCP):"),
+                 res: () => toolName.split("__").slice(1).join(" · ") })
+            : _toolCards.run_command
+
+    function _field(fn, cap) {
+        if (!fn) return ""
+        const get = (k) => bubble._args[k] === undefined ? "" : bubble._args[k]
+        return String(fn(get) || "").trim().slice(0, cap)
+    }
+
+    readonly property string toolGlyph: isTool ? _card.ico : ""
+    readonly property string toolHeadline: isTool ? _card.di : ""
     readonly property string toolPretty:
-        toolName === "open_url"  ? (_args.url || _args.raw || "")
-      : toolName === "read_file" || toolName === "list_dir"
-        || toolName === "write_file" ? (_args.path || _args.raw || "")
-      : toolName === "remember"  ? (_args.note || _args.raw || "")
-      : (_args.command || _args.raw || "")
-    // Solo write_file lleva algo más que la ruta: el contenido, previsualizado
-    // ANTES de aprobar — nadie firma un archivo sin verlo.
-    readonly property string toolPreview:
-        toolName === "write_file" ? String(_args.content || "").slice(0, 1200) : ""
-    readonly property string toolHeadline:
-        toolName === "open_url"   ? I18n.tr("The assistant wants to open:")
-      : toolName === "read_file"  ? I18n.tr("The assistant wants to read:")
-      : toolName === "list_dir"   ? I18n.tr("The assistant wants to list:")
-      : toolName === "write_file" ? I18n.tr("The assistant wants to write:")
-      : toolName === "remember"   ? I18n.tr("The assistant wants to remember:")
-      : I18n.tr("The assistant wants to run:")
-    readonly property string toolGlyph:
-        toolName === "open_url" ? "󰖟"
-      : toolName === "read_file" ? "󰈙"
-      : toolName === "list_dir" ? "󰉋"
-      : toolName === "write_file" ? "󰷈"
-      : toolName === "remember" ? "󰍩"
-      : "󰆍"
+        isTool ? (_field(_card.res, 2000) || String(_args.raw || "")) : ""
+    // Lo que va a cambiar, previsualizado ANTES de aprobar: nadie firma un
+    // archivo sin verlo.
+    readonly property string toolPreview: isTool ? _field(_card.ver, 2000) : ""
 
     // ── Prosa y código, separados ────────────────────────────────────────────
     // El Markdown de Qt pinta los bloques ``` sin fondo ni forma de copiarlos.
@@ -495,6 +614,31 @@ Item {
                 }
             }
 
+            // Un enlace simbólico que se va fuera de la carpeta personal: se
+            // dice adónde apunta DE VERDAD. No se prohíbe (perderías rutas
+            // legítimas como ~/datos → /mnt/almacen), pero esta llamada no se
+            // auto-aprueba nunca: la decides tú, viendo el destino.
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Theme.space6
+                visible: AiService.realPathFor(bubble.msgIndex) !== ""
+                Text {
+                    text: "󰌷"
+                    color: Theme.orange
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.sp(12)
+                }
+                Text {
+                    Layout.fillWidth: true
+                    text: I18n.tr("Symlink — really points to: %1")
+                        .arg(AiService.realPathFor(bubble.msgIndex))
+                    color: Theme.fgDim
+                    font.family: Theme.monoFontFamily
+                    font.pixelSize: Theme.typeLabelSmall
+                    wrapMode: Text.WrapAnywhere
+                }
+            }
+
             // write_file: el contenido que se va a escribir, previsualizado.
             QuoteBlock {
                 visible: bubble.toolPreview !== ""
@@ -545,16 +689,130 @@ Item {
                 text: bubble._diffOut
             }
 
+            // ── Plan propuesto (propose_plan) ────────────────────────────
+            // No es aprobar una acción: es dar el visto bueno a un rumbo.
+            // Aprobar saca del solo-lectura; rechazar devuelve tu crítica.
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: Theme.space8
+                visible: bubble.toolName === "propose_plan" && bubble.toolStatus === "pending"
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Theme.space8
+                    TextField {
+                        id: planFeedback
+                        property string draft: ""
+                        Layout.fillWidth: true
+                        label: ""
+                        placeholder: I18n.tr("what would you change?")
+                        onEdited: (t) => draft = t
+                    }
+                    TextButton {
+                        text: I18n.tr("Revise")
+                        onClicked: {
+                            AiService.rejectPlan(bubble.msgIndex, planFeedback.draft)
+                            planFeedback.draft = ""; planFeedback.clear()
+                        }
+                    }
+                    TextButton {
+                        text: I18n.tr("Start")
+                        primary: true
+                        onClicked: AiService.approvePlan(bubble.msgIndex)
+                    }
+                }
+            }
+
+            // ── Pregunta al usuario (ask_user) ───────────────────────────
+            // No hay nada que aprobar: hay algo que contestar. Opciones como
+            // chips y, siempre, la puerta del texto libre.
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: Theme.space8
+                visible: bubble.toolName === "ask_user" && bubble.toolStatus === "pending"
+
+                Flow {
+                    Layout.fillWidth: true
+                    spacing: Theme.space6
+                    Repeater {
+                        model: Array.isArray(bubble._args.options) ? bubble._args.options : []
+                        delegate: Rectangle {
+                            id: optChip
+                            required property var modelData
+                            width: optText.implicitWidth + Theme.space12 * 2
+                            height: Theme.dp(30)
+                            radius: height / 2
+                            color: optMa.containsMouse ? SettingsPalette.accentSoft
+                                                       : SettingsPalette.settingsControl
+                            border.width: Theme.hairline
+                            border.color: SettingsPalette.settingsBorder
+                            Behavior on color { ColorAnimation { duration: Theme.animFast } }
+                            Text {
+                                id: optText
+                                anchors.centerIn: parent
+                                text: String(optChip.modelData)
+                                color: optMa.containsMouse ? Theme.accentText : Theme.fg
+                                font.family: Theme.fontFamily
+                                font.pixelSize: Theme.typeLabelMedium
+                            }
+                            MouseArea {
+                                id: optMa
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: AiService.answerQuestion(bubble.msgIndex,
+                                                                    String(optChip.modelData))
+                            }
+                        }
+                    }
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Theme.space8
+                    TextField {
+                        id: freeAnswer
+                        property string draft: ""
+                        Layout.fillWidth: true
+                        label: ""
+                        placeholder: I18n.tr("or answer here…")
+                        onEdited: (t) => draft = t
+                        onAccepted: {
+                            AiService.answerQuestion(bubble.msgIndex, draft)
+                            draft = ""; clear()
+                        }
+                    }
+                    TextButton {
+                        text: I18n.tr("Answer")
+                        primary: true
+                        onClicked: {
+                            AiService.answerQuestion(bubble.msgIndex, freeAnswer.draft)
+                            freeAnswer.draft = ""; freeAnswer.clear()
+                        }
+                    }
+                }
+            }
+
             // Pendiente: las dos decisiones. Resuelta: el veredicto + salida.
             RowLayout {
                 Layout.fillWidth: true
                 spacing: Theme.space8
                 visible: bubble.toolStatus === "pending"
+                         && bubble.toolName !== "ask_user"
+                         && bubble.toolName !== "propose_plan"
 
                 Item { Layout.fillWidth: true }
                 TextButton {
                     text: I18n.tr("Reject")
                     onClicked: AiService.rejectTool(bubble.msgIndex)
+                }
+                // "Siempre" (esta conversación): solo donde se puede permitir
+                // en firme — leer y externos benignos; lo que ejecuta o
+                // escribe no lo ofrece (siempre pregunta).
+                TextButton {
+                    visible: AiService.canStandingAllow(bubble.toolName)
+                    text: I18n.tr("Always")
+                    onClicked: AiService.approveToolAlways(bubble.msgIndex)
                 }
                 TextButton {
                     text: I18n.tr("Approve")
@@ -583,6 +841,12 @@ Item {
                     visible: bubble.toolStatus === "done" && bubble.toolResult !== ""
                     label: bubble.showToolOut ? I18n.tr("Hide output") : I18n.tr("Show output")
                     onDo: () => bubble.showToolOut = !bubble.showToolOut
+                }
+                // Volver el archivo a como estaba antes de esta edición.
+                FootAction {
+                    visible: bubble.toolStatus === "done" && bubble.undoPath !== ""
+                    label: I18n.tr("Undo")
+                    onDo: () => AiService.undoEdit(bubble.msgIndex)
                 }
             }
 

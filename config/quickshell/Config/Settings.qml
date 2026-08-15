@@ -51,28 +51,74 @@ Singleton {
     property string aiKeyGemini: ""
     property string aiKeyOpenrouter: ""
     property string aiOllamaUrl: "http://127.0.0.1:11434"
-    // Proveedor "LLM": cualquier servidor OpenAI-compatible local o remoto
-    // (llama.cpp, LM Studio, vLLM…). La URL es la base /v1; la clave es
-    // opcional (algunos servidores locales piden token).
-    property string aiCustomUrl: "http://127.0.0.1:8080/v1"
-    property string aiModelCustom: "local"
+    // Proveedor "Servidor": cualquier servidor OpenAI-compatible, pensado
+    // ante todo para uno REMOTO (vLLM, TGI, LiteLLM, Ollama tras un proxy,
+    // LM Studio publicado…). La URL es la base /v1 —se normaliza, admite
+    // host a secas— y la clave es opcional (la mayoría de los remotos la
+    // piden, los caseros no).
+    property string aiCustomUrl: ""
+    property string aiModelCustom: ""
     property string aiKeyCustom: ""
+    // Cabecera HTTP extra para servidores tras una pasarela ("Nombre: valor"):
+    // CF-Access, api-key de Azure, el token de un proxy inverso…
+    property string aiCustomHeader: ""
+    // Aceptar certificados TLS que no se pueden verificar (servidor propio con
+    // certificado autofirmado). Solo afecta a Servidor y Ollama.
+    property bool   aiInsecureTls: false
+    // Panel ancho: más sitio para leer código y respuestas largas.
+    property bool   aiWide: false
     // Estilo de respuesta: "normal" | "concise" | "teacher" | "reviewer".
     property string aiPersona: "normal"
     // Modo del asistente: "chat" (solo conversación) | "agent" (herramientas
-    // con aprobación, al estilo plan/build de opencode).
+    // con aprobación). No hay modo "plan": planificar lo decide el agente al
+    // leer el encargo, proponiendo con propose_plan cuando la tarea lo merece.
     property string aiMode: "chat"
     // Instrucciones extra del usuario, añadidas al prompt de sistema.
     property string aiCustomPrompt: ""
     // Auto-aprobar las herramientas de SOLO LECTURA (leer archivo, listar
     // carpeta). Las que escriben o ejecutan siempre piden aprobación.
+    // Heredado: hoy lo decide aiApproval, y este valor solo sirve para migrar.
     property bool   aiAutoRead: false
-    // Política por herramienta (estilo aisuite): mapa nombre → "ask" (pedir
-    // aprobación, el defecto) | "auto" (ejecutar sin preguntar) | "off" (el
-    // modelo ni la ve). Vacío = todo en "ask".
+    // Cuánta correa lleva el agente, en UN control (como los modos de permiso
+    // de Claude Code o los de aprobación de Codex). De la clase de riesgo de
+    // cada herramienta sale su aprobación, así que no hay que decidir cuarenta
+    // veces lo mismo:
+    //   "careful"  pregunta siempre, incluso para leer
+    //   "normal"   lee y consulta sola; escribir y ejecutar preguntan
+    //   "auto"     actúa sin preguntar (menos ask_user, que es una pausa)
+    property string aiApproval: "normal"
+    // Excepciones POR herramienta, encima del modo (estilo aisuite): mapa
+    // nombre → "ask" (pedir aprobación) | "auto" (sin preguntar) | "off" (el
+    // modelo ni la ve). Vacío = manda el modo, que es lo normal.
     property var    aiToolPolicies: ({})
+    // Habilidades (Modules/IA/skills/<nombre>/SKILL.md): mapa
+    // nombre → false para apagar una. Lo que no esté en el mapa cuenta como
+    // encendida — instalar la carpeta ya es decir que la quieres.
+    property var    aiSkills: ({})
+    // Servidores MCP (Model Context Protocol, transporte stdio): lista de
+    // {name, command}. Cada uno es un proceso hijo que publica herramientas;
+    // el modelo las ve como mcp__<name>__<tool> y su ejecución pasa por la
+    // misma tarjeta de aprobación que las nativas.
+    property var    aiMcpServers: []
+    // Buscador para la herramienta web_search: la URL de un SearXNG (propio o
+    // de confianza) con la API JSON activa. Vacío = la herramienta no existe.
+    property string aiSearchUrl: ""
+    // Servidores remotos de confianza (lista blanca para SSH/SFTP/hosting):
+    // lista de {name, host, user, port}. El modelo solo puede conectarse a los
+    // registrados aquí, por su nombre. Las contraseñas NO viven en este
+    // archivo: van al llavero (o en memoria de sesión).
+    property var    aiSshHosts: []
     // Temperatura del modelo (parámetro universal del contrato).
     property real   aiTemperature: 0.7
+    // Ventana de contexto del modelo, en tokens. 0 = automático (32k si el
+    // servidor es propio, 128k en la nube). De aquí salen el recorte del
+    // historial, el tope de cada resultado de herramienta y el medidor: con un
+    // modelo local pequeño conviene declararla para no desbordarlo.
+    property int    aiContextTokens: 0
+    // Razonamiento del modelo (interruptor suave de Qwen3): "auto" no toca
+    // nada, "think"/"no_think" se añaden al mensaje del usuario. Un servidor
+    // que no lo entienda simplemente lo ignora.
+    property string aiThink: "auto"
     // Compactación del contexto: "manual" (solo /compactar) | "warn" (avisa
     // al llenarse) | "auto" (se compacta solo al llenarse).
     property string aiAutoCompact: "warn"
@@ -443,10 +489,13 @@ Singleton {
         "aiProvider": "gemini", "aiModelGemini": "gemini-2.5-flash",
         "aiModelOpenrouter": "qwen/qwen3-30b-a3b:free", "aiModelOllama": "qwen3",
         "aiKeyGemini": "", "aiKeyOpenrouter": "", "aiOllamaUrl": "http://127.0.0.1:11434",
-        "aiCustomUrl": "http://127.0.0.1:8080/v1", "aiModelCustom": "local", "aiKeyCustom": "",
+        "aiCustomUrl": "", "aiModelCustom": "", "aiKeyCustom": "",
+        "aiCustomHeader": "", "aiInsecureTls": false, "aiWide": false,
         "aiPersona": "normal", "aiMode": "chat", "aiCustomPrompt": "", "aiAutoRead": false,
-        "aiToolPolicies": {}, "aiTemperature": 0.7,
-        "aiAutoCompact": "warn", "aiCompactKeep": 1,
+        "aiApproval": "normal",
+        "aiToolPolicies": {}, "aiSkills": {}, "aiMcpServers": [], "aiSearchUrl": "",
+        "aiSshHosts": [], "aiTemperature": 0.7, "aiContextTokens": 0,
+        "aiAutoCompact": "warn", "aiCompactKeep": 1, "aiThink": "auto",
         "uiScale": 1.0, "autoDensity": true, "animationSpeed": 2, "customAnimationDuration": 500, "barOpacity": 0.78,
         "popupOpacity": 0.85, "widgetOpacity": 0.55,
         "cornerScale": 1.0, "barScale": 1.0,
@@ -887,6 +936,18 @@ Singleton {
             themeName = "dynamic"
         if (!hasAccentPreset(accentName))
             accentName = "theme"
+        // El proveedor "Servidor" del panel de IA nació apuntando a un
+        // localhost de ejemplo. Ahora es remoto de primeras: si esos valores
+        // siguen intactos (nadie escribió su servidor), se vacían para que el
+        // campo pida la URL en vez de heredar un servidor local inexistente.
+        if (aiCustomUrl === "http://127.0.0.1:8080/v1")
+            aiCustomUrl = ""
+        if (aiModelCustom === "local")
+            aiModelCustom = ""
+        // El modo "plan" se retiró: quien lo tuviera guardado pasa a "agent",
+        // que es donde el agente propone el plan por su cuenta.
+        if (aiMode === "plan")
+            aiMode = "agent"
     }
 
     function pickAccent(c) {
