@@ -1,6 +1,6 @@
 ---
-name: Secretos y tokens en el código
-description: Prevenir y reaccionar ante credenciales filtradas en un repositorio: rotar la clave primero, escanear con gitleaks o trufflehog, limpiar el historial con git filter-repo y blindar el repo para que no vuelva a pasar. Úsala si se ha filtrado una clave, hay una contraseña o token en un commit, aparece un API key en el código, o hay que escanear secretos antes de publicar un repo.
+name: "Secretos y tokens en el código"
+description: "Prevenir y reaccionar ante credenciales filtradas en un repositorio: rotar la clave primero, escanear con gitleaks o trufflehog, limpiar el historial con git filter-repo y blindar el repo para que no vuelva a pasar. Úsala si se ha filtrado una clave, hay una contraseña o token en un commit, aparece un API key en el código, o hay que escanear secretos antes de publicar un repo."
 ---
 
 # Secretos en el código
@@ -27,19 +27,37 @@ trufflehog git file://. --only-verified
 
 Escanear es lectura: gratis, sin aprobación, y lo primero que se hace ante
 la mínima sospecha. Un falso positivo se descarta en segundos, un falso
-negativo por no mirar dura años.
+negativo por no mirar dura años. Los prefijos ayudan a reconocer qué se ha
+filtrado exactamente:
+
+| Empieza por | Qué es |
+|---|---|
+| `AKIA` | Clave de acceso de AWS |
+| `ghp_` o `github_pat_` | Token personal de GitHub |
+| `xoxb-` / `xoxp-` | Token de Slack |
+| `-----BEGIN ... PRIVATE KEY-----` | Clave privada (SSH, TLS) |
+| `https://usuario:algo@` | Contraseña incrustada en una URL |
 
 ## 2. Reaccionar a una filtración, en este orden
 
-1. **Rotar la credencial en el proveedor.** Generar la nueva, desplegarla
-   donde se usa, revocar la vieja. Hasta este momento, todo lo demás puede
-   esperar: es el único paso que cierra la puerta de verdad.
-2. **Revisar los logs de uso del proveedor** desde la fecha del commit que
-   la expuso (no desde hoy: la clave lleva expuesta desde que se subió).
-   Accesos desde IPs raras, horas raras, operaciones que nadie recuerda.
-   Si hay uso sospechoso, esto acaba de convertirse en un incidente, no en
-   una limpieza.
-3. **Limpiar el historial solo si el repo es público o compartido.** En un
+1. **Rotar la credencial en el proveedor.** Y rotar bien: generar la
+   NUEVA, desplegarla donde se usa, comprobar que funciona, y solo
+   entonces revocar la vieja. Revocar antes de desplegar la nueva tumba el
+   servicio y convierte la filtración en una caída. Hasta cerrar este
+   paso, todo lo demás puede esperar: es el único que cierra la puerta.
+2. **Fechar la exposición** para saber desde cuándo mirar los logs:
+
+   ```bash
+   # Qué commits metieron o quitaron la cadena, en todas las ramas
+   git log --all --oneline -S 'CADENA_FILTRADA'
+   ```
+
+3. **Revisar los logs de uso del proveedor** desde esa fecha (no desde
+   hoy: la clave lleva expuesta desde que se subió). Accesos desde IPs
+   raras, horas raras, operaciones que nadie recuerda. Si hay uso
+   sospechoso, esto acaba de convertirse en un incidente, no en una
+   limpieza.
+4. **Limpiar el historial solo si el repo es público o compartido.** En un
    repo privado de una persona, con la clave ya rotada, reescribir la
    historia aporta poco y molesta mucho. Cuando toca:
 
@@ -47,14 +65,20 @@ negativo por no mirar dura años.
    git filter-repo --replace-text <(echo 'CLAVE_FILTRADA==>***ROTADA***')
    ```
 
-   Avisando antes de que **reescribe la historia**: todos los clones
-   quedan huérfanos y todo el mundo debe reclonar. Esto y el push forzado
-   posterior van en `propose_plan`, siempre.
-4. **En GitHub, los forks y las cachés no se limpian solos.** El commit
+   Con dos avisos. Uno: `git filter-repo` exige un clon fresco y al
+   terminar elimina el remoto `origin` a propósito, hay que volver a
+   añadirlo y el push será forzado. Dos: **reescribe la historia**, todos
+   los clones quedan huérfanos y todo el mundo debe reclonar. Esto y el
+   push forzado van en `propose_plan`, siempre.
+5. **En GitHub, los forks y las cachés no se limpian solos.** El commit
    sigue accesible por su hash en los forks y en la caché de la
    plataforma aunque el repo original ya esté limpio. Para un repo público
    hay que contactar con el soporte de la plataforma, y por eso mismo el
    paso 1 no era opcional.
+6. **Los logs de CI también son copias.** Si el secreto se imprimió en un
+   log de pipeline antes de estar enmascarado, ese log lo conserva y se
+   comparte con quien pueda leer el CI. La rotación del paso 1 lo cubre,
+   pero el log viejo se borra si la plataforma lo permite.
 
 ## 3. Prevenir
 
@@ -62,10 +86,15 @@ Los secretos viajan por entorno o por gestor, nunca por el repo:
 
 | Dónde vive el secreto | Dónde NO |
 |---|---|
-| Variable de entorno o llavero del sistema | Hardcodeado en el código |
+| Variable de entorno o llavero del sistema | Incrustado a fuego en el código |
 | Vault o gestor de secretos del equipo | Un `secrets.txt` en el repo |
 | `.env` FUERA de git, con `.env.example` dentro (mismas claves, valores vacíos) | El `.env` real subido al repo |
 | Secretos enmascarados del propio CI | El YAML del pipeline |
+
+Trampa clásica del `.env`: añadirlo al `.gitignore` NO lo saca de git si
+ya estaba rastreado. Hace falta `git rm --cached .env` y confirmar ese
+cambio, y si el archivo llevaba secretos de verdad, tratarlos como
+filtrados (sección 2), porque siguen en el historial.
 
 Y la red de seguridad: gitleaks como hook de pre-commit, que atrapa el
 secreto ANTES de que exista el commit, cuando quitarlo aún es gratis.
@@ -79,6 +108,15 @@ repos:
       - id: gitleaks
 ```
 
+```bash
+# El mismo control a mano, sobre lo que está preparado para confirmar
+gitleaks protect --staged -v
+```
+
+Si la plataforma ofrece protección de push con escaneo de secretos (GitHub
+la trae para repos públicos y se puede activar en el resto), se activa: es
+la última barrera cuando el hook local no estaba instalado.
+
 ## Trampas con nombre y apellidos
 
 - **La URL con la contraseña dentro** (`https://usuario:clave@host`). No
@@ -87,6 +125,10 @@ repos:
 - **El volcado de base de datos** subido «para la demo»: dentro van
   hashes de contraseñas, tokens de sesión y datos personales. Un dump
   jamás entra en un repo.
+- **El secreto en el historial de la shell.** Pasar una clave como
+  argumento de un comando la deja escrita en el archivo de historial y
+  visible en la lista de procesos mientras corre. Mejor por variable de
+  entorno o leída de un archivo con permisos cerrados.
 - **«Era solo el repo interno.»** Los repos internos se vuelven públicos,
   se comparten con contratistas y se clonan a portátiles que se pierden.
   El estándar es el mismo para todos los repos, porque la visibilidad de
@@ -102,7 +144,14 @@ escanean en CI, dónde se rotó qué y cuándo) se guardan con `learn`.
 
 ## Verificación final
 
-Tres comprobaciones antes de dar el caso por cerrado: la clave vieja
-**revocada de verdad** (probarla y ver que falla), el escaneo del historial
-limpio tras la reescritura, y el pre-commit instalado y probado con un
-secreto de mentira para confirmar que lo bloquea.
+Cuatro comprobaciones antes de dar el caso por cerrado:
+
+1. La clave vieja **revocada de verdad**: probarla y ver que el proveedor
+   la rechaza (con AWS, `aws sts get-caller-identity` con la clave vieja
+   tiene que fallar).
+2. La nueva funcionando en todos los sitios que usaban la vieja, no solo
+   en el primero que se miró.
+3. El escaneo del historial limpio tras la reescritura: `gitleaks detect`
+   otra vez y cero hallazgos sobre esa clave.
+4. El pre-commit instalado y probado con un secreto de mentira (una cadena
+   `AKIA` inventada vale) para confirmar que de verdad bloquea.

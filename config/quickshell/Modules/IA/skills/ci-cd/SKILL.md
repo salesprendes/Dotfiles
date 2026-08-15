@@ -1,6 +1,6 @@
 ---
-name: Pipelines de CI que fallan o van lentos
-description: Depurar y acelerar pipelines de CI (GitHub Actions, GitLab CI, Jenkins): encontrar el fallo real en el log, cachés envenenadas, secretos que no llegan, tests flaky, y medir antes de optimizar. Úsala cuando el pipeline falla, el build se rompe en CI pero va en local, un job se cuelga o tarda demasiado, o un workflow da error a veces sí y a veces no.
+name: "Pipelines de CI que fallan o van lentos"
+description: "Depurar y acelerar pipelines de CI (GitHub Actions, GitLab CI, Jenkins): encontrar el fallo real en el log, cachés envenenadas, secretos que no llegan, tests flaky, y medir antes de optimizar. Úsala cuando el pipeline falla, el build se rompe en CI pero va en local, un job se cuelga o tarda demasiado, o un workflow da error a veces sí y a veces no."
 ---
 
 # Pipelines de CI que fallan o van lentos
@@ -37,6 +37,70 @@ por clave, no se borra a ciegas**: cambia la clave (súbele un sufijo de
 versión) y el sistema genera una caché limpia sin destruir las de otras
 ramas. Borrarlo todo castiga a todos los pipelines por el pecado de uno.
 
+**Caché que restaura pero nunca se actualiza.** En GitHub Actions una caché
+es inmutable: si la clave exacta ya existe, el guardado al final del job se
+omite. Síntoma: la clave es fija (`key: deps`) y las dependencias añadidas
+la semana pasada se descargan de la red en cada build. Arreglo: clave por
+hash del lockfile con `restore-keys` de red de seguridad.
+
+```yaml
+- uses: actions/cache@v4
+  with:
+    path: ~/.npm
+    key: npm-${{ hashFiles('**/package-lock.json') }}
+    restore-keys: npm-
+```
+
+Con `restore-keys` se restaura la más reciente que empiece por ese prefijo
+y, si la clave exacta no existía, al acabar el job se guarda una nueva con
+ella. Detalle que despista: una rama solo ve cachés creadas en ella misma,
+en la rama por defecto o en la base del PR, así que la primera ejecución de
+cada rama nueva «no encuentra» nada y eso no es un fallo. Y hay desalojo:
+unos 10 GB por repositorio y las cachés sin uso en una semana se borran
+solas.
+
+**Matriz que se cancela en cascada.** En `strategy.matrix`, `fail-fast`
+vale `true` por defecto: la primera combinación que falla cancela a todas
+las demás a medias. Síntoma: un job rojo y quince «cancelados», sin saber
+si el fallo era de una versión concreta o de todas. Para diagnosticar,
+una pasada con `fail-fast: false` y la matriz entera hasta el final: la
+foto completa dice si el problema es una combinación o el código.
+
+**Dos pushes seguidos que se pisan.** Sin grupo de concurrencia cada push
+lanza su ejecución y ambas tocan lo mismo a la vez. Arreglo:
+
+```yaml
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+```
+
+Ojo: `cancel-in-progress` en un workflow de despliegue puede cortarlo a la
+mitad y dejar el entorno en un estado intermedio. Para desplegar, grupo sí
+y cancelación no: que las ejecuciones hagan cola. El equivalente en GitLab
+es `interruptible: true` en el job.
+
+**Archivos que no aparecen en el siguiente job.** Cada job estrena runner:
+nada del disco sobrevive de un job a otro. Lo construido viaja con
+`actions/upload-artifact` y `actions/download-artifact`, y el orden se
+declara con `needs:` (sin él los jobs corren en paralelo y el consumidor
+arranca antes de que el artefacto exista). En la v4 el nombre de artefacto
+es único por ejecución: dos patas de una matriz subiendo al mismo nombre
+fallan, mete la variable de la matriz en el nombre. En GitLab es al revés:
+los artefactos de etapas anteriores se descargan solos en las siguientes.
+
+**El pipe que esconde el fallo.** El shell por defecto de un paso `run` en
+Linux es `bash -e` SIN `pipefail`: en `cmd | tee build.log` el paso hereda
+el código de `tee` y queda en verde aunque `cmd` reviente. Declarar
+`shell: bash` en el paso activa además `pipefail`. Síntoma clásico: build
+«en verde» con artefacto vacío.
+
+**El job colgado que cobra por horas.** GitHub Actions no corta un job
+hasta los 360 minutos por defecto (GitLab, 60). Un proceso esperando una
+entrada que nunca llega son seis horas de facturación y de cola bloqueada.
+Póliza barata: `timeout-minutes` a nivel de job, ajustado a la duración
+real con margen.
+
 **Secretos que no llegan.** Los PR desde forks NO reciben secretos (es una
 protección deliberada: un fork podría exfiltrarlos), así que el job falla
 solo en PRs externos. Y una variable enmascarada sale como `***` en el log:
@@ -56,7 +120,21 @@ entorno es la primera sospechosa, no el código.
 la hora, del orden de ejecución, de un `sleep` optimista o de la red. Se
 arregla o se marca en cuarentena con un issue: nunca se tapa.
 
-## 4. Acelerar: medir primero
+## 4. GitHub Actions y GitLab CI no hablan el mismo idioma
+
+| Tema | GitHub Actions | GitLab CI |
+|---|---|---|
+| Archivos entre jobs | Artefactos explícitos, subir y bajar | Automáticos entre etapas |
+| Caché | Central e inmutable por clave, ámbito de rama | En runners propios vive en cada máquina: sin caché distribuida, «a veces está» según qué runner toque |
+| Tiempo máximo por defecto | 360 min por job | 60 min |
+| Ejecuciones duplicadas | `concurrency` + `cancel-in-progress` | `interruptible: true` |
+| Vida de los artefactos | Configurable por workflow | Caducan solos pasado el plazo por defecto |
+
+La fila de la caché explica un clásico de GitLab con runners propios: el
+build «recuerda» las dependencias unas veces sí y otras no, y la única
+diferencia es qué máquina ejecutó el job.
+
+## 5. Acelerar: medir primero
 
 La mayoría del tiempo de un pipeline vive en uno o dos pasos. Mira la
 duración por paso en la interfaz del CI antes de optimizar nada, porque
@@ -80,6 +158,8 @@ Después, en este orden de rentabilidad:
   retry compra tiempo para arreglar la causa, no la sustituye: cada retry
   duplica la duración del pipeline y esconde una regresión real cuando
   llegue.
+- **Editar el YAML a ojo y hacer push como método de depuración.** Cada
+  intento son minutos de cola: reproduce en local primero.
 
 ## Herramientas del harness
 
@@ -92,6 +172,8 @@ usa, qué job es flaky conocido, dónde viven los secretos) se guardan con
 ## Verificación final
 
 El pipeline en verde una vez no basta si el fallo era intermitente:
-relánzalo dos o tres veces seguidas. Y comprueba que tu arreglo no ha
+relánzalo dos o tres veces seguidas. Si el arreglo era de caché, el log lo
+confirma: la línea de restauración nombra la clave exacta y el paso de
+instalación baja de minutos a segundos. Y comprueba que el arreglo no ha
 alargado el pipeline: la duración total antes y después, en la misma vista
 donde mediste al principio.

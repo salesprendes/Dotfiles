@@ -73,26 +73,32 @@ Singleton {
     })
 
     readonly property var provider: providers[Settings.aiProvider] || providers.gemini
-    readonly property string model:
-        Settings.aiProvider === "openrouter" ? Settings.aiModelOpenrouter
-        : Settings.aiProvider === "ollama"   ? Settings.aiModelOllama
-        : Settings.aiProvider === "custom"   ? Settings.aiModelCustom
-                                             : Settings.aiModelGemini
 
-    // Normaliza lo que escriba el usuario hasta una raíz /v1 utilizable. Es
-    // deliberadamente indulgente porque una URL remota se copia y se pega mal:
-    // sobran barras, falta el esquema, se pega el endpoint completo… Todo eso
-    // acaba en la misma base. Sin esquema se asume https, salvo que apunte a
-    // una IP o a localhost (ahí lo normal es http).
-    // Lógica en TextUtils.js (pura); aquí solo el puente para no tocar llamadas.
-    function normalizeBase(u) { return TU.normalizeBase(u) }
-    function normalizeSearchBase(u) { return TU.normalizeSearchBase(u) }
+    // El modelo elegido de CADA proveedor vive en su propio ajuste. Este par
+    // de funciones es el único sitio que conoce ese reparto: antes el mismo
+    // switch de cuatro ramas estaba copiado en cinco puntos del archivo.
+    function modelFor(id) {
+        return id === "openrouter" ? Settings.aiModelOpenrouter
+             : id === "ollama"     ? Settings.aiModelOllama
+             : id === "custom"     ? Settings.aiModelCustom
+                                   : Settings.aiModelGemini
+    }
+    function _setModelFor(id, name) {
+        if (id === "openrouter")  Settings.aiModelOpenrouter = name
+        else if (id === "ollama") Settings.aiModelOllama = name
+        else if (id === "custom") Settings.aiModelCustom = name
+        else                      Settings.aiModelGemini = name
+    }
+    readonly property string model: modelFor(Settings.aiProvider)
 
-    // Raíz /v1 efectiva del proveedor activo ("" si aún falta la URL).
+    // Raíz /v1 efectiva del proveedor activo ("" si aún falta la URL). La
+    // normalización (TU.normalizeBase) es deliberadamente indulgente: una URL
+    // remota se copia y se pega mal — sobran barras, falta el esquema, se pega
+    // el endpoint completo… Todo eso acaba en la misma base.
     readonly property string apiBase:
         provider.userUrl
-            ? normalizeBase(Settings.aiProvider === "ollama"
-                            ? Settings.aiOllamaUrl : Settings.aiCustomUrl)
+            ? TU.normalizeBase(Settings.aiProvider === "ollama"
+                               ? Settings.aiOllamaUrl : Settings.aiCustomUrl)
             : provider.base
     readonly property string endpoint:
         apiBase === "" ? "" : apiBase + "/chat/completions"
@@ -142,7 +148,7 @@ Singleton {
         const core = defs.filter(d => coreTools.indexOf(d["function"].name) !== -1)
         const rest = defs.filter(d => coreTools.indexOf(d["function"].name) === -1)
         const texts = rest.map(d => d["function"].name + " " + (d["function"].description || ""))
-        const order = _rankNotes(texts, _lastUserText)
+        const order = TU.rankNotes(texts, _lastUserText)
         const room = Math.max(0, maxTools - core.length)
         const picked = order.slice(0, room).map(i => rest[i])
         return core.concat(picked)
@@ -169,14 +175,7 @@ Singleton {
                 name = name.slice(colon + 1)
             }
         }
-        if (target === "openrouter")
-            Settings.aiModelOpenrouter = name
-        else if (target === "ollama")
-            Settings.aiModelOllama = name
-        else if (target === "custom")
-            Settings.aiModelCustom = name
-        else
-            Settings.aiModelGemini = name
+        _setModelFor(target, name)
         Settings.aiProvider = target
     }
 
@@ -186,43 +185,15 @@ Singleton {
     // la lista de reserva de abajo. El elegido actual siempre entra en la
     // lista aunque sea un id escrito a mano.
     property var fetchedModels: ({})
-    readonly property var modelOptions: {
-        let base = fetchedModels[Settings.aiProvider] || []
-        if (base.length === 0) {
-            if (Settings.aiProvider === "openrouter")
-                base = ["qwen/qwen3-30b-a3b:free", "qwen/qwen3-14b:free",
-                        "deepseek/deepseek-chat-v3-0324:free",
-                        "meta-llama/llama-3.3-70b-instruct:free"]
-            else if (Settings.aiProvider === "gemini")
-                base = ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.5-pro",
-                        "gemini-2.0-flash"]
-        }
-        const out = base.slice()
-        if (ai.model !== "" && out.indexOf(ai.model) === -1)
-            out.unshift(ai.model)
-        const opts = out.map(m => ({ text: m, value: m }))
-        // Servidor recién configurado y todavía sin modelo: el desplegable
-        // debe decirlo. Sin esta entrada, al no encontrar el valor vigente
-        // pintaría la primera opción de la lista y parecería que hay elegido
-        // un modelo que no está en uso.
-        if (ai.model === "")
-            opts.unshift({ text: I18n.tr("Choose a model"), value: "" })
-        // Cola del desplegable: el modelo vigente de los OTROS proveedores,
-        // en sintaxis proveedor:modelo — cambiar de cerebro entre nubes (o a
-        // local) sin pasar por la config.
-        const ids = ["gemini", "openrouter", "ollama", "custom"]
-        for (let i = 0; i < ids.length; i++) {
-            if (ids[i] === Settings.aiProvider)
-                continue
-            const other = ids[i] === "openrouter" ? Settings.aiModelOpenrouter
-                        : ids[i] === "ollama" ? Settings.aiModelOllama
-                        : ids[i] === "custom" ? Settings.aiModelCustom
-                        : Settings.aiModelGemini
-            if (other !== "")
-                opts.push({ text: ids[i] + ":" + other, value: ids[i] + ":" + other })
-        }
-        return opts
-    }
+    // Lista de reserva mientras el servidor no ha contestado (solo los
+    // proveedores de nube con catálogo conocido de antemano).
+    readonly property var _fallbackModels: ({
+        openrouter: ["qwen/qwen3-30b-a3b:free", "qwen/qwen3-14b:free",
+                     "deepseek/deepseek-chat-v3-0324:free",
+                     "meta-llama/llama-3.3-70b-instruct:free"],
+        gemini: ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.5-pro",
+                 "gemini-2.0-flash"]
+    })
 
     // ── Cuánta correa lleva el agente ────────────────────────────────────────
     // UN control en vez de cuarenta. La aprobación sale de la CLASE DE RIESGO
@@ -270,24 +241,27 @@ Singleton {
     }
 
     // Catálogo agrupado por proveedor para el selector: el del proveedor
-    // activo, entero; de los demás, el modelo que tengan elegido — cambiar de
-    // cerebro (o de nube a local) sin pasar por la configuración.
+    // activo, entero (lo que publica el servidor, o la reserva, más el modelo
+    // vigente aunque sea un id escrito a mano); de los demás, el modelo que
+    // tengan elegido — cambiar de cerebro (o de nube a local) sin pasar por
+    // la configuración.
     readonly property var modelGroups: {
         const ids = ["gemini", "openrouter", "ollama", "custom"]
         const out = []
         for (let i = 0; i < ids.length; i++) {
             const id = ids[i]
             const activo = id === Settings.aiProvider
-            const suyo = id === "openrouter" ? Settings.aiModelOpenrouter
-                       : id === "ollama" ? Settings.aiModelOllama
-                       : id === "custom" ? Settings.aiModelCustom
-                       : Settings.aiModelGemini
-            let lista = activo ? modelOptions.map(o => o.value).filter(v => v !== "")
-                               : (suyo !== "" ? [suyo] : [])
-            // Los "proveedor:modelo" de la cola de modelOptions ya salen en su
-            // propio grupo: aquí sobran.
-            lista = lista.filter(v => v.indexOf(":") === -1
-                                   || !providers[v.slice(0, v.indexOf(":"))])
+            let lista
+            if (activo) {
+                lista = (fetchedModels[id] || []).slice()
+                if (lista.length === 0)
+                    lista = (_fallbackModels[id] || []).slice()
+                if (ai.model !== "" && lista.indexOf(ai.model) === -1)
+                    lista.unshift(ai.model)
+            } else {
+                const suyo = modelFor(id)
+                lista = suyo !== "" ? [suyo] : []
+            }
             if (lista.length === 0)
                 continue
             out.push({ provider: id, label: providers[id].label,
@@ -296,15 +270,23 @@ Singleton {
         return out
     }
 
+    // Lo que dicta el modo para una herramienta SIN excepciones de por medio.
+    // Lo consultan toolPolicy y setToolPolicy: antes cada uno llevaba su copia
+    // del mismo cálculo, y divergir aquí significaría que el contador de
+    // excepciones mintiera.
+    function naturalPolicy(name) {
+        if (_bookkeeping.indexOf(name) !== -1)
+            return "auto"
+        return _modeGrants(riskClass(name)) ? "auto" : "ask"
+    }
+
     // Política efectiva de una herramienta: la excepción del usuario manda; si
     // no hay, decide el modo sobre su clase de riesgo.
     function toolPolicy(name) {
         const over = (Settings.aiToolPolicies || {})[name]
         if (over === "ask" || over === "auto" || over === "off")
             return over
-        if (_bookkeeping.indexOf(name) !== -1)
-            return "auto"
-        return _modeGrants(riskClass(name)) ? "auto" : "ask"
+        return naturalPolicy(name)
     }
 
     // Cuántas excepciones hay puestas: el panel lo enseña para que un permiso
@@ -322,9 +304,7 @@ Singleton {
         // El modo ya dice lo que hace falta: una excepción que COINCIDE con él
         // no se guarda, se borra. Así el contador dice la verdad y volver al
         // valor de siempre limpia de verdad en vez de dejar rastro.
-        const natural = _bookkeeping.indexOf(name) !== -1 ? "auto"
-                      : (_modeGrants(riskClass(name)) ? "auto" : "ask")
-        if (v === natural)
+        if (v === naturalPolicy(name))
             delete p[name]
         else
             p[name] = v
@@ -382,13 +362,6 @@ Singleton {
         _resolveTool(index, a)
     }
 
-    // Metacaracteres que convierten UN comando permitido en varios (cadenas,
-    // tuberías, redirecciones, sustitución). La guardia de OpenWorker: aunque
-    // el usuario ponga run_command/ssh_exec en "auto", un comando con estos
-    // vuelve a pedir aprobación — "allow git status" no debe colar
-    // "git status; rm -rf ~".
-    function _hasShellOps(cmd) { return TU.hasShellOps(cmd) }
-
     // Permisos permanentes de ESTA conversación (el "session allowlist" de
     // OpenWorker): el usuario pulsa "Siempre" en una tarjeta y esa herramienta
     // deja de preguntar hasta que cambie de conversación. Efímero por diseño.
@@ -413,12 +386,13 @@ Singleton {
             return "auto"
 
         const p = toolPolicy(name)
-        const a = repairJson(argsJson) || ({})
+        const a = TU.repairJson(argsJson) || ({})
 
-        // Guardia de shell: un comando "auto" que encadena/redirige vuelve a
-        // preguntar. Se aplica a lo que ejecuta comandos.
+        // Guardia de shell (idea de OpenWorker): un comando "auto" que
+        // encadena, redirige o sustituye vuelve a preguntar — "permite git
+        // status" no debe colar "git status; rm -rf ~".
         if (p === "auto" && (name === "run_command" || name === "ssh_exec")
-                && _hasShellOps(a.command))
+                && TU.hasShellOps(a.command))
             return "ask"
 
         // Consulta a un servidor: aunque esté permitida (por política o por la
@@ -565,6 +539,22 @@ Singleton {
         return (Settings.aiInsecureTls && provider.userUrl) ? ["-k"] : []
     }
 
+    // El argv completo de una llamada al /chat/completions. Lo comparten el
+    // streaming del panel, la compactación y el subagente: antes cada uno
+    // armaba su copia del mismo curl y las credenciales, los tiempos o el "-k"
+    // podían divergir entre los tres caminos. 15 s para conectar (VPN, túnel,
+    // arranque perezoso del modelo) y el tope total que pida cada uso.
+    function chatCommand(req, maxTime) {
+        let cmd = ["curl", "-sS", "--connect-timeout", "15",
+                   "--max-time", String(maxTime)]
+        if (req.stream)
+            cmd = cmd.concat(["-N", "--no-buffer"])
+        cmd = cmd.concat(["-X", "POST", endpoint,
+                          "-H", "Content-Type: application/json"])
+        return cmd.concat(_authArgs()).concat(_netArgs())
+                  .concat(["-d", JSON.stringify(req)])
+    }
+
     Process {
         id: probeProc
         property string forProvider: ""
@@ -615,7 +605,7 @@ Singleton {
                 return
             }
             // OpenRouter publica cientos: el desplegable se queda con los
-            // gratuitos (más el que ya usas, que lo añade modelOptions).
+            // gratuitos (más el que ya usas, que lo añade modelGroups).
             if (probeProc.forProvider === "openrouter")
                 names = names.filter(n => n.endsWith(":free"))
             names.sort()
@@ -729,7 +719,7 @@ Singleton {
     property var activeSub: null
     readonly property Component _subComp: Component { SubAgent {} }
 
-    readonly property var _liveSplit: splitThink(streamBuf)
+    readonly property var _liveSplit: TU.splitThink(streamBuf)
     readonly property string liveText: _liveSplit.text
     readonly property string liveThink: (reasonBuf + _liveSplit.think).trim()
 
@@ -844,7 +834,7 @@ Singleton {
         // OpenHarness): con el presupuesto lleno, lo que entra es lo que viene
         // a cuento, no lo que se guardó primero. Los ids [#n] siguen siendo
         // los de la lista real, para que corregir siga apuntando bien.
-        const order = _rankNotes(n, _lastUserText)
+        const order = TU.rankNotes(n, _lastUserText)
         let chars = 0
         for (let k = 0; k < order.length; k++) {
             const i = order[k]
@@ -859,12 +849,6 @@ Singleton {
     // Lo último que preguntó el usuario: la consulta contra la que se mide la
     // relevancia. Se actualiza al empujar su mensaje.
     property string _lastUserText: ""
-
-    // Devuelve los ÍNDICES de las notas ordenados por relevancia. Puntúa por
-    // palabras compartidas con la consulta (ignorando las muy cortas, que son
-    // artículos y preposiciones); a igualdad, respeta el orden original —
-    // sin consulta, el orden es el de siempre.
-    function _rankNotes(notes, query) { return TU.rankNotes(notes, query) }
 
     // ── Hooks del usuario (idea de OpenHarness) ──────────────────────────────
     // Comandos propios que el harness dispara en momentos concretos del ciclo
@@ -1092,6 +1076,11 @@ Singleton {
                              body: (fm ? head.slice(fm[0].length) : head).trim() })
             }
             ai.skills = found
+            // El historial puede haberse restaurado ANTES de que este escaneo
+            // termine: con el catálogo ya en la mano, se recarga la habilidad
+            // que el hilo restaurado traía a cuento.
+            if (ai._stickySkillId === "" && ai._lastUserText !== "")
+                ai._updateAutoSkill(ai._lastUserText)
             // Reescaneo por fallo (regla de OpenWorker): si el modelo pidió una
             // habilidad que aún no estaba y por eso se reescaneó, se reintenta
             // la lectura ahora que sí aparece.
@@ -1126,19 +1115,37 @@ Singleton {
         agentMode ? TU.rankSkills(activeSkills, _lastUserText) : []
 
     // Cuándo se considera que encaja "claramente": que se nombre su tema
-    // (una palabra propia de su nombre vale 3) o que coincidan tres términos
+    // (una palabra propia de su nombre vale 4) o que coincidan varios términos
     // de su descripción. Y además tiene que DESPEGARSE de la segunda: ante una
     // duda entre dos, no se carga ninguna y decide el modelo con el catálogo
     // delante. Cargar la equivocada cuesta más que no cargar ninguna.
     readonly property int autoSkillFloor: 2
     readonly property int autoSkillMargin: 2
-    readonly property var autoSkill: {
-        const r = _rankedSkills
+
+    // La habilidad cargada es PEGAJOSA: una vez dentro, acompaña a la
+    // conversación hasta que otra le gane el puesto o el hilo muera. Antes se
+    // recalculaba contra el ÚLTIMO mensaje y nada más: un "sí, hazlo" sin
+    // palabras clave la descargaba a mitad de tarea — justo cuando el agente
+    // empezaba a ejecutar lo que la habilidad enseña. Es lo mismo que hacen
+    // los harness grandes: en Claude Code una skill invocada queda en el hilo,
+    // no se evapora con el siguiente mensaje.
+    property string _stickySkillId: ""
+    readonly property var autoSkill:
+        activeSkills.find(s => s.id === _stickySkillId) || null
+
+    // La decisión, al enviar cada mensaje del usuario: si hay un ganador claro
+    // se carga (o sustituye a la anterior — el tema cambió); si no lo hay, se
+    // queda la que estuviera, que la ausencia de palabras clave en un "vale,
+    // sigue" no es información.
+    function _updateAutoSkill(text) {
+        if (!agentMode)
+            return
+        const r = TU.rankSkills(activeSkills, text)
         if (r.length === 0 || r[0].score < autoSkillFloor)
-            return null
+            return
         if (r.length > 1 && r[0].score - r[1].score < autoSkillMargin)
-            return null
-        return r[0].skill
+            return
+        _stickySkillId = r[0].skill.id
     }
 
     // Presupuesto del catálogo, como todo lo demás: proporcional a la ventana
@@ -1147,6 +1154,14 @@ Singleton {
     // resto se anuncian solo por su nombre — que para pedirlas basta.
     readonly property int skillsBudget:
         Math.max(1000, Math.min(8000, Math.round(charBudget * 0.12)))
+
+    // Cuánto texto de UNA habilidad entra al contexto. Lo comparten la carga
+    // automática y use_skill: antes use_skill pasaba por el tope genérico de
+    // resultados (~8,6k con ventana de 32k) y la auto-carga por el suyo de
+    // 12k, así que la misma habilidad llegaba entera o amputada según la
+    // puerta por la que entrara.
+    readonly property int skillTextCap:
+        Math.max(2000, Math.min(12000, Math.round(charBudget * 0.3)))
 
     readonly property string _skillsBlock: {
         const r = _rankedSkills
@@ -1184,11 +1199,10 @@ Singleton {
         const s = autoSkill
         if (!s)
             return ""
-        const cap = Math.max(2000, Math.min(12000, Math.round(charBudget * 0.3)))
         return "\n\nINSTRUCCIONES DE LA HABILIDAD «" + s.name + "», cargadas "
              + "porque encajan con lo que te acaban de pedir. Síguelas; no "
              + "hace falta que la pidas con use_skill.\n"
-             + s.body.slice(0, cap)
+             + s.body.slice(0, skillTextCap)
     }
 
     // Dos modos: charlar o actuar. NO hay un tercer modo "plan" — planificar
@@ -1900,7 +1914,7 @@ Singleton {
         if (!m || String(m.undoPath || "") === "")
             return
         let target = ""
-        const a = repairJson(m.toolArgs) || ({})
+        const a = TU.repairJson(m.toolArgs) || ({})
         target = _safePath(a.path)
         if (target === "")
             return
@@ -1943,7 +1957,7 @@ Singleton {
     // nadie haya pedido nada nuevo.
     readonly property int loopThreshold: 3
     function _loopCount(name, argsJson) {
-        const sig = String(name) + " " + String(argsJson || "")
+        const sig = String(name) + "\u0000" + String(argsJson || "")
         let start = 0
         for (let i = messages.count - 1; i >= 0; i--)
             if (messages.get(i).role === "user") {
@@ -1954,16 +1968,11 @@ Singleton {
         for (let i = start; i < messages.count; i++) {
             const m = messages.get(i)
             if (m.role === "tool" && m.toolStatus !== "pending"
-                    && (String(m.toolName) + " " + String(m.toolArgs)) === sig)
+                    && (String(m.toolName) + "\u0000" + String(m.toolArgs)) === sig)
                 n++
         }
         return n
     }
-
-    // Repara los defectos típicos de un JSON generado por un modelo pequeño:
-    // vallas de Markdown, comas colgantes, comillas simples, literales de
-    // Python. Si aun así no parsea, devuelve null (nunca inventa argumentos).
-    function repairJson(raw) { return TU.repairJson(raw) }
 
     // Llamadas escritas EN EL TEXTO. Cada familia de modelos abiertos tiene su
     // propia manía, y un servidor que no traduce a la API de OpenAI las deja
@@ -1983,9 +1992,6 @@ Singleton {
                         .concat(ai.mcpToolDefs.map(d => d["function"].name))
         return TU.extractTextToolCalls(raw, known)
     }
-
-    // Separa el razonamiento <think>…</think> (Qwen y compañía) del texto.
-    function splitThink(raw) { return TU.splitThink(raw) }
 
     // ── Operaciones de conversación ──────────────────────────────────────────
     // Tira el subagente en marcha sin resolver su tarjeta: el hilo que la
@@ -2019,9 +2025,27 @@ Singleton {
         }
         sessionAllow = ({})
         activeSkillTools = []
+        _stickySkillId = ""
         pathReal = ({})
         todos = []
         _compactWarned = false
+    }
+
+    // Al entrar en una conversación (cambiar, arrancar, estrenar), la consulta
+    // de relevancia vuelve a ser SU último mensaje de usuario: el orden del
+    // catálogo, la memoria y el recorte de herramientas hablan del tema de
+    // este hilo, no del de la conversación anterior. Y la habilidad que ese
+    // mensaje cargaría se recarga: retomar un hilo de SQL a medias debe
+    // retomarlo con las instrucciones de SQL puestas.
+    function _restoreLastUser() {
+        _lastUserText = ""
+        for (let i = messages.count - 1; i >= 0; i--)
+            if (messages.get(i).role === "user") {
+                _lastUserText = messages.get(i).content
+                break
+            }
+        if (_lastUserText !== "")
+            _updateAutoSkill(_lastUserText)
     }
 
     function newConversation() {
@@ -2029,6 +2053,7 @@ Singleton {
         _snapshotCurrent()
         messages.clear()
         currentId = String(Date.now())
+        _restoreLastUser()
         _saveHistoryNow()
     }
 
@@ -2050,6 +2075,7 @@ Singleton {
         conversations = conversations.filter(x => x.id !== currentId)
         messages.clear()
         currentId = String(Date.now())
+        _restoreLastUser()
         _recountTotals()
         _saveHistoryNow()
     }
@@ -2066,6 +2092,7 @@ Singleton {
         messages.clear()
         for (let i = 0; i < c.entries.length; i++)
             _append(c.entries[i])
+        _restoreLastUser()
         _saveHistoryNow()
     }
 
@@ -2077,6 +2104,7 @@ Singleton {
             _resetThread()
             messages.clear()
             currentId = String(Date.now())
+            _restoreLastUser()
         }
         _saveHistoryNow()
     }
@@ -2181,7 +2209,6 @@ Singleton {
     // que pedirle al agente que lo lea: un paso menos, y el contenido llega ya
     // en el primer turno. Se resuelven antes de enviar; lo que no exista o se
     // salga de la carpeta personal se deja tal cual, como texto.
-    function _atRefs(t) { return TU.atRefs(t) }
     property var _atPending: null       // {text, atts} esperando la expansión
     readonly property Process _atProc: Process {
         id: atProc
@@ -2209,7 +2236,7 @@ Singleton {
         if (_atSkip) {
             _atSkip = false              // este ya viene expandido
         } else if (_atPending === null && !busy) {
-            const refs = _atRefs(text)
+            const refs = TU.atRefs(text)
             if (refs.length > 0) {
                 _atPending = { text: String(text), atts: pendingAtts }
                 // Las rutas viajan por ENTORNO (una por línea) y el bucle las
@@ -2272,6 +2299,7 @@ Singleton {
         ai.pendingAtts = []
         _push({ role: "user", content: t, attachNote: note.join(" · ") })
         _lastUserText = t
+        _updateAutoSkill(t)
         _fireHooks("user_prompt_submit", "", { QS_HOOK_PROMPT: t.slice(0, 4000) })
         _start()
     }
@@ -2330,7 +2358,7 @@ Singleton {
         // Argumentos tolerantes: un modelo local manda JSON roto a menudo. Si
         // ni con reparación sale, se le dice al modelo qué esperaba en vez de
         // ejecutar con argumentos vacíos (que sería peor que fallar).
-        const parsed = repairJson(m.toolArgs)
+        const parsed = TU.repairJson(m.toolArgs)
         if (parsed === null) {
             _resolveTool(index, "No entendí los argumentos: no son JSON válido. "
                 + "Vuelve a llamar a " + m.toolName + " con un objeto JSON correcto.")
@@ -2458,8 +2486,8 @@ Singleton {
             // De más específico a más general: lo que diga el mensaje, luego
             // el ajuste si lo hay, y si no una instancia pública. La
             // herramienta funciona SIEMPRE; configurarla solo cambia adónde va.
-            const base = normalizeSearchBase(args.instance)
-                      || normalizeSearchBase(Settings.aiSearchUrl)
+            const base = TU.normalizeSearchBase(args.instance)
+                      || TU.normalizeSearchBase(Settings.aiSearchUrl)
                       || "https://searx.be"
             _exec(["sh", "-c",
                 'curl -sSL --max-time 15 "$QS_B/search?format=json&q=$(python3 -c \'import urllib.parse,os; print(urllib.parse.quote(os.environ[\"QS_Q\"]))\')" | '
@@ -2624,8 +2652,9 @@ Singleton {
             ai.activeSkillTools = (s.allowedTools && s.allowedTools.length > 0)
                 ? s.allowedTools.slice() : []
             // El texto ya está en memoria desde el escaneo: no hace falta ir
-            // al disco otra vez.
-            _resolveTool(index, s.text)
+            // al disco otra vez. Y entra con el tope de habilidad, no con el
+            // genérico de resultados: son instrucciones, no salida de comando.
+            _resolveTool(index, s.text, Math.max(toolResultCap, skillTextCap))
             return
         }
         case "memory_update": {
@@ -2719,10 +2748,12 @@ Singleton {
         return s
     }
 
-    function _resolveTool(index, result) {
+    // 'cap' permite a una herramienta concreta un tope distinto del genérico
+    // (use_skill: el texto de una habilidad vale más contexto que un ls).
+    function _resolveTool(index, result, cap) {
         messages.setProperty(index, "toolStatus", "done")
         messages.setProperty(index, "toolResult",
-                            redactSecrets(String(result)).slice(0, toolResultCap))
+                            redactSecrets(String(result)).slice(0, cap || toolResultCap))
         _saveHistory()
         // Aviso de "esto ya corrió": para registrar, medir o encadenar.
         const done = messages.get(index)
@@ -2817,7 +2848,7 @@ Singleton {
                 // Si la llamada lleva una ruta local, primero se averigua
                 // adónde apunta DE VERDAD (puede ser un enlace). Se hace una
                 // sola vez por tarjeta, y al volver se re-entra aquí.
-                const args = repairJson(m.toolArgs) || ({})
+                const args = TU.repairJson(m.toolArgs) || ({})
                 const p = _pathArgOf(m.toolName, args)
                 if (p !== "" && pathReal[i] === undefined) {
                     _resolvePath(i, p)
@@ -2871,15 +2902,17 @@ Singleton {
     }
 
     // ── Historial que viaja al modelo ────────────────────────────────────────
-    // Recorte por DETRÁS (16 mensajes o el presupuesto de caracteres, lo que
-    // llegue antes) y reconstrucción del protocolo de herramientas: cada
-    // tarjeta resuelta se traduce al par
-    // assistant(tool_calls) + tool(result) que exige el contrato OpenAI.
+    // Recorte por DETRÁS (el presupuesto de caracteres, que sale de la ventana
+    // real del modelo, con un tope de mensajes como red de seguridad) y
+    // reconstrucción del protocolo de herramientas: cada tarjeta resuelta se
+    // traduce al par assistant(tool_calls) + tool(result) que exige el
+    // contrato OpenAI. El tope era 16 y mandaba él casi siempre: una ventana
+    // holgada viajaba medio vacía habiendo conversación que enseñarle.
     function _payloadMessages() {
         const out = []
         let chars = 0
         let i = messages.count - 1
-        while (i >= 0 && out.length < 16) {
+        while (i >= 0 && out.length < 48) {
             const m = messages.get(i)
             if (m.role === "tool") {
                 // Un LOTE de tarjetas contiguas (el modelo pidió varias de
@@ -3046,18 +3079,10 @@ Singleton {
         }
         if (Settings.aiProvider !== "gemini")
             req.stream_options = { include_usage: true }
-        // Un servidor remoto puede tardar en aceptar la conexión (VPN, túnel,
-        // arranque perezoso del modelo): 15 s para conectar, 300 para el
-        // stream entero. Credenciales y opciones de red salen de las mismas
-        // funciones que usa la sonda, así que lo que prueba el botón "Probar"
-        // es exactamente lo que va a viajar.
-        let cmd = ["curl", "-sS", "-N", "--no-buffer",
-                   "--connect-timeout", "15", "--max-time", "300",
-                   "-X", "POST", ai.endpoint,
-                   "-H", "Content-Type: application/json"]
-        cmd = cmd.concat(ai._authArgs()).concat(ai._netArgs())
-        cmd = cmd.concat(["-d", JSON.stringify(req)])
-        streamProc.command = cmd
+        // Credenciales y opciones de red salen de las mismas funciones que
+        // usa la sonda, así que lo que prueba el botón "Probar" es
+        // exactamente lo que va a viajar. 300 s para el stream entero.
+        streamProc.command = ai.chatCommand(req, 300)
         ai.busy = true
         streamProc.running = true
     }
@@ -3135,7 +3160,7 @@ Singleton {
 
         onExited: (code) => {
             ai.busy = false
-            const parts = ai.splitThink(ai.streamBuf)
+            const parts = TU.splitThink(ai.streamBuf)
             const think = (ai.reasonBuf + parts.think).trim()
             let text = parts.text.trim()
             // Modelo local que escribe la llamada en el texto en vez de
@@ -3298,16 +3323,8 @@ Singleton {
                     }
                 }
             if (cut >= 0)
-                for (let i = cut; i < messages.count; i++) {
-                    const m = messages.get(i)
-                    _keepTail.push({ role: m.role, content: m.content,
-                        reasoning: m.reasoning, modelName: m.modelName,
-                        ms: m.ms, tokens: m.tokens, ts: m.ts,
-                        toolName: m.toolName, toolArgs: m.toolArgs,
-                        toolId: m.toolId, toolResult: m.toolResult,
-                        toolStatus: m.toolStatus, toolBatch: m.toolBatch,
-                        attachNote: m.attachNote, undoPath: m.undoPath })
-                }
+                for (let i = cut; i < messages.count; i++)
+                    _keepTail.push(_plainMsg(messages.get(i)))
         }
         pushInfo(I18n.tr("Compacting the context…"))
         _compactSend()
@@ -3323,11 +3340,7 @@ Singleton {
         msgs.push({ role: "user", content: _compactPrompt })
         const req = { model: model, messages: msgs,
                       temperature: 0.2, stream: false }
-        let cmd = ["curl", "-sS", "--connect-timeout", "15", "--max-time", "180",
-                   "-X", "POST", endpoint, "-H", "Content-Type: application/json"]
-        cmd = cmd.concat(_authArgs()).concat(_netArgs())
-        cmd = cmd.concat(["-d", JSON.stringify(req)])
-        compactProc.command = cmd
+        compactProc.command = chatCommand(req, 180)
         compactProc.running = true
     }
 
@@ -3341,7 +3354,7 @@ Singleton {
             let j = null
             try { j = JSON.parse(compactOut.text) } catch (e) {}
             const m = j && j.choices && j.choices[0] && j.choices[0].message
-            const texto = m ? ai.splitThink(String(m.content || "")).text.trim() : ""
+            const texto = m ? TU.splitThink(String(m.content || "")).text.trim() : ""
             if (code !== 0 || texto === "") {
                 const why = (j && j.error && (j.error.message || j.error.code))
                           || (code !== 0 ? "curl " + code : I18n.tr("No response received"))
@@ -3427,6 +3440,20 @@ Singleton {
     // ── Persistencia (multi-conversación) ────────────────────────────────────
     // Todo en data/ai-history.json, dentro del módulo y, como settings.json,
     // fuera de git.
+
+    // Un mensaje del ListModel como objeto plano con TODOS sus campos. Lo usan
+    // la instantánea del historial y la cola de compactación: cada uno llevaba
+    // su copia de la lista, y añadir un campo obligaba a acertar en tres
+    // sitios contando _append.
+    function _plainMsg(m) {
+        return { role: m.role, content: m.content, reasoning: m.reasoning,
+                 modelName: m.modelName, ms: m.ms, tokens: m.tokens,
+                 toolName: m.toolName, toolArgs: m.toolArgs,
+                 toolId: m.toolId, toolResult: m.toolResult,
+                 toolStatus: m.toolStatus, attachNote: m.attachNote,
+                 ts: m.ts, undoPath: m.undoPath, toolBatch: m.toolBatch }
+    }
+
     function _append(m) {
         messages.append({
             role: m.role || "user", content: m.content || "",
@@ -3487,16 +3514,8 @@ Singleton {
         if (currentId === "")
             currentId = String(Date.now())
         const entries = []
-        for (let i = 0; i < messages.count; i++) {
-            const m = messages.get(i)
-            entries.push({ role: m.role, content: m.content, reasoning: m.reasoning,
-                           modelName: m.modelName, ms: m.ms, tokens: m.tokens,
-                           toolName: m.toolName, toolArgs: m.toolArgs,
-                           toolId: m.toolId, toolResult: m.toolResult,
-                           toolStatus: m.toolStatus, attachNote: m.attachNote,
-                           ts: m.ts, undoPath: m.undoPath,
-                           toolBatch: m.toolBatch })
-        }
+        for (let i = 0; i < messages.count; i++)
+            entries.push(_plainMsg(messages.get(i)))
         const rest = conversations.filter(c => c.id !== currentId)
         // Una conversación vacía no merece hueco en la lista.
         if (entries.length > 0)
@@ -3565,6 +3584,7 @@ Singleton {
             } else {
                 ai.currentId = String(Date.now())
             }
+            ai._restoreLastUser()
             ai._recountTotals()
             // El harness está en pie y con su historial: momento de
             // session_start (montar algo, precalentar, avisar).

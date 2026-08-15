@@ -1,6 +1,6 @@
 ---
-name: Perfilar rendimiento
-description: Perfila el código antes de optimizar y demuestra la mejora con mediciones. Úsala cuando algo «va lento», «tarda mucho», «se come la CPU», haya que perfilar un script Python o un proceso, comparar tiempos con hyperfine, o decidir si una optimización merece la pena.
+name: "Perfilar rendimiento"
+description: "Perfila el código antes de optimizar y demuestra la mejora con mediciones. Úsala cuando algo «va lento», «tarda mucho», «se come la CPU», haya que perfilar un script Python o un proceso, comparar tiempos con hyperfine, o decidir si una optimización merece la pena."
 ---
 
 # Perfilar antes de optimizar
@@ -15,9 +15,17 @@ description: Perfila el código antes de optimizar y demuestra la mejora con med
   hyperfine --warmup 3 'comando_a' 'comando_b'
   ```
 
-  El calentamiento absorbe la caché fría de disco y las repeticiones dan media y desviación. Una sola ejecución mide el estado del sistema en ese instante, no el comando.
+  El calentamiento absorbe la caché fría de disco y las repeticiones dan media y desviación. Una sola ejecución mide el estado del sistema en ese instante, no el comando. `--prepare 'comando'` ejecuta algo antes de cada medición (vaciar una caché, regenerar un archivo) y `--export-markdown tabla.md` deja la comparación lista para pegar en un informe.
 
 - **`time` y su desglose**: `real` es reloj de pared, `user` es CPU en tu código, `sys` es CPU en el núcleo. **`real` alto con `user` bajo significa que el proceso ESPERA** (disco, red, otro proceso), y optimizar la CPU ahí es inútil: hay que ir a buscar la E/S.
+
+- **Un script que termina: `cProfile`**, sin instalar nada.
+
+  ```sh
+  python3 -m cProfile -s cumulative script.py | head -30
+  ```
+
+  La columna `cumtime` (la función más todo lo que llama) señala el camino caliente, `tottime` lo que quema la función en sí.
 
 - **Python en vivo: `py-spy`**, sin tocar el código ni reiniciar el proceso.
 
@@ -26,15 +34,31 @@ description: Perfila el código antes de optimizar y demuestra la mejora con med
   py-spy record -o llama.svg --pid 1234
   ```
 
-  `top` enseña en qué funciones está el tiempo ahora mismo y `record` genera el gráfico de llama para ver el reparto entero. Es solo lectura del proceso, aunque acoplarse a uno ajeno puede pedir privilegios.
+  `top` enseña en qué funciones está el tiempo ahora mismo y `record` genera el gráfico de llama para ver el reparto entero. Con `--native` se ven también las extensiones en C, y con `--idle` cuentan los hilos que ESPERAN — imprescindible cuando el problema no es quemar CPU sino esperar. Es solo lectura del proceso, aunque acoplarse a uno ajeno puede pedir privilegios.
 
-- **Código nativo en Linux: `perf top`**, para ver en qué símbolos arde la CPU de la máquina.
+- **Código nativo en Linux: `perf`**, para ver en qué símbolos arde la CPU.
+
+  ```sh
+  perf top                             # la máquina entera, en vivo
+  perf record -g -p 1234 -- sleep 10   # 10 s de muestreo de un proceso
+  perf report                          # y su desglose por función
+  ```
 
 Medir es lectura y no necesita aprobación. Las manías de cada máquina (qué herramienta está instalada, qué proceso es el sensible) se guardan con `learn`.
 
 ## El número de ANTES
 
-Antes de tocar nada se apunta el comando exacto de medición y su tiempo. «Va más rápido» sin número es una sensación, y las sensaciones mejoran solas cuando uno acaba de trabajar en algo. La demostración es siempre la misma: mismo comando, mismos datos, número de antes contra número de después.
+Antes de tocar nada se apunta el comando exacto de medición y su tiempo. «Va más rápido» sin número es una sensación, y las sensaciones mejoran solas cuando uno acaba de trabajar en algo. La demostración es siempre la misma: mismo comando, mismos datos, número de antes contra número de después. «Antes 4,31 s ± 0,08, después 0,52 s ± 0,02, mismo hyperfine y mismos datos» es una demostración. «Ahora vuela» no es nada.
+
+## Fallos con nombre y apellidos
+
+- **`real` alto con `user` bajo → espera de E/S.** Diagnóstico: `iostat -x 1` (columna `%util` del disco) o `pidstat -d 1` para ver quién lee y escribe. El arreglo nunca está en la CPU: está en agrupar la E/S, leer una vez lo que se leía mil veces, o cachear.
+- **`sys` alto → demasiadas llamadas al sistema.** Los clásicos: leer o escribir sin búfer, y hacer miles de `stat` recorriendo árboles de archivos. `strace -c -p PID` da el recuento por llamada, con un aviso serio: `strace` frena mucho al proceso observado, en producción solo ráfagas cortas.
+- **Memoria que solo sube → fuga.** Se confirma midiendo lo mismo a lo largo del tiempo: `ps -o rss= -p PID` cada pocos minutos. Una caché legítima sube y se aplana, una fuga sube sin techo. En Python, `tracemalloc` compara dos instantáneas y dice qué línea acumula. Reiniciar el proceso cada noche no es un arreglo, es una confesión con fecha.
+- **Rápido la segunda vez → caché de página.** La primera ejecución lee de disco, las siguientes de memoria, con diferencias de 10×. O se mide todo caliente (`--warmup`) o todo frío, nunca mezclado.
+- **Python multihilo con un solo núcleo al 100 % → el GIL.** Los hilos de CPU no paralelizan en CPython, y en `py-spy top --idle` se ve: muchos hilos, casi todos esperando. La salida es `multiprocessing` o llevar el bucle caliente a una biblioteca nativa (numpy trabaja fuera del GIL).
+- **Proceso clavado sin consumir CPU → una foto de las pilas.** `py-spy dump --pid 1234` imprime dónde está parado cada hilo: un candado que nadie suelta, una lectura de red sin plazo. Diagnóstico en un segundo, sin reiniciar nada.
+- **Números que bailan entre ejecuciones → la máquina, no el código.** Un portátil con frecuencia variable o ahogado por temperatura hace la segunda mitad del banco de pruebas más lenta que la primera. Las repeticiones de `hyperfine` lo delatan con una desviación enorme: se mide enchufado, con la máquina tranquila, y se desconfía de toda diferencia menor que la desviación.
 
 ## La jerarquía de las optimizaciones
 

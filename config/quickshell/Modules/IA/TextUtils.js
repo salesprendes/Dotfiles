@@ -9,7 +9,10 @@
 // deliberadamente indulgente porque una URL remota se copia y se pega mal:
 // sobran barras, falta el esquema, se pega el endpoint entero… Todo eso acaba
 // en la misma base. Sin esquema se asume https, salvo IP/localhost (http).
-function normalizeBase(u) {
+// Limpieza y esquema comunes a las dos normalizaciones de URL: espacios
+// fuera, barras finales fuera, y si falta el esquema se asume https salvo
+// IP/localhost (ahí lo normal es http). "" si no había nada.
+function _withScheme(u) {
     let b = String(u || "").trim().replace(/\s+/g, "").replace(/\/+$/, "")
     if (b === "")
         return ""
@@ -18,6 +21,13 @@ function normalizeBase(u) {
         const local = /^(localhost|\[|\d{1,3}(\.\d{1,3}){3})(:\d+)?$/i.test(host)
         b = (local ? "http://" : "https://") + b
     }
+    return b
+}
+
+function normalizeBase(u) {
+    let b = _withScheme(u)
+    if (b === "")
+        return ""
     // Pegar el endpoint entero es lo más común: se recorta a su raíz.
     b = b.replace(/\/(chat\/completions|completions|models)$/i, "")
          .replace(/\/+$/, "")
@@ -26,18 +36,9 @@ function normalizeBase(u) {
     return b
 }
 
-// La raíz del buscador SearXNG, con la misma indulgencia (esquema opcional,
-// barras de más recortadas).
+// La raíz del buscador SearXNG, con la misma indulgencia.
 function normalizeSearchBase(u) {
-    let b = String(u || "").trim().replace(/\s+/g, "").replace(/\/+$/, "")
-    if (b === "")
-        return ""
-    if (!/^https?:\/\//i.test(b)) {
-        const host = b.split("/")[0]
-        const local = /^(localhost|\[|\d{1,3}(\.\d{1,3}){3})(:\d+)?$/i.test(host)
-        b = (local ? "http://" : "https://") + b
-    }
-    return b.replace(/\/search$/i, "")
+    return _withScheme(u).replace(/\/search$/i, "")
 }
 
 // Metacaracteres que convierten UN comando permitido en varios (cadenas,
@@ -149,15 +150,6 @@ function keywords(text) {
     return out
 }
 
-// ¿Aparece la palabra en el nombre / en la descripción de esta habilidad?
-function _where(skill, word) {
-    if (fold((skill.name || "") + " " + (skill.id || "")).indexOf(word) !== -1)
-        return 2
-    if (fold(skill.description || "").indexOf(word) !== -1)
-        return 1
-    return 0
-}
-
 // Las habilidades ordenadas por encaje: [{skill, score}], de más a menos, y a
 // igualdad en el orden en que estaban.
 //
@@ -168,14 +160,30 @@ function _where(skill, word) {
 // cuatro; sin descontarla, cualquier frase con esa palabra empataba tres
 // habilidades y la elección salía a cara o cruz. Es la misma idea que el IDF
 // de toda la vida: cuanto más común es un término, menos dice.
+//
+// Nombre y descripción se pliegan UNA vez por habilidad, no una por cada
+// palabra de la consulta: con treinta habilidades y diez palabras, la versión
+// ingenua plegaba seiscientas veces los mismos textos.
 function rankSkills(skills, text) {
     const words = keywords(text)
-    const comun = words.map(w =>
-        skills.filter(s => _where(s, w) > 0).length >= 3)
+    const folded = skills.map(s => ({
+        name: fold((s.name || "") + " " + (s.id || "")),
+        desc: fold(s.description || "")
+    }))
+    // 2 = está en el nombre, 1 = en la descripción, 0 = no está.
+    const where = (i, w) => folded[i].name.indexOf(w) !== -1 ? 2
+                          : folded[i].desc.indexOf(w) !== -1 ? 1 : 0
+    const comun = words.map(w => {
+        let n = 0
+        for (let i = 0; i < skills.length; i++)
+            if (where(i, w) > 0)
+                n++
+        return n >= 3
+    })
     const out = skills.map((s, i) => {
         let score = 0
         for (let k = 0; k < words.length; k++) {
-            const donde = _where(s, words[k])
+            const donde = where(i, words[k])
             if (donde === 0)
                 continue
             // Una palabra POCO común en el NOMBRE es la señal más fuerte que

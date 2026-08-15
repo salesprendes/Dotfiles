@@ -1,6 +1,6 @@
 ---
-name: Proxmox VE
-description: Administrar y diagnosticar un Proxmox por SSH: VMs con qm, contenedores LXC con pct, almacenamiento, copias vzdump, clúster y quórum, y las averías típicas (VM bloqueada, interfaz caída, nodo en gris, /etc/pve de solo lectura). Úsala si se habla de Proxmox, PVE, un hipervisor, una VM, un contenedor o un nodo.
+name: "Proxmox VE"
+description: "Administrar y diagnosticar un Proxmox por SSH: VMs con qm, contenedores LXC con pct, almacenamiento, copias vzdump, clúster y quórum, y las averías típicas (VM bloqueada, interfaz caída, nodo en gris, /etc/pve de solo lectura). Úsala si se habla de Proxmox, PVE, un hipervisor, una VM, un contenedor o un nodo."
 ---
 
 # Proxmox VE
@@ -71,6 +71,41 @@ nombra la causa — un volumen que no existe, un almacenamiento inactivo o
 lleno, memoria insuficiente. `qm config <id>` dice qué discos referencia y
 `pvesm status` si ese almacenamiento está activo.
 
+**VM en pausa con estado «io-error».** El almacenamiento de debajo no
+acepta escrituras: thin pool lleno o un NFS caído. `lvs` y `pvesm status`
+señalan al culpable. Se libera espacio y `qm resume <id>` — reiniciarla
+sin arreglar el almacenamiento la devuelve al mismo sitio en minutos.
+
+**«El nodo se reinició solo».** Si hay HA configurado, un nodo con
+recursos HA que pierde el quórum se autorreinicia por watchdog en cosa de
+un minuto — es el fencing, y es por diseño. El journal justo anterior al
+reinicio y `ha-manager status` lo confirman. Corolario: con HA, el gestor
+puede rearrancar una VM que acabas de parar con `qm stop` — su estado se
+gobierna con `ha-manager set vm:<id> --state stopped`.
+
+**El nodo perdió la red tras actualizar.** Un kernel nuevo o un cambio de
+hardware pueden renombrar las interfaces (enp3s0 pasa a enp4s0) y el
+puente de `/etc/network/interfaces` sigue apuntando al nombre viejo. Se ve
+comparando `ip -br link` con ese archivo, se corrige el nombre y se aplica
+con `ifreload -a` sin reiniciar el nodo.
+
+**Copia colgada y la VM congelada con ella.** vzdump con guest agent hace
+fsfreeze dentro del invitado antes del snapshot, y a veces algo ahí dentro
+(una base de datos, un NFS interno) no suelta. La VM entera queda helada
+hasta el timeout. El task log de la copia lo cuenta: la solución va por el
+invitado, no por repetir la copia.
+
+**Discos huérfanos.** Tras una migración o una restauración fallida quedan
+volúmenes que ninguna configuración referencia. `qm rescan --vmid <id>`
+los engancha a la configuración como `unusedX` y desde ahí se borran
+sabiendo qué son — nunca borrando a ojo en el almacenamiento.
+
+**Contenedor que no arranca y no dice por qué.** `pct start <id> --debug`
+en versiones recientes, o `lxc-start -n <id> -F` para verlo en primer
+plano. Un clásico: restaurar la copia de un contenedor privilegiado como
+no privilegiado (o al revés) descoloca los UID y todo el sistema de
+archivos aparece como «permission denied».
+
 **«Falta» RAM y hay ZFS.** El ARC de ZFS usa hasta la mitad de la RAM por
 diseño y la suelta cuando hay presión. No es una fuga: `arc_summary` lo
 enseña. Solo si de verdad estorba se limita con `zfs_arc_max` en
@@ -112,6 +147,12 @@ invitado la tiene habilitada. Con el guest agent instalado,
   crecer la partición DENTRO del invitado — son dos pasos y la gente olvida
   el segundo). Encoger no existe como operación segura: eso es copia,
   recrear y restaurar.
+- **`qm destroy` borra la VM y sus discos**, y con `--purge` también sus
+  referencias en trabajos de copia y replicación. No hay papelera.
+- **`local` y `local-lvm` no son intercambiables**: `local` es un
+  directorio en la raíz del nodo (ahí caen ISOs y copias) y `local-lvm`
+  son volúmenes. Llenar `local` llena la raíz del sistema mientras la
+  interfaz jura que en `local-lvm` sobra sitio.
 - **Actualizar:** nunca `apt upgrade` a secas — Proxmox exige
   `full-upgrade`, y un upgrade parcial puede dejar el nodo cojo. Sin
   suscripción, el repositorio enterprise devuelve 401: se cambia al
@@ -121,12 +162,21 @@ invitado la tiene habilitada. Con el guest agent instalado,
   latencia baja y red estable. Y jamás reinicies varios nodos a la vez sin
   haber contado los votos del quórum.
 
+## Comprobar que quedó arreglado
+
+`qm status <id>` en running es lo mínimo, no la prueba. Con guest agent,
+`qm agent <id> ping` confirma que el invitado vive y
+`qm guest cmd <id> network-get-interfaces` que tiene red. Si dentro corre
+un servicio, la prueba de verdad es desde fuera (`fetch_url` o el puerto).
+Tras liberar disco, `pvesm status` y `lvs` deben enseñar el margen
+recuperado, no solo «ya no da error».
+
 ## Lo que va en propose_plan
 
-Parar una VM en uso, `qm unlock`, `pvecm expected 1`, borrar snapshots o
-copias, el `full-upgrade` del nodo y cualquier operación de clúster. Un
-hipervisor multiplica el daño: debajo de cada orden hay N máquinas de otra
-gente.
+Parar una VM en uso, `qm unlock`, `qm destroy`, `pvecm expected 1`, borrar
+snapshots o copias, el `full-upgrade` del nodo y cualquier operación de
+clúster o de HA. Un hipervisor multiplica el daño: debajo de cada orden
+hay N máquinas de otra gente.
 
 Si el Proxmox del usuario tiene una particularidad (versión, un
 almacenamiento con nombre raro, un nodo sin quórum crónico), guárdala con

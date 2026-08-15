@@ -1,6 +1,6 @@
 ---
-name: Quickshell y QML
-description: Cómo trabajar en la configuración de Quickshell del usuario (~/.config/quickshell) sin romperla: cómo verificar un cambio, y las trampas de QML que ya han costado un fallo real aquí. Úsala antes de editar cualquier .qml o .js de este shell.
+name: "Quickshell y QML"
+description: "Cómo trabajar en la configuración de Quickshell del usuario (~/.config/quickshell) sin romperla: cómo verificar un cambio, y las trampas de QML que ya han costado un fallo real aquí. Úsala antes de editar cualquier .qml o .js de este shell."
 ---
 
 # Quickshell y QML
@@ -39,6 +39,9 @@ verifica siempre.
   declara con `required property`.
 - Los `Process` son la forma de hablar con el sistema: `SplitParser` para
   leer línea a línea (streaming) y `StdioCollector` para la salida entera.
+- **Dos `Component.onCompleted` en el mismo objeto** dan
+  `Property value set multiple times` y tumban la carga del archivo entero.
+  Las inicializaciones nuevas van DENTRO del que ya existe.
 - **El watcher de recarga solo mira `.qml` y `.js`**: editar un `SKILL.md`
   o un `.json` no recarga nada, y `touch` a secas tampoco (vigila
   contenido, no fechas). Para probar una recarga, cambia contenido real.
@@ -50,6 +53,47 @@ verifica siempre.
 - Para animar apariciones, la casa ya tiene el patrón: un escalar 0→1 con
   `Behavior` y la geometría derivada de él (ver `ExpandableDetail` y
   `Theme.revealOpacity`) — no se apilan `visible` + animaciones sueltas.
+
+## Trampas de QML en general (muerden en cualquier proyecto)
+
+- **Una asignación imperativa MATA el binding para siempre.** `ancho = 200`
+  en un manejador destruye el `ancho: otro.ancho` declarativo, y la
+  propiedad deja de seguir a su fuente sin aviso ninguno. Síntoma: «esto
+  se actualizaba solo y dejó de hacerlo después de X». Diagnóstico: buscar
+  asignaciones `=` a esa propiedad en los manejadores. Arreglo: derivar de
+  una propiedad de estado (`ancho: abierto ? 200 : 80`) y cambiar SOLO el
+  estado, o un elemento `Binding {}` explícito.
+- **`Binding loop detected for property`** en `qs log`: A depende de B y B
+  de A, casi siempre con alturas (el contenedor mide a sus hijos y un hijo
+  se mide contra el contenedor). La regla que lo corta: un componente
+  define su `implicitHeight`/`implicitWidth` (lo que MIDE su contenido) y
+  quien lo coloca decide `height`/`width`. Mezclar los dos planos es el
+  origen de casi todos los bucles.
+- **`property var` no notifica cambios internos**: `lista.push(x)` o
+  `obj.n++` no dispara ningún binding. Se reasigna entero:
+  `lista = lista.concat([x])`. (Pariente de la trampa del ListModel de
+  arriba: el estado compartido cambia por reemplazo, no por mutación.)
+- **`Loader`**: mientras `active` es false o con `asynchronous: true` a
+  medio cargar, `item` es null — todo acceso lleva guarda
+  (`loader.item?.algo`) o va en `onLoaded`. Para pasar valores iniciales,
+  `setSource("Cosa.qml", { valor: 3 })` evita el parpadeo de crear con
+  valores por defecto y corregir un tick después.
+- **Los manejadores `onXChanged` saltan ya durante la construcción**, con
+  medio árbol aún sin existir: guarda de null en la primera línea.
+- **Dentro de un Layout mandan las `Layout.*`**: anclar un hijo de
+  `ColumnLayout` con `anchors` pelea con el layout (aviso en el log y
+  geometría errática). `Layout.fillWidth` y compañía, o fuera del layout.
+- **Señales que llegan tarde**: un `Process` puede terminar cuando el panel
+  que lo lanzó ya no existe, y su manejador toca objetos muertos
+  (`TypeError: Cannot read property ... of null` en el log). Los `Process`
+  que sobreviven a la vista van en un servicio/Singleton, no en el panel.
+- En delegados de `Repeater`/`ListView` los datos del modelo SÍ se
+  declaran con `required property` — justo al revés que en `Instantiator`
+  (arriba). Copiar un delegado de un contexto al otro sin revisar esto
+  acaba en `modelData` indefinido.
+- **`console.log(objeto)` enseña `QObject(0x…)`**, no el contenido. Para
+  datos planos, `JSON.stringify(obj)`. Para un objeto QML, imprimir las
+  propiedades sueltas que interesen.
 
 ## Estilo de la casa
 

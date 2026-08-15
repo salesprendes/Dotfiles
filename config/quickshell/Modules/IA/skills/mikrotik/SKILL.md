@@ -1,6 +1,6 @@
 ---
-name: MikroTik RouterOS
-description: Operar routers y switches MikroTik (RouterOS) por SSH o WinBox: safe mode, firewall, NAT, bridge con VLANs, colas, copias con /export y las trampas que te dejan fuera del equipo. Úsala si se habla de MikroTik, RouterOS, WinBox, un hAP, un CRS o un CCR.
+name: "MikroTik RouterOS"
+description: "Operar routers y switches MikroTik (RouterOS) por SSH o WinBox: safe mode, firewall, NAT, bridge con VLANs, colas, copias con /export y las trampas que te dejan fuera del equipo. Úsala si se habla de MikroTik, RouterOS, WinBox, un hAP, un CRS o un CCR."
 ---
 
 # MikroTik RouterOS
@@ -21,6 +21,11 @@ confirmando con otro `Ctrl-X` (los cambios se quedan) o descartando con
 Todo cambio remoto de firewall, direcciones, bridge o VLANs se hace DENTRO
 de Safe Mode, sin excepción. Es el único fabricante que regala esta red de
 seguridad: no usarla es elegir el riesgo.
+
+Segunda red, menos conocida: `/system history print` lista los últimos
+cambios de configuración con quién y cuándo, y `/undo` deshace el más
+reciente (repetible). No sustituye al Safe Mode, pero responde al «¿qué
+acabo de tocar?» y al «¿qué tocó el compañero ayer?».
 
 ## Leer el equipo
 
@@ -51,6 +56,9 @@ Herramientas de diagnóstico propias que conviene conocer:
 - `/ip neighbor print` — otros MikroTik y equipos con descubrimiento
   visibles, con IP y MAC (así se encuentra el equipo mal configurado).
 - `/tool profile` — qué se come la CPU del router (¿el firewall? ¿colas?).
+- `/interface ethernet monitor ether1 once` — velocidad y dúplex
+  negociados de verdad, y `/interface ethernet print stats` los
+  contadores finos por puerto.
 
 ## Firewall: las dos cadenas que importan
 
@@ -70,6 +78,82 @@ NAT de salida típico: `/ip firewall nat` cadena `srcnat` acción
 `dstnat` + `dst-port` + `to-addresses`. Si un dstnat no funciona desde la
 propia LAN, es el clásico hairpin NAT: falta la regla de masquerade para
 el tráfico LAN→LAN.
+
+## Blindar la gestión
+
+Los servicios de administración se gobiernan en `/ip service`: telnet
+(23), ftp (21), www (80), ssh (22), www-ssl (443), api (8728), api-ssl
+(8729) y winbox (8291). En un equipo con la WAN a internet:
+
+```
+/ip service print
+/ip service disable telnet,ftp,www,api
+/ip service set winbox address=192.168.88.0/24
+/ip service set ssh address=192.168.88.0/24
+```
+
+Matiz documentado que importa: `address=` **no descarta el paquete a
+nivel de red**, solo niega el servicio — el drop de verdad sigue siendo
+cosa del firewall de input. Las dos capas juntas, no una u otra.
+
+## Averías con nombre y apellidos
+
+**Las colas no limitan nada**: hay simple queues y el tráfico las ignora.
+Casi siempre es FastTrack: la regla `action=fasttrack-connection` de la
+configuración por defecto salta el resto del firewall Y las colas para
+las conexiones marcadas. Se ve en los contadores (la regla fasttrack
+engorda y las colas no se mueven). Para ese tráfico se elige: o colas o
+fasttrack, no ambos.
+
+**CPU alta y la WAN saturada de DNS**: `/ip dns` tiene
+`allow-remote-requests=yes` (necesario para servir DNS a la LAN) y el
+puerto 53 quedó abierto al mundo — el router hace de amplificador para
+terceros. `/tool torch` en la WAN lo enseña en segundos. El arreglo es
+tirar udp/53 y tcp/53 en input desde la WAN, no quitar la opción.
+
+**Pusiste la IP en el puerto y lo metiste al bridge**: al añadir ether2
+como puerto de un bridge, cualquier IP configurada EN ether2 deja de
+atender (el nivel 3 vive ahora en el bridge). Es una forma clásica de
+quedarse fuera: la IP de gestión se mueve al bridge ANTES de meter el
+puerto.
+
+**Bucle en la LAN**: todo lento y MACs bailando de puerto en
+`/interface bridge host print`. El bridge trae RSTP activado por defecto
+(`protocol-mode=rstp`) — si alguien lo deshabilitó, un latiguillo en
+bucle tumba la red entera.
+
+**La hora está mal tras cada corte de luz**: muchos RouterBOARD no
+llevan reloj con pila. Sin cliente NTP (`/system ntp client`), tras un
+reinicio los certificados fallan y los registros y programadores viven
+en otra fecha. Configurarlo es de lo primero en un equipo nuevo.
+
+**El log no cuenta nada del reinicio**: el registro por defecto vive en
+RAM y muere con el equipo. Para cazar reinicios o fallos nocturnos,
+mandar los temas importantes a disco: `/system logging add
+topics=critical action=disk`.
+
+**La red «se para» a horas punta con CPU normal**: tabla de conexiones
+llena (típico con mucho P2P o un escaneo). `/ip firewall connection print
+count-only` contra el máximo de `/ip firewall connection tracking` lo
+confirma — el remedio de fondo es cortar al causante (torch lo señala),
+no solo agrandar la tabla.
+
+## Vigilancia y automatismos
+
+- **Netwatch** vigila un host y reacciona al cambio de estado:
+  `/tool netwatch add host=1.1.1.1 interval=30s down-script=":log warning \"WAN caida\""`
+  (tipos icmp, tcp-conn, http-get y dns para vigilar servicios, no solo
+  ping). Es el detector de «se cayó la VPN o la WAN» que avisa él solo.
+- **Programador + correo**: con `/tool e-mail` configurado (servidor,
+  remitente), un script que haga `/export file=copia` y después
+  `/tool e-mail send` con `file=copia.rsc`, colgado de
+  `/system scheduler` a diario, es la copia de seguridad nocturna
+  oficial de la casa: el export sale del router cada noche sin que nadie
+  se acuerde.
+- **DDNS gratuito**: `/ip cloud set ddns-enabled=yes` y en
+  `/ip cloud print` aparece un nombre `xxxx.sn.mynetname.net` que sigue
+  a la IP pública del equipo (`force-update` para refrescarlo ya). Para
+  llegar a un router con IP dinámica sin contratar nada.
 
 ## Bridge y VLANs: donde caen los valientes
 
@@ -98,6 +182,12 @@ switch` son de v6 y no se mezclan con el método nuevo.
   la IP esté mal o no exista, desde la misma red física. Es lo que salva
   cuando el fallo es de IPs o VLANs. Neighbor discovery debe estar
   habilitado en esa interfaz (por eso no se deshabilita en la LAN).
+- **RoMON** (`/tool romon set enabled=yes secrets=<clave>`): red de
+  gestión propia por capa 2 entre MikroTik vecinos. Con el botón RoMON
+  de WinBox se entra a un equipo SIN IP alcanzable atravesando los
+  MikroTik intermedios — el salvavidas en redes con varios equipos y
+  VLANs rotas. Se habilita ANTES de necesitarlo, con secreto, o no
+  existe el día del incidente.
 - **Reset físico**: botón pulsado ANTES de enchufar y mantenido ~5 s hasta
   que el LED parpadee — configuración de fábrica (192.168.88.1, admin sin
   contraseña o la de la pegatina en equipos nuevos). Mantenerlo más tiempo
@@ -106,13 +196,26 @@ switch` son de v6 y no se mezclan con el método nuevo.
 ## Versiones y actualización
 
 `/system package update check-for-updates` y `install` — reinicia el
-equipo, así que es un cambio con plan y ventana. Tras actualizar el SO,
+equipo, así que es un cambio con plan y ventana. El canal se elige con
+`/system package update set channel=` y en producción se está en el
+conservador, no en testing. Tras actualizar el SO,
 el firmware de la placa va aparte: `/system routerboard upgrade` y OTRO
 reinicio. **v6 y v7 difieren de verdad** (v7 cambió el enrutado — tablas,
 BGP/OSPF con otra sintaxis — y consolidó las VLANs en el bridge): antes de
 recomendar comandos de rutas, `/system resource print` para saber en cuál
 estás. El salto v6→v7 en un equipo en producción no es una actualización
 más: es un plan.
+
+## Verificar tras cada cambio
+
+- Firewall tocado: los contadores de la regla nueva suben con tráfico de
+  prueba y tu propia sesión sigue viva — ANTES de confirmar el Safe Mode.
+- VLANs de bridge: desde un puerto de cada VLAN se coge IP y se alcanza
+  su puerta de enlace.
+- NAT nuevo: probar desde FUERA (datos móviles), no solo desde la LAN —
+  el hairpin engaña.
+- Siempre: `/log print` sin quejas nuevas y `/tool torch` con la pinta de
+  tráfico esperada.
 
 ## Reglas
 

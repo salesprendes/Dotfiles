@@ -1,6 +1,6 @@
 ---
-name: Huawei VRP
-description: Operar switches y routers Huawei (VRP: series S, CE, AR) por SSH o consola: comandos display, system-view, VLANs con port trunk, eth-trunk, guardar con save, y el commit de los CloudEngine. Úsala si se habla de un Huawei, VRP, un switch S5700 o similar, un CloudEngine o comandos display.
+name: "Huawei VRP"
+description: "Operar switches y routers Huawei (VRP: series S, CE, AR) por SSH o consola: comandos display, system-view, VLANs con port trunk, eth-trunk, guardar con save, y el commit de los CloudEngine. Úsala si se habla de un Huawei, VRP, un switch S5700 o similar, un CloudEngine o comandos display."
 ---
 
 # Huawei VRP
@@ -33,9 +33,11 @@ Cisco. La paginación se quita con `screen-length 0 temporary` (el
 ```
 display version                     ← modelo, VRP, uptime
 display device                      ← tarjetas, fuentes, estado del hardware
+display cpu-usage                   ← CPU (y display memory-usage la RAM)
 display ip interface brief
 display interface brief             ← puertos: estado, uso, errores
 display vlan                        ← VLANs y qué puertos tiene cada una
+display port vlan                   ← tipo de puerto y VLANs, en una tabla
 display mac-address                 ← dónde está cada MAC
 display lldp neighbor brief         ← qué hay enchufado a cada puerto
 display stp brief
@@ -46,7 +48,37 @@ display alarm active                ← alarmas activas (en CE)
 
 En `display interface brief` la columna de errores y el `InUti/OutUti`
 (uso del puerto) responden rápido a «va lento»: un puerto al 99 % o con
-errores subiendo es el diagnóstico.
+errores subiendo es el diagnóstico. `ping -c 5 <ip>` y `tracert` existen
+tal cual dentro del propio equipo.
+
+## Averías con nombre y apellidos
+
+**Puerto con errores**: en `display interface GigabitEthernet0/0/12`,
+`CRC` e `input errors` subiendo son cable o SFP. Tras cambiarlo, `reset
+counters interface GigabitEthernet0/0/12` pone el marcador a cero y se
+comprueba que no vuelve a moverse.
+
+**Bucle / MAC flapping**: toda la red lenta y en `display logbuffer`
+alarmas de MAC flapping entre dos puertos — esos dos puertos son los
+extremos del bucle. Se corta con `shutdown` en uno y se investiga qué se
+enchufó. Vacuna: `stp edged-port enable` en cada puerto de acceso y
+`stp bpdu-protection` en global, que apaga el puerto de acceso al que
+llegue un BPDU (el bpduguard de Huawei).
+
+**Puerto en error-down**: es el err-disabled de Huawei (lo provocan
+bpdu-protection, tormentas y similares). Se rearma a mano con `shutdown`
++ `undo shutdown` en la interfaz, o solo si está configurado el rearme:
+`error-down auto-recovery cause bpdu-protection interval 300` en global.
+Rearmar sin arreglar la causa es un bucle, aquí y en todas las marcas.
+
+**Nada de DHCP funciona**: relay, servidor o snooping recién puestos y
+muertos. Casi todo lo DHCP de VRP exige antes el interruptor global
+`dhcp enable` — sin él, la configuración se acepta y no hace nada. Es el
+clásico «lo tengo igual que el manual y no va».
+
+**La Vlanif está down con la VLAN bien creada**: una interfaz Vlanif
+solo sube si al menos un puerto físico de esa VLAN tiene enlace. No es
+avería, es el diseño — el diagnóstico sigue por los puertos.
 
 ## VLANs y trunks
 
@@ -117,6 +149,18 @@ En un S o AR el paracaídas es el de Cisco pero con sus nombres: programar
 un reinicio con `schedule reboot delay 10` ANTES del cambio arriesgado
 (sin `save`, el reinicio vuelve a lo guardado), verificar que sigues
 dentro, y cancelarlo con `undo schedule reboot`.
+
+## Verificar tras cada cambio
+
+- `display this` en el contexto tocado: lo que hay es lo que se quiso
+  escribir, sin restos.
+- Trunk o acceso: `display port vlan` con el tipo y las VLANs esperadas,
+  y ping a la puerta de enlace de la VLAN afectada desde un equipo de
+  ella.
+- Interfaz: `display interface brief` con el puerto up y los errores
+  quietos.
+- En CE: nada pendiente en la candidata tras el commit.
+- Solo entonces `save` (o se deja vencer el `commit trial` confirmando).
 
 ## Detalles del mundo real
 

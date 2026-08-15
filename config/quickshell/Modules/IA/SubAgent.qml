@@ -1,7 +1,7 @@
 import QtQuick
-import Quickshell
 import Quickshell.Io
 import qs.Config
+import "TextUtils.js" as TU
 
 // Un SUBAGENTE (el AgentTool de Claude Code, en pequeño): una conversación
 // aparte con el mismo modelo, que investiga por su cuenta y devuelve un
@@ -79,12 +79,9 @@ QtObject {
         // Última ronda: sin herramientas, solo queda redactar.
         if (withTools && sub.rounds < sub.maxRounds)
             req.tools = sub.roToolDefs
-        let cmd = ["curl", "-sS", "--max-time", "120",
-                   "-X", "POST", AiService.endpoint,
-                   "-H", "Content-Type: application/json"]
-        cmd = cmd.concat(AiService._authArgs()).concat(AiService._netArgs())
-        cmd = cmd.concat(["-d", JSON.stringify(req)])
-        curl.command = cmd
+        // El mismo constructor de curl que el agente principal: credenciales,
+        // tiempos y opciones de red idénticos por construcción.
+        curl.command = AiService.chatCommand(req, 120)
         curl.running = true
     }
 
@@ -141,8 +138,8 @@ QtObject {
                 return
             }
             // Sin herramientas: es el informe. El <think> de Qwen y compañía
-            // no pinta nada ahí, y quien sabe quitarlo es el harness.
-            const report = AiService.splitThink(String(m.content || "")).text.trim()
+            // no pinta nada ahí.
+            const report = TU.splitThink(String(m.content || "")).text.trim()
             sub.state = "done"
             sub.finished(report !== "" ? report : "(el subagente no redactó informe)")
         }
@@ -155,9 +152,10 @@ QtObject {
             return
         }
         const tc = sub._calls[sub._callIdx]
-        // Los argumentos pasan por el reparador del harness: un modelo local
-        // manda JSON roto a menudo, y aquí no hay nadie mirando para corregir.
-        const args = AiService.repairJson(tc["function"].arguments) || ({})
+        // Los argumentos pasan por el mismo reparador que usa el harness: un
+        // modelo local manda JSON roto a menudo, y aquí nadie mira para
+        // corregir.
+        const args = TU.repairJson(tc["function"].arguments) || ({})
         // El constructor es el MISMO que usa el agente principal: una sola
         // jaula que auditar. Si devuelve null, la herramienta no es de solo
         // lectura y un subagente no la toca.
