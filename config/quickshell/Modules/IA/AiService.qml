@@ -451,6 +451,26 @@ Singleton {
     // es volver a intentarlo sin cambiar de conversación.
     readonly property string searchKey: keys.searchKey
 
+    // Cómo se llama la fuente preferida, y si esa acepta clave. Lo consultan los
+    // ajustes: un campo de clave rotulado "Brave Search" cuando el elegido es
+    // Mojeek no confunde un poco, confunde del todo.
+    readonly property string searchBackendLabel: WS.labelOf(Settings.aiSearchBackend)
+    readonly property bool searchTakesKey:
+        ["brave", "tavily", "exa", "kagi"].indexOf(Settings.aiSearchBackend) !== -1
+
+    // A cuántas voces se pregunta. Con la fusión por consenso, "configurado" ya
+    // no es un sí o un no: siempre hay al menos DuckDuckGo, y cada fuente que
+    // añadas mejora la ordenación (lo que coincide entre varias sube).
+    readonly property var searchSources: {
+        // Se nombran las dependencias para que la lista se recalcule sola.
+        const _ = [Settings.aiSearchBackend, keys.searchKey]
+        return WS.sources(({ url: Settings.aiSearchUrl !== "" ? Settings.aiSearchUrl
+                                                              : searchLocal,
+                             backend: Settings.aiSearchBackend,
+                             key: keys.searchKey }),
+                          TU.normalizeSearchBase)
+    }
+
     // El SearXNG de esta máquina, si lo hay. "" = ninguno. Se comprueba al
     // arrancar y cada vez que alguien abre los ajustes de búsqueda: levantar uno
     // no debería obligar a reiniciar el shell para que se entere.
@@ -854,7 +874,14 @@ Singleton {
                  + "máximo). Espera a que alguno termine."
         const role = TP.SUB_ROLES.indexOf(String(opts.role || "")) !== -1
                      ? String(opts.role) : "research"
-        const mr = Math.max(1, Math.min(12, parseInt(opts.max_rounds) || 8))
+        // El tope por defecto depende del papel. Rastrear en internet se agota
+        // pronto: lo que se va a encontrar aparece en las tres primeras rondas,
+        // y a partir de ahí el modelo reformula la misma consulta cada vez con
+        // más contexto encima. Revisar código o diagnosticar una avería sí
+        // avanza ronda a ronda, y ahí ocho siguen teniendo sentido.
+        const porDefecto = role === "research" ? 5 : 8
+        const mr = Math.max(1, Math.min(12,
+                                        parseInt(opts.max_rounds) || porDefecto))
         // El esquema puede llegar como objeto o como texto: un modelo local
         // manda cualquiera de los dos, y rechazar el encargo por eso sería
         // absurdo.
@@ -1063,6 +1090,10 @@ Singleton {
         // pregunta anterior condicionara la siguiente sería castigar al usuario
         // por un error del modelo que ya quedó atrás.
         tools.fetchSecos = 0
+        // Y buscador nuevo, por el mismo motivo: la avería de la pregunta
+        // anterior pudo ser una cuarentena de quince minutos, no una falta de
+        // configuración. Reintentar cuesta una décima de segundo.
+        tools.searchBroken = false
         chat.retries = 0
         // Turno nuevo: el supervisor recupera su presupuesto de frenazos y
         // olvida las opiniones del anterior, y la nota del consejero caduca —

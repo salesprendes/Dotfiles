@@ -714,12 +714,9 @@ Rectangle {
             Fold {
                 glyph: "󰖟"
                 title: I18n.tr("Web search")
-                summary: root.searchUnset ? I18n.tr("not set up")
-                       : Settings.aiSearchBackend === "brave" ? "Brave"
-                       : Settings.aiSearchBackend === "tavily" ? "Tavily"
-                       : AiService.searchLocal !== "" && Settings.aiSearchUrl === ""
-                         ? I18n.tr("SearXNG here") : "SearXNG"
-                warn: root.searchUnset
+                // Ya no es "configurado o no": siempre hay al menos DuckDuckGo,
+                // así que lo que importa es a CUÁNTAS voces se pregunta.
+                summary: AiService.searchSources.join(" + ")
                 sourceComponent: Component {
                     ColumnLayout {
                         spacing: Theme.space8
@@ -728,20 +725,31 @@ Rectangle {
                         // vengas aquí a comprobarlo.
                         Component.onCompleted: AiService.probeSearchLocal()
 
-                        SegRow {
+                        Hint {
+                            Layout.leftMargin: 0
+                            text: I18n.tr("Asks every source at once and merges the answers: what several agree on rises to the top. Three need nothing at all and are always asked — DuckDuckGo, Brave and Mojeek, with three different indexes — so there is consensus out of the box.")
+                        }
+
+                        DropdownRow {
                             glyph: "󰍉"
-                            label: I18n.tr("Search with")
-                            options: [ { text: "SearXNG", value: "searxng" },
-                                       { text: "Brave", value: "brave" },
-                                       { text: "Tavily", value: "tavily" } ]
+                            label: I18n.tr("Preferred source")
+                            options: [ { text: "DuckDuckGo", value: "ddg" },
+                                       { text: "Brave Search", value: "brave" },
+                                       { text: "Mojeek", value: "mojeek" },
+                                       { text: "SearXNG", value: "searxng" },
+                                       { text: I18n.tr("Tavily (needs a key)"), value: "tavily" },
+                                       { text: I18n.tr("Exa (needs a key)"), value: "exa" },
+                                       { text: I18n.tr("Kagi (needs a key)"), value: "kagi" } ]
                             current: Settings.aiSearchBackend
                             onPicked: (v) => Settings.aiSearchBackend = v
                         }
+                        Hint {
+                            Layout.leftMargin: 0
+                            text: I18n.tr("Only breaks ties: with the same number of sources agreeing, this one wins. The one with a key, if you set one, is this one.")
+                        }
 
-                        // El elegido falla → se prueban los demás que estén
-                        // configurados. Por eso la dirección y la clave se
-                        // enseñan las dos siempre: tener las dos puestas es
-                        // mejor que tener una.
+                        // La dirección y la clave se enseñan siempre: no
+                        // compiten entre sí, se suman.
                         TextField {
                             label: I18n.tr("Your SearXNG")
                             leftIcon: "󰇧"
@@ -758,32 +766,38 @@ Rectangle {
                                 : I18n.tr("Needs formats: [json] in its settings.yml. One running on localhost:8080 is found on its own.")
                         }
 
+                        // La clave es UNA y es la de la fuente preferida. Por
+                        // eso el campo desaparece cuando la elegida no lleva
+                        // clave: enseñar una casilla que no va a ningún sitio es
+                        // peor que no enseñarla.
                         TextField {
-                            label: Settings.aiSearchBackend === "tavily"
-                                ? I18n.tr("Tavily key") : I18n.tr("Brave Search key")
+                            visible: AiService.searchTakesKey
+                            label: I18n.tr("%1 key").arg(AiService.searchBackendLabel)
                             leftIcon: "󰌆"
                             password: true
-                            placeholder: Settings.aiSearchBackend === "tavily"
-                                ? "tvly-…" : "BSA…"
+                            placeholder: Settings.aiSearchBackend === "tavily" ? "tvly-…"
+                                       : Settings.aiSearchBackend === "brave" ? "BSA…"
+                                       : ""
                             value: AiService.searchKey
                             onEdited: (t) => AiService.setKey("search", t)
                         }
                         Hint {
                             Layout.leftMargin: 0
-                            text: AiService.haveKeyring
-                                ? I18n.tr("Free tier is enough for everyday use. Stored in the system keyring.")
-                                : I18n.tr("Free tier is enough for everyday use.")
+                            visible: AiService.searchTakesKey
+                            text: Settings.aiSearchBackend === "brave"
+                                ? I18n.tr("Optional: without a key Brave is read from its public page, which already works. With one it answers through its API, with dates and no markup surprises.")
+                                : AiService.haveKeyring
+                                  ? I18n.tr("Free tier is enough for everyday use. Stored in the system keyring.")
+                                  : I18n.tr("Free tier is enough for everyday use.")
                         }
 
                         // El estado, dicho sin rodeos: es la diferencia entre
                         // "no encuentro nada" y "no puedo buscar".
                         Hint {
                             Layout.leftMargin: 0
-                            visible: root.searchUnset || AiService.searchBroken
+                            visible: AiService.searchBroken
                             color: Theme.red
-                            text: root.searchUnset
-                                ? I18n.tr("Nothing set up: the assistant cannot search the web. Public instances no longer work without a browser.")
-                                : I18n.tr("The last search failed. Fix it above and it will try again.")
+                            text: I18n.tr("The last search failed in every source. Change something here and it will try again.")
                         }
                     }
                 }
@@ -1016,14 +1030,6 @@ Rectangle {
                 n++
         return n
     }
-
-    // ¿El asistente puede buscar en la web? Es "no" cuando no hay ni instancia
-    // escrita, ni una en esta máquina, ni clave de API. Lo enseña la propia
-    // línea del grupo plegado, porque es un ajuste que hasta que no falla no se
-    // echa de menos — y cuando falla, se confunde con que el modelo va lento.
-    readonly property bool searchUnset:
-        Settings.aiSearchUrl === "" && AiService.searchLocal === ""
-        && AiService.searchKey === ""
 
     function approvalLabel(m) {
         return m === "careful" ? I18n.tr("Careful")

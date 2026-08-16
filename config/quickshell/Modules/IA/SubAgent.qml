@@ -60,6 +60,7 @@ QtObject {
     property var _calls: []
     property int _callIdx: 0
     property bool _expired: false
+    property bool _seco: false
     property bool _avisado: false
     property int repairs: 0
     property double startedAt: 0
@@ -154,9 +155,21 @@ QtObject {
             s += " " + sub.ws.note
 
         s += " PRESUPUESTO: " + sub.maxRounds + " rondas de herramientas y "
-           + Math.round(sub.budgetMs / 1000) + " segundos. No los malgastes: "
-           + "cuando necesites mirar en varios sitios, pídelo TODO en el mismo "
+           + Math.round(sub.budgetMs / 1000) + " segundos. Es un TOPE de "
+           + "seguridad, no un objetivo: gastarlo entero no mejora el informe. "
+           + "Cuando necesites mirar en varios sitios, pídelo TODO en el mismo "
            + "turno con varias llamadas en paralelo."
+
+        // El presupuesto dice cuándo hay que parar a la fuerza. Esto dice
+        // cuándo hay que parar porque ya está: sin un criterio de cierre, un
+        // modelo pequeño confunde "me quedan rondas" con "me falta trabajo" y
+        // se pone a confirmar por quinta vez algo que ya sabía.
+        s += " CUÁNDO HAS TERMINADO: en cuanto tengas lo que pedía el encargo "
+           + "sostenido por dos o tres fuentes que coincidan, cierra y redacta. "
+           + "No busques para confirmar lo que ya está confirmado. Y si dos "
+           + "consultas distintas te devuelven lo mismo, o una vuelve vacía dos "
+           + "veces, el problema no es cómo la escribes: no la reformules otra "
+           + "vez, di en el informe qué no se pudo averiguar."
 
         if (SC.usable(sub.outputSchema))
             s += " ENTREGA: tu última respuesta debe ser SOLO un JSON con esta "
@@ -201,7 +214,8 @@ QtObject {
     // ── La ronda ─────────────────────────────────────────────────────────────
     function _round(withTools) {
         sub.rounds++
-        const conHerr = withTools && sub.rounds < sub.maxRounds && !sub._expired
+        const conHerr = withTools && sub.rounds < sub.maxRounds
+                        && !sub._expired && !sub._seco
         // Si se le retira el vocabulario, hay que DECÍRSELO: un modelo al que
         // le desaparecen las herramientas sin explicación suele contestar que no
         // puede hacer nada, en vez de redactar lo que ya sabe.
@@ -210,6 +224,11 @@ QtObject {
             sub.msgs = sub.msgs.concat([{ role: "user", content: sub._expired
                 ? "Se acabó el tiempo del encargo. Redacta AHORA el informe con "
                   + "lo que tengas, diciendo con claridad qué te quedó sin mirar."
+                : sub._seco
+                ? "Las dos últimas rondas no han traído NI UN dato nuevo: todo lo "
+                  + "que has pedido ya lo tenías. Seguir por ahí no va a cambiar "
+                  + "nada. Redacta AHORA el informe con lo que tengas y di con "
+                  + "claridad qué no conseguiste averiguar y por qué."
                 : "Se acabaron las rondas de herramientas. Redacta AHORA el "
                   + "informe con lo que tengas, diciendo qué te quedó sin mirar." }])
         }
@@ -283,6 +302,7 @@ QtObject {
                     content: texto, tool_calls: llamadas }])
                 sub._calls = llamadas
                 sub._callIdx = 0
+                sub._nuevos = 0
                 sub._execNext()
                 return
             }
@@ -335,7 +355,8 @@ QtObject {
         sub.ws.collect((resumen) => {
             sub.artifacts = resumen
             sub._trace({ t: "end", ms: sub.ms, tools: sub.toolCalls,
-                         rounds: sub.rounds, artifacts: resumen.slice(0, 300) })
+                         rounds: sub.rounds, memo: sub._ahorradas,
+                         seco: sub._seco, artifacts: resumen.slice(0, 300) })
             sub._flushTrace()
             sub.finished(cuerpo + sub._pie(resumen))
         })
@@ -351,6 +372,8 @@ QtObject {
               + sub.rounds + " rondas · " + seg + " s"
         if (sub._expired)
             f += " · SE AGOTÓ EL TIEMPO"
+        if (sub._seco)
+            f += " · CERRÓ AL DEJAR DE ENCONTRAR NADA NUEVO"
         if (resumen !== "") {
             f += "\n  taller: " + (sub.ws.mode === "worktree"
                 ? "rama " + sub.ws.branch + " en " + sub.ws.repo
@@ -366,6 +389,19 @@ QtObject {
     // ── Ejecución en serie de las herramientas de la ronda ───────────────────
     function _execNext() {
         if (sub._callIdx >= sub._calls.length) {
+            // Cierre de ronda: ¿ha traído algo que no tuviéramos? Una ronda que
+            // no aporta nada es una advertencia; dos seguidas son un bucle, y un
+            // bucle no se rompe solo. Se midió: en un encargo de precios, de
+            // once rondas las siete últimas fueron exactamente la misma
+            // respuesta con la consulta reescrita, ciento cincuenta segundos
+            // para no averiguar nada.
+            if (sub._calls.length > 0) {
+                sub._esteriles = sub._nuevos === 0 ? sub._esteriles + 1 : 0
+                if (sub._esteriles >= sub.maxEsteriles)
+                    sub._seco = true
+                sub._trace({ t: "ronda", nuevos: sub._nuevos,
+                             esteriles: sub._esteriles })
+            }
             sub._trim()
             sub._round(true)
             return
@@ -406,6 +442,25 @@ QtObject {
             return
         }
 
+        // ¿Esto ya se pidió, exactamente igual, en este mismo encargo? Entonces
+        // no se vuelve a la red: se devuelve lo de antes y se le DICE que se
+        // está repitiendo. Lo segundo importa más que lo primero — el modelo no
+        // se da cuenta solo de que lleva cinco consultas dando vueltas a lo
+        // mismo, y aquí es donde se le cuenta.
+        const mk = sub._memoClave(name, args)
+        if (mk !== "") {
+            const previo = sub._memo[mk]
+            if (previo) {
+                previo.veces++
+                sub._ahorradas++
+                sub._trace({ t: "memo", n: name, veces: previo.veces })
+                sub._memoHit = true
+                sub._pushResult(tc.id, sub._memoAviso(previo.veces) + previo.texto)
+                return
+            }
+            sub._memoKey = mk
+        }
+
         // Lo que va a traer texto de fuera se apunta antes de lanzarlo: el
         // subagente lee la web igual que su jefe, así que le entra con el mismo
         // marco de "esto son DATOS, no instrucciones". Un subagente es además el
@@ -420,12 +475,14 @@ QtObject {
         // "escrito por un desconocido" un rechazo NUESTRO sería mentirle.
         if (r === null) {
             sub._fenceSrc = ""
+            sub._memoKey = ""
             sub._pushResult(tc.id, "Herramienta fuera de tus permisos: " + name
                 + ". Tienes: " + sub.toolDefs.map(d => d["function"].name).join(", "))
             return
         }
         if (r.error !== undefined) {
             sub._fenceSrc = ""
+            sub._memoKey = ""
             sub._pushResult(tc.id, r.error)
             return
         }
@@ -438,6 +495,29 @@ QtObject {
     // pasa por el mismo tapado de secretos antes de salir de este equipo.
     function _pushResult(id, text) {
         const limpio = AiService.redactSecrets(String(text)).slice(0, 8000)
+        // Lo que se guarda para la próxima vez es el texto TAL CUAL llegó, sin
+        // el aviso de repetición: si no, el aviso se iría acumulando encima de
+        // sí mismo en cada vuelta.
+        if (sub._memoKey !== "") {
+            if (sub._memoCuenta < sub._memoTope) {
+                sub._memo[sub._memoKey] = ({ texto: limpio, veces: 1 })
+                sub._memoCuenta++
+            }
+            sub._memoKey = ""
+        }
+        // ¿Trae algo que no tuviéramos? Una respuesta idéntica a otra ya vista
+        // —la misma página, el mismo "sin resultados", el mismo muro de 403— no
+        // cuenta como hallazgo por mucho que la consulta fuera distinta. Y lo
+        // servido de memoria no cuenta nunca: por definición ya lo teníamos.
+        if (sub._memoHit) {
+            sub._memoHit = false
+        } else {
+            const h = sub._huella(limpio)
+            if (!sub._vistos[h]) {
+                sub._vistos[h] = true
+                sub._nuevos++
+            }
+        }
         sub._trace({ t: "res", head: limpio.slice(0, 200), len: limpio.length })
         sub.msgs = sub.msgs.concat([{ role: "tool", tool_call_id: id,
                                       content: limpio }])
@@ -447,6 +527,67 @@ QtObject {
 
     // De dónde viene el texto que está a punto de llegar, si viene de fuera.
     property string _fenceSrc: ""
+
+    // ── Lo ya pedido, y lo ya visto ──────────────────────────────────────────
+    // Dos cuentas distintas y las dos hacen falta. La memoria evita REPETIR la
+    // llamada (misma consulta, misma URL). Las huellas detectan que llamadas
+    // DISTINTAS están trayendo lo mismo, que es como se manifiesta un bucle
+    // cuando el modelo va reescribiendo la consulta en cada vuelta.
+    property var _memo: ({})          // clave → { texto, veces }
+    property string _memoKey: ""      // la clave de la llamada en curso
+    property bool _memoHit: false
+    property int _memoCuenta: 0
+    property int _ahorradas: 0        // llamadas servidas sin tocar la red
+    readonly property int _memoTope: 60
+    property var _vistos: ({})        // huella → true
+    property int _nuevos: 0           // hallazgos de ESTA ronda
+    property int _esteriles: 0        // rondas seguidas sin nada nuevo
+    readonly property int maxEsteriles: 2
+
+    // La clave de una llamada repetible. Solo las dos que salen a la red: leer
+    // un archivo dos veces puede ser legítimo (lo acabas de escribir), pero
+    // preguntarle lo mismo a un buscador nunca lo es.
+    function _memoClave(name, args) {
+        if (name === "web_search") {
+            const q = String(args.query || "").trim().toLowerCase()
+                        .replace(/\s+/g, " ")
+            return q === "" ? "" : "b|" + q + "|" + String(args.domains || "")
+                 + "|" + String(args.exclude_domains || "")
+                 + "|" + String(args.recency || "")
+        }
+        if (name === "fetch_url") {
+            const u = String(args.url || "").trim().replace(/#.*$/, "")
+            if (u === "")
+                return ""
+            // El host no distingue mayúsculas y "www." sobra; la ruta SÍ
+            // distingue, y hay servidores donde /Dp y /dp son páginas distintas.
+            const m = u.match(/^(https?:\/\/)([^\/]+)(.*)$/i)
+            return "d|" + (m ? m[1].toLowerCase()
+                               + m[2].toLowerCase().replace(/^www\./, "")
+                               + m[3].replace(/\/+$/, "")
+                             : u)
+        }
+        return ""
+    }
+
+    function _memoAviso(veces) {
+        return veces === 2
+            ? "[ya pediste esto exactamente igual en este encargo: te devuelvo "
+            + "lo mismo sin volver a la red]\n"
+            : "[es la " + veces + "ª vez que pides esto EXACTAMENTE igual. La "
+            + "respuesta no va a cambiar por repetirla: o cambias de estrategia "
+            + "o cierras el informe con lo que ya tienes.]\n"
+    }
+
+    // djb2. No hace falta nada mejor: aquí solo se pregunta "¿esto es idéntico
+    // a algo que ya pasó por aquí?", y una colisión cuesta, como mucho, no
+    // apuntarse un hallazgo.
+    function _huella(s) {
+        let h = 5381
+        for (let i = 0; i < s.length; i++)
+            h = ((h * 33) ^ s.charCodeAt(i)) | 0
+        return "h" + h
+    }
 
     readonly property Process _toolP: Process {
         id: toolP

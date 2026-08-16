@@ -92,9 +92,15 @@ Scope {
     // Con él, la primera avería se explica entera y las siguientes se contestan
     // en el acto y sin red.
     //
-    // Es de SESIÓN, no de encargo: si el buscador está caído, sigue caído en el
-    // mensaje siguiente. Se levanta solo cuando el usuario cambia algo que puede
-    // arreglarlo, que es la única novedad que justifica volver a probar.
+    // Dura lo que dura el ENCARGO. Dentro de él es donde hace falta: es ahí
+    // donde el modelo, si le dejas, reformula la misma consulta diez veces. Al
+    // mensaje siguiente se levanta, y no por optimismo — desde que las fuentes
+    // pueden entrar en cuarentena, una avería ya no es forzosamente de
+    // configuración: puede ser un castigo de quince minutos que a la pregunta
+    // siguiente ya haya caducado. Volver a probar cuesta una décima de segundo
+    // y ninguna conexión, y si sigue caído el pestillo se arma otra vez a la
+    // primera. También se levanta en cuanto el usuario cambia un ajuste que
+    // pueda arreglarlo.
     property bool searchBroken: false
     property int _searchIndex: -1
 
@@ -302,6 +308,77 @@ Scope {
             + String(reason).slice(0, 2000))
         conv.save()
         advance()
+    }
+
+    // ── Lo que el jefe ya ha hecho, y el subagente no tiene que repetir ──────
+    // Un subagente arranca con el contexto en blanco: es lo que lo hace barato,
+    // y también lo que hace que su primera ronda sea, casi siempre, la búsqueda
+    // que el agente principal acababa de hacer. Se midió en un encargo de
+    // precios: el jefe buscó dos veces, delegó, y la primera consulta del
+    // subagente era prácticamente idéntica a la primera del jefe.
+    //
+    // Así que el encargo viaja con el trabajo ya hecho: las últimas búsquedas
+    // con sus resultados, y la lista de páginas que ya se abrieron —esas sin
+    // contenido, solo la dirección: lo caro es volver a descargarlas, y para no
+    // hacerlo basta con saber que ya se hizo.
+    readonly property int _briefBusquedas: 3
+    function _briefConTrabajoHecho(propio) {
+        const busquedas = []
+        const paginas = []
+        for (let i = messages.count - 1; i >= 0; i--) {
+            const m = messages.get(i)
+            if (!m || m.role !== "tool" || m.toolStatus !== "done")
+                continue
+            const res = String(m.toolResult || "")
+            if (m.toolName === "web_search") {
+                // Solo viaja lo que vino ENMARCADO, es decir, lo que escribió
+                // el buscador. Cuando no hay buscador, en la tarjeta no queda
+                // su respuesta sino nuestro aviso de configuración —"no pude
+                // buscar, arréglalo en Ajustes"—, y eso, metido en un encargo,
+                // se leería como un hallazgo del jefe.
+                if (busquedas.length >= _briefBusquedas || !WS.fenced(res))
+                    continue
+                let q = ""
+                try { q = String((JSON.parse(m.toolArgs) || {}).query || "") }
+                catch (e) {}
+                busquedas.push("· búsqueda «" + q + "»:\n"
+                               + WS.unfence(res).slice(0, 1200))
+            } else if (m.toolName === "fetch_url" && paginas.length < 8) {
+                try {
+                    const u = String((JSON.parse(m.toolArgs) || {}).url || "")
+                    if (u !== "")
+                        paginas.push("· " + u)
+                } catch (e) {}
+            }
+        }
+        if (busquedas.length === 0 && paginas.length === 0)
+            return String(propio || "")
+        // El encargo entero se recorta a 4000 caracteres más adelante, así que
+        // el hueco se reparte AQUÍ: primero lo que escribió el jefe, que es
+        // suyo y no se toca, y con lo que quede se meten las búsquedas más
+        // recientes enteras. Media búsqueda cortada no vale para nada.
+        const base = String(propio || "").trim()
+        let hueco = 3900 - base.length - 400
+        let cuerpo = ""
+        for (let k = 0; k < busquedas.length && hueco > 300; k++) {
+            const b = busquedas[k]
+            if (b.length > hueco)
+                continue
+            cuerpo = "\n" + b + (cuerpo !== "" ? "\n" + cuerpo : "")
+            hueco -= b.length + 2
+        }
+        // Si el resumen del jefe ya llenaba el encargo, no se añade una cabecera
+        // sin nada debajo: sería gastar cien caracteres en anunciar el vacío.
+        if (cuerpo === "" && (paginas.length === 0 || hueco <= 120))
+            return String(propio || "")
+        let extra = "TRABAJO YA HECHO por el agente principal — no lo repitas."
+                  + cuerpo
+        if (paginas.length > 0 && hueco > 120)
+            extra += "\n\nPáginas ya abiertas (vuélvelas a abrir solo si "
+                   + "necesitas algo que no esté arriba):\n"
+                   + paginas.reverse().join("\n").slice(0, hueco)
+        return (base !== "" ? base + "\n\n" : "")
+             + WS.fence(extra, "las búsquedas del agente principal")
     }
 
     // Cómo se autorizó ESTA llamada, para el registro: el usuario pulsó, la
@@ -670,7 +747,8 @@ Scope {
             const task = String(args.task || "").trim()
             if (task === "") { resolveTool(index, "Encargo vacío."); return }
             const why = svc.runSubagent(task, {
-                label: args.label, role: args.role, brief: args.brief,
+                label: args.label, role: args.role,
+                brief: _briefConTrabajoHecho(args.brief),
                 workspace: args.workspace,
                 capabilities: args.capabilities,
                 output: args.output, output_schema: args.output_schema,
