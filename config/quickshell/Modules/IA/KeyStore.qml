@@ -23,6 +23,10 @@ Scope {
     property string keyGemini: ""
     property string keyOpenrouter: ""
     property string keyCustom: ""
+    // La del BUSCADOR (Brave o Tavily). No es la de un proveedor de modelos,
+    // pero es un secreto que viaja a un servidor ajeno: mismo llavero, mismas
+    // reglas — nunca en argv, nunca en el chat.
+    property string keySearch: ""
 
     // La del proveedor activo: la del llavero si la hay, y si no la de Settings
     // (instalaciones sin llavero, o antes de que termine la migración).
@@ -39,6 +43,7 @@ Scope {
         const k = String(key).trim()
         if (providerId === "gemini") keys.keyGemini = k
         else if (providerId === "custom") keys.keyCustom = k
+        else if (providerId === "search") keys.keySearch = k
         else keys.keyOpenrouter = k
         if (keys.haveKeyring) {
             // Vacío = borrar la entrada.
@@ -55,13 +60,20 @@ Scope {
             // El fallback en claro se limpia: la fuente de verdad es el llavero.
             if (providerId === "gemini") Settings.aiKeyGemini = ""
             else if (providerId === "custom") Settings.aiKeyCustom = ""
+            else if (providerId === "search") Settings.aiKeySearch = ""
             else Settings.aiKeyOpenrouter = ""
         } else {
             if (providerId === "gemini") Settings.aiKeyGemini = k
             else if (providerId === "custom") Settings.aiKeyCustom = k
+            else if (providerId === "search") Settings.aiKeySearch = k
             else Settings.aiKeyOpenrouter = k
         }
     }
+
+    // La del buscador, con el mismo respaldo que las demás: el llavero manda, y
+    // si no hay llavero se usa la de Settings.
+    readonly property string searchKey:
+        keySearch !== "" ? keySearch : Settings.aiKeySearch
 
     Process {
         running: true
@@ -74,8 +86,8 @@ Scope {
             }
         }
     }
-    // Las tres claves se leen EN CADENA (cada una arranca la siguiente al
-    // terminar) en vez de con tres procesos a la vez: son tres consultas al
+    // Las cuatro claves se leen EN CADENA (cada una arranca la siguiente al
+    // terminar) en vez de con cuatro procesos a la vez: son consultas al
     // mismo demonio y encadenarlas evita despertarlo por triplicado en el
     // arranque, que es justo el momento en que el escritorio tiene prisa.
     Process {
@@ -97,10 +109,16 @@ Scope {
                     keys.setKey("openrouter", Settings.aiKeyOpenrouter)
                 keyLookup.stage = "custom"
                 keyLookup.running = true
-            } else {
+            } else if (keyLookup.stage === "custom") {
                 if (k !== "") keys.keyCustom = k
                 else if (Settings.aiKeyCustom !== "")
                     keys.setKey("custom", Settings.aiKeyCustom)
+                keyLookup.stage = "search"
+                keyLookup.running = true
+            } else {
+                if (k !== "") keys.keySearch = k
+                else if (Settings.aiKeySearch !== "")
+                    keys.setKey("search", Settings.aiKeySearch)
             }
         }
     }

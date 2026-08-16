@@ -289,7 +289,7 @@ Popout {
                     }
                     Chip {
                         label: "󰍃 " + (AiService.compacting
-                            ? I18n.tr("Compacting…") : I18n.tr("Compact"))
+                            ? I18n.tr("Compacting…") : I18n.tr("Compact now"))
                         enabled: !AiService.busy && !AiService.compacting
                                  && !AiService.notConfigured
                         opacity: enabled ? 1 : 0.4

@@ -99,7 +99,7 @@ function core() {
                 required: ["todos"] } } },
         { type: "function", "function": {
             name: "fetch_url",
-            description: "Descarga una URL y devuelve su contenido como texto plano (HTML convertido, máx. 20 kB). Para leer documentación, artículos o APIs.",
+            description: "Descarga una URL y devuelve su contenido (máx. 20 000 caracteres). El HTML se convierte a texto legible; lo que no es HTML —JSON, XML, texto— llega tal cual, así que sirve igual para leer una API. Cada página que abras se queda en el contexto de esta conversación: si vas a abrir tres o más, delega en un subagente con role:'research' y capabilities:['net'].",
             parameters: { type: "object",
                 properties: { url: { type: "string" } },
                 required: ["url"] } } },
@@ -161,10 +161,17 @@ function core() {
                 required: ["pattern", "path"] } } },
         { type: "function", "function": {
             name: "web_search",
-            description: "Busca en la web (SearXNG) y devuelve títulos, URLs y fragmentos de los primeros resultados. Para saber qué páginas existen; para leer una, fetch_url. Si el usuario nombra su propia instancia, pásala en 'instance'.",
+            description: "Busca en la web y devuelve títulos, URLs y fragmentos de los primeros resultados. Los fragmentos suelen bastar para un dato suelto (un precio, una versión); para leer una página entera, fetch_url. Si el usuario nombra su propia instancia de SearXNG, pásala en 'instance'. Si la pregunta exige abrir VARIAS páginas y comparar, no lo hagas aquí: delega en un subagente con role:'research' y capabilities:['net'], y el ruido se queda en su contexto en vez de en esta conversación.",
             parameters: { type: "object",
                 properties: { query: { type: "string" },
-                              instance: { type: "string", description: "URL de un SearXNG concreto; vacío = el configurado o uno público" } },
+                              domains: { type: "array", items: { type: "string" },
+                                         description: "Buscar SOLO en estos dominios, p. ej. [\"doc.qt.io\"]. Úsalo cuando sepas dónde está la respuesta buena: quita casi todo el ruido" },
+                              exclude_domains: { type: "array", items: { type: "string" },
+                                                 description: "Dominios que NO quieres ver" },
+                              recency: { type: "string", "enum": ["day", "week", "month", "year"],
+                                         description: "Solo resultados de este último periodo. Imprescindible para precios, versiones y noticias; contraproducente para conceptos que no cambian" },
+                              limit: { type: "integer", description: "Cuántos resultados (1-10, por defecto 8)" },
+                              instance: { type: "string", description: "URL de un SearXNG concreto; vacío = el configurado" } },
                 required: ["query"] } } },
         { type: "function", "function": {
             name: "notify_user",

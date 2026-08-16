@@ -11,6 +11,7 @@ import "ModelCatalog.js" as MC
 import "ModelProfile.js" as MP
 import "LocalTools.js" as LT
 import "RemoteTools.js" as RT
+import "WebSearch.js" as WS
 
 // Harness del asistente IA. La idea (tomada de la capa "aisuite" que usa
 // OpenWorker) es que el panel no sepa NADA de proveedores: todos hablan el
@@ -435,6 +436,50 @@ Singleton {
         haveSshpass: keys.haveSshpass
     })
 
+    // ── La búsqueda web ──────────────────────────────────────────────────────
+    // Todo lo que WebSearch.js necesita para decidir a quién preguntar. La
+    // instancia del ARGUMENTO va aparte porque manda sobre el ajuste: si el
+    // usuario nombra su SearXNG en el mensaje, se usa ese y punto.
+    function searchCtx(instancia) {
+        return ({ instancia: String(instancia || ""),
+                  url: Settings.aiSearchUrl,
+                  backend: Settings.aiSearchBackend,
+                  key: keys.searchKey })
+    }
+    // La clave del buscador se expone para que el ejecutor pueda levantar su
+    // pestillo de avería en cuanto cambie: si acabas de pegar la clave, lo justo
+    // es volver a intentarlo sin cambiar de conversación.
+    readonly property string searchKey: keys.searchKey
+
+    // El SearXNG de esta máquina, si lo hay. "" = ninguno. Se comprueba al
+    // arrancar y cada vez que alguien abre los ajustes de búsqueda: levantar uno
+    // no debería obligar a reiniciar el shell para que se entere.
+    property string searchLocal: ""
+    function probeSearchLocal() {
+        const p = WS.localProbe()
+        localProbe.command = p.cmd
+        localProbe.running = true
+    }
+    Process {
+        id: localProbe
+        running: true
+        command: WS.localProbe().cmd
+        stdout: StdioCollector { id: localProbeOut }
+        onExited: ai.searchLocal = (localProbeOut.text || "").trim()
+    }
+
+    // El trato del texto que viene de fuera, en un solo sitio: lo usan el
+    // ejecutor y también los subagentes, que leen la web igual que su jefe.
+    function fenceExternal(texto, fuente) { return WS.fence(texto, fuente) }
+    function searchFailed(salida) { return WS.failed(salida) }
+    function searchFailureText(salida) { return WS.failureText(salida) }
+    function fetchOwnMessage(salida) {
+        return String(salida).indexOf(LT.FETCH_KO) !== -1
+    }
+    function stripFetchMark(salida) {
+        return String(salida).replace(LT.FETCH_KO, "").trim()
+    }
+
     // El constructor correspondiente: prueba las tres familias en orden. Devuelve
     // {cmd,env} | {error} | null (null = no es de solo lectura).
     function readOnlyCommand(tool, args) {
@@ -480,6 +525,13 @@ Singleton {
                               + ws.writeRoot + "). Usa rutas relativas." }
             return LT.writes(tool, p, args, bak, ws.undoDir)
         }
+        // La búsqueda web no la construye ninguna de las tres familias, así que
+        // hasta ahora un subagente con permiso de red la tenía ANUNCIADA y le
+        // rebotaba con "fuera de tus permisos" al usarla: justo la herramienta
+        // por la que se delega una investigación.
+        if (tool === "web_search")
+            return WS.command(args.query, searchCtx(args.instance),
+                              TU.normalizeSearchBase, args)
         const rctx = Object.assign({}, toolCtx, { root: ws ? ws.root : "" })
         return LT.sysQuery(tool, args, rctx)
             || RT.query(tool, args, rctx)
@@ -544,6 +596,16 @@ Singleton {
               + "más rápido. Las que cambian algo (escribir, ejecutar) las "
               + "aprueba el usuario. Los entregables (informes, scripts) "
               + "escríbelos como archivo con write_file."
+              // El ruido de la web es el que más contexto quema: una página son
+              // veinte mil caracteres que se reenvían en TODAS las rondas
+              // siguientes, y de los que sirven dos frases. Investigar en un
+              // subagente deja ese ruido en su contexto y devuelve la conclusión.
+              + " INVESTIGAR EN LA WEB: para un dato suelto, web_search y listo. "
+              + "Si hace falta abrir varias páginas o comparar fuentes, delega "
+              + "en un subagente con role:'research' y capabilities:['net']: lo "
+              + "que ensucia el contexto son las páginas, no las respuestas. Y "
+              + "si la búsqueda te dice que no hay buscador configurado, eso no "
+              + "se arregla reformulando: díselo al usuario y sigue."
               + " ANTES de tocar nada, decide TÚ si la tarea merece un plan: "
               + "si lleva tres pasos o más, o si algo es irreversible (borrar, "
               + "sobrescribir, reiniciar servicios, cambiar un servidor), "
@@ -676,6 +738,14 @@ Singleton {
 
     property alias toolRounds: tools.toolRounds
     property alias maxToolRounds: tools.maxToolRounds
+    // Qué tarjeta se está ejecutando ahora mismo, y desde cuándo, para que la
+    // interfaz pueda decirlo. Solo corre una a la vez, así que con el índice
+    // basta.
+    property alias toolRunningIndex: tools.runningIndex
+    property alias toolRunningSince: tools.runningSince
+    // ¿Se ha dado ya por perdido el buscador en esta sesión? Los ajustes lo
+    // enseñan: es la diferencia entre "no encuentro nada" y "no puedo buscar".
+    property alias searchBroken: tools.searchBroken
     function approveTool(i) { tools.approveTool(i) }
     // La aprobación con un clic del usuario: se distingue de la automática para
     // que el registro de auditoría diga quién dejó pasar cada cosa.

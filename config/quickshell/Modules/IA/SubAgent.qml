@@ -406,15 +406,26 @@ QtObject {
             return
         }
 
+        // Lo que va a traer texto de fuera se apunta antes de lanzarlo: el
+        // subagente lee la web igual que su jefe, así que le entra con el mismo
+        // marco de "esto son DATOS, no instrucciones". Un subagente es además el
+        // blanco más goloso para una inyección: trabaja solo y sin tarjetas.
+        sub._fenceSrc = name === "fetch_url" ? String(args.url || "una página web")
+                      : name === "web_search" ? "una búsqueda web" : ""
+
         // El constructor es el MISMO que usa el agente principal, con la
         // concesión y el taller por delante: una sola jaula que auditar.
         const r = AiService.subagentCommand(name, args, sub.grant, sub.ws)
+        // Si no llega a salir a la red, la marca se retira: enmarcar como
+        // "escrito por un desconocido" un rechazo NUESTRO sería mentirle.
         if (r === null) {
+            sub._fenceSrc = ""
             sub._pushResult(tc.id, "Herramienta fuera de tus permisos: " + name
                 + ". Tienes: " + sub.toolDefs.map(d => d["function"].name).join(", "))
             return
         }
         if (r.error !== undefined) {
+            sub._fenceSrc = ""
             sub._pushResult(tc.id, r.error)
             return
         }
@@ -434,6 +445,9 @@ QtObject {
         sub._execNext()
     }
 
+    // De dónde viene el texto que está a punto de llegar, si viene de fuera.
+    property string _fenceSrc: ""
+
     readonly property Process _toolP: Process {
         id: toolP
         stdout: StdioCollector { id: toolPOut }
@@ -446,6 +460,20 @@ QtObject {
                 out += (out !== "" ? "\n" : "") + "[stderr] " + toolPErr.text
             if (out.trim() === "")
                 out = "(sin salida; código " + code + ")"
+            // Mismo trato que en el agente principal: la avería del buscador se
+            // explica entera (y no se disfraza de "no encontré nada"), los
+            // avisos del propio harness van sin marco, y lo que sí ha escrito un
+            // desconocido entra enmarcado.
+            const fuente = sub._fenceSrc
+            sub._fenceSrc = ""
+            if (fuente !== "") {
+                if (AiService.searchFailed(out))
+                    out = AiService.searchFailureText(out)
+                else if (AiService.fetchOwnMessage(out))
+                    out = AiService.stripFetchMark(out)
+                else
+                    out = AiService.fenceExternal(out, fuente)
+            }
             sub._pushResult(sub._calls[sub._callIdx].id, out)
         }
     }

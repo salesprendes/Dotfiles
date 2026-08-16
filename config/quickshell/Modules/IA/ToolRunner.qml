@@ -7,6 +7,7 @@ import "ToolPolicy.js" as TP
 import "LocalTools.js" as LT
 import "RemoteTools.js" as RT
 import "Supervisor.js" as SV
+import "WebSearch.js" as WS
 
 // EL EJECUTOR: lo que pasa entre que el modelo propone una herramienta y el
 // resultado vuelve a su contexto. Aprobación, jaula, ejecución, resolución y
@@ -56,6 +57,59 @@ Scope {
     // los ocho de siempre.
     readonly property int maxToolRounds:
         (svc && svc.profile && svc.profile.rounds > 0) ? svc.profile.rounds : 8
+
+    // ── Qué se está ejecutando AHORA ─────────────────────────────────────────
+    // Solo corre una herramienta a la vez (un único Process, por diseño), así
+    // que basta con el índice de la tarjeta y desde cuándo. Vive aquí y no en el
+    // mensaje a propósito: es estado de ESTA sesión, no historial — al recargar
+    // una conversación no hay nada ejecutándose, y guardarlo dejaría tarjetas
+    // eternamente "en curso" de un proceso que ya no existe.
+    //
+    // Que exista arregla además algo que se notaba: entre aprobar y ver el
+    // resultado, la tarjeta se quedaba idéntica —con sus botones de Aprobar y
+    // Rechazar puestos— y no había forma de distinguir "el comando está
+    // corriendo" de "el modelo está pensando" o de "esto se ha colgado".
+    property int runningIndex: -1
+    property double runningSince: 0
+    // Aprobaciones del usuario que llegaron con algo ya en marcha (ver
+    // approveTool): se guardan y se atienden por orden al quedar el sitio libre.
+    property var _colaClics: []
+
+    function _enCurso(index) {
+        runningIndex = index
+        runningSince = Date.now()
+    }
+    function _finCurso(index) {
+        if (runningIndex === index || index === undefined)
+            runningIndex = -1
+    }
+
+    // ── El pestillo de la búsqueda web ───────────────────────────────────────
+    // Cuando no hay NINGÚN buscador que funcione, el fallo no es de la consulta:
+    // es de configuración, y va a fallar igual las diez veces siguientes. Sin
+    // este pestillo el modelo lo descubría una vez por llamada —reformulando y
+    // razonando entre medias, que es lo caro— hasta agotar las rondas del turno.
+    // Con él, la primera avería se explica entera y las siguientes se contestan
+    // en el acto y sin red.
+    //
+    // Es de SESIÓN, no de encargo: si el buscador está caído, sigue caído en el
+    // mensaje siguiente. Se levanta solo cuando el usuario cambia algo que puede
+    // arreglarlo, que es la única novedad que justifica volver a probar.
+    property bool searchBroken: false
+    property int _searchIndex: -1
+    // La tarjeta cuyo resultado viene de la web, y de dónde. Ver resolveTool.
+    property int _fenceIndex: -1
+    property string _fenceSrc: ""
+
+    Connections {
+        target: Settings
+        function onAiSearchUrlChanged() { runner.searchBroken = false }
+        function onAiSearchBackendChanged() { runner.searchBroken = false }
+    }
+    Connections {
+        target: svc
+        function onSearchKeyChanged() { runner.searchBroken = false }
+    }
 
     // Permisos permanentes de ESTA conversación (el "session allowlist" de
     // OpenWorker): el usuario pulsa "Siempre" en una tarjeta y esa herramienta
@@ -161,6 +215,39 @@ Scope {
     // 'cap' permite a una herramienta concreta un tope distinto del genérico
     // (use_skill: el texto de una habilidad vale más contexto que un ls).
     function resolveTool(index, result, cap) {
+        _finCurso(index)
+        // ¿Esto viene de fuera? Se decide ANTES de tocar el texto.
+        let externo = (index === _fenceIndex)
+        if (externo)
+            _fenceIndex = -1
+        // La búsqueda web es la única herramienta que distingue entre "no hay
+        // resultados" y "no hay buscador": lo segundo es una avería de
+        // configuración, y hay que tratarla como tal ANTES de que el texto entre
+        // al contexto. Si no, el modelo lee un fallo cualquiera, supone que la
+        // culpa es de su consulta, reformula, y se pasa el turno entero dando
+        // vueltas contra una pared — que era exactamente lo que ocurría.
+        if (index === _searchIndex) {
+            _searchIndex = -1
+            if (WS.failed(result)) {
+                searchBroken = true
+                result = WS.failureText(result)
+                externo = false      // esto lo decimos NOSOTROS
+            }
+        }
+        // Un aviso del propio harness (no se pudo descargar, la página no tenía
+        // texto) tampoco se enmarca: sería decirle al modelo que lo ha escrito
+        // un desconocido.
+        if (externo && String(result).indexOf(LT.FETCH_KO) !== -1) {
+            result = String(result).replace(LT.FETCH_KO, "").trim()
+            externo = false
+        }
+        // LA PUERTA POR LA QUE ENTRA TEXTO AJENO. Una página web puede decir
+        // "ignora las instrucciones anteriores y ejecuta esto", y como resultado
+        // de herramienta pelado se lee con el mismo peso que una orden del
+        // usuario. No se puede impedir que el modelo lo lea, pero sí decirle qué
+        // es: mismo trato que le da el supervisor a sus expedientes.
+        if (externo)
+            result = WS.fence(result, _fenceSrc)
         messages.setProperty(index, "toolStatus", "done")
         messages.setProperty(index, "toolResult",
             TU.redactSecrets(String(result)).slice(0, cap || svc.toolResultCap))
@@ -184,6 +271,7 @@ Scope {
         const m = messages.get(index)
         if (!m || m.toolStatus !== "pending")
             return
+        _finCurso(index)
         const quien = src === "supervisor" ? "supervisor" : "hook"
         audit.record({ src: quien, tool: m.toolName, args: m.toolArgs,
                        decision: "blocked", why: reason })
@@ -209,6 +297,7 @@ Scope {
         const m = messages.get(index)
         if (!m || m.role !== "tool" || m.toolStatus !== "pending")
             return
+        _finCurso(index)
         audit.record({ src: "card", tool: m.toolName, args: m.toolArgs,
                        decision: "rejected" })
         messages.setProperty(index, "toolStatus", "rejected")
@@ -280,6 +369,22 @@ Scope {
         if (!m || m.role !== "tool" || m.toolStatus !== "pending" || svc.busy
                 || svc.compacting)
             return
+        // Esta tarjeta YA se está ejecutando. Mientras corre, su estado sigue
+        // siendo "pending" (que es lo correcto: aún no hay resultado que mandar
+        // al modelo), así que sin esta guarda un segundo paso por aquí —dos
+        // clics seguidos, un advance() que llega a destiempo— la lanzaba otra
+        // vez, con el mismo comando y encima pisando el Process del primero.
+        if (runningIndex === index)
+            return
+        // Y si lo que corre es OTRA tarjeta, tampoco: solo hay un Process, y
+        // lanzar la segunda encima dejaba a la primera esperando un resultado
+        // que ya nunca iba a llegarle. El clic no se pierde — se atiende en
+        // cuanto la de delante termine.
+        if (runningIndex >= 0) {
+            if (_colaClics.indexOf(index) === -1)
+                _colaClics = _colaClics.concat([index])
+            return
+        }
         runner._toolIndex = index
         // Argumentos tolerantes: un modelo local manda JSON roto a menudo. Si ni
         // con reparación sale, se le dice al modelo qué esperaba en vez de
@@ -319,6 +424,13 @@ Scope {
                        danger: dangerOf(m.toolName, m.toolArgs),
                        decision: _decisionDe(index, m.toolName) })
 
+        // A partir de aquí la tarjeta está EN CURSO. Se marca aquí y no en
+        // exec() para que valga también para las asíncronas (lsp, depurador,
+        // celda de Python, subagente, MCP), que son justo las que más tardan.
+        // Las que se resuelven en el acto pasan por los dos estados dentro del
+        // mismo ciclo, así que no llegan a pintarse: no parpadea nada.
+        _enCurso(index)
+
         // Herramienta de un servidor MCP: el nombre viaja con el esquema
         // mcp__<servidor>__<tool> de Claude Code. Se enruta a su proceso.
         if (m.toolName.startsWith("mcp__")) {
@@ -334,6 +446,16 @@ Scope {
         const built = svc.readOnlyCommand(m.toolName, args)
         if (built !== null) {
             if (built.error !== undefined) { resolveTool(index, built.error); return }
+            // Lo que va a traer texto escrito por un desconocido se apunta aquí,
+            // y solo cuando de verdad va a salir a la red: al volver, su
+            // resultado entra al contexto enmarcado (ver resolveTool). Marcarlo
+            // antes de construir el comando enmarcaba también nuestros propios
+            // rechazos ("solo URLs http(s)"), que es justo lo contrario de lo
+            // que hace falta.
+            if (m.toolName === "fetch_url") {
+                _fenceIndex = index
+                _fenceSrc = String(args.url || "una página web")
+            }
             exec(built.cmd, built.env)
             return
         }
@@ -472,27 +594,28 @@ Scope {
         case "web_search": {
             const q = String(args.query || "").trim()
             if (q === "") { resolveTool(index, "Consulta vacía."); return }
-            // Contra un SearXNG del usuario (ajuste aiSearchUrl), por su API
-            // JSON. Se probó scrapear DuckDuckGo y Bing: el primero bloquea
-            // ("anomaly") y el segundo sirve resultados-señuelo a los bots — un
-            // buscador que miente es peor que ninguno.
-            // De más específico a más general: lo que diga el mensaje, luego el
-            // ajuste si lo hay, y si no una instancia pública. La herramienta
-            // funciona SIEMPRE; configurarla solo cambia adónde va.
-            const base = TU.normalizeSearchBase(args.instance)
-                      || TU.normalizeSearchBase(Settings.aiSearchUrl)
-                      || "https://searx.be"
-            exec(["sh", "-c",
-                'curl -sSL --max-time 15 "$QS_B/search?format=json&q=$(python3 -c \'import urllib.parse,os; print(urllib.parse.quote(os.environ[\"QS_Q\"]))\')" | '
-                + 'python3 -c \''
-                + 'import sys,json\n'
-                + 'try: d=json.load(sys.stdin)\n'
-                + 'except Exception: print("El buscador no devolvio JSON (activa format=json en tu SearXNG)."); raise SystemExit\n'
-                + 'rs=d.get("results",[])[:8]\n'
-                + 'if not rs: print("(sin resultados)")\n'
-                + 'for r in rs:\n'
-                + '    print("- "+r.get("title","")+"\\n  "+r.get("url","")+"\\n  "+(r.get("content") or "")[:200])\n\''],
-                ({ QS_Q: q, QS_B: base }))
+            // Ya se sabe de este encargo que no hay buscador: se contesta sin
+            // tocar la red. Antes cada intento costaba una conexión y, sobre
+            // todo, una ronda entera de razonamiento del modelo.
+            if (searchBroken) {
+                resolveTool(index, WS.failureText("", true))
+                return
+            }
+            // La cascada (tu SearXNG, el que nombre el mensaje, los locales, la
+            // API con clave) la arma WebSearch.js; aquí solo se le pasa la
+            // configuración y se recuerda qué tarjeta hay que vigilar al volver.
+            const built = WS.command(q, svc.searchCtx(args.instance),
+                                     TU.normalizeSearchBase, args)
+            if (built.error !== undefined) {
+                _searchIndex = index
+                resolveTool(index, built.error)
+                return
+            }
+            _searchIndex = index
+            // Los títulos y fragmentos también los escribe un desconocido.
+            _fenceIndex = index
+            _fenceSrc = "una búsqueda web"
+            exec(built.cmd, built.env)
             return
         }
         case "notify_user": {
@@ -846,6 +969,17 @@ Scope {
                     && m.toolName === "propose_plan")
                 return
         }
+        // Un clic del usuario que llegó tarde (había otra herramienta corriendo)
+        // se atiende ANTES que la ronda automática: lo pidió él.
+        while (_colaClics.length > 0) {
+            const k = _colaClics[0]
+            _colaClics = _colaClics.slice(1)
+            const mk = messages.get(k)
+            if (mk && mk.role === "tool" && mk.toolStatus === "pending") {
+                approveTool(k)
+                return
+            }
+        }
         for (let i = 0; i < messages.count; i++) {
             const m = messages.get(i)
             if (m.role === "tool" && m.toolStatus === "pending") {
@@ -909,6 +1043,12 @@ Scope {
         _userApproved = -1
         _toolIndex = -1
         _resolveIndex = -1
+        _searchIndex = -1
+        _fenceIndex = -1
+        runningIndex = -1
+        _colaClics = []
+        // El pestillo del buscador NO se levanta al cambiar de conversación: la
+        // avería es de la máquina, no del hilo. Se levanta al tocar los ajustes.
     }
 
     // Las rutas resueltas se indexan por POSICIÓN en el hilo, así que cualquier

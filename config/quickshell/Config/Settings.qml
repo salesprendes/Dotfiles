@@ -117,9 +117,23 @@ Singleton {
     // el modelo las ve como mcp__<name>__<tool> y su ejecución pasa por la
     // misma tarjeta de aprobación que las nativas.
     property var    aiMcpServers: []
-    // Buscador para la herramienta web_search: la URL de un SearXNG (propio o
-    // de confianza) con la API JSON activa. Vacío = la herramienta no existe.
+    // ── Búsqueda web ─────────────────────────────────────────────────────────
+    // A quién se le pregunta: "searxng" (el propio, o uno local que se detecta
+    // solo), "brave" o "tavily" (APIs con clave). Sea cual sea el elegido, si
+    // falla se prueban los demás que estén configurados.
+    //
+    // Por qué hay que elegir algo: las instancias PÚBLICAS de SearXNG ya no
+    // sirven format=json a un cliente sin navegador, y DuckDuckGo y Mojeek
+    // responden con un captcha. Un buscador "que funciona siempre" dejó de
+    // existir, y fingir lo contrario solo conseguía que el asistente se pasara
+    // los turnos reintentando.
+    property string aiSearchBackend: "searxng"
+    // La URL de tu SearXNG con la API JSON activa (formats: [json] en su
+    // settings.yml). Vacío = solo se prueban las instancias locales.
     property string aiSearchUrl: ""
+    // Clave del buscador de API elegido. Respaldo en claro: la de verdad vive
+    // en el llavero del sistema, igual que las de los proveedores de modelos.
+    property string aiKeySearch: ""
     // Servidores remotos de confianza (lista blanca para SSH/SFTP/hosting):
     // lista de {name, host, user, port}. El modelo solo puede conectarse a los
     // registrados aquí, por su nombre. Las contraseñas NO viven en este
@@ -526,7 +540,8 @@ Singleton {
         "aiPersona": "normal", "aiMode": "chat", "aiCustomPrompt": "", "aiAutoRead": false,
         "aiApproval": "normal", "aiAudit": true,
         "aiSupervisor": "risky", "aiSupervisorModel": "",
-        "aiToolPolicies": {}, "aiSkills": {}, "aiMcpServers": [], "aiSearchUrl": "",
+        "aiToolPolicies": {}, "aiSkills": {}, "aiMcpServers": [],
+        "aiSearchBackend": "searxng", "aiSearchUrl": "", "aiKeySearch": "",
         "aiSshHosts": [], "aiTemperature": 0.7, "aiContextTokens": 0,
         "aiAutoCompact": "warn", "aiCompactKeep": 1, "aiThink": "auto",
         "aiEffort": "auto", "aiModelTuning": true, "aiKeepThinking": true,

@@ -162,6 +162,88 @@ function sysQuery(tool, args, ctx) {
     return null
 }
 
+// ── Leer una página web ──────────────────────────────────────────────────────
+// Lo que devuelve fetch_url no es "el HTML": es lo que el modelo va a LEER, y
+// cada carácter que entre ahí cuesta contexto en todas las rondas siguientes.
+// Desnudar las etiquetas con expresiones regulares —lo que se hacía antes— saca
+// el artículo, sí, pero también el menú, el pie, el aviso de galletas y los
+// treinta enlaces de la barra lateral: veinte mil caracteres de los que sirven
+// dos mil. Por eso ahora hay una CASCADA de extractores, del bueno al basto:
+//
+//   trafilatura   saca el cuerpo del artículo y tira el resto (lo mejor)
+//   w3m -dump     renderiza como un navegador de texto: respeta tablas y listas
+//   el desnudado  el de siempre, que no depende de nada instalado
+//
+// Y antes de todo eso, una comprobación que faltaba: si lo descargado NO es
+// HTML (una API que devuelve JSON, un XML, un texto plano), no se desnuda nada
+// — quitarle las "etiquetas" a un XML es destruirlo.
+const PY_DESNUDA =
+    "import sys,re,html\n"
+    // errors=replace: una web en Latin-1 (las viejas en español) no debe tirar
+    // la herramienta entera por un byte — los que no sean UTF-8 salen como "" y
+    // el resto del texto se conserva.
+    + "sys.stdin.reconfigure(errors='replace')\n"
+    + "t=sys.stdin.read()\n"
+    + "t=re.sub(r'(?is)<(script|style|nav|footer|aside|noscript)[^>]*>.*?</\\1>',' ',t)\n"
+    + "t=re.sub(r'(?s)<[^>]+>',' ',t)\n"
+    + "t=html.unescape(t)\n"
+    + "t=re.sub(r'[ \\t]+',' ',t)\n"
+    + "t=re.sub(r'\\n\\s*\\n+','\\n\\n',t)\n"
+    + "sys.stdout.write(t.strip())\n"
+
+// El recorte final. Se hace en PYTHON y no con `head -c` porque el tope es de
+// caracteres, no de bytes: cortar 20 000 bytes a mitad de una eñe deja basura
+// en el contexto del modelo.
+const PY_CORTE =
+    "import sys\n"
+    + "sys.stdin.reconfigure(errors='replace')\n"
+    + "t=sys.stdin.read()\n"
+    + "sys.stdout.write(t[:20000] + ('\\n\\n[...cortado a 20 000 caracteres]' if len(t)>20000 else ''))\n"
+
+// La marca de "esto lo dice el harness, no la página". Hace falta porque lo que
+// SÍ viene de la página se le entrega al modelo enmarcado como contenido ajeno
+// (ver WebSearch.fence), y enmarcar así un mensaje propio sería mentirle: le
+// estaríamos diciendo que un aviso nuestro lo ha escrito un desconocido.
+const FETCH_KO = "[[FETCH_KO]]"
+
+const FETCH_SH = [
+    // Con agente de usuario de navegador: hay bastantes sitios que responden 403
+    // a un curl pelado, y esa negativa llegaba al modelo como "página vacía".
+    'ua="Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0"',
+    'f=$(mktemp) || { echo "' + FETCH_KO + ' No se pudo crear un archivo temporal."; exit 0; }',
+    'trap \'rm -f "$f"\' EXIT INT TERM',
+    'ct=$(curl -sSL --max-time 20 --max-filesize 2000000 -A "$ua" -o "$f" -w "%{content_type}" -- "$QS_U" 2>/dev/null)',
+    '[ -s "$f" ] || { echo "' + FETCH_KO + ' No se pudo descargar la página (sin respuesta, demasiado grande, o error de red)."; exit 0; }',
+    'case "$ct" in',
+    // Lo que no es HTML se entrega TAL CUAL: es dato, no maquetación.
+    '  *json*|*xml*|*javascript*|text/plain*|text/csv*|"")',
+    '    python3 -c "$QS_CUT" < "$f"; exit 0 ;;',
+    'esac',
+    'texto=""',
+    'aviso=""',
+    'if command -v trafilatura >/dev/null 2>&1; then',
+    // Las tablas SE CONSERVAN: media respuesta útil de una página de producto
+    // (precios, versiones, características) vive dentro de una tabla.
+    '  texto=$(trafilatura --no-comments -i "$f" 2>/dev/null)',
+    'fi',
+    'if [ -z "$texto" ] && command -v w3m >/dev/null 2>&1; then',
+    '  texto=$(w3m -dump -T text/html -cols 100 "$f" 2>/dev/null)',
+    'fi',
+    'if [ -z "$texto" ]; then',
+    '  texto=$(python3 -c "$QS_PY" < "$f")',
+    // El aviso va SOLO cuando se ha usado el extractor basto, y desaparece en
+    // cuanto se instala cualquiera de los otros dos. Es una línea, y es la
+    // diferencia entre "esta página se lee fatal" y saber por qué. Se añade
+    // DESPUÉS del recorte, o el recorte se lo comería justo en las páginas
+    // largas, que son donde más falta hace.
+    '  aviso="[extracción básica: instala w3m o trafilatura y estas páginas se leerán mucho mejor]"',
+    'fi',
+    '[ -n "$texto" ] || texto="' + FETCH_KO + ' (la página no tenía texto legible)"',
+    'printf "%s" "$texto" | python3 -c "$QS_CUT"',
+    '[ -n "$aviso" ] && printf "\\n\\n%s\\n" "$aviso"',
+    'exit 0'
+].join("\n")
+
 // ── Archivos y red, en solo lectura ──────────────────────────────────────────
 // Leer, listar, grep, glob y descargar. La misma jaula ($HOME clampado, todo
 // por entorno) que comparten el agente principal y el subagente.
@@ -347,16 +429,8 @@ function files(tool, args, ctx) {
     case "fetch_url": {
         const url = String(args.url || "").trim()
         if (!/^https?:\/\//i.test(url)) return { error: "Solo URLs http(s)." }
-        return { cmd: ["sh", "-c",
-            'curl -sSL --max-time 20 --max-filesize 2000000 -- "$QS_U" | '
-            // errors=replace: una web en Latin-1 (las viejas en español) no debe
-            // tirar la herramienta entera por un byte — los que no sean UTF-8
-            // salen como "�" y el resto del texto se conserva.
-            + 'python3 -c "import sys,re,html; sys.stdin.reconfigure(errors=\'replace\'); t=sys.stdin.read(); '
-            + "t=re.sub(r'(?is)<(script|style)[^>]*>.*?</\\\\1>',' ',t); "
-            + "t=re.sub(r'(?s)<[^>]+>',' ',t); t=html.unescape(t); "
-            + "t=re.sub(r'[ \\\\t]+',' ',t); t=re.sub(r'\\\\n\\\\s*\\\\n+','\\\\n\\\\n',t); "
-            + 'print(t.strip()[:20000])"'], env: { QS_U: url } }
+        return { cmd: ["sh", "-c", FETCH_SH],
+                 env: { QS_U: url, QS_PY: PY_DESNUDA, QS_CUT: PY_CORTE } }
     }
     }
     return null

@@ -53,6 +53,32 @@ Item {
     readonly property bool isInfo: role === "info"
     readonly property bool isAssistant: !isUser && !isError && !isTool && !isInfo
 
+    // ── Herramienta EN CURSO ─────────────────────────────────────────────────
+    // Entre aprobar y ver el resultado hay un rato en el que la tarjeta no
+    // cambiaba nada: seguían puestos los botones de Aprobar y Rechazar, no había
+    // reloj, y desde fuera era imposible distinguir "el comando está corriendo"
+    // de "el modelo está pensando" o de "esto se ha quedado colgado". Un
+    // buscador que tardaba quince segundos en fallar se veía igual que un modelo
+    // razonando: por eso todo parecía "pensar".
+    //
+    // El estado NO vive en el mensaje sino en el ejecutor: al recargar una
+    // conversación no hay nada ejecutándose, y guardarlo dejaría tarjetas
+    // eternamente en curso de procesos que ya no existen.
+    readonly property bool toolRunning:
+        isTool && AiService.toolRunningIndex === msgIndex
+    // El reloj solo late mientras hay algo corriendo, y solo en ESTA tarjeta:
+    // como mucho hay una a la vez.
+    property double _ahora: 0
+    readonly property int _corriendoS:
+        Math.max(0, Math.round((_ahora - AiService.toolRunningSince) / 1000))
+    Timer {
+        running: bubble.toolRunning
+        interval: 500
+        repeat: true
+        triggeredOnStart: true
+        onTriggered: bubble._ahora = Date.now()
+    }
+
     // Lo que pide la herramienta, ya legible.
     readonly property var _args: {
         if (!isTool) return ({})
@@ -965,11 +991,46 @@ Item {
                 }
             }
 
+            // EN CURSO. Ocupa el sitio de los botones —que desaparecen en cuanto
+            // algo empieza a correr— y dice lo único que hace falta saber
+            // mientras se espera: que esto está pasando de verdad, y desde hace
+            // cuánto. Los segundos son el dato que convierte "se ha colgado" en
+            // "lleva cuatro segundos", que son cosas muy distintas.
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Theme.space6
+                visible: bubble.toolRunning
+                Text {
+                    text: "󰑮"
+                    color: Theme.accentText
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.sp(13)
+                    // Late en vez de girar: una rotación continua pide la mirada
+                    // todo el rato, y esto pasa DENTRO de una conversación que
+                    // se está leyendo.
+                    SequentialAnimation on opacity {
+                        running: bubble.toolRunning
+                        loops: Animation.Infinite
+                        NumberAnimation { to: 1; duration: Theme.animSlow }
+                        NumberAnimation { to: 0.45; duration: Theme.animSlow }
+                    }
+                }
+                Text {
+                    Layout.fillWidth: true
+                    text: bubble._corriendoS < 1
+                        ? I18n.tr("Running…")
+                        : I18n.tr("Running… %1 s").arg(bubble._corriendoS)
+                    color: Theme.fgDim
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.typeLabelSmall
+                }
+            }
+
             // Pendiente: las dos decisiones. Resuelta: el veredicto + salida.
             RowLayout {
                 Layout.fillWidth: true
                 spacing: Theme.space8
-                visible: bubble.toolStatus === "pending"
+                visible: bubble.toolStatus === "pending" && !bubble.toolRunning
                          && bubble.toolName !== "ask_user"
                          && bubble.toolName !== "propose_plan"
 

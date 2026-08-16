@@ -697,22 +697,93 @@ Rectangle {
                             Layout.leftMargin: 0
                             text: I18n.tr("Its tools appear to the model as mcp__name__tool and run only after your approval.")
                         }
+                    }
+                }
+            }
 
-                        // Buscador por DEFECTO de web_search. La herramienta
-                        // funciona sin esto (usa una instancia pública, o la
-                        // que el usuario nombre en el mensaje); esto solo
-                        // cambia adónde va por defecto.
+            // ── Búsqueda web ────────────────────────────────────────────────
+            // Tenía media línea escondida dentro del grupo de MCP, y era
+            // engañosa: decía "opcional, sin esto el asistente busca igual". Ya
+            // no es verdad, y esa mentira salía cara — las instancias públicas
+            // de SearXNG dejaron de servir su API JSON a clientes sin navegador,
+            // y DuckDuckGo y Mojeek responden con un captcha, así que la
+            // herramienta fallaba SIEMPRE. Como el fallo llegaba al modelo como
+            // un error cualquiera, este reformulaba la consulta y lo reintentaba
+            // hasta agotar el turno: por fuera se veía como si se quedara
+            // pensando.
+            Fold {
+                glyph: "󰖟"
+                title: I18n.tr("Web search")
+                summary: root.searchUnset ? I18n.tr("not set up")
+                       : Settings.aiSearchBackend === "brave" ? "Brave"
+                       : Settings.aiSearchBackend === "tavily" ? "Tavily"
+                       : AiService.searchLocal !== "" && Settings.aiSearchUrl === ""
+                         ? I18n.tr("SearXNG here") : "SearXNG"
+                warn: root.searchUnset
+                sourceComponent: Component {
+                    ColumnLayout {
+                        spacing: Theme.space8
+                        // Abrir esta sección vuelve a mirar si hay un SearXNG en
+                        // la máquina: si acabas de levantarlo, lo normal es que
+                        // vengas aquí a comprobarlo.
+                        Component.onCompleted: AiService.probeSearchLocal()
+
+                        SegRow {
+                            glyph: "󰍉"
+                            label: I18n.tr("Search with")
+                            options: [ { text: "SearXNG", value: "searxng" },
+                                       { text: "Brave", value: "brave" },
+                                       { text: "Tavily", value: "tavily" } ]
+                            current: Settings.aiSearchBackend
+                            onPicked: (v) => Settings.aiSearchBackend = v
+                        }
+
+                        // El elegido falla → se prueban los demás que estén
+                        // configurados. Por eso la dirección y la clave se
+                        // enseñan las dos siempre: tener las dos puestas es
+                        // mejor que tener una.
                         TextField {
-                            Layout.topMargin: Theme.space4
-                            label: I18n.tr("Default search engine")
-                            leftIcon: "󰖟"
-                            placeholder: "https://searx.be"
+                            label: I18n.tr("Your SearXNG")
+                            leftIcon: "󰇧"
+                            placeholder: "http://localhost:8080"
                             value: Settings.aiSearchUrl
                             onEdited: (t) => Settings.aiSearchUrl = t.trim()
                         }
                         Hint {
                             Layout.leftMargin: 0
-                            text: I18n.tr("Optional: your own SearXNG. Without it the assistant still searches, and obeys any instance you name in chat.")
+                            color: AiService.searchLocal !== "" ? Theme.green : Theme.fgMuted
+                            text: AiService.searchLocal !== ""
+                                ? I18n.tr("Found one here: %1 — it works with no further setup.")
+                                      .arg(AiService.searchLocal)
+                                : I18n.tr("Needs formats: [json] in its settings.yml. One running on localhost:8080 is found on its own.")
+                        }
+
+                        TextField {
+                            label: Settings.aiSearchBackend === "tavily"
+                                ? I18n.tr("Tavily key") : I18n.tr("Brave Search key")
+                            leftIcon: "󰌆"
+                            password: true
+                            placeholder: Settings.aiSearchBackend === "tavily"
+                                ? "tvly-…" : "BSA…"
+                            value: AiService.searchKey
+                            onEdited: (t) => AiService.setKey("search", t)
+                        }
+                        Hint {
+                            Layout.leftMargin: 0
+                            text: AiService.haveKeyring
+                                ? I18n.tr("Free tier is enough for everyday use. Stored in the system keyring.")
+                                : I18n.tr("Free tier is enough for everyday use.")
+                        }
+
+                        // El estado, dicho sin rodeos: es la diferencia entre
+                        // "no encuentro nada" y "no puedo buscar".
+                        Hint {
+                            Layout.leftMargin: 0
+                            visible: root.searchUnset || AiService.searchBroken
+                            color: Theme.red
+                            text: root.searchUnset
+                                ? I18n.tr("Nothing set up: the assistant cannot search the web. Public instances no longer work without a browser.")
+                                : I18n.tr("The last search failed. Fix it above and it will try again.")
                         }
                     }
                 }
@@ -945,6 +1016,14 @@ Rectangle {
                 n++
         return n
     }
+
+    // ¿El asistente puede buscar en la web? Es "no" cuando no hay ni instancia
+    // escrita, ni una en esta máquina, ni clave de API. Lo enseña la propia
+    // línea del grupo plegado, porque es un ajuste que hasta que no falla no se
+    // echa de menos — y cuando falla, se confunde con que el modelo va lento.
+    readonly property bool searchUnset:
+        Settings.aiSearchUrl === "" && AiService.searchLocal === ""
+        && AiService.searchKey === ""
 
     function approvalLabel(m) {
         return m === "careful" ? I18n.tr("Careful")
