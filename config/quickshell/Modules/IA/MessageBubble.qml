@@ -25,6 +25,11 @@ Item {
     property real ms: 0
     property int tokens: 0
     property string toolName: ""
+    // El motivo por el que esta llamada concreta se considera peligrosa ("" si
+    // no lo es). Solo se pregunta mientras la tarjeta espera decisión: después
+    // ya no aporta.
+    readonly property string dangerWhy:
+        toolStatus === "pending" ? AiService.dangerOf(msgIndex) : ""
     property string toolArgs: ""
     property string toolResult: ""
     property string toolStatus: ""
@@ -52,6 +57,53 @@ Item {
     readonly property var _args: {
         if (!isTool) return ({})
         try { return JSON.parse(toolArgs) } catch (e) { return ({ raw: toolArgs }) }
+    }
+
+    // ── El supervisor, en la tarjeta ─────────────────────────────────────────
+    // El veredicto llega DESPUÉS de que la tarjeta esté en pantalla (la crea el
+    // streaming; el segundo modelo tarda lo suyo), así que esto va de "mirando"
+    // a un juicio sin que el usuario espere a nada.
+    readonly property bool _supWatching:
+        isTool && AiService.supervisorWatching === msgIndex
+    readonly property var _sup: isTool ? AiService.supervisorOf(msgIndex) : null
+    readonly property color _supColor:
+        _supWatching ? Theme.fgMuted
+      : !_sup ? Theme.fgMuted
+      : _sup.fallo ? Theme.orange
+      : _sup.veredicto === "dudo" ? Theme.orange
+      : _sup.veredicto === "bloqueo" ? Theme.red
+                                     : Theme.green
+    readonly property string _supText: {
+        if (_supWatching)
+            return I18n.tr("The supervisor is looking at this…")
+        if (!_sup)
+            return ""
+        if (_sup.fallo)
+            return I18n.tr("The supervisor did not answer — decide yourself.")
+        if (_sup.veredicto === "ok")
+            return I18n.tr("The supervisor sees nothing worrying.")
+        let t = I18n.tr("The supervisor is not sure — %1").arg(
+            _sup.riesgo !== "" ? _sup.riesgo : I18n.tr("it did not say why"))
+        if (String(_sup.irreversible || "").trim() !== "")
+            t += "  ·  " + I18n.tr("no way back: %1").arg(_sup.irreversible)
+        if (String(_sup.ajuste || "") !== "")
+            t += "  (" + _sup.ajuste + ")"
+        return t
+    }
+
+    // Lo que se le CONCEDE al subagente, dicho en la tarjeta donde se aprueba.
+    // Una tarjeta que dice "delega una tarea" y se calla que va a escribir no es
+    // una aprobación informada: el permiso que se da aquí es el único que habrá
+    // para todo lo que el subagente haga después.
+    readonly property string _subGrant: {
+        if (toolName !== "subagent")
+            return ""
+        const nombres = ({ read: I18n.tr("reads"), net: I18n.tr("web"),
+                           write: I18n.tr("writes in its own workshop") })
+        const g = AiService.subagentGrantFor(bubble._args)
+        const papel = String(bubble._args.role || "research")
+        return papel + "  ·  "
+             + AiService.grantCaps(g).map(c => nombres[c] || c).join(" · ")
     }
 
     // ── La ficha de cada herramienta ─────────────────────────────────────────
@@ -87,6 +139,20 @@ Item {
                          // El trozo saliente con - y el entrante con +, como un diff.
                          ver: a => ("- " + String(a("old_string")).split("\n").join("\n- ")).slice(0, 600)
                                  + "\n" + ("+ " + String(a("new_string")).split("\n").join("\n+ ")).slice(0, 600) },
+        edit_patch:    { ico: "󱇧", di: I18n.tr("The assistant wants to patch (hash-anchored):"),
+                         res: a => a("path") + "  ·  "
+                                   + (Array.isArray(a("hunks")) ? a("hunks").length : "?")
+                                   + " cambios"
+                                   + (a("dry_run") ? "  (ensayo)" : ""),
+                         // Cada hunk como "op ancla → texto": el usuario ve
+                         // dónde toca y con qué, sin abrir el archivo.
+                         ver: a => (a("hunks") || []).map(k =>
+                                (k.op || "replace") + "  " + (k.at || "?")
+                                + (k.to ? ".." + k.to : "")
+                                + (k.text !== undefined && k.text !== ""
+                                   ? "\n" + String(k.text).split("\n")
+                                       .map(l => "+ " + l).join("\n") : ""))
+                             .join("\n\n") },
         edit_lines:    { ico: "󰗀", di: I18n.tr("The assistant wants to replace lines:"),
                          res: a => a("path") + "  ·  líneas "
                                    + (a("start") || "?") + "-" + (a("end") || "?"),
@@ -122,7 +188,8 @@ Item {
         ask_user:      { ico: "󰘥", di: I18n.tr("The assistant asks you:"),
                          res: a => a("question") },
         subagent:      { ico: "󰳆", di: I18n.tr("The assistant delegates to a subagent:"),
-                         res: a => a("label") || String(a("task")).slice(0, 80),
+                         res: a => (a("label") || String(a("task")).slice(0, 60))
+                                   + "  ·  " + bubble._subGrant,
                          ver: a => a("task") },
         list_mcp_resources: { ico: "󰐱", di: I18n.tr("The assistant wants to list resources (MCP):"),
                          res: a => a("server") },
@@ -660,6 +727,65 @@ Item {
                 }
             }
 
+            // COMANDO DESTRUCTIVO: el guardarraíl de encima de la política. No
+            // se prohíbe (a veces borrar es justo lo que toca) pero se dice qué
+            // se ha visto y esta llamada nunca se auto-aprueba, por muy suelta
+            // que esté la correa.
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Theme.space6
+                visible: bubble.dangerWhy !== ""
+                Text {
+                    text: "󰀪"
+                    color: Theme.red
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.sp(13)
+                }
+                Text {
+                    Layout.fillWidth: true
+                    text: I18n.tr("Careful — %1").arg(bubble.dangerWhy)
+                    color: Theme.red
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.typeLabelSmall
+                    font.weight: Font.Medium
+                    wrapMode: Text.WordWrap
+                }
+            }
+
+            // EL SUPERVISOR. Banda propia, separada del aviso destructivo de
+            // arriba, porque dicen cosas distintas: aquel es una regla local
+            // sobre el comando, esto es la opinión de un segundo modelo sobre
+            // esta llamada en este encargo. Mientras piensa se dice que está
+            // pensando: un supervisor callado no puede parecer conforme.
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Theme.space6
+                visible: bubble.toolStatus === "pending"
+                         && (bubble._supWatching || bubble._sup !== null)
+                Text {
+                    text: bubble._supWatching ? "󰛐" : "󰭎"
+                    color: bubble._supColor
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.sp(13)
+                    opacity: bubble._supWatching ? 0.6 : 1
+                    SequentialAnimation on opacity {
+                        running: bubble._supWatching
+                        loops: Animation.Infinite
+                        NumberAnimation { to: 1; duration: Theme.animSlow }
+                        NumberAnimation { to: 0.45; duration: Theme.animSlow }
+                    }
+                }
+                Text {
+                    Layout.fillWidth: true
+                    text: bubble._supText
+                    color: bubble._supColor
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.typeLabelSmall
+                    font.weight: Font.Medium
+                    wrapMode: Text.WordWrap
+                }
+            }
+
             // Un enlace simbólico que se va fuera de la carpeta personal: se
             // dice adónde apunta DE VERDAD. No se prohíbe (perderías rutas
             // legítimas como ~/datos → /mnt/almacen), pero esta llamada no se
@@ -863,7 +989,7 @@ Item {
                 TextButton {
                     text: I18n.tr("Approve")
                     primary: true
-                    onClicked: AiService.approveTool(bubble.msgIndex)
+                    onClicked: AiService.approveToolByUser(bubble.msgIndex)
                 }
             }
 

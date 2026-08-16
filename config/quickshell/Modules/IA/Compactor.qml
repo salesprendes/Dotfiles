@@ -96,11 +96,17 @@ Scope {
             images: []
         })
         msgs[0] = { role: "system",
-                    content: "Eres el archivero de una conversación entre un "
-                        + "usuario y su asistente. Resumes con fidelidad." }
+                    content: svc.systemFor(
+                        "Eres el archivero de una conversación entre un "
+                        + "usuario y su asistente. Resumes con fidelidad.",
+                        "compact") }
         msgs.push({ role: "user", content: _prompt })
         const req = { model: svc.model, messages: msgs,
                       temperature: 0.2, stream: false }
+        // Resumir es trabajo mecánico: se le pide el esfuerzo mínimo. Pagar
+        // pensamiento profundo por un resumen es justo el gasto que el reparto
+        // por tarea existe para evitar.
+        svc.tuneRequest(req, "compact")
         proc.command = svc.chatCommand(req, 180)
         proc.running = true
     }

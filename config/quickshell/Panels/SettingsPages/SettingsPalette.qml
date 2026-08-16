@@ -10,7 +10,9 @@ import qs.Services
 Singleton {
     readonly property color settingsCard: Theme.withAlpha(Theme.surface, 0.72)
     readonly property color settingsControl: Theme.withAlpha(Theme.surface, 0.86)
-    readonly property color settingsHover: Theme.withAlpha(Theme.surfaceHi, 0.74)
+    // El tono de fila lo define el TEMA (Theme.rowHover): aquí solo se le da
+    // el nombre con el que lo conocen las páginas de ajustes.
+    readonly property color settingsHover: Theme.rowHover
     readonly property color settingsBorder: Theme.withAlpha(Theme.overlay, 0.28)
 
     // Material de tarjeta con luz cenital: el degradado aclara el borde
@@ -43,7 +45,7 @@ Singleton {
     // ficha de cuenta seleccionada y el segmento activo de un SegRow. La misma
     // fórmula estaba calculada en dos ficheros; con dos copias, cambiar la
     // intensidad en uno habría dejado al otro diciendo lo mismo en otro tono.
-    readonly property color selectedTint: Theme.withAlpha(Theme.accent, Theme.isDark ? 0.26 : 0.32)
+    readonly property color selectedTint: Theme.rowSelected
 
     // Degradado acento→acento2 de los "distintivos": la pestaña activa de la
     // nav, la cabecera de cada tarjeta y el icono de la ventana lo comparten,

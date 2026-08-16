@@ -22,12 +22,15 @@ ColumnLayout {
     // gobierna la aprobación, así que el grupo explica por qué una pide
     // permiso y otra no.
     readonly property var grupos: {
-        const orden = ["read", "external", "write", "exec", "ask", "plan"]
+        const orden = ["read", "external", "write", "exec", "critical", "ask", "plan"]
         const nombres = ({
             read: I18n.tr("Read and query"),
             external: I18n.tr("Reach outside"),
             write: I18n.tr("Write files"),
             exec: I18n.tr("Run and act"),
+            // Las que ejecutan código arbitrario: por más que se afloje la
+            // correa, estas siempre pasan por ti.
+            critical: I18n.tr("Critical — never automatic"),
             ask: I18n.tr("Ask you"),
             plan: I18n.tr("Plan")
         })
@@ -118,7 +121,7 @@ ColumnLayout {
 
                         Repeater {
                             model: grupo.modelData.tools
-                            delegate: RowLayout {
+                            delegate: Item {
                                 id: fila
                                 required property string modelData
                                 readonly property string pol:
@@ -126,28 +129,58 @@ ColumnLayout {
                                 readonly property bool excepcion:
                                     (Settings.aiToolPolicies || {})[fila.modelData] !== undefined
                                 Layout.fillWidth: true
-                                spacing: Theme.space8
+                                implicitHeight: Math.max(filaRow.implicitHeight,
+                                                         Theme.dp(30))
 
-                                // Un punto marca lo que se ha tocado a mano: en
-                                // una lista de cuarenta, lo que se sale de la
-                                // norma tiene que verse sin leerla entera.
-                                Rectangle {
-                                    implicitWidth: Theme.dp(5)
-                                    implicitHeight: Theme.dp(5)
-                                    radius: width / 2
-                                    color: fila.excepcion ? Theme.accent : "transparent"
+                                // Cuarenta filas sin ninguna respuesta al ratón:
+                                // en una lista así, saber a cuál estás apuntando
+                                // no es un lujo. Mismo resaltado que el resto del
+                                // shell, y la fila ENTERA cicla la política —
+                                // como cualquier fila de Ajustes, donde tocar la
+                                // fila hace lo que hace su control.
+                                RowHighlight {
+                                    id: filaRealce
+                                    hovered: filaMa.containsMouse
+                                    bleedX: Theme.space6
+                                    bleedY: Theme.space2
                                 }
-                                Text {
-                                    Layout.fillWidth: true
-                                    text: fila.modelData
-                                    color: fila.pol === "off" ? Theme.fgMuted : Theme.fgDim
-                                    font.family: Theme.monoFontFamily
-                                    font.pixelSize: Theme.typeLabelMedium
-                                    elide: Text.ElideMiddle
+                                MouseArea {
+                                    id: filaMa
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onPressed: (e) => filaRealce.press(e.x, e.y)
+                                    onClicked: AiService.setToolPolicy(fila.modelData,
+                                        fila.pol === "ask" ? "auto"
+                                      : fila.pol === "auto" ? "off" : "ask")
                                 }
-                                PolicyPill {
-                                    policy: fila.pol
-                                    onCycled: (v) => AiService.setToolPolicy(fila.modelData, v)
+
+                                RowLayout {
+                                    id: filaRow
+                                    anchors.fill: parent
+                                    spacing: Theme.space8
+
+                                    // Un punto marca lo que se ha tocado a mano: en
+                                    // una lista de cuarenta, lo que se sale de la
+                                    // norma tiene que verse sin leerla entera.
+                                    Rectangle {
+                                        implicitWidth: Theme.dp(5)
+                                        implicitHeight: Theme.dp(5)
+                                        radius: width / 2
+                                        color: fila.excepcion ? Theme.accent : "transparent"
+                                    }
+                                    Text {
+                                        Layout.fillWidth: true
+                                        text: fila.modelData
+                                        color: fila.pol === "off" ? Theme.fgMuted : Theme.fgDim
+                                        font.family: Theme.monoFontFamily
+                                        font.pixelSize: Theme.typeLabelMedium
+                                        elide: Text.ElideMiddle
+                                    }
+                                    PolicyPill {
+                                        policy: fila.pol
+                                        onCycled: (v) => AiService.setToolPolicy(fila.modelData, v)
+                                    }
                                 }
                             }
                         }
@@ -184,7 +217,12 @@ ColumnLayout {
         implicitHeight: Theme.dp(24)
         radius: height / 2
         color: Theme.withAlpha(tinte, pillMa.containsMouse ? 0.24 : 0.13)
-        Behavior on color { ColorAnimation { duration: Theme.animFast } }
+        Behavior on color {
+            ColorAnimation {
+                duration: pillMa.containsMouse ? Theme.animHover : Theme.animHoverOut
+                easing.type: pillMa.containsMouse ? Easing.OutCubic : Easing.InQuad
+            }
+        }
         scale: pillMa.pressed ? 0.95 : 1
         Behavior on scale {
             NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic }

@@ -23,7 +23,17 @@ Rectangle {
          : SettingsPalette.settingsControl
     border.width: Theme.hairline
     border.color: SettingsPalette.settingsBorder
-    Behavior on color { ColorAnimation { duration: Theme.animFast } }
+    // Entra casi instantáneo y sale con calma: el fondo sigue al
+    // puntero, y los 100 ms de una transición normal se notan
+    // como retraso (ver Theme.animHover).
+    Behavior on color {
+        ColorAnimation {
+            duration: ma.containsMouse ? Theme.animHover
+                                       : Theme.animHoverOut
+            easing.type: ma.containsMouse ? Easing.OutCubic
+                                          : Easing.InQuad
+        }
+    }
     scale: ma.pressed ? 0.96 : 1
     Behavior on scale {
         NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic }

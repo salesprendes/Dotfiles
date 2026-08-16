@@ -31,7 +31,17 @@ Rectangle {
     color: chip.open ? SettingsPalette.accentSoft
          : ma.containsMouse ? SettingsPalette.settingsHover
          : "transparent"
-    Behavior on color { ColorAnimation { duration: Theme.animFast } }
+    // Entra casi instantáneo y sale con calma: el fondo sigue al
+    // puntero, y los 100 ms de una transición normal se notan
+    // como retraso (ver Theme.animHover).
+    Behavior on color {
+        ColorAnimation {
+            duration: ma.containsMouse ? Theme.animHover
+                                       : Theme.animHoverOut
+            easing.type: ma.containsMouse ? Easing.OutCubic
+                                          : Easing.InQuad
+        }
+    }
     // Se hunde al pulsar: el gesto se siente antes de que la lámina abra.
     scale: ma.pressed ? 0.97 : 1
     Behavior on scale {

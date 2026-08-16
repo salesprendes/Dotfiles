@@ -6,6 +6,7 @@ import "TextUtils.js" as TU
 import "ToolPolicy.js" as TP
 import "LocalTools.js" as LT
 import "RemoteTools.js" as RT
+import "Supervisor.js" as SV
 
 // EL EJECUTOR: lo que pasa entre que el modelo propone una herramienta y el
 // resultado vuelve a su contexto. Aprobación, jaula, ejecución, resolución y
@@ -14,11 +15,17 @@ import "RemoteTools.js" as RT
 // El orden de las puertas por las que pasa una llamada, que es lo que de verdad
 // define la seguridad del harness:
 //   1. Argumentos reparados y validados (un modelo local manda JSON roto).
-//   2. Hooks pre_tool_use — la última palabra del usuario, y puede vetar.
-//   3. Enrutado: MCP, familia de solo lectura, o el vocabulario que cambia algo.
-//   4. Ejecución con TODO argumento por entorno, nunca interpolado.
-//   5. Redacción de secretos ANTES de que el resultado entre al contexto.
-//   6. Aviso post_tool_use y coordinación del resto del lote.
+//   2. Política dura y local: nunca-auto, comando destructivo, concesión.
+//   3. SUPERVISOR — un segundo modelo opina antes de que se ejecute Y antes de
+//      que el usuario decida, para que su razón esté a la vista en la tarjeta.
+//      Solo puede endurecer: su "ok" no aprueba nada.
+//   4. Hooks pre_tool_use — la última palabra del usuario, y puede vetar. Van
+//      los últimos a propósito: una regla escrita por él manda sobre la opinión
+//      de un modelo, y además no cuesta una llamada.
+//   5. Enrutado: MCP, familia de solo lectura, o el vocabulario que cambia algo.
+//   6. Ejecución con TODO argumento por entorno, nunca interpolado.
+//   7. Redacción de secretos ANTES de que el resultado entre al contexto.
+//   8. Aviso post_tool_use y coordinación del resto del lote.
 Scope {
     id: runner
 
@@ -28,10 +35,12 @@ Scope {
     property var memory       // memoria e instintos
     property var mcp          // clientes MCP
     property var hooks        // hooks del usuario
+    property var sup          // el supervisor (segundo modelo)
     property var lsp          // servidores de lenguaje
     property var dbg          // sesión de depuración (DAP)
     property var repl         // el Python persistente
     property var jobs         // trabajos en segundo plano
+    property var audit        // registro de auditoría
 
     readonly property var messages: conv ? conv.messages : null
 
@@ -41,7 +50,12 @@ Scope {
     // pasado el tope, la tarjeta se queda pendiente y decide el humano (el límite
     // de turnos de Claude Code / Cline, en pequeño).
     property int toolRounds: 0
-    readonly property int maxToolRounds: 8
+    // El tope sale del modelo cuando se le conoce: ocho pasos se le quedan
+    // cortos a uno entrenado para tareas largas de varios pasos justo cuando
+    // empieza a ser útil, y le sobran a uno pequeño. Con un modelo desconocido,
+    // los ocho de siempre.
+    readonly property int maxToolRounds:
+        (svc && svc.profile && svc.profile.rounds > 0) ? svc.profile.rounds : 8
 
     // Permisos permanentes de ESTA conversación (el "session allowlist" de
     // OpenWorker): el usuario pulsa "Siempre" en una tarjeta y esa herramienta
@@ -53,6 +67,16 @@ Scope {
         sessionAllow = m
     }
 
+    // El motivo por el que una llamada concreta es peligrosa, si lo es. Lo usan
+    // la política (para forzar la tarjeta) y la propia tarjeta (para pintarlo).
+    function dangerOf(name, argsJson) {
+        const a = TU.repairJson(argsJson) || ({})
+        // Los tres sitios por donde entra texto que acaba en un shell.
+        const cmd = a.command !== undefined ? a.command
+                  : (name === "job_input" ? a.text : "")
+        return cmd ? TU.dangerScan(cmd) : ""
+    }
+
     // Política de UNA LLAMADA concreta: la del nombre, salvo en las consultas
     // remotas, donde también cuentan los argumentos. Leer un servidor que el
     // usuario ya guardó es rutina; asomarse por primera vez a una máquina que
@@ -61,6 +85,25 @@ Scope {
         // Preguntar y proponer plan SIEMPRE esperan al usuario: son la pausa, no
         // una acción que se pueda automatizar.
         if (name === "ask_user" || name === "propose_plan")
+            return "ask"
+        // GARANTÍA DURA: lo crítico (shell, ssh, Python, evaluar en el
+        // depurador) no se auto-aprueba jamás. Se comprueba ANTES que el
+        // permiso permanente para que ni un "siempre" concedido a la ligera
+        // pueda saltárselo.
+        if (TP.neverAuto(name))
+            return "ask"
+        // Un comando destructivo se enseña SIEMPRE, diga lo que diga la
+        // política: la clase de riesgo mira la herramienta, esto mira lo que
+        // esa llamada concreta va a hacer.
+        if (dangerOf(name, argsJson) !== "")
+            return "ask"
+        // Un subagente que va a ESCRIBIR nace de una tarjeta, aunque delegar sea
+        // clase external y se pueda permitir "siempre": esa tarjeta es la única
+        // aprobación que habrá para todo lo que escriba después. También va
+        // antes del permiso permanente, por el mismo motivo que lo crítico.
+        if (name === "subagent"
+                && TP.grantNeedsApproval(
+                       svc.subagentGrantFor(TU.repairJson(argsJson) || ({}))))
             return "ask"
         // Permiso permanente de la conversación (solo para lo aprobable así).
         if (sessionAllow[name] && TP.canStandingAllow(name))
@@ -132,23 +175,42 @@ Scope {
         advance()   // ¿otra herramienta del lote?; si no, sigue el modelo
     }
 
-    // Una llamada vetada por un hook: se marca rechazada y el motivo vuelve al
-    // modelo, que así puede corregir en vez de reintentar a ciegas.
-    function blockTool(index, reason) {
+    // Una llamada vetada: se marca rechazada y el motivo vuelve al modelo, que
+    // así puede corregir en vez de reintentar a ciegas. Vetan dos cosas, y
+    // conviene que se distingan en el registro y en la tarjeta: un hook del
+    // usuario (una regla suya, escrita por él) y el supervisor (la opinión de un
+    // segundo modelo).
+    function blockTool(index, reason, src) {
         const m = messages.get(index)
         if (!m || m.toolStatus !== "pending")
             return
+        const quien = src === "supervisor" ? "supervisor" : "hook"
+        audit.record({ src: quien, tool: m.toolName, args: m.toolArgs,
+                       decision: "blocked", why: reason })
         messages.setProperty(index, "toolStatus", "rejected")
         messages.setProperty(index, "toolResult",
-            I18n.tr("Blocked by a hook: ") + String(reason).slice(0, 2000))
+            (quien === "supervisor" ? I18n.tr("Stopped by the supervisor: ")
+                                    : I18n.tr("Blocked by a hook: "))
+            + String(reason).slice(0, 2000))
         conv.save()
         advance()
     }
+
+    // Cómo se autorizó ESTA llamada, para el registro: el usuario pulsó, la
+    // tenía permitida en firme, o la dejó pasar la política del modo.
+    function _decisionDe(index, name) {
+        if (_userApproved === index)
+            return sessionAllow[name] ? "always" : "user"
+        return "auto"
+    }
+    property int _userApproved: -1
 
     function rejectTool(index) {
         const m = messages.get(index)
         if (!m || m.role !== "tool" || m.toolStatus !== "pending")
             return
+        audit.record({ src: "card", tool: m.toolName, args: m.toolArgs,
+                       decision: "rejected" })
         messages.setProperty(index, "toolStatus", "rejected")
         messages.setProperty(index, "toolResult",
             "El usuario rechazó ejecutar esta acción.")
@@ -201,6 +263,15 @@ Scope {
             return
         if (TP.canStandingAllow(m.toolName))
             allowForSession(m.toolName)
+        _userApproved = index
+        approveTool(index)
+    }
+
+    // La aprobación de UN clic del usuario (el botón de la tarjeta). El
+    // coordinador llama a approveTool directamente para las automáticas, así
+    // que distinguirlas es cuestión de por dónde entran.
+    function approveToolByUser(index) {
+        _userApproved = index
         approveTool(index)
     }
 
@@ -239,6 +310,14 @@ Scope {
             return
         }
         _hookPassed = -1
+
+        // A partir de aquí la llamada SE EJECUTA: queda en el registro de
+        // auditoría con quién la aprobó y por qué. Es el único punto por el que
+        // pasan todas las herramientas del agente principal, así que es el
+        // sitio honesto para anotarlo.
+        audit.record({ src: "card", tool: m.toolName, args: m.toolArgs,
+                       danger: dangerOf(m.toolName, m.toolArgs),
+                       decision: _decisionDe(index, m.toolName) })
 
         // Herramienta de un servidor MCP: el nombre viaja con el esquema
         // mcp__<servidor>__<tool> de Claude Code. Se enruta a su proceso.
@@ -428,8 +507,11 @@ Scope {
             const task = String(args.task || "").trim()
             if (task === "") { resolveTool(index, "Encargo vacío."); return }
             const why = svc.runSubagent(task, {
-                label: args.label, role: args.role,
-                output: args.output, max_rounds: args.max_rounds
+                label: args.label, role: args.role, brief: args.brief,
+                workspace: args.workspace,
+                capabilities: args.capabilities,
+                output: args.output, output_schema: args.output_schema,
+                max_rounds: args.max_rounds, budget_s: args.budget_s
             }, (report) => runner.resolveTool(index, report))
             if (why !== "")
                 resolveTool(index, why)
@@ -451,61 +533,43 @@ Scope {
                 { uri: String(args.uri || "") },
                 (res) => runner.mcp.flatten(res.contents).trim() || "(recurso sin texto)")
             return
+        // ── Edición anclada por hash: UNA puerta, UN motor ──────────────────
+        // edit_patch es el camino bueno (varios hunks, atómico, con
+        // recuperación de anclas) y edit_lines es la puerta estrecha de
+        // siempre, traducida a un parche de un solo hunk: así el anclaje vive
+        // implementado en UN sitio y no puede divergir entre las dos.
+        case "edit_patch": {
+            const pv = svc._safePath(args.path)
+            if (pv === "") { resolveTool(index, "Ruta fuera de la carpeta personal."); return }
+            const bakP = args.dry_run === true ? "" : backupFor(index, pv)
+            const built = LT.hashPatch(args, svc.toolCtx, bakP, undoDir, svc.iaDir)
+            if (built.error !== undefined) { resolveTool(index, built.error); return }
+            exec(built.cmd, built.env)
+            return
+        }
         case "edit_lines": {
-            const p = svc._safePath(args.path)
-            if (p === "") { resolveTool(index, "Ruta fuera de la carpeta personal."); return }
             const st = parseInt(args.start), en = parseInt(args.end)
             if (!(st >= 1) || !(en >= st)) { resolveTool(index, "Rango inválido: start debe ser ≥1 y end ≥ start."); return }
-            // Edición por rango con ANCLA: si el hash de los extremos ya no
-            // coincide, el archivo cambió desde que el modelo lo leyó y la
-            // edición se niega. Es lo que evita el destrozo clásico de editar por
-            // número de línea sobre un archivo que se movió.
-            const bakL = backupFor(index, p)
-            exec(["python3", "-c", LT.PY_HASH
-                + 'import os,sys,shutil\n'
-                + 'p=os.environ["QS_P"]; st=int(os.environ["QS_ST"]); en=int(os.environ["QS_EN"])\n'
-                + 'sh_=os.environ["QS_SH"]; eh=os.environ["QS_EH"]; new=os.environ["QS_TXT"]\n'
-                + 'try: lines=open(p,encoding="utf-8",errors="replace").read().split("\\n")\n'
-                + 'except OSError as e: print("No se pudo leer:",e); raise SystemExit\n'
-                + 'if en>len(lines): print(f"El archivo tiene {len(lines)} lineas; pediste hasta {en}."); raise SystemExit\n'
-                + 'if sh_ and h(lines[st-1])!=sh_:\n'
-                + '    print(f"La linea {st} ya no es la que viste (hash {h(lines[st-1])}, esperabas {sh_}). Vuelve a leer el archivo."); raise SystemExit\n'
-                + 'if eh and h(lines[en-1])!=eh:\n'
-                + '    print(f"La linea {en} ya no es la que viste (hash {h(lines[en-1])}, esperabas {eh}). Vuelve a leer el archivo."); raise SystemExit\n'
-                + 'os.makedirs(os.environ["QS_BD"],exist_ok=True); shutil.copy2(p,os.environ["QS_BAK"])\n'
-                + 'rep=new.split("\\n") if new!="" else []\n'
-                + 'out=lines[:st-1]+rep+lines[en:]\n'
-                + 'open(p,"w",encoding="utf-8").write("\\n".join(out))\n'
-                + 'print(f"Editado {p}: lineas {st}-{en} ({en-st+1}) sustituidas por {len(rep)}.")\n'],
-                ({ QS_P: p, QS_ST: String(st), QS_EN: String(en),
-                   QS_SH: String(args.start_hash || ""),
-                   QS_EH: String(args.end_hash || ""),
-                   QS_TXT: String(args.text || ""),
-                   QS_BAK: bakL, QS_BD: undoDir }))
+            const pl = svc._safePath(args.path)
+            if (pl === "") { resolveTool(index, "Ruta fuera de la carpeta personal."); return }
+            const hunk = {
+                op: String(args.text || "") === "" ? "delete" : "replace",
+                at: String(st) + (args.start_hash ? "#" + args.start_hash : ""),
+                to: String(en) + (args.end_hash ? "#" + args.end_hash : ""),
+                text: String(args.text || "")
+            }
+            const bakL = backupFor(index, pl)
+            const b2 = LT.hashPatch({ path: args.path, hunks: [hunk] },
+                                    svc.toolCtx, bakL, undoDir, svc.iaDir)
+            if (b2.error !== undefined) { resolveTool(index, b2.error); return }
+            exec(b2.cmd, b2.env)
             return
         }
         case "edit_file": {
             const p = svc._safePath(args.path)
             if (p === "") { resolveTool(index, "Ruta fuera de la carpeta personal."); return }
-            // Sustitución exacta con la regla de unicidad del FileEditTool: 0
-            // apariciones = error, 2+ = error (pide más contexto), 1 = edita.
-            // Todo por entorno y en python3, que no re-interpreta nada.
-            const bakE = backupFor(index, p)
-            exec(["python3", "-c",
-                'import os,sys,shutil\n'
-                + 'p=os.environ["QS_P"]; old=os.environ["QS_OLD"]; new=os.environ["QS_NEW"]\n'
-                + 'try: s=open(p,encoding="utf-8",errors="replace").read()\n'
-                + 'except OSError as e: print("No se pudo leer:",e); sys.exit(0)\n'
-                + 'n=s.count(old)\n'
-                + 'if n==0: print("old_string no aparece en el archivo."); sys.exit(0)\n'
-                + 'if n>1: print("old_string aparece",n,"veces; amplia el contexto para que sea unico."); sys.exit(0)\n'
-                + 'os.makedirs(os.environ["QS_BD"],exist_ok=True); shutil.copy2(p,os.environ["QS_BAK"])\n'
-                + 'open(p,"w",encoding="utf-8").write(s.replace(old,new,1))\n'
-                + 'print("Editado:",p)'],
-                ({ QS_P: p,
-                   QS_OLD: String(args.old_string || ""),
-                   QS_NEW: String(args.new_string || ""),
-                   QS_BAK: bakE, QS_BD: undoDir }))
+            const bE = LT.writes("edit_file", p, args, backupFor(index, p), undoDir)
+            exec(bE.cmd, bE.env)
             return
         }
         case "open_url": {
@@ -519,17 +583,8 @@ Scope {
         case "write_file": {
             const p = svc._safePath(args.path)
             if (p === "") { resolveTool(index, "Ruta fuera de la carpeta personal."); return }
-            // El contenido viaja por entorno (nunca argv) y se escribe con
-            // printf; la carpeta destino se crea si falta. Copia de seguridad
-            // antes de sobrescribir: es lo que permite Deshacer. Si el archivo no
-            // existía, no hay nada que copiar (y deshacer significará borrarlo).
-            const bak = backupFor(index, p)
-            exec(["sh", "-c",
-                'mkdir -p "$QS_BD" "$(dirname -- "$QS_P")"; '
-                + '[ -f "$QS_P" ] && cp -a -- "$QS_P" "$QS_BAK"; '
-                + 'printf %s "$QS_C" > "$QS_P" && echo "Escrito: $QS_P ($(wc -c < "$QS_P") bytes)"'],
-                ({ QS_P: p, QS_C: args.content || "",
-                   QS_BAK: bak, QS_BD: undoDir }))
+            const bW = LT.writes("write_file", p, args, backupFor(index, p), undoDir)
+            exec(bW.cmd, bW.env)
             return
         }
         case "use_skill": {
@@ -701,6 +756,28 @@ Scope {
     // va de verdad. Escape visible en vez de prohibido.
     property var pathReal: ({})        // índice de mensaje → {real, escapes}
 
+    // ── Veredictos del supervisor ────────────────────────────────────────────
+    // Índice de mensaje → {veredicto, riesgo, irreversible, ajuste, fallo}. Se
+    // indexa por POSICIÓN, igual que pathReal, así que caduca exactamente igual
+    // (ver forgetPaths): heredar el "ok" de otra tarjeta sería justo el fallo
+    // que este componente viene a evitar.
+    property var supVerdict: ({})
+
+    function _supDone(index, v) {
+        const m = Object.assign({}, supVerdict)
+        m[index] = v
+        supVerdict = m
+        // Frenazo: se trata igual que el veto de un hook —tarjeta rechazada y el
+        // motivo de vuelta al modelo—, con la diferencia de que se le invita a
+        // rebatir. Un bloqueo sin réplica convierte al agente en alguien que
+        // reintenta a ciegas.
+        if (v && v.veredicto === "bloqueo") {
+            blockTool(index, SV.motivoBloqueo(v), "supervisor")
+            return
+        }
+        advance()
+    }
+
     function realPathFor(index) {
         const r = pathReal[index]
         return (r && r.escapes) ? r.real : ""
@@ -710,7 +787,7 @@ Scope {
     function _pathArgOf(toolName, args) {
         switch (toolName) {
         case "read_file": case "list_dir": case "write_file": case "edit_file":
-        case "grep_files": case "glob_files":
+        case "grep_files": case "glob_files": case "edit_patch":
             return String(args.path || "")
         case "sftp_get": case "sftp_put":
             return String(args.local_path || "")
@@ -781,18 +858,43 @@ Scope {
                     _resolvePath(i, p)
                     return
                 }
+                const escapes = pathReal[i] && pathReal[i].escapes
+                const pol = callPolicy(m.toolName, m.toolArgs)
+                // Solo se calcula si hay quien lo mire: es un JSON.parse más
+                // en un camino por el que se pasa muchas veces.
+                const peligro = sup ? dangerOf(m.toolName, m.toolArgs) : ""
+                // SUPERVISOR: el segundo modelo opina ANTES de que esto corra y
+                // antes de que el usuario decida. Igual que el enlace simbólico:
+                // se pregunta una sola vez por tarjeta, se guarda el veredicto y
+                // al volver se re-entra aquí.
+                if (sup && supVerdict[i] === undefined
+                        && sup.wants(m.toolName, m.toolArgs, peligro, escapes)) {
+                    sup.review(i, m,
+                        ({ politica: pol, danger: peligro,
+                           escapa: escapes ? pathReal[i].real : "" }),
+                        (v) => runner._supDone(i, v))
+                    return
+                }
                 // Hay pendientes: si esta es auto (y no se pasó el tope de pasos),
                 // se ejecuta sola; si es manual, se espera aquí. Una ruta que se
                 // va fuera de $HOME por un enlace NUNCA va sola, por muy "auto"
-                // que esté la herramienta: eso lo miras.
-                const escapes = pathReal[i] && pathReal[i].escapes
-                if (toolRounds <= maxToolRounds && !escapes
-                        && callPolicy(m.toolName, m.toolArgs) === "auto")
+                // que esté la herramienta: eso lo miras. Y una llamada sobre la
+                // que el supervisor tiene dudas tampoco: su "ok" no aprueba
+                // nada, pero su duda sí frena la aprobación automática.
+                const duda = supVerdict[i] && supVerdict[i].veredicto !== "ok"
+                if (toolRounds <= maxToolRounds && !escapes && !duda
+                        && pol === "auto")
                     approveTool(i)
                 return
             }
         }
         // Nada pendiente: el lote está completo, se continúa la conversación.
+        // Antes de seguir se le da un toque al CONSEJERO — no se le espera (no
+        // frena nada y su observación viaja en la petición siguiente), y solo
+        // opina en turnos que ya se han hecho largos, que es donde un agente se
+        // pone a dar vueltas.
+        if (sup)
+            sup.observe()
         svc.start()
     }
 
@@ -801,8 +903,10 @@ Scope {
     function resetThread() {
         sessionAllow = ({})
         pathReal = ({})
+        supVerdict = ({})
         toolRounds = 0
         _hookPassed = -1
+        _userApproved = -1
         _toolIndex = -1
         _resolveIndex = -1
     }
@@ -814,5 +918,6 @@ Scope {
     // no tocaba. Se tiran, que volver a resolverlas cuesta un readlink.
     function forgetPaths() {
         pathReal = ({})
+        supVerdict = ({})
     }
 }

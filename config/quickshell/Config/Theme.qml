@@ -127,6 +127,31 @@ Singleton {
     // el ajuste de redondeo del usuario): son los radios FIJOS de los
     // controles, que en M3 no dependen del tema sino de su tamaño.
     readonly property int shapeXs: dp(4)
+    // ── El resaltado de una FILA ─────────────────────────────────────────────
+    // Los tres tonos con los que se realza cualquier fila del shell (lista de
+    // ajustes, modelos, herramientas, conversaciones). Viven aquí y no en la
+    // paleta de Ajustes porque no son de Ajustes: son del shell entero, y
+    // tenerlos en dos sitios era lo que hacía que el panel de IA se resaltara
+    // distinto que el resto. Quien los pinta es Components/RowHighlight.qml.
+    // Y sus DOS tiempos, que no son los de una transición cualquiera. El
+    // resaltado no decora: es la respuesta al puntero, y tiene que llegar
+    // ANTES de que te dé tiempo a notar que llega. Con los 100 ms de una
+    // transición normal la banda va literalmente por detrás del ratón, y al
+    // barrer una lista se ve encenderse tarde cada fila.
+    //
+    // Entra deprisa y sale con calma — la misma regla que ya sigue la onda de
+    // pulsación (ver Components/Ripple.qml): al revés se percibe como un
+    // parpadeo, no como un material que responde. Y va con TOPE además de con
+    // factor: si eliges animaciones lentas, un panel puede tardar más, pero el
+    // acuse de recibo del puntero no debe pasar de un parpadeo. En "sin
+    // animaciones" (animFast = 0) sale instantáneo, como todo lo demás.
+    readonly property int animHover:    Math.min(70, Math.round(animFast * 0.45))
+    readonly property int animHoverOut: animFast
+
+    readonly property color rowHover:    withAlpha(surfaceHi, 0.74)
+    readonly property color rowSelected: withAlpha(accent, isDark ? 0.26 : 0.32)
+    readonly property color rowRipple:   withAlpha(fg, isDark ? 0.10 : 0.08)
+
     readonly property int shapeSm: dp(8)
     readonly property int shapeMd: dp(12)
     readonly property int shapeLg: dp(16)

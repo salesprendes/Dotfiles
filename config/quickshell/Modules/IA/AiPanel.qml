@@ -323,14 +323,14 @@ Popout {
                         readonly property bool current: modelData.id === AiService.currentId
                         Layout.fillWidth: true
                         implicitHeight: Theme.dp(42)
-                        radius: Theme.shapeSm
-                        color: current ? SettingsPalette.selectedTint
-                             : convMa.containsMouse ? SettingsPalette.settingsHover
-                             : "transparent"
-                        Behavior on color { ColorAnimation { duration: Theme.animFast } }
+                        color: "transparent"
                         clip: true
 
-                        Ripple { id: convRipple }
+                        RowHighlight {
+                            id: convRealce
+                            hovered: convMa.containsMouse
+                            selected: convRow.current
+                        }
 
                         // Debajo de la fila entera; el botón de borrar,
                         // declarado después, gana los clics que le caen.
@@ -339,7 +339,7 @@ Popout {
                             anchors.fill: parent
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
-                            onPressed: (e) => convRipple.press(e.x, e.y)
+                            onPressed: (e) => convRealce.press(e.x, e.y)
                             onClicked: {
                                 AiService.switchTo(convRow.modelData.id)
                                 panel.convOpen = false
@@ -837,6 +837,11 @@ Popout {
                               .arg(AiService.activeSub.label)
                               .arg(AiService.activeSub.rounds)
                               .arg(AiService.activeSub.maxRounds)
+                          // Qué está haciendo AHORA. Un subagente corre sin
+                          // tarjetas: si la barra solo cuenta rondas, lo que
+                          // hace es invisible mientras lo hace.
+                          + (AiService.activeSub.lastTool !== ""
+                             ? "  ·  " + AiService.activeSub.lastTool : "")
                         : ""
                 color: Theme.accentText
                 font.family: Theme.fontFamily
@@ -1103,13 +1108,17 @@ Popout {
                     required property int index
                     Layout.fillWidth: true
                     implicitHeight: Theme.dp(30)
-                    radius: Theme.shapeSm
-                    color: cmdMa.containsMouse || cmdRow.index === 0
-                        ? SettingsPalette.settingsHover : "transparent"
-                    Behavior on color { ColorAnimation { duration: Theme.animFast } }
+                    color: "transparent"
                     clip: true
 
-                    Ripple { id: cmdRipple }
+                    // La primera es la que se lleva el Enter: se pinta como
+                    // ELEGIDA, no como si el ratón estuviera encima. Antes
+                    // compartían tono y no había forma de saber cuál era cuál.
+                    RowHighlight {
+                        id: cmdRealce
+                        hovered: cmdMa.containsMouse
+                        selected: cmdRow.index === 0 && !cmdMa.containsMouse
+                    }
 
                     RowLayout {
                         anchors.fill: parent
@@ -1150,7 +1159,7 @@ Popout {
                         anchors.fill: parent
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
-                        onPressed: (e) => cmdRipple.press(e.x, e.y)
+                        onPressed: (e) => cmdRealce.press(e.x, e.y)
                         onClicked: panel.runSlash(cmdRow.modelData)
                     }
                 }

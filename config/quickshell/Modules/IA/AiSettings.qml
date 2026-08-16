@@ -280,7 +280,11 @@ Rectangle {
                         // existe — y encenderlo, la de calidad.
                         SegRow {
                             glyph: "󰟃"
-                            label: I18n.tr("Reasoning (Qwen)")
+                            // Con un modelo reconocido ya no es "lo de Qwen":
+                            // es la palanca de ese modelo, se llame como se
+                            // llame por dentro.
+                            label: AiService.profileLabel !== ""
+                                ? I18n.tr("Reasoning") : I18n.tr("Reasoning (Qwen)")
                             options: [ { text: "Auto", value: "auto" },
                                        { text: I18n.tr("Always"), value: "think" },
                                        { text: I18n.tr("Off"), value: "no_think" } ]
@@ -289,11 +293,72 @@ Rectangle {
                         }
                         Hint {
                             Layout.leftMargin: 0
-                            text: I18n.tr("Qwen3 soft switch: adds /think or /no_think to your message. Other models ignore it.")
+                            // Cada familia enciende el pensamiento por un
+                            // sitio distinto, y decirlo evita que el usuario
+                            // busque un interruptor que en su modelo no existe.
+                            text: AiService.profile.softSwitch
+                                ? I18n.tr("Qwen3 soft switch: adds /think or /no_think to your message. Other models ignore it.")
+                                : AiService.profile.thinking === "always"
+                                ? I18n.tr("%1 always thinks: it cannot be turned off, only turned down.").arg(AiService.profileLabel)
+                                : AiService.profile.thinkVia === "systoken"
+                                ? I18n.tr("%1 switches it with a mark at the start of the system prompt — the harness puts it there.").arg(AiService.profileLabel)
+                                : I18n.tr("%1 has its own flag: the switch travels in the request, not inside your message.").arg(AiService.profileLabel)
+                        }
+
+                        // ── Lo que solo existe si el modelo está reconocido ──
+                        // Con cualquier otro modelo esta parte no aparece: no
+                        // tiene sentido ofrecer palancas que nadie va a leer al
+                        // otro lado.
+                        SegRow {
+                            shown: AiService.profile.efforts.length > 0
+                            glyph: "󰓅"
+                            label: I18n.tr("Reasoning effort")
+                            options: [ { text: "Auto", value: "auto" },
+                                       { text: I18n.tr("Low"), value: "low" },
+                                       { text: I18n.tr("Balanced"), value: "medium" },
+                                       { text: I18n.tr("Max"), value: "xhigh" } ]
+                            current: AiService.effortSetting
+                            onPicked: (v) => Settings.aiEffort = v
+                        }
+                        Hint {
+                            shown: AiService.profile.efforts.length > 0
+                            Layout.leftMargin: 0
+                            text: AiService.effortSetting === "auto"
+                                ? I18n.tr("Auto spends thinking where decisions are made (the first turn of a task, code review) and goes light where the work is mechanical (tool rounds, compacting, supervising).")
+                                : I18n.tr("Fixed for everything — including compacting and supervising, which do not need it.")
+                        }
+
+                        SwitchRow {
+                            shown: AiService.profile.sampling !== null
+                            glyph: "󰘵"
+                            label: I18n.tr("Model's recommended settings")
+                            checked: Settings.aiModelTuning
+                            onToggled: Settings.aiModelTuning = !Settings.aiModelTuning
+                        }
+                        Hint {
+                            shown: AiService.profile.sampling !== null
+                            Layout.leftMargin: 0
+                            text: I18n.tr("Uses the sampling values its authors recommend (they differ between thinking and not thinking). With a Qwen this is not a detail: the wrong temperature turns solving the task into rambling. While it is on, the Creativity slider does not travel.")
+                        }
+
+                        SwitchRow {
+                            shown: AiService.profile.preserveThinking
+                            glyph: "󰑖"
+                            label: I18n.tr("Give its reasoning back")
+                            checked: Settings.aiKeepThinking
+                            onToggled: Settings.aiKeepThinking = !Settings.aiKeepThinking
+                        }
+                        Hint {
+                            shown: AiService.profile.preserveThinking
+                            Layout.leftMargin: 0
+                            text: I18n.tr("Sends back its own reasoning from the last two turns, which this model knows how to reuse: it picks a long task up where it left it instead of reasoning it out again.")
                         }
 
                         SliderRow {
                             label: I18n.tr("Creativity"); glyph: "󰔄"
+                            enabled: !(AiService.profile.sampling !== null
+                                       && Settings.aiModelTuning)
+                            opacity: enabled ? 1 : 0.45
                             from: 0.0; to: 1.5; value: Settings.aiTemperature
                             valueText: Settings.aiTemperature.toFixed(1)
                             onMoved: (v) => Settings.aiTemperature = Math.round(v * 10) / 10
@@ -308,6 +373,34 @@ Rectangle {
                         }
                     }
                 }
+            }
+
+            // ── El MODELO ───────────────────────────────────────────────────
+            // Hasta ahora solo se podía elegir desde el botón de la cabecera, y
+            // en Ajustes —donde uno viene precisamente a configurar el
+            // servidor— no había forma. Es la misma lámina, con su buscador y
+            // su catálogo: lo que publique el servidor, con la variante al lado
+            // para distinguir el de 27B del de 32B, y la fila "Otro" para
+            // escribir un id que el catálogo no liste.
+            Fold {
+                glyph: "󰧑"
+                title: I18n.tr("Model")
+                summary: AiService.model === "" ? I18n.tr("choose one")
+                                                : AiService.modelLabel(AiService.model)
+                warn: AiService.model === ""
+                sourceComponent: Component { ModelSheet { autoFocus: false } }
+            }
+
+            // Que se vea que el harness ha reconocido el modelo: si no, el
+            // usuario no tiene forma de saber por qué la ventana pasó de 32k a
+            // 262k ni de dónde salen las palancas nuevas.
+            Hint {
+                shown: AiService.profileLabel !== ""
+                Layout.leftMargin: 0
+                text: "󰄬  " + I18n.tr("Recognised model: %1").arg(AiService.profileLabel)
+                      + "  ·  " + Math.round(AiService.contextTokens / 1000) + "k"
+                      + (AiService.profile.vision ? "  ·  " + I18n.tr("sees images") : "")
+                color: Theme.green
             }
 
             Fold {
@@ -393,6 +486,41 @@ Rectangle {
                                 : I18n.tr("Reads and queries on its own. Writing, running and reaching out ask first.")
                             color: AiService.approvalMode === "auto" ? Theme.red
                                                                      : Theme.fgMuted
+                        }
+
+                        // El supervisor va aquí y no en su propia sección: es
+                        // una decisión de permisos, no una comodidad. Y vive
+                        // pegado al modo porque lo que hace es corregirlo —
+                        // sostener una correa suelta con un segundo par de ojos.
+                        SegRow {
+                            glyph: "󰭎"
+                            label: I18n.tr("Supervisor")
+                            options: [ { text: I18n.tr("Off"), value: "off" },
+                                       { text: I18n.tr("Risky only"), value: "risky" },
+                                       { text: I18n.tr("Everything"), value: "all" } ]
+                            current: AiService.supervisorMode
+                            onPicked: (v) => Settings.aiSupervisor = v
+                        }
+                        Hint {
+                            Layout.leftMargin: 0
+                            text: AiService.supervisorMode === "off"
+                                ? I18n.tr("Nobody double-checks the agent.")
+                                : AiService.supervisorMode === "all"
+                                ? I18n.tr("A second model reviews every call — one extra request each. Only worth it with a fast model.")
+                                : I18n.tr("A second model reviews what can do damage (writing, running, destructive commands) before you decide. It can only stop things, never approve them.")
+                        }
+                        TextField {
+                            shown: AiService.supervisorMode !== "off"
+                            label: I18n.tr("Supervisor model")
+                            leftIcon: "󰭎"
+                            placeholder: I18n.tr("the same one as the agent")
+                            value: Settings.aiSupervisorModel
+                            onEdited: (t) => Settings.aiSupervisorModel = t.trim()
+                        }
+                        Hint {
+                            visible: AiService.supervisorMode !== "off"
+                            Layout.leftMargin: 0
+                            text: I18n.tr("Another model on the SAME server — a small fast one watching a big one is the useful combination. Not another provider: that would mean sending pieces of your files to a third company for an opinion.")
                         }
 
                         // Las excepciones son eso: excepciones. Plegadas, con

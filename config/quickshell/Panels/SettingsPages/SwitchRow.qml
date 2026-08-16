@@ -28,32 +28,20 @@ SettingsRow {
     // Alto de fila de ChromeOS: sus listas respiran más que una fila de 36.
     implicitHeight: Math.max(row.implicitHeight, Theme.dp(46))
 
-    // Fondo de hover: solo opacidad, sin color propio, para no imponer un tono
-    // que desentone con el tema activo. Sangra fuera de la fila para que la
-    // franja realzada respire; menos por arriba y abajo que por los lados, que
-    // es donde hay sitio (el hueco entre filas es de Theme.space12).
-    Rectangle {
-        anchors.fill: parent
-        anchors.leftMargin: -Theme.space8
-        anchors.rightMargin: -Theme.space8
-        anchors.topMargin: -Theme.space4
-        anchors.bottomMargin: -Theme.space4
-        radius: Theme.dp(10)
-        color: SettingsPalette.settingsHover
-        opacity: rowMa.containsMouse ? 1 : 0
-        Behavior on opacity { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutQuad } }
-    }
-
-    // Onda de pulsación (ver Components/Ripple.qml). Toda la fila es el área
-    // de toque, pero hasta ahora pulsar no devolvía NADA hasta que el
-    // interruptor terminaba de deslizarse: el clic caía en el vacío. La onda
-    // nace donde pinchas y responde en el mismo fotograma.
+    // El resaltado de fila del shell, entero (banda + onda). Estaba escrito
+    // aquí dentro, y por eso las listas del panel de IA se resaltaban de otra
+    // manera; ahora es Components/RowHighlight.qml y lo comparten todas. Va
+    // ANTES del contenido para quedar por debajo: en Material la onda corre por
+    // la superficie, no por encima del texto.
     //
-    // Va detrás del contenido a propósito: en Material la onda corre por la
-    // superficie, por debajo del texto y del control, no por encima.
-    Ripple {
-        id: rowRipple
-        color: Theme.withAlpha(Theme.fg, Theme.isDark ? 0.10 : 0.08)
+    // La banda sangra fuera de la fila para que la franja respire; menos por
+    // arriba y abajo que por los lados, que es donde hay sitio (el hueco entre
+    // filas es de Theme.space12).
+    RowHighlight {
+        id: realce
+        hovered: rowMa.containsMouse
+        bleedX: Theme.space8
+        bleedY: Theme.space4
     }
 
     // Área de toque de la fila entera. Va ANTES del contenido (más abajo en
@@ -64,7 +52,7 @@ SettingsRow {
         anchors.fill: parent
         hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
-        onPressed: (m) => rowRipple.press(m.x, m.y)
+        onPressed: (m) => realce.press(m.x, m.y)
         onClicked: sr.toggled()
     }
 

@@ -38,7 +38,17 @@ ColumnLayout {
         color: fold.open ? SettingsPalette.settingsControl
              : ma.containsMouse ? SettingsPalette.settingsHover
              : "transparent"
-        Behavior on color { ColorAnimation { duration: Theme.animFast } }
+        // Entra casi instantáneo y sale con calma: el fondo sigue al
+        // puntero, y los 100 ms de una transición normal se notan
+        // como retraso (ver Theme.animHover).
+        Behavior on color {
+            ColorAnimation {
+                duration: ma.containsMouse ? Theme.animHover
+                                           : Theme.animHoverOut
+                easing.type: ma.containsMouse ? Easing.OutCubic
+                                              : Easing.InQuad
+            }
+        }
         clip: true
 
         Ripple { id: ripple }

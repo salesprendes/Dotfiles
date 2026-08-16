@@ -8,6 +8,7 @@ import "TextUtils.js" as TU
 import "ToolDefs.js" as TD
 import "ToolPolicy.js" as TP
 import "ModelCatalog.js" as MC
+import "ModelProfile.js" as MP
 import "LocalTools.js" as LT
 import "RemoteTools.js" as RT
 
@@ -146,6 +147,14 @@ Singleton {
 
     function modelShort(id) { return MC.shortName(id) }
     function modelTag(id)   { return MC.tag(id) }
+    // La variante (27b, a3b, fp8, q4_k_m…): sin ella, tres modelos distintos
+    // del mismo servidor se leen iguales en la lista.
+    function modelVariant(id) { return MC.variant(id) }
+    // Nombre y variante juntos, que es como se nombra un modelo en voz alta.
+    function modelLabel(id) {
+        const v = MC.variant(id)
+        return MC.shortName(id) + (v !== "" ? "  ·  " + v : "")
+    }
 
     readonly property var modelGroups: MC.groups({
         active: Settings.aiProvider,
@@ -165,6 +174,112 @@ Singleton {
     readonly property bool keyMissing: provider.needsKey && apiKey === ""
     readonly property bool notConfigured: urlMissing || keyMissing
 
+    // ── Qué modelo hay delante ───────────────────────────────────────────────
+    // Lo que ese modelo concreto admite (ventana, pensamiento, muestreo,
+    // imágenes). Un modelo desconocido devuelve el perfil genérico y con él
+    // NADA de esto se aplica: el harness se comporta como siempre. Ver
+    // ModelProfile.js.
+    readonly property var profile: MP.of(model)
+    readonly property string profileLabel: profile.label
+
+    // Lo que ESTE servidor ha rechazado. Un OpenAI-compatible puede no entender
+    // un campo y contestar 400; la respuesta no es dejar de mandarlo siempre
+    // (el que sí lo entiende lo aprovecha) sino apagar el que molesta aquí.
+    property var profileDegraded: ({})
+    function profileDegrade(msg) {
+        const k = MP.offenderOf(msg)
+        if (k === "" || profileDegraded[k])
+            return false
+        const m = Object.assign({}, profileDegraded)
+        m[k] = true
+        profileDegraded = m
+        conv.pushInfo(I18n.tr("This server does not accept %1 — turned off for this session.")
+                          .arg(MP.offenderLabel(k)))
+        return true
+    }
+    // Cambiar de modelo o de servidor estrena la hoja: lo que rechazaba uno no
+    // tiene por qué rechazarlo el siguiente.
+    onModelChanged: profileDegraded = ({})
+    onEndpointChanged: profileDegraded = ({})
+
+    // ── El esfuerzo de razonamiento, por tarea ───────────────────────────────
+    // Un modelo con tres niveles de esfuerzo se suele dejar en el máximo "por si
+    // acaso", y entonces se paga pensamiento profundo para resumir una
+    // conversación. El harness sabe algo que el usuario no puede saber a mano:
+    // QUÉ le está pidiendo en cada momento. Se piensa a fondo donde se toman las
+    // decisiones —el turno en el que se decide el plan, la revisión de código— y
+    // se va ligero donde el trabajo es mecánico: integrar el resultado de una
+    // herramienta, compactar, o decidir si una llamada es peligrosa.
+    readonly property string effortSetting:
+        ["auto", "low", "medium", "xhigh"].indexOf(Settings.aiEffort) !== -1
+            ? Settings.aiEffort : "auto"
+    // 'p' permite preguntar por un perfil que no es el del agente (el supervisor
+    // puede usar otro modelo). Sin él, el del agente.
+    function effortFor(kind, p) {
+        const perfil = p || profile
+        if (!perfil.efforts || perfil.efforts.length === 0)
+            return ""
+        if (effortSetting !== "auto")
+            return effortSetting
+        switch (kind) {
+        case "turn":     return agentMode ? "xhigh" : "medium"
+        case "tools":    return "medium"
+        case "review":   return "xhigh"
+        case "subagent": return "medium"
+        case "compact":  return "low"
+        case "guard":    return "low"
+        case "advise":   return "low"
+        }
+        return "medium"
+    }
+
+    // ¿Piensa en esta llamada? El ajuste del usuario manda, salvo en el modelo
+    // que no admite apagarlo (y ahí ModelProfile ya lo ignora).
+    readonly property bool wantThinking: Settings.aiThink !== "no_think"
+
+    // ¿Ve imágenes? Solo se dice que NO cuando el modelo está reconocido y
+    // sabemos que es de solo texto. De uno desconocido no se presume nada y se
+    // mandan como siempre — quitar una capacidad por si acaso sería peor que el
+    // error que evita.
+    readonly property bool canSeeImages: profile.family === "" || profile.vision
+
+    // La ÚNICA puerta por la que el perfil toca una petición. La usan el chat,
+    // el subagente, la compactación y el supervisor, así que lo que se sabe del
+    // modelo se aplica en los cuatro sin que ninguno tenga que acordarse.
+    // La otra mitad: hay familias que no encienden el pensamiento con un campo
+    // de la petición sino escribiendo en el PROMPT DE SISTEMA — una línea
+    // "Reasoning strength: …" (Muse Glimmer) o un token al principio del todo
+    // (Gemma 4). Por eso todo prompt de sistema del harness pasa por aquí, y
+    // con un modelo desconocido sale exactamente igual que entró.
+    function systemFor(text, kind, thinking, modelId) {
+        const p = (modelId && modelId !== model) ? MP.of(modelId) : profile
+        return MP.systemFor(text, p, ({
+            thinking: thinking === undefined ? wantThinking : thinking,
+            effort: effortFor(kind, p),
+            degraded: profileDegraded
+        }))
+    }
+
+    // 'modelId' solo hace falta cuando la petición NO va al modelo del agente
+    // (el supervisor puede usar otro): aplicarle el perfil del principal sería
+    // mandarle banderas de un modelo que no es.
+    function tuneRequest(req, kind, thinking, modelId) {
+        const p = (modelId && modelId !== model) ? MP.of(modelId) : profile
+        return MP.tune(req, p, ({
+            thinking: thinking === undefined ? wantThinking : thinking,
+            effort: effortFor(kind, p),
+            tuning: Settings.aiModelTuning !== false,
+            // Reaprovechar su razonamiento tiene sentido dentro de un encargo
+            // largo, no al resumir la conversación entera.
+            keepThinking: Settings.aiKeepThinking !== false
+                          && kind !== "compact" && kind !== "guard"
+                          && kind !== "advise",
+            maxOut: kind === "turn" || kind === "tools",
+            degraded: profileDegraded
+        }))
+    }
+
+
     // ── Presupuesto de contexto ──────────────────────────────────────────────
     // Antes el recorte era de 20 000 caracteres fijos, dijera lo que dijera el
     // modelo. Con un modelo LOCAL eso es o derrochar (un Qwen de 32k aguanta el
@@ -174,7 +289,12 @@ Singleton {
     // medidor.
     readonly property int contextTokens:
         Settings.aiContextTokens > 0 ? Settings.aiContextTokens
-        : (provider.userUrl ? 32768 : 128000)     // local típico vs. nube
+        // Si el modelo está reconocido, su ventana REAL manda sobre la
+        // heurística: adivinar 32k para un modelo de 262k es tirar casi todo el
+        // contexto que has pagado, y recortar el historial mucho antes de hacer
+        // ninguna falta.
+        : (profile.ctx > 0 ? profile.ctx
+        : (provider.userUrl ? 32768 : 128000))    // local típico vs. nube
     // Del total, algo menos de la mitad para el historial: el resto lo comen el
     // prompt de sistema, los esquemas de herramientas y la respuesta. ~3,5
     // caracteres por token es la regla de bolsillo habitual.
@@ -254,6 +374,9 @@ Singleton {
     readonly property string approvalMode: TP.mode(Settings.aiApproval)
 
     function riskClass(name)        { return TP.riskClass(name) }
+    // El nivel numérico (0 leer … 4 crítico): lo usan la auditoría y la UI.
+    function riskLevel(name)        { return TP.riskLevel(name) }
+    function neverAuto(name)        { return TP.neverAuto(name) }
     function canStandingAllow(name) { return TP.canStandingAllow(name) }
     function naturalPolicy(name)    { return TP.naturalPolicy(name, approvalMode) }
     function toolPolicy(name) {
@@ -319,6 +442,56 @@ Singleton {
             || RT.query(tool, args, toolCtx)
             || LT.files(tool, args, toolCtx)
     }
+
+    // ── La puerta de los subagentes ──────────────────────────────────────────
+    // Lo que un subagente puede ANUNCIAR y lo que puede EJECUTAR salen de la
+    // misma concesión y de la misma lista. Que sean dos funciones y no una es
+    // solo porque una devuelve esquemas y la otra comandos: si divergieran,
+    // existiría una herramienta ejecutable que nadie anunció, que es
+    // exactamente el agujero que esto viene a cerrar.
+    readonly property var _subExtraDefs:
+        TD.core().filter(d => TP.SUB_ESCRITURA.indexOf(d["function"].name) !== -1
+                              || d["function"].name === "web_search")
+          // El lsp de lectura: un revisor que puede saltar a la definición y
+          // listar las referencias revisa de otra manera.
+          .concat(TD.dev().filter(d => d["function"].name === "lsp"))
+
+    function subagentDefs(grant) {
+        return readOnlyDefs.concat(_subExtraDefs)
+                 .filter(d => TP.subagentAllows(d["function"].name, grant))
+    }
+
+    // {cmd,env} | {error} | null (null = fuera de sus permisos). Dos paredes
+    // distintas: se lee dentro de la RAÍZ y se escribe dentro del TALLER, que
+    // nunca es la carpeta viva del usuario.
+    function subagentCommand(tool, args, grant, ws) {
+        if (!TP.subagentAllows(tool, grant))
+            return null
+        if (TP.SUB_ESCRITURA.indexOf(tool) !== -1) {
+            if (!ws || ws.writeRoot === "")
+                return { error: "No tienes ningún taller donde escribir." }
+            const wctx = Object.assign({}, toolCtx, { root: ws.writeRoot })
+            const bak = ws.undoDir + "/" + Date.now() + ".bak"
+            if (tool === "edit_patch")
+                return LT.hashPatch(args, wctx, bak, ws.undoDir, iaDir)
+            const p = LT.safePath(args.path, wctx.home, ws.writeRoot)
+            if (p === "")
+                return { error: "Solo puedes escribir dentro de tu taller ("
+                              + ws.writeRoot + "). Usa rutas relativas." }
+            return LT.writes(tool, p, args, bak, ws.undoDir)
+        }
+        const rctx = Object.assign({}, toolCtx, { root: ws ? ws.root : "" })
+        return LT.sysQuery(tool, args, rctx)
+            || RT.query(tool, args, rctx)
+            || LT.files(tool, args, rctx)
+    }
+
+    // La misma resolución de rutas, para quien no construye un comando (el lsp
+    // pide la ruta ya absoluta).
+    function workPath(p, root) {
+        return LT.safePath(p, Quickshell.env("HOME"), root)
+    }
+    function lspRequest(args, cb) { lspMgr.request(args, cb) }
 
     // Expande ~ y comprueba que la ruta quede dentro de la carpeta personal.
     function _safePath(p) { return LT.safePath(p, Quickshell.env("HOME")) }
@@ -437,12 +610,18 @@ Singleton {
     DebugSession { id: dbgSess; svc: ai }
     PersistentRepl { id: replKernel; svc: ai; lsp: lspMgr }
     JobRunner { id: jobRunner; svc: ai }
+    AuditLog { id: auditLog; svc: ai }
+
+    // El segundo par de ojos. Va DESPUÉS de la auditoría porque escribe en ella,
+    // y antes del ejecutor porque este le pregunta.
+    AgentSupervisor { id: supervisor; svc: ai; conv: conv; audit: auditLog }
 
     ToolRunner {
         id: tools
         svc: ai; conv: conv; skills: skillStore
         memory: memoryStore; mcp: mcpClient; hooks: hookRunner
         lsp: lspMgr; dbg: dbgSess; repl: replKernel; jobs: jobRunner
+        audit: auditLog; sup: supervisor
     }
 
     ChatClient {
@@ -498,6 +677,28 @@ Singleton {
     property alias toolRounds: tools.toolRounds
     property alias maxToolRounds: tools.maxToolRounds
     function approveTool(i) { tools.approveTool(i) }
+    // La aprobación con un clic del usuario: se distingue de la automática para
+    // que el registro de auditoría diga quién dejó pasar cada cosa.
+    function approveToolByUser(i) { tools.approveToolByUser(i) }
+    // Puerta de registro para lo que se ejecuta SIN tarjeta (subagentes y la
+    // celda de Python por el loopback).
+    function auditRecord(o) { auditLog.record(o) }
+
+    // ── El supervisor, para la interfaz ──────────────────────────────────────
+    // El veredicto de una tarjeta ({veredicto, riesgo, irreversible, ajuste,
+    // fallo}) o null si aún no hay. La tarjeta ya está en pantalla mientras el
+    // guardián piensa, así que esto pasa de null a objeto y la banda aparece.
+    function supervisorOf(i) { return tools.supVerdict[i] || null }
+    readonly property int supervisorWatching: supervisor.reviewing
+    readonly property string supervisorMode: supervisor.modo
+    readonly property bool supervisorOn: supervisor.activo
+    // La observación del consejero que viaja en la siguiente petición. Vive una
+    // sola vuelta: es sobre el paso que se acaba de dar.
+    property string advisorNote: ""
+    function dangerOf(i) {
+        const m = conv.messages.get(i)
+        return m ? tools.dangerOf(m.toolName, m.toolArgs) : ""
+    }
     function approveToolAlways(i) { tools.approveToolAlways(i) }
     function rejectTool(i) { tools.rejectTool(i) }
     function answerQuestion(i, a) { tools.answerQuestion(i, a) }
@@ -563,22 +764,53 @@ Singleton {
     readonly property var activeSub: activeSubs.length > 0 ? activeSubs[0] : null
     readonly property Component _subComp: Component { SubAgent {} }
 
-    // opts = { label, role, output, max_rounds }. Devuelve "" si arrancó, o el
-    // motivo por el que no.
+    // La concesión que TENDRÍA un subagente con estos argumentos. La consulta el
+    // ejecutor antes de arrancarlo: si incluye escritura, la tarjeta se enseña
+    // sí o sí, y dice exactamente qué se está concediendo.
+    function subagentGrantFor(opts) {
+        const role = TP.SUB_ROLES.indexOf(String(opts.role || "")) !== -1
+                     ? String(opts.role) : "research"
+        const pedido = Array.isArray(opts.capabilities) ? opts.capabilities : null
+        return TP.subagentGrant(role, pedido, approvalMode, Settings.aiToolPolicies)
+    }
+    function grantCaps(grant) { return TP.grantCaps(grant) }
+
+    // opts = { label, role, brief, output, output_schema, capabilities,
+    //          max_rounds, budget_s }. Devuelve "" si arrancó, o el motivo por
+    // el que no.
     function runSubagent(task, opts, onDone) {
         if (activeSubs.length >= maxConcurrentSubs)
             return "Ya hay " + activeSubs.length + " subagentes en marcha (el "
                  + "máximo). Espera a que alguno termine."
-        const roles = ["research", "review", "debug"]
-        const role = roles.indexOf(String(opts.role || "")) !== -1
-                     ? opts.role : "research"
+        const role = TP.SUB_ROLES.indexOf(String(opts.role || "")) !== -1
+                     ? String(opts.role) : "research"
         const mr = Math.max(1, Math.min(12, parseInt(opts.max_rounds) || 8))
+        // El esquema puede llegar como objeto o como texto: un modelo local
+        // manda cualquiera de los dos, y rechazar el encargo por eso sería
+        // absurdo.
+        let esquema = opts.output_schema
+        if (typeof esquema === "string")
+            esquema = TU.repairJson(esquema)
+        const id = "a" + Date.now().toString(36) + "-"
+                 + Math.floor(Math.random() * 1679616).toString(36)
+        // La raíz que pide el jefe pasa por la MISMA comprobación que cualquier
+        // ruta: una carpeta de trabajo inventada no puede sacar al subagente de
+        // $HOME. Si no vale, se ignora y trabaja con el alcance de siempre.
+        const raiz = String(opts.workspace || "").trim() !== ""
+                   ? _safePath(opts.workspace) : ""
         const s = _subComp.createObject(ai, {
+            agentId: id,
             task: task,
+            workspace: raiz,
             label: String(opts.label || "").slice(0, 60) || I18n.tr("Research"),
             role: role,
+            brief: String(opts.brief || "").slice(0, 4000),
             expectedOutput: String(opts.output || "").slice(0, 400),
-            maxRounds: mr
+            outputSchema: esquema || null,
+            grant: subagentGrantFor(opts),
+            maxRounds: mr,
+            budgetMs: Math.max(30, Math.min(600,
+                parseInt(opts.budget_s) || 180)) * 1000
         })
         ai.activeSubs = ai.activeSubs.concat([s])
         s.finished.connect((report) => {
@@ -614,6 +846,8 @@ Singleton {
         dbgSess.resetThread()
         replKernel.resetThread()
         jobRunner.resetThread()
+        supervisor.resetThread()
+        advisorNote = ""
         todos = []
         comp.warned = false
     }
@@ -756,6 +990,17 @@ Singleton {
         }
         tools.toolRounds = 0
         chat.retries = 0
+        // Turno nuevo: el supervisor recupera su presupuesto de frenazos y
+        // olvida las opiniones del anterior, y la nota del consejero caduca —
+        // pertenecía al encargo que acaba de terminar.
+        supervisor.resetTurn()
+        ai.advisorNote = ""
+        // Un modelo de solo texto con una captura adjunta: se dice ANTES de
+        // mandar nada, en vez de dejar que el servidor conteste un error que no
+        // explica nada.
+        if (!canSeeImages && (att.pendingAtts || []).some(a => a.kind !== "text"))
+            conv.pushInfo(I18n.tr("%1 only reads text: the images will not travel.")
+                              .arg(profileLabel !== "" ? profileLabel : model))
         if (urlMissing) {
             conv.push({ role: "error",
                         content: I18n.tr("No server URL for %1. Add it in the panel settings.")

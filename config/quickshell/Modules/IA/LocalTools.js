@@ -16,13 +16,22 @@
 
 // Expande ~ y comprueba que la ruta quede dentro de la carpeta personal: las
 // herramientas de archivos NO salen de $HOME, y los ".." no cuelan. "" = fuera.
-function safePath(p, home) {
+//
+// El tercer parámetro es la RAÍZ DE TRABAJO, y solo la usan los subagentes: una
+// pared más estrecha que $HOME, dentro de la cual además lo relativo cuelga de
+// ella (que es como habla quien trabaja en un taller: "Bar/Bar.qml", no la ruta
+// entera). Sin él, todo se comporta exactamente igual que siempre — la tilde
+// sigue siendo $HOME y una ruta relativa sigue siendo un error.
+function safePath(p, home, root) {
     let path = String(p).trim()
+    const pared = root || home
     if (path === "~")
         path = home
     else if (path.startsWith("~/"))
         path = home + path.slice(1)
-    if (!path.startsWith(home + "/") && path !== home)
+    else if (root && path !== "" && !path.startsWith("/"))
+        path = root + "/" + path
+    if (!path.startsWith(pared + "/") && path !== pared)
         return ""
     if (path.indexOf("..") !== -1)
         return ""
@@ -159,7 +168,7 @@ function sysQuery(tool, args, ctx) {
 function files(tool, args, ctx) {
     switch (tool) {
     case "read_file": {
-        const p = safePath(args.path, ctx.home)
+        const p = safePath(args.path, ctx.home, ctx.root)
         if (p === "") return { error: "Ruta fuera de la carpeta personal." }
         const off = Math.max(1, parseInt(args.offset) || 1)
         const lim = Math.max(1, Math.min(2000, parseInt(args.limit) || 400))
@@ -178,6 +187,15 @@ function files(tool, args, ctx) {
             + 'for i,l in enumerate(sel):\n'
             + '    n=off+i\n'
             + '    out.append(f"{n}#{h(l)}|{l}" if num else l)\n'
+            // Etiqueta de instantánea del archivo ENTERO: el modelo la
+            // devuelve en edit_patch y así el motor sabe de un vistazo si el
+            // archivo es el mismo que leyó.
+            + 'if num:\n'
+            + '    v=2166136261\n'
+            + '    for c in "\\n".join(lines).encode("utf-8",errors="replace"):\n'
+            + '        v=((v^c)*16777619)&0xFFFFFFFF\n'
+            + '    print("[%s#%04x] %d lineas · edita con edit_patch usando las anclas N#hash"\n'
+            + '          % (os.path.basename(p), v&0xFFFF, total))\n'
             + 'body="\\n".join(out)[:16000]\n'
             + 'print(body)\n'
             + 'end=off-1+len(sel)\n'
@@ -196,34 +214,38 @@ function files(tool, args, ctx) {
         return { cmd: ["python3", "-c",
             'import os\n'
             + 'home=os.path.realpath(os.path.expanduser("~"))\n'
+            + 'taller=os.environ.get("QS_ROOT") or ""\n'
+            + 'raiz=os.path.realpath(taller) if taller else home\n'
             + 'out=[]\n'
             + 'for p in os.environ["QS_LIST"].split("\\n"):\n'
             + '    p=p.strip()\n'
             + '    if not p: continue\n'
-            + '    ap=os.path.realpath(os.path.abspath(os.path.expanduser(p)))\n'
             + '    cab="\\n--- %s ---\\n" % p\n'
-            + '    if ap!=home and not ap.startswith(home+os.sep):\n'
-            + '        out.append(cab+"[fuera de la carpeta personal]"); continue\n'
+            + '    q=os.path.join(raiz,p) if (taller and not p.startswith(("/","~"))) else p\n'
+            + '    ap=os.path.realpath(os.path.abspath(os.path.expanduser(q)))\n'
+            + '    if ap!=raiz and not ap.startswith(raiz+os.sep):\n'
+            + '        out.append(cab+"[fuera del area de trabajo]"); continue\n'
             + '    try: s=open(ap,encoding="utf-8",errors="replace").read(8000)\n'
             + '    except OSError as e: out.append(cab+"[no se pudo leer: %s]"%e); continue\n'
             + '    out.append(cab+s)\n'
             + 'print("".join(out)[:24000])\n'],
-            env: { QS_LIST: lista.map(String).join("\n") } }
+            env: { QS_LIST: lista.map(String).join("\n"),
+                   QS_ROOT: ctx.root || "" } }
     }
     case "list_dir": {
-        const p = safePath(args.path, ctx.home)
+        const p = safePath(args.path, ctx.home, ctx.root)
         if (p === "") return { error: "Ruta fuera de la carpeta personal." }
         return { cmd: ["sh", "-c", 'ls -lah -- "$QS_P" | head -n 80'], env: { QS_P: p } }
     }
     case "grep_files": {
-        const p = safePath(args.path, ctx.home)
+        const p = safePath(args.path, ctx.home, ctx.root)
         if (p === "") return { error: "Ruta fuera de la carpeta personal." }
         return { cmd: ["sh", "-c",
             'timeout 15 grep -rnIi --exclude-dir=.git -e "$QS_PAT" -- "$QS_P" | head -c 16000'],
             env: { QS_PAT: String(args.pattern || ""), QS_P: p } }
     }
     case "glob_files": {
-        const p = safePath(args.path, ctx.home)
+        const p = safePath(args.path, ctx.home, ctx.root)
         if (p === "") return { error: "Ruta fuera de la carpeta personal." }
         const tipo = ["file", "dir", "any"].indexOf(String(args.type || "")) !== -1
                      ? String(args.type) : "file"
@@ -306,7 +328,7 @@ function files(tool, args, ctx) {
         // metavariables ($X casa un nodo, $$$ una lista), no una regex. "$F($$$)"
         // encuentra llamadas aunque cambien los espacios o salten de línea —
         // donde grep ve texto, esto ve el árbol de sintaxis.
-        const p = safePath(args.path, ctx.home)
+        const p = safePath(args.path, ctx.home, ctx.root)
         if (p === "") return { error: "Ruta fuera de la carpeta personal." }
         const pat = String(args.pattern || "").trim()
         if (pat === "") return { error: "Falta el patrón (código con $METAVARIABLES)." }
@@ -340,13 +362,55 @@ function files(tool, args, ctx) {
     return null
 }
 
+// ── Escritura ────────────────────────────────────────────────────────────────
+// Los dos constructores que TOCAN el disco de verdad: crear/sobrescribir un
+// archivo y sustituir un fragmento exacto. Viven aquí por el mismo motivo que
+// los de lectura: son jaula, y el subagente escribe con ellos igual que su jefe
+// —cambia la pared (su taller, no $HOME), no el mecanismo—. La ruta llega YA
+// resuelta y comprobada por quien llama, que es quien sabe contra qué pared
+// mide.
+function writes(tool, p, args, bak, bakDir) {
+    switch (tool) {
+    case "write_file":
+        // El contenido viaja por entorno (nunca argv) y se escribe con printf;
+        // la carpeta destino se crea si falta. Copia de seguridad antes de
+        // sobrescribir: es lo que permite Deshacer. Si el archivo no existía, no
+        // hay nada que copiar (y deshacer significará borrarlo).
+        return { cmd: ["sh", "-c",
+            'mkdir -p "$QS_BD" "$(dirname -- "$QS_P")"; '
+            + '[ -f "$QS_P" ] && cp -a -- "$QS_P" "$QS_BAK"; '
+            + 'printf %s "$QS_C" > "$QS_P" && echo "Escrito: $QS_P ($(wc -c < "$QS_P") bytes)"'],
+            env: { QS_P: p, QS_C: String(args.content || ""),
+                   QS_BAK: bak, QS_BD: bakDir } }
+    case "edit_file":
+        // Sustitución exacta con la regla de unicidad del FileEditTool: 0
+        // apariciones = error, 2+ = error (pide más contexto), 1 = edita. Todo
+        // por entorno y en python3, que no re-interpreta nada.
+        return { cmd: ["python3", "-c",
+            'import os,sys,shutil\n'
+            + 'p=os.environ["QS_P"]; old=os.environ["QS_OLD"]; new=os.environ["QS_NEW"]\n'
+            + 'try: s=open(p,encoding="utf-8",errors="replace").read()\n'
+            + 'except OSError as e: print("No se pudo leer:",e); sys.exit(0)\n'
+            + 'n=s.count(old)\n'
+            + 'if n==0: print("old_string no aparece en el archivo."); sys.exit(0)\n'
+            + 'if n>1: print("old_string aparece",n,"veces; amplia el contexto para que sea unico."); sys.exit(0)\n'
+            + 'os.makedirs(os.environ["QS_BD"],exist_ok=True); shutil.copy2(p,os.environ["QS_BAK"])\n'
+            + 'open(p,"w",encoding="utf-8").write(s.replace(old,new,1))\n'
+            + 'print("Editado:",p)'],
+            env: { QS_P: p, QS_OLD: String(args.old_string || ""),
+                   QS_NEW: String(args.new_string || ""),
+                   QS_BAK: bak, QS_BD: bakDir } }
+    }
+    return null
+}
+
 // ── Edición estructural (ast_edit) ───────────────────────────────────────────
 // La reescritura de ast-grep sobre UN archivo, con copia previa para el botón
 // Deshacer y el diff en el resultado — el modelo ve exactamente qué cambió,
 // que con una reescritura estructural no siempre es lo que uno imagina.
 // El bak lo decide quien llama (es quien lo anota en la tarjeta).
 function astEdit(args, ctx, bak, bakDir) {
-    const p = safePath(args.path, ctx.home)
+    const p = safePath(args.path, ctx.home, ctx.root)
     if (p === "") return { error: "Ruta fuera de la carpeta personal." }
     const pat = String(args.pattern || "").trim()
     const rw = args.rewrite === undefined ? null : String(args.rewrite)
@@ -370,4 +434,29 @@ function astEdit(args, ctx, bak, bakDir) {
         + 'else echo "Cambios aplicados:"; '
         + 'diff -u -- "$QS_BAK" "$QS_P" | tail -n +3 | head -c 6000; fi'],
         env: env }
+}
+
+// ── Edición anclada por hash (hashline) ──────────────────────────────────────
+// La puerta al motor bin/hashline.py: un parche de VARIOS hunks anclados por
+// contenido, aplicado todo-o-nada, con recuperación de anclas que se movieron.
+// Es el camino de edición preferente del harness — más barato que reproducir el
+// texto viejo y más seguro que editar por número de línea a secas.
+// El bak lo decide quien llama (es quien lo anota en la tarjeta).
+function hashPatch(args, ctx, bak, bakDir, iaDir) {
+    const p = safePath(args.path, ctx.home, ctx.root)
+    if (p === "") return { error: "Ruta fuera de la carpeta personal." }
+    const hunks = Array.isArray(args.hunks) ? args.hunks : null
+    if (!hunks || hunks.length === 0)
+        return { error: "Falta 'hunks': una lista de cambios anclados, "
+                      + "p. ej. [{\"op\":\"replace\",\"at\":\"42#nd\",\"text\":\"…\"}]." }
+    if (hunks.length > 40)
+        return { error: "Demasiados hunks (" + hunks.length + "): parte el trabajo." }
+    return { cmd: ["python3", iaDir + "/bin/hashline.py"],
+             env: { QS_P: p,
+                    QS_HUNKS: JSON.stringify(hunks),
+                    QS_TAG: String(args.tag || ""),
+                    QS_DRY: args.dry_run === true ? "1" : "0",
+                    QS_WIN: String(Math.max(0, Math.min(400,
+                        parseInt(args.recover_window) || 40))),
+                    QS_BAK: bak, QS_BD: bakDir } }
 }

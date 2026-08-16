@@ -98,6 +98,20 @@ Scope {
         return svc.selectTools(defs)
     }
 
+    // ¿Este envío ABRE un encargo o CONTINÚA uno? Se mira hacia atrás desde el
+    // final: si desde el último mensaje del usuario ya hay herramientas
+    // resueltas, esto es una continuación. Lo usa el reparto de esfuerzo.
+    function _continuacion() {
+        for (let i = conv.messages.count - 1; i >= 0; i--) {
+            const m = conv.messages.get(i)
+            if (m.role === "user")
+                return false
+            if (m.role === "tool" && m.toolStatus !== "pending")
+                return true
+        }
+        return false
+    }
+
     function start() {
         chat.streamBuf = ""
         chat.reasonBuf = ""
@@ -110,20 +124,44 @@ Scope {
             model: svc.model,
             messages: PL.build(conv.messages, {
                 charBudget: svc.charBudget,
-                systemPrompt: svc.systemPrompt,
-                images: svc.sendImages
+                systemPrompt: svc.systemFor(svc.systemPrompt,
+                                  chat._continuacion() ? "tools" : "turn"),
+                advisorNote: svc.advisorNote,
+                // Su propio razonamiento de vuelta, solo si el modelo sabe
+                // aprovecharlo y el servidor no lo ha rechazado.
+                keepReasoning: svc.profile.preserveThinking
+                               && Settings.aiKeepThinking !== false
+                               && !svc.profileDegraded.reasoning,
+                // Un modelo de solo texto no admite imágenes: mandárselas es un
+                // error del servidor y un "algo falló" que el usuario no puede
+                // interpretar. Se avisa al adjuntar (ver AiService.canSeeImages).
+                images: svc.canSeeImages ? svc.sendImages : [],
+                // Gemma 4 pide las imágenes ANTES del texto; los demás las
+                // quieren detrás, que es como estaban.
+                imagesFirst: svc.profile.imagesFirst === true
             }),
             stream: true
         }
         // Temperatura: el parámetro universal del contrato, con el valor del
         // usuario (Ajustes del panel).
         req.temperature = Math.round(Settings.aiTemperature * 100) / 100
+        // Lo que sabemos del modelo concreto: pensamiento, esfuerzo, muestreo
+        // recomendado y tope de salida. Con un modelo no reconocido esta línea
+        // no hace nada — devuelve la misma petición.
+        //
+        // El TIPO de turno decide el esfuerzo: el primero de un encargo es
+        // donde se elige el plan y merece pensar a fondo; los que vienen detrás
+        // de un resultado de herramienta son sobre todo integrar lo que ya
+        // llegó, y ahí pensar a fondo es pagar de más en cada ronda.
+        svc.tuneRequest(req, chat._continuacion() ? "tools" : "turn")
         // Interruptor de razonamiento de Qwen3: "/think" y "/no_think" son
         // interruptores SUAVES que el modelo entiende dentro del turno del
         // usuario — van en el mensaje, no en la API, así que no rompen nada en
         // servidores que no los conocen. Con un Qwen local, apagar el pensamiento
-        // es la mayor mejora de latencia que existe.
-        if (Settings.aiThink !== "auto")
+        // es la mayor mejora de latencia que existe. Los modelos que traen
+        // bandera propia (Qwen 3.8) no los quieren: ahí solo serían ruido dentro
+        // del mensaje del usuario.
+        if (Settings.aiThink !== "auto" && svc.profile.softSwitch)
             for (let i = req.messages.length - 1; i >= 0; i--)
                 if (req.messages[i].role === "user"
                         && typeof req.messages[i].content === "string") {
@@ -312,6 +350,16 @@ Scope {
             // respuesta VACÍA con conexión limpia cuenta como transitoria: los
             // Qwen locales la sueltan de vez en cuando y a la siguiente va (la
             // regla de reintento de qwen-code).
+            // El servidor ha rechazado algo que le mandábamos por el perfil
+            // del modelo: se apaga ESO —no todo— y se reintenta enseguida. No
+            // cuenta como reintento transitorio, porque no es un fallo de red
+            // sino una incompatibilidad que acabamos de aprender de este
+            // servidor concreto.
+            if (svc.profileDegrade(msg)) {
+                retryTimer.interval = 200
+                retryTimer.restart()
+                return
+            }
             const vacia = code === 0 && chat._errBuf.trim() === ""
             if ((chat.transient(msg) || vacia) && chat.retries < 2) {
                 chat.retries++

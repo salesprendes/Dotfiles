@@ -20,6 +20,11 @@ ColumnLayout {
     // Elegido: el panel cierra la lámina.
     signal chosen()
 
+    // El buscador se lleva el foco al abrirse, que es lo que quieres cuando la
+    // lámina se abre a propósito desde la cabecera. Dentro de Ajustes no: ahí
+    // es una sección más y robar el foco movería el desplazamiento solo.
+    property bool autoFocus: true
+
     readonly property string q: search.text.trim().toLowerCase()
     // Los grupos ya filtrados. Se calcula UNA vez y de aquí salen tanto la
     // lista pintada como el primero (el que se lleva el Enter).
@@ -70,7 +75,7 @@ ColumnLayout {
         placeholder: I18n.tr("Search or paste a model id…")
         accentIconOnFocus: true
         onAccepted: sheet.pickFirst()
-        Component.onCompleted: input.forceActiveFocus()
+        Component.onCompleted: if (sheet.autoFocus) input.forceActiveFocus()
 
         // Refrescar el catálogo es preguntarle al servidor: la misma sonda que
         // el botón "Probar" de la configuración, aquí donde importa.
@@ -174,14 +179,19 @@ ColumnLayout {
                                     && modelData === AiService.model
                                 Layout.fillWidth: true
                                 implicitHeight: Theme.dp(36)
-                                radius: Theme.shapeSm
-                                color: fila.sel ? SettingsPalette.selectedTint
-                                     : filaMa.containsMouse ? SettingsPalette.settingsHover
-                                     : "transparent"
-                                Behavior on color { ColorAnimation { duration: Theme.animFast } }
+                                color: "transparent"
                                 clip: true
 
-                                Ripple { id: filaRipple }
+                                // El mismo resaltado que una fila de Ajustes:
+                                // banda por opacidad con curva de salida y onda
+                                // por debajo del contenido (RowHighlight). Antes
+                                // esta lista fundía el color a pelo y se notaba
+                                // que era de otra casa.
+                                RowHighlight {
+                                    id: filaRealce
+                                    hovered: filaMa.containsMouse
+                                    selected: fila.sel
+                                }
 
                                 RowLayout {
                                     anchors.fill: parent
@@ -217,12 +227,38 @@ ColumnLayout {
                                         Text {
                                             Layout.fillWidth: true
                                             visible: text !== ""
-                                            text: AiService.modelShort(fila.modelData) === fila.modelData
+                                            // La ruta entera, solo si dice algo
+                                            // que el nombre y la variante no
+                                            // digan ya ("qwen3.8:27b" no
+                                            // necesita repetirse debajo).
+                                            text: (AiService.modelShort(fila.modelData)
+                                                   + ":" + AiService.modelVariant(fila.modelData)
+                                                  ).toLowerCase() === fila.modelData.toLowerCase()
+                                                  || AiService.modelShort(fila.modelData) === fila.modelData
                                                 ? "" : fila.modelData
                                             color: Theme.fgMuted
                                             font.family: Theme.monoFontFamily
                                             font.pixelSize: Theme.typeLabelSmall
                                             elide: Text.ElideMiddle
+                                        }
+                                    }
+                                    // LA VARIANTE (27b, a3b, fp8, q4_k_m…). Es
+                                    // lo que distingue a tres modelos que se
+                                    // llaman igual: sin ella, elegir en la
+                                    // lista de un servidor propio es adivinar.
+                                    Rectangle {
+                                        visible: AiService.modelVariant(fila.modelData) !== ""
+                                        implicitWidth: varTxt.implicitWidth + Theme.space8 * 2
+                                        implicitHeight: Theme.dp(18)
+                                        radius: height / 2
+                                        color: Theme.withAlpha(Theme.fgMuted, 0.14)
+                                        Text {
+                                            id: varTxt
+                                            anchors.centerIn: parent
+                                            text: AiService.modelVariant(fila.modelData)
+                                            color: fila.sel ? Theme.fg : Theme.fgDim
+                                            font.family: Theme.monoFontFamily
+                                            font.pixelSize: Theme.typeLabelSmall
                                         }
                                     }
                                     // Insignia de la etiqueta del id (":free").
@@ -249,7 +285,7 @@ ColumnLayout {
                                     anchors.fill: parent
                                     hoverEnabled: true
                                     cursorShape: Qt.PointingHandCursor
-                                    onPressed: (e) => filaRipple.press(e.x, e.y)
+                                    onPressed: (e) => filaRealce.press(e.x, e.y)
                                     onClicked: sheet.pick(grupo.modelData.provider,
                                                           fila.modelData)
                                 }
@@ -261,13 +297,74 @@ ColumnLayout {
         }
     }
 
-    // Nada encontrado: lo escrito se usa tal cual. Un servidor propio puede
-    // servir un id que su /models no publica, y esperar a que el catálogo lo
-    // sepa sería quedarse sin hablar.
+    // ── OTRO ────────────────────────────────────────────────────────────────
+    // El catálogo enseña lo que el servidor publica, y eso no siempre es todo:
+    // un modelo recién cargado, uno servido por un proxy que no lo lista, un
+    // ajuste fino propio. Esta fila era hasta ahora un truco escondido (escribir
+    // y pulsar Enter) que solo encontraba quien ya lo sabía; ahora se ve.
+    Rectangle {
+        Layout.fillWidth: true
+        Layout.topMargin: Theme.space4
+        implicitHeight: Theme.dp(36)
+        color: "transparent"
+        clip: true
+
+        RowHighlight {
+            id: otroRealce
+            hovered: otroMa.containsMouse
+        }
+
+        RowLayout {
+            anchors.fill: parent
+            anchors.leftMargin: Theme.space8
+            anchors.rightMargin: Theme.space10
+            spacing: Theme.space8
+
+            Text {
+                Layout.preferredWidth: Theme.dp(14)
+                horizontalAlignment: Text.AlignHCenter
+                text: "󰏫"
+                color: Theme.fgMuted
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.sp(13)
+            }
+            Text {
+                Layout.fillWidth: true
+                text: sheet.q !== ""
+                    ? I18n.tr("Use \"%1\"").arg(search.text.trim())
+                    : I18n.tr("Other… — type the model id")
+                color: sheet.q !== "" ? Theme.accentText : Theme.fgMuted
+                font.family: sheet.q !== "" ? Theme.monoFontFamily : Theme.fontFamily
+                font.pixelSize: Theme.typeLabelMedium
+                elide: Text.ElideMiddle
+            }
+        }
+
+        MouseArea {
+            id: otroMa
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onPressed: (e) => otroRealce.press(e.x, e.y)
+            // Con algo escrito, se usa tal cual (sin pasar por el catálogo).
+            // Vacío, se lleva el cursor al buscador, que es donde se escribe.
+            onClicked: {
+                if (sheet.q !== "") {
+                    AiService.setModel(search.text.trim())
+                    sheet.chosen()
+                } else {
+                    search.input.forceActiveFocus()
+                }
+            }
+        }
+    }
+
+    // Nada encontrado. Ya no hace falta explicar la salida —la fila de arriba
+    // es la salida—, así que aquí solo se dice por qué la lista está vacía.
     EmptyNote {
         visible: sheet.total === 0
-        text: sheet.q === "" ? I18n.tr("No models published yet — write its id.")
-                             : I18n.tr("Press Enter to use \"%1\"").arg(search.text.trim())
+        text: sheet.q === "" ? I18n.tr("This server has not published its catalogue.")
+                             : I18n.tr("Nothing matches “%1”.").arg(search.text.trim())
     }
 
     Hint {

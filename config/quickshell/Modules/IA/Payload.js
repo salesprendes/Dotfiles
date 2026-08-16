@@ -26,10 +26,12 @@ const MAX_MENSAJES = 48
 // exige el contrato OpenAI.
 //
 //   msgs   el ListModel del hilo
-//   opts   { charBudget, systemPrompt, images: [base64] }
+//   opts   { charBudget, systemPrompt, images: [base64], advisorNote,
+//            keepReasoning, imagesFirst }
 function build(msgs, opts) {
     const out = []
     let chars = 0
+    let razonados = 0
     let i = msgs.count - 1
     while (i >= 0 && out.length < MAX_MENSAJES) {
         const m = msgs.get(i)
@@ -92,6 +94,20 @@ function build(msgs, opts) {
         chars += m.content.length
         if (chars > opts.charBudget && out.length > 0)
             break
+        // Su propio razonamiento de vuelta: hay modelos (Qwen 3.8) que saben
+        // retomar una tarea larga donde la dejaron si se lo devuelves, en vez de
+        // volver a razonarla entera. Solo los DOS últimos turnos suyos: el
+        // razonamiento pesa mucho más que la respuesta, y el de hace seis turnos
+        // ya no describe el problema que tiene delante.
+        if (opts.keepReasoning && m.role === "assistant"
+                && String(m.reasoning || "") !== "" && razonados < 2) {
+            razonados++
+            chars += m.reasoning.length
+            out.unshift({ role: m.role, content: m.content,
+                          reasoning_content: m.reasoning })
+            i--
+            continue
+        }
         out.unshift({ role: m.role, content: m.content })
         i--
     }
@@ -101,13 +117,26 @@ function build(msgs, opts) {
     if (imgs.length > 0)
         for (let k = out.length - 1; k >= 0; k--)
             if (out[k].role === "user") {
-                const parts = [{ type: "text", text: out[k].content }]
+                // El orden importa en algunas familias: Gemma 4 pide
+                // expresamente las imágenes ANTES del texto. Es la clase de
+                // detalle que no cuesta nada respetar y que cambia el
+                // resultado; los demás siguen recibiéndolas detrás.
+                const fotos = []
                 for (let j = 0; j < imgs.length; j++)
-                    parts.push({ type: "image_url", image_url: {
+                    fotos.push({ type: "image_url", image_url: {
                         url: "data:image/png;base64," + imgs[j] } })
-                out[k] = { role: "user", content: parts }
+                const texto = { type: "text", text: out[k].content }
+                out[k] = { role: "user",
+                           content: opts.imagesFirst ? fotos.concat([texto])
+                                                     : [texto].concat(fotos) }
                 break
             }
-    out.unshift({ role: "system", content: opts.systemPrompt })
+    // La observación del supervisor viaja PEGADA al prompt de sistema y no como
+    // un segundo mensaje 'system' a mitad del array: eso último es válido en el
+    // contrato pero hay servidores que lo ignoran o lo reordenan, y una opinión
+    // que a veces llega no sirve de nada.
+    out.unshift({ role: "system", content: opts.systemPrompt
+        + (opts.advisorNote && opts.advisorNote !== ""
+           ? "\n\n" + opts.advisorNote : "") })
     return out
 }

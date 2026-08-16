@@ -405,3 +405,51 @@ function redactSecrets(text) {
         s = s.replace(_SECRETOS[i].re, _SECRETOS[i].to)
     return s
 }
+
+// ── Detector de comandos DESTRUCTIVOS ────────────────────────────────────────
+// Un guardarraíl por encima de la clase de riesgo: hay comandos que, aunque el
+// usuario haya aflojado la correa, no deberían correr sin que los mire dos
+// veces. No pretende ser exhaustivo (imposible en un shell) ni bloquear —solo
+// LEVANTAR LA MANO: fuerza la tarjeta y enseña el motivo en rojo, aunque la
+// política dijera "auto". Falso positivo cuesta un clic; falso negativo cuesta
+// un disgusto, así que se peca de prudente. Devuelve el motivo, o "" si nada
+// llama la atención.
+const _PELIGROS = [
+    // rm RECURSIVO (-r/-R): el que puede llevarse un árbol entero. Un rm -f de
+    // un archivo suelto no salta — borrar un .o de build es rutina.
+    { re: /\brm\s+(-[a-z]*\s+)*-[a-z]*r[a-z]*\b/i,
+      why: "borrado recursivo (rm -r)" },
+    // rm sobre raíz, la carpeta personal, una variable sin expandir o un
+    // comodín amplio, aunque sea solo -f.
+    { re: /\brm\s+(-[a-z]*\s+)*(\/\s|\/$|~|\$HOME|\$\{HOME|\/\*|\s\*\s|\s\*$)/i,
+      why: "rm sobre la raíz, la carpeta personal o un comodín" },
+    { re: /\b(mkfs|mke2fs|fdisk|parted|wipefs)\b/i,
+      why: "formatear o reparticionar un disco" },
+    { re: /\bdd\b[^|;&]*\bof=\s*\/dev\//i,
+      why: "dd escribiendo directo a un dispositivo" },
+    { re: />\s*\/dev\/(sd|nvme|vd|hd|mmcblk|disk)/i,
+      why: "redirección directa a un disco" },
+    { re: /:\(\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;/,
+      why: "fork bomb" },
+    { re: /\bchmod\s+-[a-z]*R[a-z]*\s+[^|;&]*0*777\b|\bchmod\s+0*777\s+(-[a-z]*R|\/|~|\$HOME)/i,
+      why: "chmod 777 recursivo o sobre raíz/carpeta personal" },
+    { re: /\bchown\s+-[a-z]*R[a-z]*\b/i,
+      why: "chown recursivo (cambia el dueño de un árbol entero)" },
+    { re: /\b(curl|wget)\b[^|]*\|\s*(sudo\s+)?(sh|bash|zsh|python|perl)\b/i,
+      why: "descargar y ejecutar a ciegas (curl | sh)" },
+    { re: /\bgit\s+(reset\s+--hard|clean\s+-[a-z]*f|push\s+[^|;&]*--force)/i,
+      why: "operación de git que descarta trabajo (reset --hard, clean -f, push --force)" },
+    { re: /\b(shutdown|reboot|poweroff|halt|init\s+0|init\s+6)\b/i,
+      why: "apagar o reiniciar el equipo" },
+    { re: />\s*(\/etc\/(passwd|shadow|fstab|sudoers)|~?\/\.ssh\/)/i,
+      why: "sobrescribir un archivo de sistema o de claves sensibles" },
+    { re: /\btruncate\s+-s\s*0\b|:\s*>\s*[^|;&]*\.(db|sqlite|sql)\b/i,
+      why: "vaciar una base de datos o un archivo" }
+]
+function dangerScan(cmd) {
+    const s = String(cmd || "")
+    for (let i = 0; i < _PELIGROS.length; i++)
+        if (_PELIGROS[i].re.test(s))
+            return _PELIGROS[i].why
+    return ""
+}

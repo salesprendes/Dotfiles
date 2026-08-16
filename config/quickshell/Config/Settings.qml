@@ -87,6 +87,23 @@ Singleton {
     //   "normal"   lee y consulta sola; escribir y ejecutar preguntan
     //   "auto"     actúa sin preguntar (menos ask_user, que es una pausa)
     property string aiApproval: "normal"
+    // Registro de auditoría: qué ejecutó el agente y por qué se le dejó, en
+    // data/ai-audit.jsonl. Sobrevive a /limpiar y a cambiar de conversación —
+    // es la respuesta a "¿qué ha hecho esto en mi equipo?", que el historial
+    // del chat no puede dar porque se compacta y se borra.
+    property bool aiAudit: true
+    // SUPERVISOR: un segundo modelo mirando al agente.
+    //   "off"    nadie mira
+    //   "risky"  solo lo que puede hacer daño (riesgo 2+, comandos marcados
+    //            como destructivos, enlaces que salen de la carpeta personal)
+    //   "all"    todas las llamadas — solo tiene sentido con un modelo rápido
+    // El coste es una llamada extra por cada cosa supervisada, así que "risky"
+    // es el reparto sensato con un servidor propio.
+    property string aiSupervisor: "risky"
+    // Qué modelo supervisa. Vacío = el mismo que el agente. Lo interesante es
+    // poner aquí uno PEQUEÑO y rápido del mismo servidor: vigilar es una tarea
+    // más fácil que trabajar, y así el segundo par de ojos casi no cuesta.
+    property string aiSupervisorModel: ""
     // Excepciones POR herramienta, encima del modo (estilo aisuite): mapa
     // nombre → "ask" (pedir aprobación) | "auto" (sin preguntar) | "off" (el
     // modelo ni la ve). Vacío = manda el modo, que es lo normal.
@@ -119,6 +136,21 @@ Singleton {
     // nada, "think"/"no_think" se añaden al mensaje del usuario. Un servidor
     // que no lo entienda simplemente lo ignora.
     property string aiThink: "auto"
+    // ── Lo que depende del MODELO que haya delante (ver ModelProfile.js) ──
+    // Estos tres solo hacen algo si el modelo está reconocido; con cualquier
+    // otro, el harness se comporta igual que antes de que existieran.
+    // Esfuerzo de razonamiento: "auto" deja que el harness lo reparta por tarea
+    // (a fondo donde se decide, ligero donde el trabajo es mecánico), o se fija
+    // a mano en low | medium | xhigh.
+    property string aiEffort: "auto"
+    // Usar los parámetros de muestreo que recomiendan los autores del modelo.
+    // En un Qwen no es un detalle: con la temperatura equivocada el mismo
+    // modelo pasa de resolver la tarea a irse por las ramas.
+    property bool   aiModelTuning: true
+    // Reenviarle su propio razonamiento de turnos anteriores, en los modelos que
+    // saben aprovecharlo: es lo que le permite retomar una tarea larga donde la
+    // dejó en vez de volver a razonarla entera.
+    property bool   aiKeepThinking: true
     // Compactación del contexto: "manual" (solo /compactar) | "warn" (avisa
     // al llenarse) | "auto" (se compacta solo al llenarse).
     property string aiAutoCompact: "warn"
@@ -492,10 +524,12 @@ Singleton {
         "aiCustomUrl": "", "aiModelCustom": "", "aiKeyCustom": "",
         "aiCustomHeader": "", "aiInsecureTls": false, "aiWide": false,
         "aiPersona": "normal", "aiMode": "chat", "aiCustomPrompt": "", "aiAutoRead": false,
-        "aiApproval": "normal",
+        "aiApproval": "normal", "aiAudit": true,
+        "aiSupervisor": "risky", "aiSupervisorModel": "",
         "aiToolPolicies": {}, "aiSkills": {}, "aiMcpServers": [], "aiSearchUrl": "",
         "aiSshHosts": [], "aiTemperature": 0.7, "aiContextTokens": 0,
         "aiAutoCompact": "warn", "aiCompactKeep": 1, "aiThink": "auto",
+        "aiEffort": "auto", "aiModelTuning": true, "aiKeepThinking": true,
         "uiScale": 1.0, "autoDensity": true, "animationSpeed": 2, "customAnimationDuration": 500, "barOpacity": 0.78,
         "popupOpacity": 0.85, "widgetOpacity": 0.55,
         "cornerScale": 1.0, "barScale": 1.0,

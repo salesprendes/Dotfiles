@@ -155,6 +155,8 @@ Scope {
         }
         // lsp de lectura: útil y sin efectos (rename queda fuera adrede).
         if (name === "lsp") {
+            svc.auditRecord({ src: "cell", tool: "lsp",
+                              args: JSON.stringify(args), decision: "auto" })
             if (String(args.op || "") === "rename") {
                 responder("Desde la celda el lsp es de solo lectura: rename no.")
                 return
@@ -163,6 +165,10 @@ Scope {
             return
         }
         // El resto: la misma familia de solo lectura que hereda el subagente.
+        // La celda ya la aprobó el usuario, pero lo que llame DESDE dentro no
+        // pasa por ninguna tarjeta: al registro.
+        svc.auditRecord({ src: "cell", tool: name,
+                          args: JSON.stringify(args), decision: "auto" })
         const built = svc.readOnlyCommand(name, args)
         if (built === null) {
             responder("Desde la celda solo se pueden llamar herramientas de "
