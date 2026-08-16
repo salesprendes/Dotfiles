@@ -260,8 +260,34 @@ const FETCH_SH = [
     // reenviado en todas las rondas siguientes. Los tiempos de respuesta
     // crecían ronda a ronda y parecía que el modelo se atascaba; lo que se
     // atascaba era su contexto, lleno de ruido.
-    'resp=$(curl -sSL --compressed --max-time 20 --max-filesize 2000000 -A "$ua" -o "$f" -w "%{content_type}|%{http_code}" -- "$QS_U" 2>/dev/null)',
-    'ct=${resp%|*}; code=${resp##*|}',
+    'resp=$(curl -sSL --compressed --max-time 20 --max-filesize 2000000 -A "$ua" -o "$f" -w "%{content_type}|%{http_code}|%{remote_ip}" -- "$QS_U" 2>/dev/null)',
+    'ip=${resp##*|}; r=${resp%|*}; code=${r##*|}; ct=${r%|*}',
+    // A DÓNDE se acabó llegando, que no es lo mismo que a dónde se pidió ir.
+    // La URL se mira antes de salir (urlZone, en TextUtils), pero eso solo ve el
+    // nombre: una redirección desde una página pública o un nombre que resuelve
+    // a 127.0.0.1 —el truco de siempre— aterrizan igual en la máquina de casa.
+    // Quien lo sabe de verdad es curl, y lo dice con %{remote_ip}: la IP del
+    // ÚLTIMO salto. El cuerpo ya está descargado, pero no ha entrado al
+    // contexto todavía, y ese es el único sitio donde importa pararlo.
+    //
+    // QS_LAN=1 lo levanta quien ya enseñó la tarjeta con la dirección local
+    // escrita y se la aprobaron. Sin esa aprobación explícita, la red de casa no
+    // se lee.
+    'case "$ip" in',
+    // Las mismas redes que mira urlZone en JavaScript, más la forma mapeada
+    // (::ffff:127.0.0.1), que es la misma dirección con otro traje.
+    '  127.*|::1|10.*|192.168.*|169.254.*|172.1[6-9].*|172.2[0-9].*|172.3[01].*'
+        + '|100.6[4-9].*|100.[7-9][0-9].*|100.1[01][0-9].*|100.12[0-7].*'
+        + '|f[cd][0-9a-f][0-9a-f]:*|fe[89ab][0-9a-f]:*'
+        + '|::ffff:127.*|::ffff:10.*|::ffff:192.168.*|::ffff:169.254.*'
+        + '|::ffff:172.1[6-9].*|::ffff:172.2[0-9].*|::ffff:172.3[01].*)',
+    '    [ "$QS_LAN" = 1 ] || { echo "' + FETCH_KO + ' Esa dirección acabó en '
+        + '$ip, que es una máquina de la red local o la propia máquina, no '
+        + 'internet. No se lee: lo que hay ahí dentro suele estar sin '
+        + 'contraseña precisamente porque solo se llega desde aquí. Si de '
+        + 'verdad hace falta, pídeselo al usuario con la dirección escrita."; '
+        + 'exit 0; } ;;',
+    'esac',
     // El CÓDIGO HTTP va PRIMERO, antes incluso de mirar si llegó algo. Un 404
     // con el cuerpo vacío —que es lo normal— caía si no en la rama de "sin
     // respuesta o error de red", y eso es mentira: el servidor contestó
@@ -518,12 +544,56 @@ function files(tool, args, ctx) {
     case "fetch_url": {
         const url = String(args.url || "").trim()
         if (!/^https?:\/\//i.test(url)) return { error: "Solo URLs http(s)." }
+        // QS_LAN queda vacío a propósito: solo lo levanta ToolRunner, que es
+        // quien sabe si la dirección local pasó por una tarjeta aprobada.
         return { cmd: ["sh", "-c", FETCH_SH],
-                 env: { QS_U: url, QS_PY: PY_DESNUDA, QS_CUT: PY_CORTE,
-                        QS_BIN: PY_BINARIO, QS_DIAG: PY_DIAG } }
+                 env: { QS_U: url, QS_LAN: "", QS_PY: PY_DESNUDA,
+                        QS_CUT: PY_CORTE, QS_BIN: PY_BINARIO, QS_DIAG: PY_DIAG } }
     }
     }
     return null
+}
+
+// ── EL RELOJ Y EL TOPE DE SALIDA, DENTRO DEL COMANDO ─────────────────────────
+// El reloj y el TOPE DE SALIDA, los dos dentro del comando.
+//
+// El reloj: quien mata es coreutils, así que el proceso sale por su propio
+// pie, `onExited` llega una sola vez y no hay ninguna carrera que arbitrar
+// desde QML. `-k 5`: si a los N segundos no se ha ido con un TERM educado,
+// cinco después se le manda un KILL.
+//
+// El tope: StdioCollector se lo guarda TODO en memoria y no tiene límite.
+// Un `yes` o un bucle que escupe —cosa que un modelo escribe sin querer— son
+// un gigabyte por segundo dentro del plazo, y eso no es una herramienta que
+// falla: es Quickshell entero muriéndose por falta de memoria, con la barra,
+// el fondo y las notificaciones dentro. Así que cada flujo pasa por `head`,
+// que corta a los N bytes y cierra la tubería; el que siga escribiendo se
+// lleva un SIGPIPE y muere, que es exactamente lo que debe pasarle.
+//
+// Los dos flujos siguen separados (el 5 es el desvío que lo permite sin
+// mezclarlos) y el código de salida es el DE LA HERRAMIENTA, no el de `head`:
+// se apunta en un archivo antes de que la tubería lo pise. Comprobado:
+// salida sin salto final intacta, código 3 conservado, corte por plazo con
+// 124 limpio y desbordamiento con 141.
+const SH_ACOTADO = [
+    'umask 077',
+    'd=$(mktemp -d) || exit 97',
+    'trap \'rm -rf "$d"\' EXIT INT TERM',
+    'n=$1; shift',
+    '{ { timeout -k 5 "$n" "$@"; echo $? > "$d/s"; } 2>&1 1>&5'
+        + ' | head -c 131072 > "$d/e"; } 5>&1 | head -c 2097152 > "$d/o"',
+    'cat "$d/o"',
+    'cat "$d/e" >&2',
+    'exit "$(cat "$d/s" 2>/dev/null || echo 97)"'
+].join("\n")
+
+
+
+// Envuelve un comando: plazo en segundos y salida acotada. Lo usan el ejecutor
+// de herramientas y el de hooks — dos sitios que lanzan comandos del usuario o
+// del modelo, y los dos con el mismo par de problemas.
+function acotado(segundos, cmd) {
+    return ["sh", "-c", SH_ACOTADO, "sh", String(segundos)].concat(cmd)
 }
 
 // ── Escritura ────────────────────────────────────────────────────────────────
@@ -541,7 +611,12 @@ function writes(tool, p, args, bak, bakDir) {
         // sobrescribir: es lo que permite Deshacer. Si el archivo no existía, no
         // hay nada que copiar (y deshacer significará borrarlo).
         return { cmd: ["sh", "-c",
-            'mkdir -p "$QS_BD" "$(dirname -- "$QS_P")"; '
+            // El umask va en un subshell y solo alrededor del directorio de
+            // copias: ahí dentro hay archivos enteros del usuario y no tiene por
+            // qué listarlo nadie más. El archivo que se escribe queda con el
+            // modo de siempre — que un archivo pedido por el usuario nazca
+            // ilegible para su propio grupo sería una sorpresa, no una mejora.
+            '(umask 077; mkdir -p "$QS_BD"); mkdir -p "$(dirname -- "$QS_P")"; '
             // Dos casos, y hay que poder distinguirlos DESPUÉS: si el archivo
             // existía se copia, y si no existía se deja una señal. Sin la señal,
             // Deshacer no puede saber si la falta de copia significa "era nuevo,
@@ -598,7 +673,7 @@ function astEdit(args, ctx, bak, bakDir) {
         'command -v ast-grep >/dev/null 2>&1 || '
         + '{ echo "Falta ast-grep. Instálalo: pacman -S ast-grep"; exit 0; }; '
         + '[ -f "$QS_P" ] || { echo "No existe el archivo."; exit 0; }; '
-        + 'mkdir -p "$QS_BD"; cp -a -- "$QS_P" "$QS_BAK"; '
+        + '(umask 077; mkdir -p "$QS_BD"); cp -a -- "$QS_P" "$QS_BAK"; '
         + 'timeout 20 ' + ag + ' --update-all -- "$QS_P" 2>&1; '
         + 'if cmp -s -- "$QS_BAK" "$QS_P"; then '
         + 'echo "El patrón no casó con nada: el archivo queda igual."; '

@@ -2,6 +2,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import qs.Config
+import "LocalTools.js" as LT
 
 // Hooks del usuario (idea de OpenHarness): comandos propios que el harness
 // dispara en momentos concretos del ciclo de vida. Es la puerta de extensión que
@@ -85,6 +86,10 @@ Scope {
     property var _payload: ({})
     property int _gate: -1              // la tarjeta que espera el veredicto
     property var _done: null            // qué hacer si ninguno veta
+    // Quince segundos. Un hook decide si algo puede pasar; si necesita más que
+    // eso, no es un hook, es un trabajo. Se corta CERRADO a propósito: un hook
+    // que existe para vetar y se cuelga no puede acabar dejando pasar la acción.
+    readonly property int plazoHook: 15
 
     function run(event, toolName, payload, gate, onDone) {
         const list = hooksFor(event, toolName)
@@ -110,7 +115,13 @@ Scope {
         }
         const h = _queue[0]
         _queue = _queue.slice(1)
-        proc.command = ["sh", "-c", String(h.command)]
+        // Con plazo y con tope de salida, igual que las herramientas. Un hook es
+        // un comando del usuario, y un comando del usuario se cuelga: el
+        // bloqueante corre EN SERIE y con una tarjeta esperando su veredicto, así
+        // que uno que no vuelve deja el turno congelado para siempre y sin decir
+        // por qué. Y su salida la recogía un StdioCollector sin límite, que es la
+        // misma bomba de memoria que ya se tapó en el ejecutor.
+        proc.command = LT.acotado(runner.plazoHook, ["sh", "-c", String(h.command)])
         proc.environment = Object.assign({ QS_HOOK_EVENT: runner._event },
                                          runner._payload)
         proc.running = true
@@ -125,6 +136,13 @@ Scope {
             if (code !== 0 && runner._event === "pre_tool_use"
                     && runner._gate >= 0) {
                 let why = (outCol.text || "").trim() || (errCol.text || "").trim()
+                // Un hook cortado por el plazo veta, pero se dice como lo que
+                // es: "no contestó en 15 s" es un hook que arreglar, y "salió
+                // con 3" es una decisión suya. Confundirlos deja al usuario
+                // buscando una regla que no existe.
+                if (code === 124 || code === 137)
+                    why = I18n.tr("a hook did not answer within %1 s")
+                              .arg(runner.plazoHook)
                 if (why === "")
                     why = I18n.tr("blocked by a hook (exit %1)").arg(code)
                 const gate = runner._gate

@@ -658,6 +658,13 @@ Scope {
             if (m.toolName === "fetch_url") {
                 _fenceIndex = index
                 _fenceSrc = String(args.url || "una página web")
+                // Si la dirección YA decía "192.168…" o "localhost", esta
+                // llamada ha pasado por una tarjeta con el motivo escrito y el
+                // usuario la aprobó: entonces sí puede aterrizar ahí. Lo que no
+                // se permite nunca es llegar a la red de casa por sorpresa,
+                // desde una URL pública que redirige o un nombre que resuelve
+                // hacia dentro.
+                built.env.QS_LAN = TU.urlZone(args.url) !== "" ? "1" : ""
             }
             exec(built.cmd, built.env)
             return
@@ -900,11 +907,21 @@ Scope {
             return
         }
         case "open_url": {
-            const url = args.url || ""
-            if (url !== "")
-                Quickshell.execDetached(["xdg-open", url])
-            resolveTool(index, url !== "" ? "URL abierta en el navegador."
-                                          : "URL inválida.")
+            const url = String(args.url || "").trim()
+            // xdg-open no abre URLs: abre LO QUE SEA con el programa que le
+            // toque. Un file:// lo entrega al gestor de archivos, un .desktop lo
+            // EJECUTA, y esquemas como smb://, ssh:// o vnc:// levantan un
+            // cliente entero. Sin esta línea, "abre esto en el navegador" era un
+            // ejecutor de propósito general con permiso de clase externa, que es
+            // el escalón más barato de todos.
+            if (!/^https?:\/\//i.test(url)) {
+                resolveTool(index, "Solo se abren URLs http(s). Lo que has "
+                    + "pasado no lo es, y abrir cualquier otra cosa no es "
+                    + "abrir un enlace: es lanzar el programa que la maneje.")
+                return
+            }
+            Quickshell.execDetached(["xdg-open", url])
+            resolveTool(index, "URL abierta en el navegador.")
             return
         }
         case "write_file": {
@@ -1021,14 +1038,10 @@ Scope {
     property int _procIndex: -1
 
     function exec(cmd, env) {
-        // El reloj va DENTRO del comando. Quien mata es coreutils, así que el
-        // proceso sale por su propio pie, `onExited` llega una sola vez y no hay
-        // ninguna carrera que arbitrar desde QML. `-k 5`: si a los N segundos no
-        // se ha ido con un TERM educado, cinco después se le manda un KILL.
         const m = messages.get(_toolIndex)
         const seg = Math.round(TP.deadlineMs(m ? String(m.toolName || "") : "") / 1000)
         _procIndex = _toolIndex
-        proc.command = ["timeout", "-k", "5", String(seg)].concat(cmd)
+        proc.command = LT.acotado(seg, cmd)
         proc.environment = env || ({})
         proc.running = true
     }
@@ -1072,6 +1085,29 @@ Scope {
                     + Math.round((Date.now() - runner.runningSince) / 1000)
                     + " s). Lo que hubiera escrito hasta ahí está a medias y no "
                     + "se usa.")
+                return
+            }
+            // Se pasó del tope de salida y `head` le cerró la tubería. Decirlo
+            // con nombre y no como "murió por señal": es un fallo con arreglo
+            // —acotar, filtrar, redirigir a un archivo— y el modelo puede tomar
+            // esa decisión si se le cuenta lo que pasó.
+            // Los dos códigos se comprueban con la salida delante: 141 y 97 los
+            // puede devolver también la propia herramienta, y confundir un
+            // `exit 97` suyo con un fallo nuestro sería mentirle al modelo.
+            if (code === 141 && ((outCol.text || "").length >= 2097152
+                                 || (errCol.text || "").length >= 131072)) {
+                runner.resolveTool(idx, "La herramienta " + nombre + " escribió "
+                    + "más salida de la que cabe (2 MB por la salida normal, "
+                    + "128 kB por la de errores) y se cortó para no agotar la "
+                    + "memoria. Lo que llegó está a medias y no se usa. Repite "
+                    + "acotando la salida (un filtro, menos alcance, o "
+                    + "redirigiendo a un archivo y leyendo un trozo).")
+                return
+            }
+            if (code === 97 && (outCol.text || "") === ""
+                    && (errCol.text || "") === "") {
+                runner.resolveTool(idx, "No se pudo preparar la ejecución de "
+                    + nombre + ": falló el archivo temporal (¿disco lleno?).")
                 return
             }
             let out = (outCol.text || "")

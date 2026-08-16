@@ -63,12 +63,20 @@ Singleton {
     // chmod sobre ellos se perdería en el siguiente guardado. Un directorio a
     // 0700 no se reescribe nunca y hace irrelevante el modo de lo que hay
     // dentro. Los archivos se aprietan igual, por si algún día se mueven.
+    // Las dos cachés de ~/.cache van en el mismo viaje. No son "temporales" en
+    // el sentido de inofensivas: la de deshacer guarda COPIAS ENTERAS de los
+    // archivos que se editaron —con sus claves y su configuración dentro— y la
+    // de búsqueda guarda qué se buscó, que dice tanto como lo que se encontró.
+    // Nacían a 0755.
     Process {
         running: true
-        environment: ({ QS_D: ai.dataDir })
+        environment: ({ QS_D: ai.dataDir,
+                        QS_C: Quickshell.env("HOME") + "/.cache" })
         command: ["sh", "-c",
             'mkdir -p "$QS_D" && chmod 700 "$QS_D"; '
-            + 'chmod 600 "$QS_D"/*.json "$QS_D"/*.jsonl 2>/dev/null; true']
+            + 'chmod 600 "$QS_D"/*.json "$QS_D"/*.jsonl 2>/dev/null; '
+            + 'for c in quickshell-ai-undo quickshell-ai-search; do '
+            + '  [ -d "$QS_C/$c" ] && chmod -R go-rwx "$QS_C/$c"; done; true']
     }
 
     // ── Proveedores y modelos ────────────────────────────────────────────────

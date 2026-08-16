@@ -1,0 +1,14 @@
+# El shell reescribe este fichero en caliente (cachés de clima y paleta).
+settings.json
+
+# Estado del asistente: historial, memoria, instintos y hooks del usuario.
+# La carpeta sí se versiona (lleva .gitkeep); su contenido, no.
+Modules/IA/data/*.json
+# El registro de auditoría (qué ejecutó el agente): también fuera de git, y con
+# más motivo — lleva rutas, comandos y nombres de servidores de este equipo.
+Modules/IA/data/*.jsonl
+Modules/IA/data/*.jsonl.1
+# Los talleres de los subagentes: árboles de trabajo de git, borradores y sus
+# trazas. Si la raíz de trabajo es ESTE repositorio, ahí dentro hay un worktree
+# del propio repo — versionarlo sería morderse la cola.
+Modules/IA/data/agents/

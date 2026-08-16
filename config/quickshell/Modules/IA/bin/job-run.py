@@ -33,6 +33,7 @@ import subprocess
 import sys
 import termios
 import threading
+import time
 
 OUT = sys.stdout
 LOCK = threading.Lock()
@@ -97,6 +98,70 @@ def main():
         lectores = [(proc.stdout.fileno(), "out"), (proc.stderr.fileno(), "err")]
 
     emitir({"t": "up", "pid": proc.pid})
+
+    # ── QUE NO QUEDE NADIE VIVO DETRÁS ───────────────────────────────────────
+    # El hijo está en su PROPIA sesión (setsid, que es lo que permite matar el
+    # grupo entero y lo que hace posible el pty). Justo por eso NO le llega nada
+    # de lo que nos llegue a nosotros: si este envoltorio muere —porque se cierra
+    # la conversación, porque se recarga el shell o porque Quickshell se cae—, un
+    # `make -j8` o un `npm install` se quedaban corriendo sin nadie que pudiera
+    # pararlos ni verlos. Huérfanos de verdad, hasta reiniciar.
+    #
+    # Dos cabos, porque hay dos formas de morir:
+    #   · las señales (TERM/INT/HUP): se reenvían al grupo y se remata con KILL
+    #     si a medio segundo sigue ahí.
+    #   · que el padre desaparezca sin decir nada: PR_SET_PDEATHSIG hace que el
+    #     núcleo nos mande un TERM en ese momento, y ese TERM entra por el cabo
+    #     de arriba. Es el único que cubre una caída.
+    def _matar_grupo(sig):
+        try:
+            os.killpg(os.getpgid(proc.pid), sig)
+        except OSError:
+            pass
+
+    # DENTRO DE UN MANEJADOR DE SEÑALES NO SE COGEN CERROJOS. El manejador corre
+    # en el hilo principal, entre dos instrucciones cualesquiera: si la señal
+    # llega justo cuando ese mismo hilo está dentro de emitir() con LOCK cogido,
+    # llamar a emitir() otra vez se queda esperando un cerrojo que solo puede
+    # soltar el código al que acabamos de interrumpir. Interbloqueo, y encima en
+    # el peor momento posible — cancelando. Con un trabajo que escupe salida sin
+    # parar, emitir() se ejecuta constantemente y la ventana deja de ser
+    # estrecha.
+    #
+    # Lo mismo vale para proc.poll(): subprocess tiene su propio cerrojo de
+    # waitpid y el hilo principal puede estar dentro de proc.wait().
+    #
+    # Así que el manejador no llama a nada que pueda esperar: escribe con un
+    # os.write directo (una sola línea corta, que en una tubería es atómica),
+    # mata el grupo y se va. Los mensajes se dejan cocinados de antemano para no
+    # ni siquiera montar el JSON aquí dentro.
+    _despedida = dict((s, (json.dumps({"t": "exit", "code": 128 + s},
+                                      ensure_ascii=False) + "\n").encode("utf-8"))
+                      for s in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP))
+
+    def _adios(signum, _frame):
+        _matar_grupo(signal.SIGTERM)
+        # Un respiro para que se vaya con educación, y remate. time.sleep no coge
+        # cerrojos nuestros; poll() sí podría, así que no se pregunta: se manda
+        # el KILL igual, que sobre un proceso ya muerto no hace nada.
+        time.sleep(0.3)
+        _matar_grupo(signal.SIGKILL)
+        try:
+            os.write(1, _despedida.get(signum,
+                                       b'{"t":"exit","code":143}\n'))
+        except OSError:
+            pass
+        os._exit(0)
+
+    for _s in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
+        signal.signal(_s, _adios)
+    try:
+        import ctypes
+        ctypes.CDLL("libc.so.6", use_errno=True).prctl(
+            1, signal.SIGTERM, 0, 0, 0)          # 1 = PR_SET_PDEATHSIG
+    except Exception:
+        pass                                     # sin esto solo se pierde la
+                                                 # cobertura de "el padre se cayó"
 
     # Órdenes del harness: llegan por stdin en su propio hilo para no frenar la
     # lectura de la salida.

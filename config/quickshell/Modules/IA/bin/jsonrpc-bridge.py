@@ -171,7 +171,7 @@ def recado_apply_edit(msg):
             continue
         try:
             if bdir:
-                os.makedirs(bdir, exist_ok=True)
+                os.makedirs(bdir, mode=0o700, exist_ok=True)
                 import shutil
                 import time
                 bak = os.path.join(bdir, str(int(time.time() * 1000))

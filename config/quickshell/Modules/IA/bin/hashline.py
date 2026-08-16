@@ -274,8 +274,9 @@ def main():
         try:
             bak = os.environ.get("QS_BAK") or ""
             if bak:
+                # 0700: dentro van copias enteras de archivos del usuario.
                 os.makedirs(os.environ.get("QS_BD") or os.path.dirname(bak),
-                            exist_ok=True)
+                            mode=0o700, exist_ok=True)
                 shutil.copy2(ruta, bak)
             final = texto_nuevo.replace("\n", "\r\n") if crlf else texto_nuevo
             datos = final.encode("utf-8")

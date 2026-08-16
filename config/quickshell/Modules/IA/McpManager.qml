@@ -118,6 +118,16 @@ Scope {
                 delete mcpRoot._procs[srvName]
                 mcpRoot._setTools(srvName, [])
                 mcpRoot._setStatus(srvName, "error: terminó con " + code)
+                // Al morir el servidor, sus llamadas en vuelo NO iban a volver
+                // nunca: el callback se quedaba en 'pending' y la tarjeta que lo
+                // esperaba, pendiente para siempre. Se contestan todas aquí, con
+                // el motivo, que es información que el modelo puede usar (probar
+                // otra cosa) y el usuario también (arreglar el servidor).
+                const cuelgan = mcp.pending
+                mcp.pending = ({})
+                for (const id in cuelgan)
+                    cuelgan[id](null, { message: "el servidor MCP '" + srvName
+                        + "' se cerró (código " + code + ") antes de contestar" })
             }
         }
     }

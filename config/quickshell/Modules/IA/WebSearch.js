@@ -489,6 +489,10 @@ const PY_MERGE = [
 // final. El abanico es lo que da el consenso, y hacerlo en paralelo es lo que
 // evita que preguntar a cuatro sitios tarde cuatro veces más.
 const SH = [
+    // Lo que se guarda aquí —el temporal con las respuestas, la caché, la
+    // cuarentena— dice qué se ha buscado, y eso es tan privado como lo que se
+    // encontró. Nacía a 0755 y lo leía cualquier cuenta de la máquina.
+    'umask 077',
     // Los filtros que cada buscador nombra a su manera. Se arman como argumentos
     // sueltos y se expanden SIN comillas a propósito; el valor sale de una lista
     // cerrada validada en JavaScript (_recencia), nunca del texto del modelo.

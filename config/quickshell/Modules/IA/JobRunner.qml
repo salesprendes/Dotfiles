@@ -156,8 +156,11 @@ Scope {
         j.running = true
 
         j.pending = cb
+        // `|| 2` convertía un wait:0 —"lánzalo y sigue, no me esperes"— en dos
+        // segundos de espera. Cero es una respuesta, no una falta de respuesta.
+        const esp = parseInt(args.wait)
         j.grace.interval = Math.max(0, Math.min(30000,
-            (parseInt(args.wait) || 2) * 1000))
+            (isNaN(esp) ? 2 : esp) * 1000))
         j.grace.restart()
     }
 

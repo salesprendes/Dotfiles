@@ -284,7 +284,7 @@ Scope {
             // como tool_call: se rescata y se trata igual. Sin esto, con Qwen
             // sobre un servidor que no traduce, el agente "habla" de usar una
             // herramienta y no usa ninguna.
-            if (Object.keys(chat._tc).length === 0 && text !== "") {
+            if (svc.agentMode && Object.keys(chat._tc).length === 0 && text !== "") {
                 const found = svc.extractTextToolCalls(text)
                 if (found.calls.length > 0) {
                     text = found.rest
@@ -292,6 +292,23 @@ Scope {
                         chat._tc[i] = { id: "", name: found.calls[i].name,
                                         args: found.calls[i].args }
                 }
+            }
+            // EN MODO CHAT NO HAY HERRAMIENTAS, Y ESO TIENE QUE SER VERDAD.
+            // Chat no las anuncia (ver arriba, `if (svc.agentMode)` al armar la
+            // petición), pero anunciar no es lo mismo que impedir: el ejecutor
+            // actúa por NOMBRE, así que un tool_call que llegue igualmente
+            // —porque el servidor lo inventa, porque hay un proxy por medio, o
+            // porque una página inyectada convenció al modelo de escribirlo en
+            // el texto— se convertía en tarjeta como cualquier otra. Y una
+            // tarjeta en Chat es peor que en agente: el usuario NO espera que
+            // ahí pueda ejecutarse nada, así que la aprobaría con menos cuidado.
+            //
+            // Se descarta en silencio para el modelo pero se dice en el hilo: si
+            // no se contase, el modelo parecería no haber contestado.
+            if (!svc.agentMode && Object.keys(chat._tc).length > 0) {
+                chat._tc = ({})
+                conv.pushInfo(I18n.tr("In Chat mode no tools are run. Switch to "
+                                      + "Agent if you want it to act."))
             }
             const tcKeys = Object.keys(chat._tc)
 

@@ -186,7 +186,14 @@ const SH_ENVIO = [
 // que las usa para delimitar. La cabecera extra la escribe el usuario y la clave
 // puede ser cualquier cosa: se escapan las dos.
 function _cfgVal(v) {
-    return String(v || "").replace(/\\/g, "\\\\").replace(/"/g, '\\"')
+    // El salto de línea es el separador del fichero de configuración de curl,
+    // igual que la comilla es su delimitador. Escapar solo las comillas dejaba
+    // que un valor con un "\n" dentro CERRARA la línea y escribiera directivas
+    // nuevas: otra cabecera, un --output, un proxy. Se cortan los saltos y los
+    // retornos de carro (que en HTTP son media inyección de cabecera por sí
+    // solos) antes de escapar nada más.
+    return String(v || "").replace(/[\r\n]+/g, " ")
+                          .replace(/\\/g, "\\\\").replace(/"/g, '\\"')
 }
 
 // o = { url, maxTime, stream, bearer, extraHeader, title, netFlags }
