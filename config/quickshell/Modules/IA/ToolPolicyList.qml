@@ -23,7 +23,7 @@ ColumnLayout {
     // permiso y otra no.
     readonly property var grupos: {
         const orden = ["read", "external", "delegation", "write", "exec",
-                       "critical", "ask", "plan"]
+                       "critical", "ask", "plan", "mcp"]
         const nombres = ({
             read: I18n.tr("Read and query"),
             external: I18n.tr("Reach outside"),
@@ -34,15 +34,20 @@ ColumnLayout {
             // correa, estas siempre pasan por ti.
             critical: I18n.tr("Critical — never automatic"),
             ask: I18n.tr("Ask you"),
-            plan: I18n.tr("Plan")
+            plan: I18n.tr("Plan"),
+            // Grupo propio, y no por orden: son las únicas herramientas que no
+            // ha escrito este harness. Las publica un servidor de fuera con el
+            // nombre que quiera, así que preguntan siempre hasta que tú digas
+            // otra cosa AQUÍ, con el nombre entero delante.
+            mcp: I18n.tr("From MCP servers — someone else's code")
         })
         const cubo = ({})
-        const defs = AiService.toolDefs
+        const defs = AiService.policyToolDefs
         for (let i = 0; i < defs.length; i++) {
             const n = defs[i]["function"].name
             if (lista.q !== "" && n.toLowerCase().indexOf(lista.q) === -1)
                 continue
-            const r = AiService.riskClass(n)
+            const r = n.indexOf("mcp__") === 0 ? "mcp" : AiService.riskClass(n)
             if (!cubo[r])
                 cubo[r] = []
             cubo[r].push(n)

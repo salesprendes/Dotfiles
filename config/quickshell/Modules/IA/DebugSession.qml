@@ -2,12 +2,18 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import qs.Config
+import "Debuggers.js" as DBG
 
 // DEPURADOR: el agente habla DAP (Debug Adapter Protocol) con los adaptadores
-// de verdad — debugpy (Python), lldb-dap (binarios nativos) y delve (Go) — a
-// través del mismo puente de framing que el LSP. Una sesión cada vez, como el
-// subagente: el estado de una depuración es demasiado delicado para llevar dos
-// a medias.
+// de verdad, a través del mismo puente de framing que el LSP. Una sesión cada
+// vez, como el subagente: el estado de una depuración es demasiado delicado
+// para llevar dos a medias.
+//
+// Qué adaptador para qué lenguaje sale del catálogo (Debuggers.js), no de aquí:
+// trece adaptadores que cubren C, C++, Rust, Zig, Swift, Objective-C, Python,
+// Go, JavaScript, TypeScript, C#, F#, Ruby, PHP, Kotlin, Dart, Elixir y Bash.
+// Añadir un lenguaje es añadir una fila allí, incluida su detección y el "te
+// falta esto, instálalo así".
 //
 // El reparto de herramientas sigue la clase de riesgo del harness:
 //   debug_start   exec      arranca TU programa bajo el depurador
@@ -41,10 +47,7 @@ Scope {
     property bool detected: false
     Process {
         running: true
-        command: ["sh", "-c",
-            'python3 -c "import debugpy" 2>/dev/null && echo debugpy; '
-            + 'command -v lldb-dap >/dev/null 2>&1 && echo lldb-dap; '
-            + 'command -v dlv >/dev/null 2>&1 && echo dlv']
+        command: ["sh", "-c", DBG.deteccion()]
         stdout: StdioCollector { id: ddet }
         onExited: {
             const m = {}
@@ -208,55 +211,51 @@ Scope {
                + "debug_ctl action=stop antes de abrir otra.")
             return
         }
-        const prog = svc._safePath(args.program)
-        if (prog === "") {
-            cb("El programa debe estar dentro de la carpeta personal.")
+        // ENGANCHARSE A UN PROCESO QUE YA CORRE. Es la otra mitad de depurar:
+        // un servicio que lleva horas mal, un cuelgue que solo pasa en
+        // producción, algo que no se puede relanzar. No hay `program` que valga
+        // —el programa ya está en marcha—, así que la jaula de rutas no aplica y
+        // lo que se comprueba es que el proceso exista y sea TUYO (ver
+        // ToolRunner: engancharse a un proceso ajeno no lo permite el sistema, y
+        // pedirlo sin más devolvería un error del adaptador imposible de leer).
+        const pid = parseInt(args.attach_pid)
+        const esAdjuntar = !isNaN(pid) && pid > 0
+        let prog = ""
+        if (!esAdjuntar) {
+            prog = svc._safePath(args.program)
+            if (prog === "") {
+                cb("El programa debe estar dentro de la carpeta personal. Si lo "
+                   + "que quieres es engancharte a algo que ya corre, pasa "
+                   + "attach_pid en vez de program.")
+                return
+            }
+        }
+
+        // Qué adaptador toca: lo dice el catálogo, no este archivo.
+        const el = DBG.elige(prog, args.lang, available)
+        if (el === null) {
+            cb("No sé con qué depurar eso. Lenguajes que conozco: "
+               + DBG.lenguajes().join(", ") + ".")
             return
         }
-        // Adaptador: el que diga lang, o el que pida la extensión.
-        let lang = String(args.lang || "").toLowerCase()
-        if (lang === "") {
-            lang = prog.endsWith(".py") ? "python"
-                 : prog.endsWith(".go") ? "go" : "native"
+        if (el.falta) {
+            cb("Falta el depurador de " + el.lenguaje + ": " + el.falta
+               + ". Instálalo con  pacman -S " + el.paquete
+               + (el.otros.length > 0
+                  ? "  (también valdría: " + el.otros.join(", ") + ")" : ""))
+            return
         }
-        let bridge, launch
-        const dir = prog.slice(0, prog.lastIndexOf("/"))
+        adapterName = el.id
+        const dir = prog !== "" ? prog.slice(0, prog.lastIndexOf("/"))
+                                : svc.toolCtx.home
         const progArgs = Array.isArray(args.args) ? args.args.map(String) : []
-        if (lang === "python") {
-            if (!available.debugpy) {
-                cb("Falta debugpy. Instálalo: pacman -S python-debugpy")
-                return
-            }
-            adapterName = "debugpy"
-            bridge = ["stdio", "--", "python3", "-m", "debugpy.adapter"]
-            launch = { request: "launch", type: "python", program: prog,
-                       args: progArgs, console: "internalConsole",
-                       justMyCode: true, cwd: dir,
-                       stopOnEntry: args.stop_on_entry === true }
-        } else if (lang === "go") {
-            if (!available.dlv) {
-                cb("Falta delve. Instálalo: pacman -S delve")
-                return
-            }
-            adapterName = "delve"
-            // delve solo escucha TCP: el puente lo arranca y se conecta él.
-            const puerto = 38000 + (Date.now() % 1000)
-            bridge = ["tcp", String(puerto), "--", "dlv", "dap",
-                      "--listen=127.0.0.1:" + puerto]
-            launch = { request: "launch",
-                       mode: prog.endsWith(".go") ? "debug" : "exec",
-                       program: prog, args: progArgs,
-                       stopOnEntry: args.stop_on_entry === true }
-        } else {
-            if (!available["lldb-dap"]) {
-                cb("Falta lldb-dap para binarios nativos. Instálalo: pacman -S lldb")
-                return
-            }
-            adapterName = "lldb-dap"
-            bridge = ["stdio", "--", "lldb-dap"]
-            launch = { program: prog, args: progArgs, cwd: dir,
-                       stopOnEntry: args.stop_on_entry === true }
-        }
+        // El puerto solo lo usan los de socket (delve). Se saca del reloj para
+        // no chocar con una sesión anterior que aún esté soltando el puerto.
+        const bridge = DBG.puente(el.def, 38000 + (Date.now() % 1000))
+        const launch = esAdjuntar
+            ? DBG.peticionAdjuntar(el.def, pid)
+            : DBG.peticionLanzar(el.def, prog, progArgs, dir,
+                                 args.stop_on_entry === true)
 
         // Rupturas iniciales. Tres formas, de la más corta a la más completa:
         //   "~/p/main.py:42"
@@ -274,7 +273,7 @@ Scope {
         }
 
         state = "starting"
-        program = prog
+        program = esAdjuntar ? ("(proceso " + pid + ")") : prog
         outputBuf = ""
         lastStack = []
         exitCode = -1
@@ -302,15 +301,28 @@ Scope {
                     dbg._request("configurationDone", {}, () => {})
                 })
             }
-            dbg._request("launch", launch, (b2, err2) => {
+            // El nombre de la petición es el del propio objeto: lanzar y
+            // engancharse son dos verbos distintos del protocolo, no una
+            // opción de uno de ellos.
+            dbg._request(launch.request, launch, (b2, err2) => {
                 if (err2 !== "") {
                     dbg.stop(() => {})
-                    cb("No se pudo lanzar el programa: " + err2)
+                    cb(esAdjuntar
+                       ? ("No se pudo enganchar al proceso " + pid + ": " + err2
+                          + ". En muchos sistemas hace falta permiso para mirar "
+                          + "dentro de otro proceso aunque sea tuyo: mira "
+                          + "/proc/sys/kernel/yama/ptrace_scope.")
+                       : ("No se pudo lanzar el programa: " + err2))
                 }
             }, 30000)
             // Se contesta cuando el programa pare (ruptura o entrada) o
             // termine — eso es lo que el modelo necesita saber para seguir.
-            dbg._stopWait = { deadline: Date.now() + 15000,
+            // Engancharse no siempre para el programa: lldb y gdb sí, debugpy
+            // no. Como el "no para" es una respuesta válida y no un fallo, se
+            // espera mucho menos: cuatro segundos y se cuenta cómo está, en vez
+            // de tener al usuario quince mirando una tarjeta que no va a
+            // cambiar. Para pararlo está debug_ctl action=pause.
+            dbg._stopWait = { deadline: Date.now() + (esAdjuntar ? 4000 : 15000),
                               cb: () => cb(dbg._sitrep()) }
         }, 15000)
     }
@@ -614,8 +626,20 @@ Scope {
         }
         const idx = parseInt(args.frame) || 0
         const frame = lastStack[idx]
+        // context "watch" y NO "repl", y la diferencia no es cosmética.
+        //
+        // "repl" significa "esto lo ha tecleado alguien en la consola del
+        // depurador", y gdb lo trata como tal: ejecuta COMANDOS DE GDB, no
+        // expresiones. Comprobado en vivo — evaluar "x + 1" con context repl
+        // devuelve «Cannot access memory at address 0x1», porque gdb entendió su
+        // comando `x` de examinar memoria. Y por ese mismo camino pasarían
+        // `shell`, `set` o `file`, que no son evaluar nada.
+        //
+        // "watch" es evaluar una expresión en un marco, que es exactamente lo
+        // que promete esta herramienta. Con debugpy y lldb-dap se comporta igual
+        // que antes; con gdb es la diferencia entre funcionar y no.
         _request("evaluate", {
-            expression: expr, context: "repl",
+            expression: expr, context: "watch",
             frameId: frame ? frame.id : undefined
         }, (body, err) => {
             if (err !== "") { cb("No se pudo evaluar: " + err); return }

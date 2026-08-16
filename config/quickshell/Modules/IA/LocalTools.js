@@ -247,6 +247,507 @@ const PY_DIAG =
 // estaríamos diciendo que un aviso nuestro lo ha escrito un desconocido.
 const FETCH_KO = "[[FETCH_KO]]"
 
+// ── RECETAS POR SITIO ────────────────────────────────────────────────────────
+// Doce sitios de los que el agente tira todo el rato, y en casi todos hay una
+// puerta de servicio mejor que la de delante.
+//
+// Lo medido con npm: el JSON del registro son 804 975 bytes y lo que de verdad
+// se quiere de ahí son 285. Raspar el HTML de esa página es sacar esos mismos
+// 285 bytes de una interfaz pintada con JavaScript. La receta no es "un
+// extractor mejor": es no tener que extraer.
+//
+// Una receta solo dice DÓNDE preguntar y CÓMO resumir. Todo lo demás —la
+// comprobación de a qué red apunta cada salto, el tope de tamaño, el cerco de
+// contenido externo, la caché— es exactamente el mismo camino de siempre.
+//
+// Y si falla, no se nota: si la API contesta cualquier cosa que no sea 2xx, o
+// si el formateador no saca nada (porque el JSON cambió de forma, que pasará),
+// se reintenta la URL ORIGINAL por el camino de siempre. Una receta rota no
+// puede dejar esto peor que no tenerla.
+function _enc(s) { return encodeURIComponent(String(s)) }
+
+const RECETAS = [
+    // GitHub. Sin token: 60 peticiones por hora, y cuando se agotan la API
+    // contesta 403 y se cae sola al HTML. A propósito — para subir a 5000 habría
+    // que leer la credencial de `gh`, y eso es darle al agente acceso a los
+    // repositorios privados sin haberlo dicho en ninguna parte.
+    { id: "gh_repo",  re: /^https?:\/\/(?:www\.)?github\.com\/([^/?#]+)\/([^/?#]+)\/?(?:[?#].*)?$/i,
+      url: m => "https://api.github.com/repos/" + _enc(m[1]) + "/" + _enc(m[2].replace(/\.git$/, "")) },
+    { id: "gh_issue", re: /^https?:\/\/(?:www\.)?github\.com\/([^/?#]+)\/([^/?#]+)\/issues\/(\d+)/i,
+      url: m => "https://api.github.com/repos/" + _enc(m[1]) + "/" + _enc(m[2]) + "/issues/" + m[3] },
+    { id: "gh_pr",    re: /^https?:\/\/(?:www\.)?github\.com\/([^/?#]+)\/([^/?#]+)\/pull\/(\d+)/i,
+      url: m => "https://api.github.com/repos/" + _enc(m[1]) + "/" + _enc(m[2]) + "/pulls/" + m[3] },
+    // Un archivo concreto: el crudo, que ya es texto y no necesita formateador.
+    { id: "texto",    re: /^https?:\/\/(?:www\.)?github\.com\/([^/?#]+)\/([^/?#]+)\/blob\/([^/?#]+)\/(.+?)(?:[?#].*)?$/i,
+      url: m => "https://raw.githubusercontent.com/" + m[1] + "/" + m[2] + "/" + m[3] + "/" + m[4] },
+
+    // GitLab quiere la ruta del proyecto entera codificada, barras incluidas.
+    { id: "gl_repo",  re: /^https?:\/\/gitlab\.com\/((?!-\/)[^?#]+?)\/?(?:[?#].*)?$/i,
+      url: m => "https://gitlab.com/api/v4/projects/" + _enc(m[1].replace(/\/$/, "")) },
+
+    { id: "npm",      re: /^https?:\/\/(?:www\.)?npmjs\.com\/package\/((?:@[^/?#]+\/)?[^/?#]+)/i,
+      url: m => "https://registry.npmjs.org/" + m[1] },
+    { id: "pypi",     re: /^https?:\/\/pypi\.org\/project\/([^/?#]+)/i,
+      url: m => "https://pypi.org/pypi/" + _enc(m[1]) + "/json" },
+    { id: "crates",   re: /^https?:\/\/crates\.io\/crates\/([^/?#]+)/i,
+      url: m => "https://crates.io/api/v1/crates/" + _enc(m[1]) },
+
+    // arXiv: vale igual el /abs/ que el /pdf/, que es lo que suele pegar el
+    // modelo cuando encuentra el enlace de descarga.
+    { id: "arxiv",    re: /^https?:\/\/(?:www\.)?arxiv\.org\/(?:abs|pdf)\/([0-9]{4}\.[0-9]{4,5}(?:v\d+)?|[a-z-]+\/\d{7}(?:v\d+)?)/i,
+      url: m => "https://export.arxiv.org/api/query?id_list=" + _enc(m[1].replace(/v\d+$/, "")) },
+
+    // Stack Overflow: se piden las RESPUESTAS, no la pregunta. De un enlace a
+    // Stack Overflow lo que se quiere es la respuesta aceptada, y el enunciado
+    // ya viene en la propia URL — el formateador saca el título del final de la
+    // dirección, que para eso lo lleva. Así hace falta una sola petición.
+    { id: "so",       re: /^https?:\/\/(?:[a-z]+\.)?stackoverflow\.com\/questions\/(\d+)/i,
+      url: m => "https://api.stackexchange.com/2.3/questions/" + m[1]
+                + "/answers?site=stackoverflow&filter=withbody&sort=votes&order=desc" },
+
+    { id: "hn",       re: /^https?:\/\/news\.ycombinator\.com\/item\?id=(\d+)/i,
+      url: m => "https://hn.algolia.com/api/v1/items/" + m[1] },
+
+    { id: "mdn",      re: /^https?:\/\/developer\.mozilla\.org\/([a-zA-Z-]+)\/docs\/([^?#]+?)\/?(?:[?#].*)?$/i,
+      url: m => "https://developer.mozilla.org/" + m[1] + "/docs/" + m[2] + "/index.json" },
+
+    // ReadTheDocs publica el FUENTE de cada página junto al HTML. Sphinx lo pone
+    // en _sources con la extensión original, así que se prueba .rst y, si no,
+    // .md — y si tampoco, al camino de siempre. 19 kB de texto limpio contra 62
+    // de HTML, y sin barra lateral ni menús.
+    { id: "texto",    re: /^https?:\/\/([a-z0-9-]+)\.readthedocs\.io\/([a-z-]+)\/([^/]+)\/(.+?)\/?(?:[?#].*)?$/i,
+      url: m => "https://" + m[1] + ".readthedocs.io/" + m[2] + "/" + m[3]
+                + "/_sources/" + m[4].replace(/\.html$/, "") + ".rst.txt" },
+
+    // docs.rs no tiene API cómoda —el JSON de rustdoc viene comprimido en zstd—
+    // así que aquí sí se lee el HTML, pero recortado al bloque de documentación
+    // antes de tocarlo. El resto de la página es navegación de cajones.
+    { id: "docsrs",   re: /^https?:\/\/docs\.rs\/.+/i, url: m => m[0] }
+]
+
+// La primera receta que case, o null. El orden importa: las de ruta larga
+// (issues, pull, blob) van antes que la del repositorio a secas.
+function receta(u) {
+    const s = String(u || "")
+    for (let i = 0; i < RECETAS.length; i++) {
+        const m = s.match(RECETAS[i].re)
+        if (m)
+            return { id: RECETAS[i].id, url: RECETAS[i].url(m) }
+    }
+    return null
+}
+
+// El formateador de las recetas: recibe por la entrada estándar lo que
+// contestó la API y escribe el resumen. Si algo no cuadra —el JSON cambió de
+// forma, el campo ya no está, la API devolvió un error con cara de éxito—
+// sale con código 1 SIN escribir nada, y quien llama lo entiende como "la
+// receta no valió" y reintenta la URL original por el camino de siempre.
+const PY_RECETA = [
+    'import html as _h',
+    'import json',
+    'import os',
+    'import re',
+    'import sys',
+    '',
+    'CRUDO = sys.stdin.read()',
+    'FMT = os.environ.get("QS_FMT", "")',
+    'URL0 = os.environ.get("QS_U0", "")',
+    '',
+    '',
+    'def corta(s, n):',
+    '    s = " ".join(str(s or "").split())',
+    '    return s if len(s) <= n else s[:n].rstrip() + "…"',
+    '',
+    '',
+    '# Para los cuerpos largos (README, respuesta, documentación) hay que recortar',
+    '# SIN aplastar: un README en una sola línea pierde los títulos, las listas y los',
+    '# bloques de código, que es justo lo que hace legible un README.',
+    'def bloque(s, n):',
+    '    s = re.sub(r"\\n\\s*\\n\\s*\\n+", "\\n\\n", str(s or "").replace("\\r", "")).strip()',
+    '    return s if len(s) <= n else s[:n].rstrip() + "\\n…[recortado]"',
+    '',
+    '',
+    '# HTML a texto, para los tres que devuelven cuerpos en HTML dentro del JSON',
+    '# (Stack Overflow, MDN) y para docs.rs. No pretende ser un extractor: el bloque',
+    '# ya viene acotado, aquí solo se quitan las etiquetas conservando los saltos que',
+    '# significan algo y los bloques de código, que en una respuesta técnica SON la',
+    '# respuesta.',
+    'def texto(h):',
+    '    h = re.sub(r"(?is)<(script|style)\\b.*?</\\1>", " ", str(h or ""))',
+    '    h = re.sub(r"(?is)<pre\\b[^>]*>(.*?)</pre>", lambda m: "\\n```\\n" + m.group(1) + "\\n```\\n", h)',
+    '    h = re.sub(r"(?i)<br\\s*/?>", "\\n", h)',
+    '    h = re.sub(r"(?i)</(p|div|li|h[1-6]|tr|section)>", "\\n", h)',
+    '    h = re.sub(r"(?i)<li\\b[^>]*>", "\\n  · ", h)',
+    '    h = re.sub(r"(?s)<[^>]+>", "", h)',
+    '    h = _h.unescape(h)',
+    '    h = re.sub(r"[ \\t]+", " ", h)',
+    '    h = re.sub(r"\\n\\s*\\n\\s*\\n+", "\\n\\n", h)',
+    '    return h.strip()',
+    '',
+    '',
+    'def fecha(s):',
+    '    return str(s or "")[:10]',
+    '',
+    '',
+    'def linea(k, v):',
+    '    v = str(v or "").strip()',
+    '    return (k + ": " + v) if v else ""',
+    '',
+    '',
+    'def imprime(filas):',
+    '    salida = "\\n".join(f for f in filas if f)',
+    '    if len(salida.strip()) < 12:      # nada aprovechable → que caiga al HTML',
+    '        raise SystemExit(1)',
+    '    print(salida)',
+    '',
+    '',
+    'def js():',
+    '    return json.loads(CRUDO)',
+    '',
+    '',
+    '# El campo que IDENTIFICA la respuesta. Sin él no hay resumen que valga: un',
+    '# "npm:   / Versiones: 0" es peor que no contestar, porque el modelo se lo cree.',
+    '# Un JSON vacío o de otra forma tiene que salir por aquí, no por la puerta de',
+    '# delante a medio vestir.',
+    'def exige(v):',
+    '    if not str(v or "").strip():',
+    '        raise SystemExit(1)',
+    '    return v',
+    '',
+    '',
+    '# ── npm ──────────────────────────────────────────────────────────────────────',
+    'def npm():',
+    '    d = js()',
+    '    ult = (d.get("dist-tags") or {}).get("latest", "")',
+    '    v = (d.get("versions") or {}).get(ult, {})',
+    '    rep = (v.get("repository") or {}).get("url", "") if isinstance(v.get("repository"), dict) else ""',
+    '    deps = list((v.get("dependencies") or {}).keys())',
+    '    tiempos = d.get("time") or {}',
+    '    exige(d.get("name")); exige(ult)',
+    '    imprime([',
+    '        "npm: " + str(d.get("name", "")) + "  " + str(ult),',
+    '        linea("Descripción", corta(d.get("description"), 300)),',
+    '        linea("Licencia", v.get("license")),',
+    '        linea("Publicado", fecha(tiempos.get(ult))),',
+    '        linea("Versiones", str(len(d.get("versions") or {}))),',
+    '        linea("Repositorio", re.sub(r"^git\\+|\\.git$", "", rep)),',
+    '        linea("Web", v.get("homepage")),',
+    '        linea("Dependencias (%d)" % len(deps), ", ".join(deps[:12]) + ("…" if len(deps) > 12 else "")),',
+    '        "",',
+    '        bloque(d.get("readme"), 1800),',
+    '    ])',
+    '',
+    '',
+    '# ── PyPI ─────────────────────────────────────────────────────────────────────',
+    'def pypi():',
+    '    d = js()',
+    '    i = d.get("info") or {}',
+    '    exige(i.get("name"))',
+    '    urls = d.get("urls") or []',
+    '    req = i.get("requires_dist") or []',
+    '    imprime([',
+    '        "PyPI: " + str(i.get("name", "")) + "  " + str(i.get("version", "")),',
+    '        linea("Resumen", corta(i.get("summary"), 300)),',
+    '        linea("Licencia", corta(i.get("license") or (i.get("classifiers") or [""])[0], 120)),',
+    '        linea("Python", i.get("requires_python")),',
+    '        linea("Publicado", fecha(urls[0].get("upload_time")) if urls else ""),',
+    '        linea("Web", i.get("home_page") or (i.get("project_urls") or {}).get("Homepage")),',
+    '        linea("Requiere (%d)" % len(req), ", ".join(r.split(";")[0].strip() for r in req[:12])),',
+    '        "",',
+    '        bloque(i.get("description"), 1800),',
+    '    ])',
+    '',
+    '',
+    '# ── crates.io ────────────────────────────────────────────────────────────────',
+    'def crates():',
+    '    d = js()',
+    '    c = d.get("crate") or {}',
+    '    vs = [v.get("num", "") for v in (d.get("versions") or [])[:5]]',
+    '    exige(c.get("name"))',
+    '    imprime([',
+    '        "crates.io: " + str(c.get("name", "")) + "  " + str(c.get("max_stable_version") or c.get("max_version", "")),',
+    '        linea("Descripción", corta(c.get("description"), 300)),',
+    '        linea("Descargas", "{:,}".format(c.get("downloads", 0)).replace(",", ".")),',
+    '        linea("Actualizado", fecha(c.get("updated_at"))),',
+    '        linea("Repositorio", c.get("repository")),',
+    '        linea("Documentación", c.get("documentation")),',
+    '        linea("Categorías", ", ".join(c.get("keywords") or [])),',
+    '        linea("Últimas versiones", ", ".join(vs)),',
+    '    ])',
+    '',
+    '',
+    '# ── GitHub ───────────────────────────────────────────────────────────────────',
+    'def gh_repo():',
+    '    d = js()',
+    '    if d.get("message"):                       # 403 de cuota, 404…',
+    '        raise SystemExit(1)',
+    '    exige(d.get("full_name"))',
+    '    lic = (d.get("license") or {}).get("spdx_id", "")',
+    '    imprime([',
+    '        "GitHub: " + str(d.get("full_name", "")),',
+    '        linea("Descripción", corta(d.get("description"), 300)),',
+    '        linea("Estrellas", "{:,}".format(d.get("stargazers_count", 0)).replace(",", ".")',
+    '              + "  ·  forks: " + str(d.get("forks_count", 0))',
+    '              + "  ·  issues abiertas: " + str(d.get("open_issues_count", 0))),',
+    '        linea("Lenguaje", d.get("language")),',
+    '        linea("Licencia", lic if lic != "NOASSERTION" else ""),',
+    '        linea("Rama por defecto", d.get("default_branch")),',
+    '        linea("Último cambio", fecha(d.get("pushed_at"))),',
+    '        linea("Temas", ", ".join(d.get("topics") or [])),',
+    '        linea("Web", d.get("homepage")),',
+    '        linea("Archivado", "sí" if d.get("archived") else ""),',
+    '    ])',
+    '',
+    '',
+    'def gh_issue(clase="Issue"):',
+    '    d = js()',
+    '    if d.get("message"):',
+    '        raise SystemExit(1)',
+    '    extra = []',
+    '    if "merged" in d:',
+    '        extra = [linea("Estado", ("fusionada" if d.get("merged") else d.get("state", ""))),',
+    '                 linea("Cambios", "+%s −%s en %s archivos"',
+    '                       % (d.get("additions", 0), d.get("deletions", 0), d.get("changed_files", 0)))]',
+    '    else:',
+    '        extra = [linea("Estado", d.get("state", ""))]',
+    '    exige(d.get("title"))',
+    '    imprime([',
+    '        clase + " #" + str(d.get("number", "")) + ": " + str(d.get("title", "")),',
+    '        linea("Quien la abrió", (d.get("user") or {}).get("login")),',
+    '        linea("Abierta", fecha(d.get("created_at"))),',
+    '    ] + extra + [',
+    '        linea("Etiquetas", ", ".join(l.get("name", "") for l in (d.get("labels") or []))),',
+    '        linea("Comentarios", str(d.get("comments", 0))),',
+    '        "",',
+    '        bloque(d.get("body"), 2500),',
+    '    ])',
+    '',
+    '',
+    'def gh_pr():',
+    '    gh_issue("Pull request")',
+    '',
+    '',
+    '# ── GitLab ───────────────────────────────────────────────────────────────────',
+    'def gl_repo():',
+    '    d = js()',
+    '    if d.get("message") or d.get("error"):',
+    '        raise SystemExit(1)',
+    '    exige(d.get("path_with_namespace"))',
+    '    imprime([',
+    '        "GitLab: " + str(d.get("path_with_namespace", "")),',
+    '        linea("Descripción", corta(d.get("description"), 300)),',
+    '        linea("Estrellas", str(d.get("star_count", 0)) + "  ·  forks: " + str(d.get("forks_count", 0))),',
+    '        linea("Rama por defecto", d.get("default_branch")),',
+    '        linea("Último cambio", fecha(d.get("last_activity_at"))),',
+    '        linea("Temas", ", ".join(d.get("topics") or [])),',
+    '        linea("Web", d.get("web_url")),',
+    '    ])',
+    '',
+    '',
+    '# ── Hacker News ──────────────────────────────────────────────────────────────',
+    'def hn():',
+    '    d = js()',
+    '    exige(d.get("title") or d.get("url") or d.get("text"))',
+    '    hijos = d.get("children") or []',
+    '',
+    '    def rama(n, prof, salida):',
+    '        if prof > 1 or len(salida) >= 10:',
+    '            return',
+    '        t = texto(n.get("text") or "")',
+    '        if t:',
+    '            salida.append(("  " * prof) + "· " + str(n.get("author") or "?") + ": " + corta(t, 500))',
+    '        for h in (n.get("children") or []):',
+    '            rama(h, prof + 1, salida)',
+    '',
+    '    coms = []',
+    '    for h in hijos:',
+    '        rama(h, 0, coms)',
+    '    imprime([',
+    '        "Hacker News: " + str(d.get("title") or "(sin título)"),',
+    '        linea("Enlace", d.get("url")),',
+    '        linea("Puntos", str(d.get("points") or 0) + "  ·  autor: " + str(d.get("author") or "?")',
+    '              + "  ·  " + fecha(d.get("created_at"))),',
+    '        "",',
+    '        "Comentarios más arriba:" if coms else "",',
+    '    ] + coms)',
+    '',
+    '',
+    '# ── Stack Overflow ───────────────────────────────────────────────────────────',
+    '# El título sale de la propia URL: el enlace lo lleva en el nombre y así basta',
+    '# UNA petición, la de las respuestas, que es lo que se quiere de un enlace a',
+    '# Stack Overflow.',
+    'def so():',
+    '    d = js()',
+    '    items = d.get("items") or []',
+    '    if not items:',
+    '        raise SystemExit(1)',
+    '    m = re.search(r"/questions/\\d+/([^/?#]+)", URL0)',
+    '    titulo = m.group(1).replace("-", " ") if m else "(pregunta)"',
+    '    filas = ["Stack Overflow: " + titulo,',
+    '             linea("Respuestas", str(len(items))',
+    '                   + ("  ·  hay una aceptada" if any(a.get("is_accepted") for a in items) else "")),',
+    '             ""]',
+    '    for a in items[:3]:',
+    '        filas.append("── %s%s votos ──"',
+    '                     % ("ACEPTADA · " if a.get("is_accepted") else "", a.get("score", 0)))',
+    '        filas.append(bloque(texto(a.get("body")), 2000))',
+    '        filas.append("")',
+    '    imprime(filas)',
+    '',
+    '',
+    '# ── arXiv ────────────────────────────────────────────────────────────────────',
+    'def arxiv():',
+    '    d = CRUDO',
+    '    def uno(tag):',
+    '        m = re.search(r"(?is)<entry>.*?<%s>(.*?)</%s>" % (tag, tag), d)',
+    '        return _h.unescape(m.group(1)).strip() if m else ""',
+    '    autores = re.findall(r"(?is)<author>\\s*<name>(.*?)</name>", d)',
+    '    cats = re.findall(r\'(?i)<category[^>]*term="([^"]+)"\', d)',
+    '    if not uno("title"):',
+    '        raise SystemExit(1)',
+    '    imprime([',
+    '        "arXiv: " + corta(uno("title"), 250),',
+    '        linea("Autores", ", ".join(a.strip() for a in autores[:12])',
+    '              + ("…" if len(autores) > 12 else "")),',
+    '        linea("Publicado", fecha(uno("published")) + "  ·  revisado: " + fecha(uno("updated"))),',
+    '        linea("Categorías", ", ".join(dict.fromkeys(cats))),',
+    '        "",',
+    '        "Resumen:",',
+    '        " ".join(uno("summary").split()),',
+    '    ])',
+    '',
+    '',
+    '# ── MDN ──────────────────────────────────────────────────────────────────────',
+    'def mdn():',
+    '    doc = (js() or {}).get("doc") or {}',
+    '    exige(doc.get("title"))',
+    '    filas = ["MDN: " + str(doc.get("title", "")),',
+    '             linea("Resumen", corta(doc.get("summary"), 400)), ""]',
+    '    resumen = " ".join(str(doc.get("summary") or "").split())',
+    '    for s in (doc.get("body") or []):',
+    '        v = s.get("value") or {}',
+    '        if s.get("type") == "prose" and v.get("content"):',
+    '            # La primera sección de prosa suele SER el resumen otra vez.',
+    '            if " ".join(texto(v["content"]).split()) == resumen:',
+    '                continue',
+    '            if v.get("title"):',
+    '                filas.append("── " + str(v["title"]) + " ──")',
+    '            filas.append(texto(v["content"]))',
+    '    salida = "\\n".join(f for f in filas if f)',
+    '    if len(salida) > 12000:',
+    '        salida = salida[:12000].rstrip() + "\\n…[recortado]"',
+    '    imprime([salida])',
+    '',
+    '',
+    '# ── docs.rs ──────────────────────────────────────────────────────────────────',
+    '# Sin API cómoda (el JSON de rustdoc viene en zstd), así que se lee el HTML pero',
+    '# recortado antes al bloque de documentación: lo demás son cajones de navegación',
+    '# con cientos de nombres de items.',
+    'def docsrs():',
+    '    m = re.search(r\'(?is)<(section|div)[^>]*id="main-content".*?>(.*)\', CRUDO)',
+    '    cuerpo = m.group(2) if m else CRUDO',
+    '    cuerpo = re.split(r"(?i)</(section|main)>", cuerpo)[0]',
+    '    t = texto(cuerpo)',
+    '    if len(t) < 80:',
+    '        raise SystemExit(1)',
+    '    imprime(["docs.rs", "", bloque(t, 12000)])',
+    '',
+    '',
+    '# ── Texto tal cual ───────────────────────────────────────────────────────────',
+    'def crudo():',
+    '    if len(CRUDO.strip()) < 12:',
+    '        raise SystemExit(1)',
+    '    print(CRUDO)',
+    '',
+    '',
+    'TABLA = {"npm": npm, "pypi": pypi, "crates": crates, "gh_repo": gh_repo,',
+    '         "gh_issue": gh_issue, "gh_pr": gh_pr, "gl_repo": gl_repo, "hn": hn,',
+    '         "so": so, "arxiv": arxiv, "mdn": mdn, "docsrs": docsrs, "texto": crudo}',
+    '',
+    'fn = TABLA.get(FMT)',
+    'if fn is None:',
+    '    raise SystemExit(1)',
+    'try:',
+    '    fn()',
+    'except SystemExit:',
+    '    raise',
+    'except Exception:',
+    '    # Cualquier sorpresa en la forma del JSON —que la habrá, las APIs cambian—',
+    '    # se sale en silencio: quien llama lo interpreta como "la receta no valió" y',
+    '    # reintenta la URL original por el camino de siempre.',
+    '    raise SystemExit(1)'
+].join("\n")
+
+// A QUÉ MÁQUINA APUNTA DE VERDAD ESTA DIRECCIÓN, antes de mandarle nada.
+//
+// Contesta "ok <servidor> <puerto> <ip>" o "ko <motivo>". El motivo se le enseña
+// al modelo tal cual, así que va escrito para que pueda decidir con él.
+//
+// Tres reglas, y las tres importan:
+//   · Se miran TODAS las direcciones del nombre, no la primera. Publicar dos
+//     registros —uno público y otro privado— y confiar en que el cliente elija
+//     el bueno es el rodeo clásico; aquí una sola mala tumba el nombre entero.
+//   · Se desnuda la IPv4 metida en IPv6 (::ffff:127.0.0.1), que es la misma
+//     dirección con otro traje y que el módulo ipaddress no marca como local si
+//     no se le pide.
+//   · Se rechaza también lo reservado, lo multicast y el 0.0.0.0, que no son
+//     "red de casa" pero tampoco son internet, y alguno (el 0.0.0.0) es un alias
+//     conocido del propio equipo.
+const PY_RESOLVE = [
+    'import ipaddress, os, socket',
+    'from urllib.parse import urlsplit',
+    'u = os.environ.get("QS_HOP", "")',
+    'lan = os.environ.get("QS_LAN", "") == "1"',
+    'p = urlsplit(u)',
+    'if p.scheme not in ("http", "https"):',
+    '    print("ko Solo se descargan direcciones http(s)."); raise SystemExit',
+    'host = p.hostname or ""',
+    'if not host:',
+    '    print("ko Esa dirección no dice a qué servidor ir."); raise SystemExit',
+    'try:',
+    '    port = p.port or (443 if p.scheme == "https" else 80)',
+    'except ValueError:',
+    '    print("ko El puerto de esa dirección no es un número."); raise SystemExit',
+    'try:',
+    '    infos = socket.getaddrinfo(host, port, proto=socket.IPPROTO_TCP)',
+    'except OSError:',
+    '    print("ko No existe el servidor \'%s\' (el nombre no resuelve)." % host)',
+    '    raise SystemExit',
+    'buenas = []',
+    'for info in infos:',
+    '    bruta = info[4][0]',
+    '    ip = ipaddress.ip_address(bruta)',
+    '    mapeada = getattr(ip, "ipv4_mapped", None)',
+    '    if mapeada is not None:',
+    '        ip = mapeada',
+    // "No es global" en vez de una lista de banderas: la lista se queda corta y
+    // se nota tarde. Comprobado en Python 3.14 — 100.64.0.0/10, el rango que
+    // usan las operadoras para su NAT y que ocupa Tailscale, da is_private
+    // FALSO, así que una lista de banderas lo dejaba pasar. is_global recoge de
+    // una vez lo privado, el bucle, el enlace local, lo reservado, el 0.0.0.0 y
+    // el CGNAT. El multicast se pide aparte porque ahí sí dice que es global.
+    '    interna = (not ip.is_global) or ip.is_multicast',
+    '    if interna and not lan:',
+    '        print("ko \'%s\' apunta a %s, que es una máquina de la red local o "',
+    '              "la propia máquina, no internet. No se lee ni se le pide "',
+    '              "nada: lo que hay ahí dentro suele estar sin contraseña "',
+    '              "precisamente porque solo se llega desde aquí. Si de verdad "',
+    '              "hace falta, pídeselo al usuario con la dirección escrita."',
+    '              % (host, ip))',
+    '        raise SystemExit',
+    '    buenas.append(bruta)',
+    'if not buenas:',
+    '    print("ko No se pudo resolver \'%s\'." % host); raise SystemExit',
+    // TODAS las buenas, no la primera. --resolve acepta una lista separada por
+    // comas, y dársela entera conserva el respaldo de curl entre direcciones:
+    // fijar solo la primera rompía los sitios con IPv6 y IPv4 donde el IPv6 no
+    // tira — que es media internet doméstica. Salió probando con un nombre que
+    // resuelve a ::1 y a 127.0.0.1: se fijaba el ::1 y no conectaba nunca.
+    // curl quiere la IPv6 entre corchetes aquí, y solo aquí.
+    'lista = ",".join(("[" + b + "]") if ":" in b else b for b in buenas)',
+    'print("ok %s %s %s" % (host, port, lista))'
+].join("\n")
+
 const FETCH_SH = [
     // Con agente de usuario de navegador: hay bastantes sitios que responden 403
     // a un curl pelado, y esa negativa llegaba al modelo como "página vacía".
@@ -260,34 +761,78 @@ const FETCH_SH = [
     // reenviado en todas las rondas siguientes. Los tiempos de respuesta
     // crecían ronda a ronda y parecía que el modelo se atascaba; lo que se
     // atascaba era su contexto, lleno de ruido.
-    'resp=$(curl -sSL --compressed --max-time 20 --max-filesize 2000000 -A "$ua" -o "$f" -w "%{content_type}|%{http_code}|%{remote_ip}" -- "$QS_U" 2>/dev/null)',
-    'ip=${resp##*|}; r=${resp%|*}; code=${r##*|}; ct=${r%|*}',
-    // A DÓNDE se acabó llegando, que no es lo mismo que a dónde se pidió ir.
-    // La URL se mira antes de salir (urlZone, en TextUtils), pero eso solo ve el
-    // nombre: una redirección desde una página pública o un nombre que resuelve
-    // a 127.0.0.1 —el truco de siempre— aterrizan igual en la máquina de casa.
-    // Quien lo sabe de verdad es curl, y lo dice con %{remote_ip}: la IP del
-    // ÚLTIMO salto. El cuerpo ya está descargado, pero no ha entrado al
-    // contexto todavía, y ese es el único sitio donde importa pararlo.
+    // ── UN SALTO CADA VEZ, Y CADA UNO MIRADO ────────────────────────────────
+    // Aquí había un `curl -sSL`: seguía las redirecciones ÉL, y nosotros solo
+    // veíamos dónde acabó la última. Eso tapaba la exfiltración —el cuerpo de
+    // una máquina de casa no llegaba al modelo— pero dejaba dos cosas fuera:
+    //
+    //   · Los saltos INTERMEDIOS. `público → 192.168.1.1/admin/reboot →
+    //     público` acaba en una IP pública, así que pasaba el filtro… después de
+    //     haber hecho la petición al router. Para eso no hace falta leer la
+    //     respuesta: la petición YA es la acción.
+    //   · El instante entre resolver y conectar. Comprobar la IP a la que se
+    //     llegó es tarde por definición; el GET ya salió.
+    //
+    // Así que ahora manda el harness: `--max-redirs 0`, y por cada salto se
+    // resuelve el nombre PRIMERO, se miran TODAS las direcciones que devuelve
+    // (basta una privada para negarse: publicar dos registros, uno bueno y otro
+    // malo, es el truco clásico), y se conecta con `--resolve`, que fija la IP
+    // ya comprobada. Entre la comprobación y la conexión ya no hay ventana:
+    // curl no vuelve a preguntarle al DNS.
     //
     // QS_LAN=1 lo levanta quien ya enseñó la tarjeta con la dirección local
     // escrita y se la aprobaron. Sin esa aprobación explícita, la red de casa no
-    // se lee.
-    'case "$ip" in',
-    // Las mismas redes que mira urlZone en JavaScript, más la forma mapeada
-    // (::ffff:127.0.0.1), que es la misma dirección con otro traje.
-    '  127.*|::1|10.*|192.168.*|169.254.*|172.1[6-9].*|172.2[0-9].*|172.3[01].*'
-        + '|100.6[4-9].*|100.[7-9][0-9].*|100.1[01][0-9].*|100.12[0-7].*'
-        + '|f[cd][0-9a-f][0-9a-f]:*|fe[89ab][0-9a-f]:*'
-        + '|::ffff:127.*|::ffff:10.*|::ffff:192.168.*|::ffff:169.254.*'
-        + '|::ffff:172.1[6-9].*|::ffff:172.2[0-9].*|::ffff:172.3[01].*)',
-    '    [ "$QS_LAN" = 1 ] || { echo "' + FETCH_KO + ' Esa dirección acabó en '
-        + '$ip, que es una máquina de la red local o la propia máquina, no '
-        + 'internet. No se lee: lo que hay ahí dentro suele estar sin '
-        + 'contraseña precisamente porque solo se llega desde aquí. Si de '
-        + 'verdad hace falta, pídeselo al usuario con la dirección escrita."; '
-        + 'exit 0; } ;;',
-    'esac',
+    // se lee ni se toca.
+    // La descarga es una FUNCIÓN porque ahora se usa dos veces: primero para
+    // intentar la receta del sitio (la puerta de servicio: una API que contesta
+    // JSON en vez de una página pintada con JavaScript) y, si eso no vale,
+    // para la URL original por el camino de siempre. Deja en $code, $ct y $f lo
+    // que haya contestado el último salto.
+    'descargar() {',
+    '  u="$1"; salto=0',
+    '  while :; do',
+    '    v=$(QS_HOP="$u" python3 -c "$QS_RES" 2>/dev/null)',
+    '    case "$v" in',
+    '      ok\\ *) ;;',
+    // Una negativa por red interna NO se reintenta por otro camino: es la misma
+    // máquina prohibida en los dos casos, y repetirla solo la pediría dos veces.
+    '      ko\\ *) echo "' + FETCH_KO + ' ${v#ko }"; exit 0 ;;',
+    '      *) echo "' + FETCH_KO + ' No se pudo comprobar a qué máquina apunta esa dirección."; exit 0 ;;',
+    '    esac',
+    '    set -- $v; host=$2; port=$3; ip=$4',
+    '    resp=$(curl -sS --compressed --max-time 20 --max-filesize 2000000 --max-redirs 0 --resolve "$host:$port:$ip" -A "$ua" -o "$f" -w "%{content_type}|%{http_code}|%{remote_ip}|%{redirect_url}" -- "$u" 2>/dev/null)',
+    // El troceo va de izquierda a derecha y la URL queda LA ÚLTIMA a propósito:
+    // es el único campo que puede llevar una barra vertical dentro.
+    '    ct=${resp%%|*}; r=${resp#*|}; code=${r%%|*}; r=${r#*|}',
+    '    ip=${r%%|*}; siguiente=${r#*|}',
+    '    case "$code" in',
+    '      30[12378])',
+    '        salto=$((salto+1))',
+    '        [ "$salto" -gt 5 ] && { echo "' + FETCH_KO + ' Esa dirección da más de cinco redirecciones seguidas; no se sigue más."; exit 0; }',
+    '        [ -n "$siguiente" ] || break',
+    '        u="$siguiente"; continue ;;',
+    '    esac',
+    '    break',
+    '  done',
+    '}',
+    '',
+    // ── LA PUERTA DE SERVICIO ────────────────────────────────────────────────
+    // Si el sitio tiene receta, se prueba primero. Medido con npm: el JSON del
+    // registro son 804 975 bytes y lo que se quiere de ahí son 285 — raspar la
+    // página sería sacar esos mismos 285 bytes de una interfaz de JavaScript.
+    //
+    // Y si no sale bien —la API contesta 404, o cambió de forma y el formateador
+    // no saca nada— no se nota: se cae a la URL original. Una receta rota no
+    // puede dejar esto peor que no tenerla.
+    'if [ -n "$QS_RURL" ]; then',
+    '  descargar "$QS_RURL"',
+    '  case "$code" in',
+    '    2*) salida=$(python3 -c "$QS_REC" < "$f" 2>/dev/null)',
+    '        [ -n "$salida" ] && { printf "%s\\n" "$salida"; exit 0; } ;;',
+    '  esac',
+    'fi',
+    'descargar "$QS_U"',
+    '',
     // El CÓDIGO HTTP va PRIMERO, antes incluso de mirar si llegó algo. Un 404
     // con el cuerpo vacío —que es lo normal— caía si no en la rama de "sin
     // respuesta o error de red", y eso es mentira: el servidor contestó
@@ -362,7 +907,20 @@ const FETCH_SH = [
 // ── Archivos y red, en solo lectura ──────────────────────────────────────────
 // Leer, listar, grep, glob y descargar. La misma jaula ($HOME clampado, todo
 // por entorno) que comparten el agente principal y el subagente.
+// La pared de esta llamada: el taller del subagente si lo hay, y si no la
+// carpeta personal. Se pega al entorno de cualquier constructor que mande una
+// ruta, para que el envoltorio pueda comprobar a dónde apunta DE VERDAD.
+function conPared(r, ctx) {
+    if (r && r.env && r.env.QS_P !== undefined)
+        r.env.QS_PARED = String((ctx && (ctx.root || ctx.home)) || "")
+    return r
+}
+
 function files(tool, args, ctx) {
+    return conPared(_files(tool, args, ctx), ctx)
+}
+
+function _files(tool, args, ctx) {
     switch (tool) {
     case "read_file": {
         const p = safePath(args.path, ctx.home, ctx.root)
@@ -546,9 +1104,19 @@ function files(tool, args, ctx) {
         if (!/^https?:\/\//i.test(url)) return { error: "Solo URLs http(s)." }
         // QS_LAN queda vacío a propósito: solo lo levanta ToolRunner, que es
         // quien sabe si la dirección local pasó por una tarjeta aprobada.
+        //
+        // QS_U0 es la dirección que escribió el modelo, y viaja aunque haya
+        // receta: el formateador de Stack Overflow saca de ahí el enunciado de
+        // la pregunta —el enlace lo lleva en el nombre— y así hace falta una
+        // sola petición, la de las respuestas, que es lo que se quiere de un
+        // enlace a Stack Overflow.
+        const rec = receta(url)
         return { cmd: ["sh", "-c", FETCH_SH],
-                 env: { QS_U: url, QS_LAN: "", QS_PY: PY_DESNUDA,
-                        QS_CUT: PY_CORTE, QS_BIN: PY_BINARIO, QS_DIAG: PY_DIAG } }
+                 env: { QS_U: url, QS_U0: url, QS_LAN: "", QS_RES: PY_RESOLVE,
+                        QS_RURL: rec ? rec.url : "", QS_FMT: rec ? rec.id : "",
+                        QS_REC: rec ? PY_RECETA : "",
+                        QS_PY: PY_DESNUDA, QS_CUT: PY_CORTE,
+                        QS_BIN: PY_BINARIO, QS_DIAG: PY_DIAG } }
     }
     }
     return null
@@ -580,6 +1148,30 @@ const SH_ACOTADO = [
     'd=$(mktemp -d) || exit 97',
     'trap \'rm -rf "$d"\' EXIT INT TERM',
     'n=$1; shift',
+    // ── EL CERCO, OTRA VEZ, PERO MIRANDO LA RUTA DE VERDAD ──────────────────
+    // safePath comprueba la ruta como TEXTO: que empiece por la carpeta
+    // permitida y que no lleve "..". Eso para lo evidente, pero un enlace
+    // simbólico no es texto:
+    //
+    //     ~/proyecto/notas  ->  /etc/passwd
+    //
+    // se escribe entero dentro de la carpeta personal y apunta fuera. Y el
+    // modelo puede haber creado ese enlace él mismo en una llamada anterior.
+    //
+    // Así que aquí se resuelve con readlink -f —que sigue todos los enlaces del
+    // camino— y se vuelve a comprobar contra la pared. Va en el envoltorio y no
+    // en cada constructor porque los diez pasan la ruta en QS_P: un solo sitio
+    // que auditar, y ninguno que se pueda olvidar.
+    //
+    // Sin QS_PARED no hay cerco: las consultas del sistema (df sobre /var) miran
+    // fuera de casa a propósito y no lo ponen.
+    'if [ -n "$QS_PARED" ] && [ -n "$QS_P" ]; then',
+    '  real=$(readlink -f -- "$QS_P" 2>/dev/null) || real="$QS_P"',
+    '  case "$real" in',
+    '    "$QS_PARED"|"$QS_PARED"/*) ;;',
+    '    *) printf "%s\\n" "La ruta lleva fuera de la carpeta permitida: sigue un enlace simbólico que acaba en $real. No se toca." >&2; exit 96 ;;',
+    '  esac',
+    'fi',
     '{ { timeout -k 5 "$n" "$@"; echo $? > "$d/s"; } 2>&1 1>&5'
         + ' | head -c 131072 > "$d/e"; } 5>&1 | head -c 2097152 > "$d/o"',
     'cat "$d/o"',
@@ -603,7 +1195,11 @@ function acotado(segundos, cmd) {
 // —cambia la pared (su taller, no $HOME), no el mecanismo—. La ruta llega YA
 // resuelta y comprobada por quien llama, que es quien sabe contra qué pared
 // mide.
-function writes(tool, p, args, bak, bakDir) {
+function writes(tool, p, args, bak, bakDir, ctx) {
+    return conPared(_writes(tool, p, args, bak, bakDir), ctx)
+}
+
+function _writes(tool, p, args, bak, bakDir) {
     switch (tool) {
     case "write_file":
         // El contenido viaja por entorno (nunca argv) y se escribe con printf;
@@ -656,6 +1252,10 @@ function writes(tool, p, args, bak, bakDir) {
 // que con una reescritura estructural no siempre es lo que uno imagina.
 // El bak lo decide quien llama (es quien lo anota en la tarjeta).
 function astEdit(args, ctx, bak, bakDir) {
+    return conPared(_astEdit(args, ctx, bak, bakDir), ctx)
+}
+
+function _astEdit(args, ctx, bak, bakDir) {
     const p = safePath(args.path, ctx.home, ctx.root)
     if (p === "") return { error: "Ruta fuera de la carpeta personal." }
     const pat = String(args.pattern || "").trim()
@@ -689,6 +1289,10 @@ function astEdit(args, ctx, bak, bakDir) {
 // texto viejo y más seguro que editar por número de línea a secas.
 // El bak lo decide quien llama (es quien lo anota en la tarjeta).
 function hashPatch(args, ctx, bak, bakDir, iaDir) {
+    return conPared(_hashPatch(args, ctx, bak, bakDir, iaDir), ctx)
+}
+
+function _hashPatch(args, ctx, bak, bakDir, iaDir) {
     const p = safePath(args.path, ctx.home, ctx.root)
     if (p === "") return { error: "Ruta fuera de la carpeta personal." }
     const hunks = Array.isArray(args.hunks) ? args.hunks : null

@@ -202,6 +202,14 @@ Scope {
         // para entonces ya ha viajado.
         if (name === "fetch_url" || name === "open_url")
             return TU.urlLeakScan(a.url)
+        // Engancharse a un proceso que ya corre no se parece a lanzar uno tuyo:
+        // el depurador puede leer TODA su memoria —claves, sesiones, lo que
+        // tuviera dentro—, pararlo y cambiarle variables. La tarjeta lo dice con
+        // el número delante, porque "debug_start" a secas no lo insinúa.
+        if (name === "debug_start" && parseInt(a.attach_pid) > 0)
+            return "se engancha al proceso " + parseInt(a.attach_pid)
+                 + " que ya está corriendo: podrá leer su memoria entera, "
+                 + "detenerlo y modificarlo"
         // Una escritura en el sitio correcto es una ejecución con retardo: un
         // .bashrc, un .desktop de autostart o un hook de git no son archivos,
         // son comandos que esperan. La ejecución directa nunca se auto-aprueba,
@@ -902,7 +910,8 @@ Scope {
         case "edit_file": {
             const p = svc._safePath(args.path)
             if (p === "") { resolveTool(index, "Ruta fuera de la carpeta personal."); return }
-            const bE = LT.writes("edit_file", p, args, backupFor(index, p), undoDir)
+            const bE = LT.writes("edit_file", p, args, backupFor(index, p), undoDir,
+                                  svc.toolCtx)
             exec(bE.cmd, bE.env)
             return
         }
@@ -927,7 +936,8 @@ Scope {
         case "write_file": {
             const p = svc._safePath(args.path)
             if (p === "") { resolveTool(index, "Ruta fuera de la carpeta personal."); return }
-            const bW = LT.writes("write_file", p, args, backupFor(index, p), undoDir)
+            const bW = LT.writes("write_file", p, args, backupFor(index, p), undoDir,
+                                  svc.toolCtx)
             exec(bW.cmd, bW.env)
             return
         }
@@ -1102,6 +1112,13 @@ Scope {
                     + "memoria. Lo que llegó está a medias y no se usa. Repite "
                     + "acotando la salida (un filtro, menos alcance, o "
                     + "redirigiendo a un archivo y leyendo un trozo).")
+                return
+            }
+            // El cerco de rutas del envoltorio: la ruta resolvía fuera de la
+            // pared siguiendo un enlace simbólico. El motivo ya viene escrito
+            // por el shell, con la ruta real dentro, que es el dato que importa.
+            if (code === 96 && (errCol.text || "").indexOf("enlace") !== -1) {
+                runner.resolveTool(idx, (errCol.text || "").trim())
                 return
             }
             if (code === 97 && (outCol.text || "") === ""

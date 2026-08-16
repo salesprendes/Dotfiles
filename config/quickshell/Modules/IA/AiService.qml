@@ -438,6 +438,17 @@ Singleton {
     readonly property var toolDefs: TD.core().concat(sysQueryDefs).concat(sysActionDefs)
      .concat(sshQueryDefs).concat(sshActionDefs).concat(TD.dev())
 
+    // Las nuestras MÁS las de los servidores MCP, para la lista de permisos.
+    // Van aparte de `toolDefs` a propósito: esa es la que arma la petición y no
+    // debe cambiar. Pero la lista de permisos sí las necesita — sin ellas no
+    // había ninguna forma de decirle al harness "de este servidor me fío",
+    // y como una herramienta MCP tampoco puede auto-aprobarse por su nombre
+    // (ver ToolPolicy), la única salida habría sido una tarjeta por llamada
+    // para siempre. Un permiso que no se puede conceder no es una defensa: es
+    // una molestia que acaba en modo automático para todo.
+    readonly property var policyToolDefs:
+        toolDefs.concat(mcpClient ? mcpClient.toolDefs : [])
+
     // Dos familias con reglas distintas. Las CONSULTAS no cambian nada del
     // sistema: cuentan como lectura para la auto-aprobación y también las hereda
     // el subagente, que así sabe diagnosticar solo. Las ACCIONES (parar

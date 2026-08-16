@@ -125,6 +125,12 @@ function canStandingAllow(name) {
     // una vez todos los trabajadores futuros, con sus encargos, sus rondas y sus
     // herramientas — y ninguno enseña tarjeta. Es el permiso permanente que más
     // superficie concede y el que menos se ve.
+    // Y lo de MCP también queda fuera, por lo mismo que no se auto-aprueba: el
+    // "Siempre" de una tarjeta se concede en un segundo y mirando el nombre
+    // corto, que es justo el dato que no vale. Fiarse de un servidor de terceros
+    // debe costar ir a Ajustes y verlo entero.
+    if (String(name).indexOf("mcp__") === 0)
+        return false
     return r === "read" || r === "external"
 }
 
@@ -232,6 +238,24 @@ function naturalPolicy(name, modo) {
         return "ask"
     if (CONTABILIDAD.indexOf(name) !== -1)
         return "auto"
+    // LO QUE VIENE DE UN SERVIDOR MCP NO SE AUTO-APRUEBA POR SU NOMBRE.
+    //
+    // De todas las herramientas del harness, estas son las únicas que no
+    // escribimos nosotros: las publica un servidor de terceros, con el nombre y
+    // la descripción que él quiera. Y lo único que teníamos para clasificarlas
+    // era precisamente eso, el nombre: `_mcpClass` mira si suena a lectura.
+    //
+    // El fallo se ve con un ejemplo y no hace falta más: un servidor publica
+    // `get_secrets`, suena a lectura, y por dentro borra la base de datos. El
+    // verbo del nombre no es una garantía de nada — es una sugerencia escrita
+    // por quien queremos vigilar.
+    //
+    // Así que por defecto PREGUNTAN, en cualquier modo. Sigue siendo posible
+    // fiarse de una: se le pone "auto" a mano en Ajustes → Permisos, donde el
+    // usuario lee el nombre completo con su servidor delante y lo decide él.
+    // Eso es una concesión explícita; deducirla del nombre no lo era.
+    if (String(name).indexOf("mcp__") === 0)
+        return "ask"
     return modeGrants(modo, riskClass(name)) ? "auto" : "ask"
 }
 
