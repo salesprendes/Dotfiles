@@ -1,7 +1,7 @@
 import QtQuick
 import qs.Components
 import qs.Config
-import qs.Modules.IA
+import qs.Modules.IA.core
 
 // Abre el asistente IA (Modules/IA). Con acento mientras el panel está
 // abierto o el modelo aún está respondiendo — así la barra dice "hay una

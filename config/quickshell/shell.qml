@@ -12,7 +12,7 @@ import qs.Background
 import qs.Bar
 import qs.Config
 import qs.Modules.Carousel
-import qs.Modules.IA
+import qs.Modules.IA.ui
 import qs.Panels
 import qs.Services
 

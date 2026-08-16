@@ -448,7 +448,30 @@ const _PELIGROS = [
     { re: />\s*(\/etc\/(passwd|shadow|fstab|sudoers)|~?\/\.ssh\/)/i,
       why: "sobrescribir un archivo de sistema o de claves sensibles" },
     { re: /\btruncate\s+-s\s*0\b|:\s*>\s*[^|;&]*\.(db|sqlite|sql)\b/i,
-      why: "vaciar una base de datos o un archivo" }
+      why: "vaciar una base de datos o un archivo" },
+    // Barrer la red de casa. Lo escribió el modelo tal cual —un bucle de 254
+    // pings en paralelo para ver quién hay en la LAN— no por malicia, sino
+    // porque no tenía una herramienta que lo hiciera. Sigue mereciendo tarjeta:
+    // desde fuera es indistinguible de un reconocimiento, y en una red ajena
+    // puede saltarle la alarma a alguien.
+    { re: /\b(nmap|masscan|zmap|arp-scan)\b/i,
+      why: "escanear la red" },
+    { re: /\bfor\b[^\n]{0,80}\b(seq|\{\d+\.\.\d+\})[^\n]{0,120}&\s*(done|$)/,
+      why: "lanzar muchos procesos a la vez en un bucle (barrido o tormenta de procesos)" },
+    // Una consola inversa: la máquina llama hacia fuera y entrega el shell.
+    { re: /\b(nc|ncat|netcat|socat)\b[^|;&]*\s-e\b|>&\s*\/dev\/tcp\/|\bbash\s+-i\b[^\n]*\/dev\/tcp\//i,
+      why: "abrir una consola hacia otra máquina (shell inversa)" },
+    // Trabajos programados: lo que se planta ahí se ejecuta solo, después, sin
+    // que haya ninguna tarjeta que aprobar.
+    { re: /\bcrontab\s+(-r\b|[^-\s])|\bsystemd-run\b|\bat\s+(now|\d)/i,
+      why: "programar o borrar tareas que se ejecutarán solas más tarde" },
+    { re: /\bhistory\s+-c\b|>\s*~?\/?\.(bash|zsh)_history\b/i,
+      why: "borrar el historial de la terminal" },
+    // sudo no puede funcionar aquí y conviene decirlo: este proceso no tiene
+    // terminal, así que no hay dónde escribir la contraseña. O está configurado
+    // sin contraseña para eso, o se queda esperando hasta que lo corta el plazo.
+    { re: /(^|[|;&]\s*)sudo\s/,
+      why: "usa sudo, y aquí no hay terminal donde escribir la contraseña: si no está configurado sin contraseña, se quedará esperando hasta agotar el plazo" }
 ]
 function dangerScan(cmd) {
     const s = String(cmd || "")
