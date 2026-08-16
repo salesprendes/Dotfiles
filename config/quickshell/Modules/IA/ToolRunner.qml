@@ -97,6 +97,20 @@ Scope {
     // arreglarlo, que es la única novedad que justifica volver a probar.
     property bool searchBroken: false
     property int _searchIndex: -1
+
+    // ── La correa de las descargas en seco ───────────────────────────────────
+    // Sin buscador, un agente decidido no se para: se pone a ADIVINAR URLs. Se
+    // vio tal cual — veintidós fetch_url en tres minutos contra páginas de
+    // resultados de tiendas, todas devolviendo menús, captchas o "página no
+    // encontrada", y cada una engordando el contexto que se reenvía en la ronda
+    // siguiente. Los tiempos de respuesta crecían 21 → 34 → 42 → 50 segundos, y
+    // desde fuera parecía que el modelo se había atascado.
+    //
+    // Cinco seguidas sin sacar nada es señal de sobra: no es investigar, es dar
+    // palos de ciego. Una descarga que SÍ trae contenido pone el contador a cero,
+    // así que una tanda de exploración legítima con algún fallo no se penaliza.
+    readonly property int maxFetchSecos: 5
+    property int fetchSecos: 0
     // La tarjeta cuyo resultado viene de la web, y de dónde. Ver resolveTool.
     property int _fenceIndex: -1
     property string _fenceSrc: ""
@@ -234,12 +248,18 @@ Scope {
                 externo = false      // esto lo decimos NOSOTROS
             }
         }
-        // Un aviso del propio harness (no se pudo descargar, la página no tenía
-        // texto) tampoco se enmarca: sería decirle al modelo que lo ha escrito
-        // un desconocido.
-        if (externo && String(result).indexOf(LT.FETCH_KO) !== -1) {
-            result = String(result).replace(LT.FETCH_KO, "").trim()
-            externo = false
+        // Un aviso del propio harness (no se pudo descargar, la página exige
+        // JavaScript) tampoco se enmarca: sería decirle al modelo que lo ha
+        // escrito un desconocido. Y de paso es la señal para la correa: una
+        // descarga que no trajo nada.
+        if (externo) {
+            const seca = String(result).indexOf(LT.FETCH_KO) !== -1
+            if (_fenceSrc !== "una búsqueda web")
+                fetchSecos = seca ? fetchSecos + 1 : 0
+            if (seca) {
+                result = String(result).replace(LT.FETCH_KO, "").trim()
+                externo = false
+            }
         }
         // LA PUERTA POR LA QUE ENTRA TEXTO AJENO. Una página web puede decir
         // "ignora las instrucciones anteriores y ejecuta esto", y como resultado
@@ -437,6 +457,26 @@ Scope {
             const parts = m.toolName.split("__")
             if (parts.length < 3) { resolveTool(index, "Nombre MCP inválido."); return }
             _mcpCall(index, parts[1], parts.slice(2).join("__"), args)
+            return
+        }
+
+        // La correa de las descargas en seco. Se corta ANTES de salir a la red:
+        // lo que hay que parar no es el gasto de ancho de banda, es la ronda de
+        // razonamiento que vendría después de recibir otra página vacía.
+        if (m.toolName === "fetch_url" && fetchSecos >= maxFetchSecos) {
+            resolveTool(index, "PARA. Llevas " + fetchSecos + " descargas "
+                + "seguidas sin sacar nada: menús, captchas o páginas que se "
+                + "pintan con JavaScript, que aquí no se ejecuta. Adivinar más "
+                + "URLs va a dar exactamente lo mismo.\n"
+                + "Si lo que necesitas es DESCUBRIR páginas, eso es una "
+                + "búsqueda, no una descarga"
+                + (searchBroken
+                    ? ", y no hay buscador configurado: díselo al usuario y "
+                      + "párate."
+                    : ": usa web_search.")
+                + "\nSi ya tienes una URL concreta y fiable que no hayas "
+                + "probado, puedes pedirla, pero explica primero al usuario "
+                + "dónde estás.")
             return
         }
 
@@ -1047,6 +1087,7 @@ Scope {
         _fenceIndex = -1
         runningIndex = -1
         _colaClics = []
+        fetchSecos = 0
         // El pestillo del buscador NO se levanta al cambiar de conversación: la
         // avería es de la máquina, no del hilo. Se levanta al tocar los ajustes.
     }

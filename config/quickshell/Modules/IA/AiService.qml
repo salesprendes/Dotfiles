@@ -1059,6 +1059,10 @@ Singleton {
             return
         }
         tools.toolRounds = 0
+        // Encargo nuevo, correa nueva: que la tanda de descargas fallidas de la
+        // pregunta anterior condicionara la siguiente sería castigar al usuario
+        // por un error del modelo que ya quedó atrás.
+        tools.fetchSecos = 0
         chat.retries = 0
         // Turno nuevo: el supervisor recupera su presupuesto de frenazos y
         // olvida las opiniones del anterior, y la nota del consejero caduca —

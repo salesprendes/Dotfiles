@@ -179,7 +179,7 @@ const SH = [
     // --connect-timeout 2 es la clave de que esto no se note: un localhost sin
     // nadie detrás rechaza la conexión al instante, y uno apagado se descarta en
     // dos segundos en vez de en los quince del tiempo total.
-    '    r=$(curl -sSL --connect-timeout 2 --max-time 12 -A "$ua" -H "Accept: application/json" -G --data-urlencode "q=$QS_Q" $tr "$b/search?format=json" 2>/dev/null | QS_FMT=searxng python3 -c "$QS_PY")',
+    '    r=$(curl -sSL --compressed --connect-timeout 2 --max-time 12 -A "$ua" -H "Accept: application/json" -G --data-urlencode "q=$QS_Q" $tr "$b/search?format=json" 2>/dev/null | QS_FMT=searxng python3 -c "$QS_PY")',
     '    case "$r" in',
     '      "KO "*) motivos="$motivos($b) ${r#KO } · " ;;',
     '      *) printf "%s\\n" "$r"; return 0 ;;',
@@ -195,13 +195,13 @@ const SH = [
     // printf INTERNO del shell: así no nace ningún proceso con el secreto
     // encima.
     'buscar_brave() {',
-    '  printf "header = \\"X-Subscription-Token: %s\\"\\n" "$QS_K" | curl -sS --connect-timeout 4 --max-time 15 -K - -A "$ua" -H "Accept: application/json" -G --data-urlencode "q=$QS_Q" --data-urlencode "count=$QS_N" $fr "https://api.search.brave.com/res/v1/web/search" 2>/dev/null | QS_FMT=brave python3 -c "$QS_PY"',
+    '  printf "header = \\"X-Subscription-Token: %s\\"\\n" "$QS_K" | curl -sS --compressed --connect-timeout 4 --max-time 15 -K - -A "$ua" -H "Accept: application/json" -G --data-urlencode "q=$QS_Q" --data-urlencode "count=$QS_N" $fr "https://api.search.brave.com/res/v1/web/search" 2>/dev/null | QS_FMT=brave python3 -c "$QS_PY"',
     '}',
     '',
     // Tavily: la clave viaja en el cuerpo, así que el cuerpo se arma aparte y
     // entra por la entrada estándar (-d @-). Mismo motivo que arriba.
     'buscar_tavily() {',
-    '  python3 -c "$QS_PYJ" | curl -sS --connect-timeout 4 --max-time 15 -H "Content-Type: application/json" -d @- "https://api.tavily.com/search" 2>/dev/null | QS_FMT=tavily python3 -c "$QS_PY"',
+    '  python3 -c "$QS_PYJ" | curl -sS --compressed --connect-timeout 4 --max-time 15 -H "Content-Type: application/json" -d @- "https://api.tavily.com/search" 2>/dev/null | QS_FMT=tavily python3 -c "$QS_PY"',
     '}',
     '',
     // Se arranca con lo que ni siquiera se ha podido intentar: si has elegido
@@ -386,16 +386,28 @@ function failureText(out, repetido) {
     const detalle = String(out || "").replace(MARCA, "").trim()
     if (repetido)
         return "La búsqueda web SIGUE sin estar disponible (mismo motivo que "
-             + "antes). No la vuelvas a llamar en este encargo: dile al usuario "
-             + "que la configure y resuelve lo que puedas sin ella."
+             + "antes). No la vuelvas a llamar en este encargo, y tampoco "
+             + "intentes sustituirla con fetch_url: dile al usuario que la "
+             + "configure."
     return "No pude buscar en la web: no hay ningún buscador que funcione.\n"
          + (detalle !== "" ? detalle + "\n" : "")
-         + "\nESTO NO ES CULPA DE LA CONSULTA: no la reformules ni lo reintentes, "
-         + "fallará igual. Es configuración, y la tiene que poner el usuario en "
-         + "Ajustes → IA → Búsqueda web:\n"
+         + "\nQUÉ HACER AHORA, en este orden:\n"
+         + "1. Si el encargo ERA buscar algo en internet, PÁRATE AQUÍ. Dile al "
+         + "usuario que no tienes buscador configurado y qué le falta. No sigas.\n"
+         // Esta es la línea que faltaba. Sin ella, el modelo leía "sigue con lo
+         // que puedas" y se ponía a adivinar URLs de tiendas a mano: veintidós
+         // descargas en tres minutos, cero resultados, y el contexto lleno de
+         // menús y captchas. Improvisar un buscador con fetch_url no es
+         // ingenioso, es la peor forma posible de gastar el turno.
+         + "2. NO intentes sustituir la búsqueda adivinando URLs. Las páginas de "
+         + "resultados (de tiendas, de buscadores, de comparadores) se pintan con "
+         + "JavaScript y fetch_url no lo ejecuta: solo vas a recibir menús, "
+         + "captchas y páginas de error. fetch_url sirve para leer una URL "
+         + "CONCRETA que ya conoces, no para descubrir.\n"
+         + "3. Lo que sí puedas resolver sin internet, resuélvelo.\n"
+         + "\nESTO NO ES CULPA DE LA CONSULTA: no la reformules, fallará igual. "
+         + "Es configuración, y la tiene que poner el usuario en Ajustes → IA → "
+         + "Búsqueda web:\n"
          + "  · un SearXNG propio (con formats: [json] en su settings.yml), o\n"
-         + "  · una clave de Brave Search API o de Tavily.\n"
-         + "Dile eso al usuario con estas palabras, sigue con lo que sí puedas "
-         + "hacer sin buscar, y si el encargo dependía por completo de la "
-         + "búsqueda, párate y explícalo."
+         + "  · una clave de Brave Search API o de Tavily."
 }
