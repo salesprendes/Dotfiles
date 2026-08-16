@@ -95,12 +95,38 @@ Scope {
         // no puede convertirse en otra orden. La tilde la expande el propio
         // harness, no el shell.
         const home = Quickshell.env("HOME")
-        const abs = refs.map(r => r === "~" ? home
-                                : r.startsWith("~/") ? home + r.slice(1) : r)
+        // EL CERCO. El comentario de arriba decía desde el primer día que lo que
+        // se saliera de la carpeta personal se quedaba como texto, y era mentira:
+        // no había ninguna comprobación, así que un "@/etc/passwd" —o un
+        // "@~/../../etc/shadow"— se adjuntaba y viajaba al modelo. Las
+        // herramientas llevan este cerco desde el principio (_safePath); la
+        // puerta de las @ se quedó sin él, que es exactamente la clase de agujero
+        // que abre una puerta lateral y no la principal.
+        //
+        // Se pasa por el MISMO _safePath que todo lo demás: una sola política de
+        // rutas que auditar, y las que no pasen se dejan tal cual — una @ que no
+        // era una ruta válida es simplemente texto, como siempre.
+        const abs = []
+        for (const r of refs) {
+            const conCasa = r === "~" ? home
+                          : r.startsWith("~/") ? home + r.slice(1) : r
+            const seguro = att.svc._safePath(conCasa)
+            if (seguro !== "")
+                abs.push(seguro)
+        }
+        if (abs.length === 0)
+            return false
         refProc.command = ["sh", "-c",
-            'printf %s "$QS_REFS" | while IFS= read -r p; do '
-            + '[ -f "$p" ] || continue; '
-            + 'printf "\\n\\n--- %s ---\\n" "$p"; head -c 20000 -- "$p"; done']
+            // Y una segunda vuelta en el shell, porque _safePath mira el texto de
+            // la ruta y no adónde APUNTA: un enlace dentro de casa puede llevar
+            // fuera. Aquí ya se puede resolver de verdad, que es donde se sabe.
+            'casa=$(readlink -f -- "$HOME") || exit 0\n'
+            + 'printf %s "$QS_REFS" | while IFS= read -r p; do\n'
+            + '  [ -f "$p" ] || continue\n'
+            + '  real=$(readlink -f -- "$p") || continue\n'
+            + '  case "$real" in "$casa"/*) ;; *) continue ;; esac\n'
+            + '  printf "\\n\\n--- %s ---\\n" "$p"; head -c 20000 -- "$p"\n'
+            + 'done']
         refProc.environment = ({ QS_REFS: abs.join("\n") + "\n" })
         refProc.running = true
         return true

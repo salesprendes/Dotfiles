@@ -42,6 +42,26 @@ const CON_CLAVE = ["tavily", "exa", "kagi"]
 // un sitio: son las que pueden acabar en cuarentena.
 const RASPADAS = ["ddg", "brave", "mojeek"]
 
+// EL ORDEN DE PREFERENCIA, que no es el del catálogo. Primero lo que contesta
+// con una estructura y un contrato —tu propio SearXNG, y después las API con
+// clave—, y al final lo que hay que sacar del HTML de una página. Raspar
+// funciona (está medido), pero depende de un marcado que nadie nos ha prometido
+// y que puede cambiar cualquier martes; una API que cambia, avisa.
+//
+// Antes esto daba casi igual porque se preguntaba a todas y el orden solo
+// desempataba. Con el modo rápido —que se queda con las dos primeras— pasa a
+// decidir a quién se pregunta, así que ahora importa de verdad.
+const PRIORIDAD = ["searxng", "tavily", "exa", "kagi", "brave", "ddg", "mojeek"]
+
+// Cuántas fuentes se consultan según lo que se pida. El consenso es lo que
+// protege de una fuente que miente, así que "rápido" no baja de dos: una sola
+// voz no se puede contrastar con nada.
+const PROFUNDIDAD = ({ quick: 2, research: 99 })
+function _profundidad(v) {
+    const s = String(v || "").trim().toLowerCase()
+    return PROFUNDIDAD[s] !== undefined ? s : "research"
+}
+
 function labelOf(b) {
     return b === "brave" ? "Brave Search"
          : b === "tavily" ? "Tavily"
@@ -451,8 +471,12 @@ const PY_MERGE = [
     "    extra=[]",
     "    if e['f']: extra.append(e['f'])",
     // Solo se dice cuántas fuentes coinciden cuando coincide más de una: en el
-    // caso normal (una sola fuente configurada) sería ruido en cada línea.
-    "    if len(e['fuentes'])>1: extra.append(str(len(e['fuentes']))+' fuentes')",
+    // caso normal (una sola fuente configurada) sería ruido en cada línea. Y se
+    // dicen CUÁLES, no solo cuántas: "2 fuentes" no se puede citar, "Brave y
+    // Mojeek" sí. Es lo que permite que el informe diga de dónde sale cada dato
+    // en vez de pedir que se le crea.
+    "    if len(e['fuentes'])>1:",
+    "        extra.append(str(len(e['fuentes']))+' fuentes: '+', '.join(sorted(e['fuentes'])))",
     "    print('- '+e['t']+'\\n  '+e['u']+(' · '+' · '.join(extra) if extra else '')",
     "          +('\\n  '+e['s'] if e['s'] else ''))",
     // Que una fuente se haya caído no invalida la respuesta, pero conviene que
@@ -756,8 +780,10 @@ function _orden(ctx, bases) {
     const out = []
     if (hay(elegido))
         out.push(elegido)
-    for (let i = 0; i < BACKENDS.length; i++) {
-        const b = BACKENDS[i]
+    // El resto por PREFERENCIA (API estable antes que raspado), no por el orden
+    // del catálogo.
+    for (let i = 0; i < PRIORIDAD.length; i++) {
+        const b = PRIORIDAD[i]
         if (b !== elegido && hay(b))
             out.push(b)
     }
@@ -806,7 +832,13 @@ function command(query, ctx, normalize, opts) {
     const tiempo = _recencia(o.recency)
     const tope = Math.min(10, Math.max(1, parseInt(o.limit) || 8))
     const bases = _bases(ctx, normalize)
-    const orden = _orden(ctx, bases)
+    const hondo = _profundidad(o.depth)
+    // "Rápido" se queda con las dos primeras de la lista de preferencia. No es
+    // un ahorro de milisegundos: preguntarle a siete buscadores "cuál es la web
+    // oficial de X" es gastar siete conexiones y siete cuotas para una respuesta
+    // que la primera ya sabía — y quemar cuota es lo que acaba con una fuente en
+    // cuarentena cuando de verdad hace falta.
+    const orden = _orden(ctx, bases).slice(0, PROFUNDIDAD[hondo])
     const saltados = _saltados(ctx, orden)
     if (orden.length === 0)
         return { error: MARCA + "\n- "

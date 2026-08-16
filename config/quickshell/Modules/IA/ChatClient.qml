@@ -179,13 +179,33 @@ Scope {
         // Credenciales y opciones de red salen de las mismas funciones que usa la
         // sonda, así que lo que prueba el botón "Probar" es exactamente lo que va
         // a viajar. 300 s para el stream entero.
-        proc.command = svc.chatCommand(req, 300)
+        // El cuerpo ya no viaja en el comando: se escribe en la entrada estándar
+        // en cuanto el proceso arranca (ver onStarted). Con la conversación
+        // entera en el argv, un adjunto de captura o un hilo largo pasaba de los
+        // 128 kB por argumento y la petición fallaba con E2BIG antes de salir.
+        const t = svc.chatCommand(req, 300)
+        chat._body = t.body
+        proc.command = t.cmd
+        proc.environment = t.env
+        proc.stdinEnabled = true
         chat.busy = true
         proc.running = true
     }
 
+    // El cuerpo en vuelo, esperando a que el proceso esté vivo para escribirlo.
+    property string _body: ""
+
     Process {
         id: proc
+        // Se escribe en onStarted y no justo después de running=true: hasta que
+        // el proceso no existe no hay tubería a la que escribir.
+        onStarted: {
+            proc.write(chat._body)
+            chat._body = ""
+            // Cerrar la entrada es lo que hace que el shell deje de leer y
+            // lance curl. Sin esto no se envía nada y no se sabría por qué.
+            proc.stdinEnabled = false
+        }
 
         stdout: SplitParser {
             onRead: (line) => {

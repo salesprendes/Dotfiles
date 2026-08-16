@@ -22,10 +22,12 @@ ColumnLayout {
     // gobierna la aprobación, así que el grupo explica por qué una pide
     // permiso y otra no.
     readonly property var grupos: {
-        const orden = ["read", "external", "write", "exec", "critical", "ask", "plan"]
+        const orden = ["read", "external", "delegation", "write", "exec",
+                       "critical", "ask", "plan"]
         const nombres = ({
             read: I18n.tr("Read and query"),
             external: I18n.tr("Reach outside"),
+            delegation: I18n.tr("Delegate work"),
             write: I18n.tr("Write files"),
             exec: I18n.tr("Run and act"),
             // Las que ejecutan código arbitrario: por más que se afloje la

@@ -542,7 +542,14 @@ function writes(tool, p, args, bak, bakDir) {
         // hay nada que copiar (y deshacer significará borrarlo).
         return { cmd: ["sh", "-c",
             'mkdir -p "$QS_BD" "$(dirname -- "$QS_P")"; '
-            + '[ -f "$QS_P" ] && cp -a -- "$QS_P" "$QS_BAK"; '
+            // Dos casos, y hay que poder distinguirlos DESPUÉS: si el archivo
+            // existía se copia, y si no existía se deja una señal. Sin la señal,
+            // Deshacer no puede saber si la falta de copia significa "era nuevo,
+            // bórralo" o "la copia falló" — y en el segundo caso borraría un
+            // archivo que sí existía. Un botón de deshacer que destruye es lo
+            // contrario de un botón de deshacer.
+            + 'if [ -f "$QS_P" ]; then cp -a -- "$QS_P" "$QS_BAK" || exit 1; '
+            + 'else : > "$QS_BAK.nuevo"; fi; '
             + 'printf %s "$QS_C" > "$QS_P" && echo "Escrito: $QS_P ($(wc -c < "$QS_P") bytes)"'],
             env: { QS_P: p, QS_C: String(args.content || ""),
                    QS_BAK: bak, QS_BD: bakDir } }

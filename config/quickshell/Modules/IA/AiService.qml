@@ -12,6 +12,7 @@ import "ModelProfile.js" as MP
 import "LocalTools.js" as LT
 import "RemoteTools.js" as RT
 import "WebSearch.js" as WS
+import "Payload.js" as PL
 
 // Harness del asistente IA. La idea (tomada de la capa "aisuite" que usa
 // OpenWorker) es que el panel no sepa NADA de proveedores: todos hablan el
@@ -52,6 +53,23 @@ Singleton {
     readonly property string iaDir: Quickshell.shellDir + "/Modules/IA"
     readonly property string dataDir: iaDir + "/data"
     readonly property string skillsDir: iaDir + "/skills"
+
+    // El cerco de la carpeta de datos. Ahí dentro está la conversación entera,
+    // la memoria y el registro de auditoría con los argumentos de cada llamada,
+    // y nacían con 0644: legibles por cualquier cuenta de la máquina.
+    //
+    // Se cierra el DIRECTORIO y no solo los archivos, y es a propósito: los
+    // archivos los reescribe FileView con el umask de la sesión, así que un
+    // chmod sobre ellos se perdería en el siguiente guardado. Un directorio a
+    // 0700 no se reescribe nunca y hace irrelevante el modo de lo que hay
+    // dentro. Los archivos se aprietan igual, por si algún día se mueven.
+    Process {
+        running: true
+        environment: ({ QS_D: ai.dataDir })
+        command: ["sh", "-c",
+            'mkdir -p "$QS_D" && chmod 700 "$QS_D"; '
+            + 'chmod 600 "$QS_D"/*.json "$QS_D"/*.jsonl 2>/dev/null; true']
+    }
 
     // ── Proveedores y modelos ────────────────────────────────────────────────
     // 'base' es la raíz /v1 del contrato OpenAI: de ahí salen SIEMPRE las dos
@@ -334,17 +352,11 @@ Singleton {
     // ── Transporte ───────────────────────────────────────────────────────────
     // Cabecera de credencial: Bearer si hay clave (también en los servidores
     // propios con token) más la cabecera extra que pida la pasarela.
-    function authArgs() {
-        let a = []
-        if (apiKey !== "")
-            a = a.concat(["-H", "Authorization: Bearer " + apiKey])
-        const extra = Settings.aiCustomHeader.trim()
-        if (extra !== "" && provider.userUrl)
-            a = a.concat(["-H", extra])
-        if (Settings.aiProvider === "openrouter")
-            a = a.concat(["-H", "X-Title: Quickshell"])
-        return a
-    }
+    // (Aquí vivía authArgs(), que devolvía las cabeceras como argumentos de
+    // curl. Se ha ido entera: las credenciales ya no pasan por el argv en
+    // ningún camino — ni en el envío, ni en la compactación, ni en el
+    // subagente, ni en la sonda. Lo arma Payload.js en un fichero de
+    // configuración que escribe el propio shell.)
     // Opciones de red del transporte: certificado no verificable (servidor propio
     // con TLS autofirmado). Solo donde el usuario pone la URL: nadie necesita
     // saltarse la verificación contra Google u OpenRouter.
@@ -357,15 +369,34 @@ Singleton {
     // su copia del mismo curl y las credenciales, los tiempos o el "-k" podían
     // divergir entre los tres caminos. 15 s para conectar (VPN, túnel, arranque
     // perezoso del modelo) y el tope total que pida cada uso.
+    // Devuelve { cmd, env, body }. El cuerpo NO viaja en el comando: quien llama
+    // lo escribe en la entrada estándar del proceso y la cierra. Ver el porqué
+    // entero en Payload.js — resumido: el argv es de lectura pública y además
+    // tiene un tope de 128 kB por argumento, así que la conversación completa
+    // ahí dentro era a la vez una fuga y un fallo.
     function chatCommand(req, maxTime) {
-        let cmd = ["curl", "-sS", "--connect-timeout", "15",
-                   "--max-time", String(maxTime)]
-        if (req.stream)
-            cmd = cmd.concat(["-N", "--no-buffer"])
-        cmd = cmd.concat(["-X", "POST", endpoint,
-                          "-H", "Content-Type: application/json"])
-        return cmd.concat(authArgs()).concat(netArgs())
-                  .concat(["-d", JSON.stringify(req)])
+        return PL.transport(req, {
+            url: endpoint,
+            maxTime: maxTime,
+            stream: !!req.stream,
+            bearer: apiKey,
+            extraHeader: provider.userUrl ? Settings.aiCustomHeader.trim() : "",
+            title: Settings.aiProvider === "openrouter",
+            netFlags: netArgs()
+        })
+    }
+    function transportError(code) { return PL.transportError(code) }
+
+    // La sonda del catálogo, con las MISMAS credenciales y por la misma jaula:
+    // el botón "Probar" tiene que probar exactamente lo que va a viajar.
+    function probeCommand() {
+        return PL.probeTransport({
+            url: modelsUrl,
+            bearer: apiKey,
+            extraHeader: provider.userUrl ? Settings.aiCustomHeader.trim() : "",
+            title: Settings.aiProvider === "openrouter",
+            netFlags: netArgs()
+        })
     }
 
     // ── Política de aprobación ───────────────────────────────────────────────
@@ -721,6 +752,10 @@ Singleton {
     // propiedad, no una copia) y permiten mover una pieza de sitio sin tocar ni
     // una línea de la interfaz.
     property alias haveKeyring: keys.haveKeyring
+    // Si el llavero falló al guardar, dónde ha quedado la clave. Vacío = todo
+    // bien. Lo enseña Ajustes: prometer "se guarda en el llavero" cuando no ha
+    // sido así es peor que no prometer nada.
+    property alias keyringWarn: keys.keyringWarn
     property alias apiKey: keys.apiKey
     property alias sshPass: keys.sshPass
     function setKey(providerId, key) { keys.setKey(providerId, key) }

@@ -204,9 +204,19 @@ Rectangle {
             }
             Hint {
                 Layout.leftMargin: 0
-                shown: AiService.haveKeyring
+                shown: AiService.haveKeyring && AiService.keyringWarn === ""
                        && (AiService.provider.needsKey || Settings.aiProvider === "custom")
                 text: I18n.tr("Keys are stored in the system keyring, not in settings.json.")
+            }
+            // Si el llavero ha fallado, la clave NO se ha perdido: se ha quedado
+            // en los ajustes. Hay que decirlo, porque la promesa de la línea de
+            // arriba deja de ser cierta y el usuario tiene derecho a saber
+            // dónde está su clave.
+            Hint {
+                Layout.leftMargin: 0
+                shown: AiService.keyringWarn !== ""
+                color: Theme.yellow
+                text: AiService.keyringWarn
             }
 
             // ── Planta de arriba: los grupos ─────────────────────────────────

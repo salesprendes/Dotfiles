@@ -94,8 +94,13 @@ def call(name, a):
         return text(run(argv, cwd=repo))
 
     if name == "git_show":
+        # --end-of-options antes de la referencia: sin él, una ref que empiece
+        # por guion la lee git como una OPCIÓN suya, y el modelo elige esa ref.
+        # "--upload-pack=..." o "--output=..." dejan de ser una referencia y
+        # pasan a ser una orden. Es el mismo motivo por el que las rutas van
+        # detrás de "--", solo que para el otro lado del comando.
         argv = ["git", "--no-pager", "show", "--stat", "--patch",
-                str(a.get("ref") or "HEAD")]
+                "--end-of-options", str(a.get("ref") or "HEAD")]
         if a.get("path"):
             argv += ["--", str(a["path"])]
         return text(run(argv, cwd=repo))

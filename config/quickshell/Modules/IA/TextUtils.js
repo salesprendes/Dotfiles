@@ -394,8 +394,12 @@ const _SECRETOS = [
     // Cabeceras de autorización.
     { re: /(authorization\s*:\s*bearer\s+)[A-Za-z0-9._~+/=-]{12,}/gi,
       to: "$1[oculto]" },
-    // clave = valor en configuraciones y .env
-    { re: /((?:password|passwd|secret|api[_-]?key|access[_-]?token|auth[_-]?token|private[_-]?key)\s*[:=]\s*["']?)([^\s"'\n]{6,})/gi,
+    // clave = valor en configuraciones, .env… y en JSON, que es como llegan de
+    // verdad los argumentos de una herramienta. La comilla de CIERRE del nombre
+    // faltaba en el patrón, así que `"password": "secreto"` —la forma más común
+    // de todas, y la que se guarda en el historial— se colaba entera: el
+    // separador nunca venía pegado al nombre, siempre había una comilla en medio.
+    { re: /((?:password|passwd|secret|api[_-]?key|access[_-]?token|auth[_-]?token|private[_-]?key|token|credential)["']?\s*[:=]\s*["']?)([^\s"'\n,}]{6,})/gi,
       to: "$1[oculto]" }
 ]
 

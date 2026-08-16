@@ -171,6 +171,7 @@ function core() {
                               recency: { type: "string", "enum": ["day", "week", "month", "year"],
                                          description: "Solo resultados de este último periodo. Imprescindible para precios, versiones y noticias; contraproducente para conceptos que no cambian" },
                               limit: { type: "integer", description: "Cuántos resultados (1-10, por defecto 8)" },
+                              depth: { type: "string", "enum": ["quick", "research"], description: "'quick' pregunta solo a las dos mejores fuentes: úsalo para lo que tiene UNA respuesta y se comprueba solo — la web oficial de algo, la versión actual, una definición, un dato que ya casi sabes. 'research' (por defecto) pregunta a todas y funde por consenso: úsalo cuando el dato importa y conviene contrastarlo — precios, comparativas, disponibilidad, cualquier cosa que vayas a afirmar. Preguntar a siete buscadores algo trivial gasta cuota que hará falta luego" },
                               instance: { type: "string", description: "URL de un SearXNG concreto; vacío = el configurado" } },
                 required: ["query"] } } },
         { type: "function", "function": {

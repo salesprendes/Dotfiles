@@ -37,9 +37,11 @@ Scope {
         probe.connDetail = ""
         probe._t0 = Date.now()
         proc.forProvider = Settings.aiProvider
-        proc.command = ["curl", "-sS", "--max-time", "15",
-                        "-w", "\n__QS %{http_code}", svc.modelsUrl]
-            .concat(svc.authArgs()).concat(svc.netArgs())
+        // La clave sale del argv también aquí: es pequeña y la petición no lleva
+        // cuerpo, pero /proc/<pid>/cmdline lo lee cualquiera igual.
+        const t = svc.probeCommand()
+        proc.command = t.cmd
+        proc.environment = t.env
         proc.running = true
     }
 

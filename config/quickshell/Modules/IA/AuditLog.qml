@@ -77,10 +77,16 @@ Scope {
         // donde se sabe si el archivo creció (1 MB ≈ varios miles de apuntes).
         proc.environment = ({ QS_P: audit.path, QS_L: lote })
         proc.command = ["sh", "-c",
-            'mkdir -p "$(dirname -- "$QS_P")"; '
+            // umask 077 ANTES de crear nada: aquí dentro va el nombre de cada
+            // herramienta con sus argumentos, y en los argumentos va lo que el
+            // usuario haya escrito. Nacía con 0644, o sea legible por cualquier
+            // cuenta de la máquina. Y el chmod al final arregla también los
+            // archivos que ya existían de antes.
+            'umask 077; mkdir -p "$(dirname -- "$QS_P")"; '
             + 'printf %s "$QS_L" >> "$QS_P"; '
+            + 'chmod 600 -- "$QS_P" 2>/dev/null; '
             + 'if [ "$(wc -c < "$QS_P")" -gt 1048576 ]; then '
-            + 'mv -f -- "$QS_P" "$QS_P.1"; fi']
+            + 'mv -f -- "$QS_P" "$QS_P.1"; chmod 600 -- "$QS_P.1" 2>/dev/null; fi']
         proc.running = true
     }
 

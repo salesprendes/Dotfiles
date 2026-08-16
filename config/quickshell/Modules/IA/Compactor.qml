@@ -107,14 +107,27 @@ Scope {
         // pensamiento profundo por un resumen es justo el gasto que el reparto
         // por tarea existe para evitar.
         svc.tuneRequest(req, "compact")
-        proc.command = svc.chatCommand(req, 180)
+        // El cuerpo entra por la entrada estándar: aquí va la conversación
+        // ENTERA, que es justo la que no cabía en un argumento.
+        const t = svc.chatCommand(req, 180)
+        comp._body = t.body
+        proc.command = t.cmd
+        proc.environment = t.env
+        proc.stdinEnabled = true
         proc.running = true
     }
+
+    property string _body: ""
 
     Process {
         id: proc
         stdout: StdioCollector { id: outCol }
         stderr: StdioCollector {}
+        onStarted: {
+            proc.write(comp._body)
+            comp._body = ""
+            proc.stdinEnabled = false
+        }
         onExited: (code) => {
             if (!comp.compacting)          // cancelada por /limpiar o similar
                 return

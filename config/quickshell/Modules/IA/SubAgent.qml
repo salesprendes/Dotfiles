@@ -245,10 +245,18 @@ QtObject {
         // pensamiento se nota; rastrear y leer, no tanto.
         AiService.tuneRequest(req, sub.role === "review" ? "review" : "subagent")
         // El mismo constructor de curl que el agente principal: credenciales,
-        // tiempos y opciones de red idénticos por construcción.
-        curl.command = AiService.chatCommand(req, 120)
+        // tiempos y opciones de red idénticos por construcción — y el cuerpo por
+        // la entrada estándar, que es lo que permite que un subagente con ocho
+        // rondas de resultados dentro siga cabiendo.
+        const t = AiService.chatCommand(req, 120)
+        sub._body = t.body
+        curl.command = t.cmd
+        curl.environment = t.env
+        curl.stdinEnabled = true
         curl.running = true
     }
+
+    property string _body: ""
 
     function _fail(msg) {
         sub.state = "error"
@@ -260,6 +268,11 @@ QtObject {
 
     readonly property Process _curl: Process {
         id: curl
+        onStarted: {
+            curl.write(sub._body)
+            sub._body = ""
+            curl.stdinEnabled = false
+        }
         stdout: StdioCollector { id: curlOut }
         stderr: StdioCollector {}
         onExited: (code) => {

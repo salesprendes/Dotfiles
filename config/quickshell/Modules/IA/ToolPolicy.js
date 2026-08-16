@@ -45,8 +45,17 @@ const RIESGO_EJECUCION = ["service_ctl", "kill_process", "debug_start",
 // debug_ctl actúa sobre una sesión que el usuario YA aprobó al arrancarla:
 // external permite el "Siempre" de la conversación, que es lo que hace
 // llevadero avanzar paso a paso.
-const RIESGO_EXTERNO   = ["open_url", "fetch_url", "web_search", "subagent",
-                          "debug_ctl"]
+const RIESGO_EXTERNO   = ["open_url", "fetch_url", "web_search", "debug_ctl"]
+
+// DELEGAR es de otra naturaleza, y estaba metido con los externos. Una búsqueda
+// web es UNA operación concreta con un resultado que se lee; un subagente es un
+// proceso entero con contexto propio que va a hacer muchas operaciones, ninguna
+// de ellas con tarjeta y sin pasar por los hooks ni por el supervisor. Que
+// compartieran clase tenía una consecuencia concreta y fea: se podía conceder
+// "Siempre" a subagent, y a partir de ahí el modelo lanzaba trabajadores
+// autónomos sin que se viera ni uno. Aprobar la primera delegación no puede
+// aprobar todas las siguientes.
+const RIESGO_DELEGACION = ["subagent"]
 
 // La heurística que clasifica una herramienta MCP por su NOMBRE: un servidor
 // puede publicar cualquier cosa, y tratarlas todas como "external" era optimista
@@ -77,6 +86,8 @@ function riskClass(name) {
         return _mcpClass(name)
     if (RIESGO_CRITICO.indexOf(name) !== -1)
         return "critical"
+    if (RIESGO_DELEGACION.indexOf(name) !== -1)
+        return "delegation"
     if (RIESGO_EJECUCION.indexOf(name) !== -1)
         return "exec"
     if (RIESGO_ESCRITURA.indexOf(name) !== -1)
@@ -94,8 +105,11 @@ function riskClass(name) {
 //   3 exec       aprobación
 //   4 critical   nunca automático
 // (ask y plan son pausas, no riesgo: nivel -1, jamás automáticas.)
-const NIVEL = ({ read: 0, external: 1, write: 2, exec: 3, critical: 4,
-                 ask: -1, plan: -1 })
+// Delegar va en el 2: no destruye por sí mismo —la concesión no alcanza ni
+// ejecución ni escritura fuera del taller—, pero abre un proceso que hará
+// muchas cosas sin que se vean, y eso pesa más que una descarga.
+const NIVEL = ({ read: 0, external: 1, delegation: 2, write: 2, exec: 3,
+                 critical: 4, ask: -1, plan: -1 })
 function riskLevel(name) {
     const n = NIVEL[riskClass(name)]
     return n === undefined ? 0 : n
@@ -107,6 +121,10 @@ function riskLevel(name) {
 // definición: no hay permiso permanente que valga para un shell.
 function canStandingAllow(name) {
     const r = riskClass(name)
+    // Delegar queda FUERA a propósito: un "siempre" sobre subagent aprueba de
+    // una vez todos los trabajadores futuros, con sus encargos, sus rondas y sus
+    // herramientas — y ninguno enseña tarjeta. Es el permiso permanente que más
+    // superficie concede y el que menos se ve.
     return r === "read" || r === "external"
 }
 
@@ -162,7 +180,8 @@ const PLAZO_S = ({
     // El comando del usuario ya va envuelto en `timeout 20` dentro del shell.
     run_command: 40
 })
-const PLAZO_CLASE = ({ read: 30, external: 60, write: 45, exec: 60, critical: 60 })
+const PLAZO_CLASE = ({ read: 30, external: 60, delegation: 660, write: 45,
+                       exec: 60, critical: 60 })
 function deadlineMs(name) {
     const s = PLAZO_S[name]
     if (s !== undefined)

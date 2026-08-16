@@ -478,8 +478,17 @@ Scope {
         messages.setProperty(index, "toolResult",
             "El usuario rechazó ejecutar esta acción.")
         conv.save()
-        if (!svc.busy)
-            svc.start()      // que el modelo reaccione al rechazo
+        // advance() y NO svc.start(). Parece lo mismo cuando el modelo pidió una
+        // sola herramienta, y no lo es cuando pidió varias: rechazar una de
+        // cuatro y arrancar el envío deja las otras tres en "pendiente", y el
+        // constructor del cuerpo se salta las pendientes. Al servidor le llega un
+        // assistant con cuatro tool_calls y un solo resultado, que es un cuerpo
+        // inválido según el contrato de OpenAI — un servidor tolerante lo traga y
+        // uno estricto lo rechaza, pero en los dos casos el modelo pierde tres
+        // llamadas sin enterarse. advance() atiende lo que quede y solo llama al
+        // modelo cuando el lote está completo, que es justo lo que hace ya el
+        // veto de un hook.
+        advance()
     }
 
     // La respuesta del usuario a un ask_user: vuelve al modelo como resultado de
@@ -1097,9 +1106,17 @@ Scope {
         const target = svc._safePath(a.path)
         if (target === "")
             return
+        // Tres desenlaces, no dos. Antes eran dos —"hay copia, restauro" y "no
+        // hay copia, borro"— y el segundo daba por hecho que la falta de copia
+        // significaba que el archivo era nuevo. También significa que la copia
+        // FALLÓ (disco lleno, permisos, la carpeta de copias limpiada), y ahí
+        // borrar es destruir el archivo que se venía a salvar. Ahora quien
+        // escribe deja una señal explícita cuando el archivo no existía, y sin
+        // copia y sin señal esto NO toca nada.
         undoProc.command = ["sh", "-c",
             'if [ -f "$QS_BAK" ]; then cp -a -- "$QS_BAK" "$QS_P" && echo restaurado; '
-            + 'else rm -f -- "$QS_P" && echo borrado; fi']
+            + 'elif [ -f "$QS_BAK.nuevo" ]; then rm -f -- "$QS_P" && echo borrado; '
+            + 'else echo sincopia; exit 1; fi']
         undoProc.environment = ({ QS_BAK: String(m.undoPath), QS_P: target })
         undoProc.running = true
         _undoTarget = target
@@ -1108,11 +1125,14 @@ Scope {
         id: undoProc
         stdout: StdioCollector { id: undoOut }
         onExited: (code) => {
+            const salida = (undoOut.text || "").trim()
             conv.pushInfo(code === 0
-                ? ((undoOut.text || "").trim() === "borrado"
+                ? (salida === "borrado"
                     ? I18n.tr("Undone: %1 removed (it didn't exist before).").arg(runner._undoTarget)
                     : I18n.tr("Undone: %1 back as it was.").arg(runner._undoTarget))
-                : I18n.tr("Could not undo %1").arg(runner._undoTarget))
+                : salida === "sincopia"
+                    ? I18n.tr("Did NOT undo %1: there is no backup copy, so it cannot be told apart from a file that never existed. Nothing was touched.").arg(runner._undoTarget)
+                    : I18n.tr("Could not undo %1").arg(runner._undoTarget))
         }
     }
 

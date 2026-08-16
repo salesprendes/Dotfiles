@@ -45,29 +45,32 @@ Scope {
         else if (providerId === "custom") keys.keyCustom = k
         else if (providerId === "search") keys.keySearch = k
         else keys.keyOpenrouter = k
-        if (keys.haveKeyring) {
-            // Vacío = borrar la entrada.
-            if (k === "")
-                Quickshell.execDetached(["secret-tool", "clear",
-                                         "service", "quickshell-ai", "provider", providerId])
-            else
-                Quickshell.execDetached({
-                    command: ["sh", "-c",
-                        'printf %s "$QS_AI_KEY" | secret-tool store --label "Quickshell IA ' + providerId
-                        + '" service quickshell-ai provider ' + providerId],
-                    environment: { QS_AI_KEY: k }
-                })
-            // El fallback en claro se limpia: la fuente de verdad es el llavero.
-            if (providerId === "gemini") Settings.aiKeyGemini = ""
-            else if (providerId === "custom") Settings.aiKeyCustom = ""
-            else if (providerId === "search") Settings.aiKeySearch = ""
-            else Settings.aiKeyOpenrouter = ""
-        } else {
-            if (providerId === "gemini") Settings.aiKeyGemini = k
-            else if (providerId === "custom") Settings.aiKeyCustom = k
-            else if (providerId === "search") Settings.aiKeySearch = k
-            else Settings.aiKeyOpenrouter = k
+        const enClaro = (v) => {
+            if (providerId === "gemini") Settings.aiKeyGemini = v
+            else if (providerId === "custom") Settings.aiKeyCustom = v
+            else if (providerId === "search") Settings.aiKeySearch = v
+            else Settings.aiKeyOpenrouter = v
         }
+        if (!keys.haveKeyring) {
+            enClaro(k)
+            return
+        }
+        keys._guardar({
+            servicio: "quickshell-ai", campo: "provider", valor: providerId,
+            secreto: k, etiqueta: "Quickshell IA " + providerId,
+            hecho: (bien) => {
+                if (bien) {
+                    // Ahora SÍ: guardado y comprobado, la copia en claro sobra.
+                    enClaro("")
+                    keys.keyringWarn = ""
+                } else {
+                    // El llavero ha fallado. La clave se queda donde el usuario
+                    // pueda seguir usándola, y se dice por qué.
+                    enClaro(k)
+                    keys.keyringWarn = I18n.tr("The system keyring did not accept the key, so it stays in the settings file. Check that a keyring daemon is running.")
+                }
+            }
+        })
     }
 
     // La del buscador, con el mismo respaldo que las demás: el llavero manda, y
@@ -75,15 +78,77 @@ Scope {
     readonly property string searchKey:
         keySearch !== "" ? keySearch : Settings.aiKeySearch
 
+    // ¿Hay llavero? Y ojo con la pregunta: NO es "¿está instalado secret-tool?".
+    // Esta máquina tiene el binario y NO tiene servicio detrás —el bus contesta
+    // "The name is not activatable"—, así que la versión anterior daba llavero
+    // por bueno, guardaba en el vacío y, acto seguido, borraba la copia en claro
+    // de Settings porque "la fuente de verdad es el llavero". La clave
+    // desaparecía. No es un riesgo teórico: se reprodujo aquí.
+    //
+    // Se pregunta por el SERVICIO, con un ping de D-Bus: sin escribir nada, sin
+    // desbloquear nada, sin prompt, y sin leer prosa traducida — solo un código
+    // de salida.
     Process {
         running: true
-        command: ["sh", "-c", "command -v secret-tool"]
+        command: ["sh", "-c",
+            'command -v secret-tool >/dev/null 2>&1 || exit 1\n'
+            + 'busctl --user call org.freedesktop.secrets /org/freedesktop/secrets '
+            + 'org.freedesktop.DBus.Peer Ping >/dev/null 2>&1']
         onExited: (code) => {
             keys.haveKeyring = (code === 0)
             if (keys.haveKeyring) {
                 keyLookup.stage = "gemini"
                 keyLookup.running = true
             }
+        }
+    }
+
+    // ── El escribano del llavero ─────────────────────────────────────────────
+    // Una cola de UN proceso, con el secreto por la entrada estándar (que es
+    // como `secret-tool store` lo espera) y sin ningún `sh -c`: así el nombre
+    // del proveedor y —sobre todo— el del servidor SSH viajan como argumentos
+    // sueltos y no como texto que un shell va a interpretar. Un host llamado
+    // `x"; rm -rf ~; #` era ejecutable antes de esto.
+    //
+    // Y se ESPERA el resultado. Lo de antes era execDetached: se lanzaba y se
+    // daba por hecho. Ahora la copia en claro solo se borra si el guardado ha
+    // salido bien, y si ha salido mal se conserva — perder la clave del usuario
+    // por un llavero caído es el peor de los desenlaces.
+    property var _cola: []
+    property var _tarea: null
+    property string keyringWarn: ""
+
+    function _guardar(t) {
+        keys._cola = keys._cola.concat([t])
+        keys._siguiente()
+    }
+    function _siguiente() {
+        if (keys._tarea !== null || keys._cola.length === 0)
+            return
+        const t = keys._cola[0]
+        keys._cola = keys._cola.slice(1)
+        keys._tarea = t
+        guarda.command = t.secreto === ""
+            ? ["secret-tool", "clear", "service", t.servicio, t.campo, t.valor]
+            : ["secret-tool", "store", "--label", t.etiqueta,
+               "service", t.servicio, t.campo, t.valor]
+        guarda.stdinEnabled = t.secreto !== ""
+        guarda.running = true
+    }
+    readonly property Process _guarda: Process {
+        id: guarda
+        onStarted: {
+            if (keys._tarea && keys._tarea.secreto !== "") {
+                guarda.write(keys._tarea.secreto)
+                guarda.stdinEnabled = false
+            }
+        }
+        onExited: (code) => {
+            const t = keys._tarea
+            keys._tarea = null
+            if (t && t.hecho)
+                t.hecho(code === 0)
+            keys._siguiente()
         }
     }
     // Las cuatro claves se leen EN CADENA (cada una arranca la siguiente al
@@ -144,16 +209,13 @@ Scope {
         const m = Object.assign({}, sshPass)
         if (pw === "") delete m[name]; else m[name] = pw
         sshPass = m
-        if (haveKeyring) {
-            if (pw === "")
-                Quickshell.execDetached(["secret-tool", "clear",
-                    "service", "quickshell-ai-ssh", "host", name])
-            else
-                Quickshell.execDetached({ command: ["sh", "-c",
-                    'printf %s "$QS_PW" | secret-tool store --label "Quickshell SSH ' + name
-                    + '" service quickshell-ai-ssh host ' + name],
-                    environment: { QS_PW: pw } })
-        }
+        // Aquí el nombre lo escribe el usuario y antes se interpolaba dentro de
+        // un `sh -c`: un host llamado `x"; rm -rf ~; #` era un comando. Ahora va
+        // como argumento suelto y no hay shell que interpretar.
+        if (haveKeyring)
+            keys._guardar({ servicio: "quickshell-ai-ssh", campo: "host",
+                            valor: name, secreto: pw,
+                            etiqueta: "Quickshell SSH " + name })
     }
 
     // Carga de contraseñas del llavero, una por host registrado.

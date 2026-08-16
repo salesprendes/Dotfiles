@@ -140,3 +140,109 @@ function build(msgs, opts) {
            ? "\n\n" + opts.advisorNote : "") })
     return out
 }
+
+// ── El transporte ────────────────────────────────────────────────────────────
+// Cómo sale la petición de esta máquina. Estaba en una línea —curl con la
+// cabecera de autorización y `-d <json entero>` en los argumentos— y esa línea
+// tenía dos problemas, uno de seguridad y otro que rompía el harness sin más:
+//
+//   · TODO iba en el argv, que en Linux es de LECTURA PÚBLICA a través de
+//     /proc/<pid>/cmdline. Cualquier proceso de la máquina podía leer la clave
+//     de API y, de paso, la conversación entera: el prompt, el historial, los
+//     resultados de herramientas y lo que hubiera dentro de ellos.
+//   · Y el argv tiene un tope POR ARGUMENTO de 128 kB (MAX_ARG_STRLEN, 32
+//     páginas). Medido: 130 kB pasa, 200 kB devuelve E2BIG. O sea que adjuntar
+//     una captura —cien kilobytes largos en base64— o llegar a una conversación
+//     de treinta y dos mil componentes hacía que la petición fallara antes de
+//     salir. No era un riesgo teórico: era un fallo que ya estaba ahí.
+//
+// El entorno NO vale como sustituto: tiene el mismo límite (comprobado, 200 kB
+// también revienta). Así que el cuerpo entra por la ENTRADA ESTÁNDAR y el shell
+// lo vuelca a un temporal con umask 077, y las cabeceras van por un fichero de
+// configuración de curl escrito por el propio shell — el mismo patrón que ya
+// usaban las claves de Brave y Kagi en la búsqueda.
+//
+// Lo que queda en el argv es lo que no es secreto: las banderas y la URL.
+const SH_ENVIO = [
+    'umask 077',
+    'c=$(mktemp) || exit 97',
+    'f=$(mktemp) || { rm -f "$c"; exit 97; }',
+    'trap \'rm -f "$c" "$f"\' EXIT INT TERM',
+    '{',
+    '  printf \'header = "Content-Type: application/json"\\n\'',
+    '  [ -n "$QS_AUTH" ] && printf \'header = "Authorization: Bearer %s"\\n\' "$QS_AUTH"',
+    '  [ -n "$QS_HDR" ] && printf \'header = "%s"\\n\' "$QS_HDR"',
+    '  [ -n "$QS_TITLE" ] && printf \'header = "X-Title: Quickshell"\\n\'',
+    '} > "$c"',
+    // Si quien llama no cierra su entrada, esto esperaría para siempre y la
+    // conversación se quedaría muda sin decir por qué. Quince segundos y un
+    // código propio: un cuelgue diagnosticable es infinitamente mejor que un
+    // cuelgue mudo.
+    'timeout 15 cat > "$f" || exit 98',
+    'curl -sS $QS_FLAGS -K "$c" -d @"$f" "$QS_URL"'
+].join("\n")
+
+// Las comillas dentro de un valor romperían el fichero de configuración de curl,
+// que las usa para delimitar. La cabecera extra la escribe el usuario y la clave
+// puede ser cualquier cosa: se escapan las dos.
+function _cfgVal(v) {
+    return String(v || "").replace(/\\/g, "\\\\").replace(/"/g, '\\"')
+}
+
+// o = { url, maxTime, stream, bearer, extraHeader, title, netFlags }
+// Devuelve { cmd, env, body }: el cuerpo lo escribe quien llama en la entrada
+// estándar del proceso, y CIERRA la entrada al terminar.
+function transport(req, o) {
+    const flags = ["--connect-timeout", "15",
+                   "--max-time", String(o.maxTime || 300),
+                   "-X", "POST"]
+        .concat(o.stream ? ["-N", "--no-buffer"] : [])
+        .concat(o.netFlags || [])
+    return {
+        cmd: ["sh", "-c", SH_ENVIO],
+        env: { QS_URL: String(o.url || ""),
+               QS_FLAGS: flags.join(" "),
+               QS_AUTH: _cfgVal(o.bearer),
+               QS_HDR: _cfgVal(o.extraHeader),
+               QS_TITLE: o.title ? "1" : "" },
+        body: JSON.stringify(req)
+    }
+}
+
+// Qué le pasó al transporte, dicho para que se pueda arreglar. Los dos códigos
+// propios son del shell de arriba; el resto los pone curl.
+function transportError(code) {
+    if (code === 97)
+        return "no se pudo crear el archivo temporal de la petición (¿disco lleno?)"
+    if (code === 98)
+        return "la petición no llegó a enviarse: el cuerpo no terminó de escribirse"
+    return ""
+}
+
+// Una consulta GET con las mismas credenciales, para la sonda del catálogo de
+// modelos. No lleva cuerpo, así que no tiene el problema del tamaño — pero la
+// clave iba igualmente en el argv, y una clave a la vista es una clave a la
+// vista aunque la petición sea pequeña. Mismo fichero de configuración, misma
+// jaula, y así "Probar" sigue probando EXACTAMENTE lo que va a viajar.
+const SH_SONDA = [
+    'umask 077',
+    'c=$(mktemp) || exit 97',
+    'trap \'rm -f "$c"\' EXIT INT TERM',
+    '{',
+    '  [ -n "$QS_AUTH" ] && printf \'header = "Authorization: Bearer %s"\\n\' "$QS_AUTH"',
+    '  [ -n "$QS_HDR" ] && printf \'header = "%s"\\n\' "$QS_HDR"',
+    '  [ -n "$QS_TITLE" ] && printf \'header = "X-Title: Quickshell"\\n\'',
+    '} > "$c"',
+    'curl -sS --max-time 15 $QS_FLAGS -K "$c" -w "\\n__QS %{http_code}" "$QS_URL"'
+].join("\n")
+
+function probeTransport(o) {
+    return {
+        cmd: ["sh", "-c", SH_SONDA],
+        env: { QS_URL: String(o.url || ""),
+               QS_FLAGS: (o.netFlags || []).join(" "),
+               QS_AUTH: _cfgVal(o.bearer),
+               QS_HDR: _cfgVal(o.extraHeader),
+               QS_TITLE: o.title ? "1" : "" }
+    }
+}
