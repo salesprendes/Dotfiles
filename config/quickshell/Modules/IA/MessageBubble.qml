@@ -128,6 +128,52 @@ Item {
                          res: a => a("server") },
         read_mcp_resource:  { ico: "󰐱", di: I18n.tr("The assistant wants to read a resource (MCP):"),
                          res: a => a("server") + "  ·  " + a("uri") },
+        // Desarrollo: LSP, AST, depurador y la celda de Python.
+        lsp:           { ico: "󰿘", di: I18n.tr("The assistant asks the language server:"),
+                         res: a => a("op") + "  ·  " + a("path")
+                                   + (a("line") ? ":" + a("line") : "") },
+        lsp_rename:    { ico: "󰑕", di: I18n.tr("The assistant wants to rename a symbol:"),
+                         res: a => a("path") + ":" + (a("line") || "?")
+                                   + "  →  " + a("new_name") },
+        ast_search:    { ico: "󱁉", di: I18n.tr("The assistant searches the syntax tree:"),
+                         res: a => a("pattern") + "  ·  " + a("path") },
+        ast_edit:      { ico: "󱁊", di: I18n.tr("The assistant wants to rewrite structurally:"),
+                         res: a => a("path"),
+                         ver: a => "- " + a("pattern") + "\n+ " + a("rewrite") },
+        python_exec:   { ico: "󰌠", di: I18n.tr("The assistant runs a Python cell:"),
+                         res: a => String(a("code")).split("\n")[0].slice(0, 80),
+                         ver: a => a("code") },
+        debug_start:   { ico: "󰃤", di: I18n.tr("The assistant wants to debug:"),
+                         res: a => a("program"),
+                         ver: a => (a("breakpoints") || []).join("\n") },
+        debug_ctl:     { ico: "󰐊", di: I18n.tr("The assistant steps the debugger:"),
+                         res: a => a("action")
+                                   + (a("file") ? "  ·  " + a("file") + ":" + a("line") : "") },
+        debug_view:    { ico: "󰈈", di: I18n.tr("The assistant inspects the debugger:"),
+                         res: a => a("what")
+                                   + (a("frame") !== undefined && a("frame") !== ""
+                                      ? "  ·  marco " + a("frame") : "") },
+        debug_eval:    { ico: "󰊕", di: I18n.tr("The assistant evaluates in the paused frame:"),
+                         res: a => a("expression") },
+        lsp_fix:       { ico: "󰁨", di: I18n.tr("The assistant applies a quick fix:"),
+                         res: a => a("path") + ":" + (a("line") || "?")
+                                   + "  ·  #" + (a("index") || 0) },
+        lsp_raw:       { ico: "󰘦", di: I18n.tr("The assistant sends a raw LSP request:"),
+                         res: a => a("method") + "  ·  " + a("path") },
+        // Trabajos en segundo plano.
+        job_start:     { ico: "󱜯", di: I18n.tr("The assistant wants to run in the background:"),
+                         res: a => (a("pty") ? "[pty] " : "") + a("command"),
+                         ver: a => a("command") },
+        job_list:      { ico: "󰋙", di: I18n.tr("The assistant lists background jobs"),
+                         res: () => "" },
+        job_view:      { ico: "󰈈", di: I18n.tr("The assistant checks a job:"),
+                         res: a => "#" + (a("id") || "?") },
+        job_input:     { ico: "󰌌", di: I18n.tr("The assistant types into a job:"),
+                         res: a => "#" + (a("id") || "?") + "  ⌨  "
+                                   + (a("eof") ? "(fin de entrada)" : a("text")) },
+        job_ctl:       { ico: "󰚌", di: I18n.tr("The assistant wants to stop a job:"),
+                         res: a => a("action") + (a("id") ? "  ·  #" + a("id") : "")
+                                   + (a("signal") ? "  ·  " + a("signal") : "") },
         // Administración local.
         system_status: { ico: "󰄨", di: I18n.tr("The assistant checks the system"),
                          res: () => "" },

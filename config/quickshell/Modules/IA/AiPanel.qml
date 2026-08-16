@@ -827,12 +827,17 @@ Popout {
             }
             Text {
                 Layout.fillWidth: true
-                text: AiService.activeSub
-                    ? I18n.tr("Subagent: %1 — round %2 of %3")
-                          .arg(AiService.activeSub.label)
-                          .arg(AiService.activeSub.rounds)
-                          .arg(AiService.activeSub.maxRounds)
-                    : ""
+                // Uno: su etiqueta y su ronda. Varios (fan-out en paralelo):
+                // cuántos y qué hacen, que no caben tres líneas de detalle.
+                text: AiService.activeSubs.length > 1
+                    ? I18n.tr("%1 subagents working…").arg(AiService.activeSubs.length)
+                      + "  " + AiService.activeSubs.map(s => s.label).join(" · ")
+                    : AiService.activeSub
+                        ? I18n.tr("Subagent: %1 — round %2 of %3")
+                              .arg(AiService.activeSub.label)
+                              .arg(AiService.activeSub.rounds)
+                              .arg(AiService.activeSub.maxRounds)
+                        : ""
                 color: Theme.accentText
                 font.family: Theme.fontFamily
                 font.pixelSize: Theme.typeLabelMedium
@@ -845,7 +850,70 @@ Popout {
                 iconPixelSize: Theme.sp(12)
                 baseColor: "transparent"
                 iconColor: Theme.red
-                onClicked: if (AiService.activeSub) AiService.activeSub.cancel()
+                // Para a TODOS: el freno de mano no distingue cuál.
+                onClicked: {
+                    const subs = AiService.activeSubs.slice()
+                    for (let i = 0; i < subs.length; i++)
+                        subs[i].cancel()
+                }
+            }
+        }
+    }
+
+    // ── Trabajos en segundo plano ────────────────────────────────────────────
+    // Un `make` corriendo no puede ser invisible: si algo sigue vivo detrás de
+    // la conversación, aquí se ve y desde aquí se corta.
+    RevealBar {
+        id: jobBar
+        want: AiService.runningJobs.length > 0
+        barHeight: Theme.dp(36)
+        radius: Theme.shapeSm
+        color: SettingsPalette.accentSoft
+
+        RowLayout {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            height: jobBar.barHeight
+            anchors.leftMargin: Theme.space10
+            anchors.rightMargin: Theme.space6
+            spacing: Theme.space8
+
+            Text {
+                text: "󱜯"
+                color: Theme.accentText
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.sp(14)
+                RotationAnimation on rotation {
+                    running: AiService.runningJobs.length > 0
+                    from: 0; to: 360
+                    duration: Theme.animLoop * 3
+                    loops: Animation.Infinite
+                }
+            }
+            Text {
+                Layout.fillWidth: true
+                text: AiService.runningJobs.length === 0 ? ""
+                    : I18n.tr("%1 running in the background")
+                          .arg(AiService.runningJobs.length)
+                      + "  " + AiService.runningJobs.map(j => j.label).join(" · ")
+                color: Theme.accentText
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.typeLabelMedium
+                font.weight: Font.Medium
+                elide: Text.ElideRight
+            }
+            IconButton {
+                icon: "󰓛"
+                diameter: Theme.dp(26)
+                iconPixelSize: Theme.sp(12)
+                baseColor: "transparent"
+                iconColor: Theme.red
+                onClicked: {
+                    const vivos = AiService.runningJobs.slice()
+                    for (let i = 0; i < vivos.length; i++)
+                        AiService.stopJob(vivos[i].jobId)
+                }
             }
         }
     }

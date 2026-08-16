@@ -379,3 +379,29 @@ function b64utf8(s) {
     }
     return out
 }
+
+// ── Guardarraíl de privacidad ────────────────────────────────────────────────
+// Lo que una herramienta lee acaba EN EL CONTEXTO, y de ahí viaja al modelo (y
+// a su servidor, si no es local). Antes de entrar se tapan los secretos de
+// forma inequívoca: claves privadas, Bearer, y asignaciones de
+// password/token/api_key. Solo formas de ALTA confianza — enmascarar de más
+// rompería trabajos legítimos —, y el hueco se marca a la vista para que se
+// sepa que hay algo tapado en vez de creer que no había nada.
+const _SECRETOS = [
+    // Bloques PEM enteros (clave privada SSH/TLS).
+    { re: /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g,
+      to: "[clave privada oculta]" },
+    // Cabeceras de autorización.
+    { re: /(authorization\s*:\s*bearer\s+)[A-Za-z0-9._~+/=-]{12,}/gi,
+      to: "$1[oculto]" },
+    // clave = valor en configuraciones y .env
+    { re: /((?:password|passwd|secret|api[_-]?key|access[_-]?token|auth[_-]?token|private[_-]?key)\s*[:=]\s*["']?)([^\s"'\n]{6,})/gi,
+      to: "$1[oculto]" }
+]
+
+function redactSecrets(text) {
+    let s = String(text || "")
+    for (let i = 0; i < _SECRETOS.length; i++)
+        s = s.replace(_SECRETOS[i].re, _SECRETOS[i].to)
+    return s
+}

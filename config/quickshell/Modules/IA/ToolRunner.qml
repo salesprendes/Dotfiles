@@ -1,0 +1,818 @@
+import QtQuick
+import Quickshell
+import Quickshell.Io
+import qs.Config
+import "TextUtils.js" as TU
+import "ToolPolicy.js" as TP
+import "LocalTools.js" as LT
+import "RemoteTools.js" as RT
+
+// EL EJECUTOR: lo que pasa entre que el modelo propone una herramienta y el
+// resultado vuelve a su contexto. Aprobación, jaula, ejecución, resolución y
+// coordinación del lote.
+//
+// El orden de las puertas por las que pasa una llamada, que es lo que de verdad
+// define la seguridad del harness:
+//   1. Argumentos reparados y validados (un modelo local manda JSON roto).
+//   2. Hooks pre_tool_use — la última palabra del usuario, y puede vetar.
+//   3. Enrutado: MCP, familia de solo lectura, o el vocabulario que cambia algo.
+//   4. Ejecución con TODO argumento por entorno, nunca interpolado.
+//   5. Redacción de secretos ANTES de que el resultado entre al contexto.
+//   6. Aviso post_tool_use y coordinación del resto del lote.
+Scope {
+    id: runner
+
+    property var svc          // el harness
+    property var conv         // el hilo y su historial
+    property var skills       // habilidades
+    property var memory       // memoria e instintos
+    property var mcp          // clientes MCP
+    property var hooks        // hooks del usuario
+    property var lsp          // servidores de lenguaje
+    property var dbg          // sesión de depuración (DAP)
+    property var repl         // el Python persistente
+    property var jobs         // trabajos en segundo plano
+
+    readonly property var messages: conv ? conv.messages : null
+
+    // ── Correa del turno ─────────────────────────────────────────────────────
+    // Pasos de herramienta del turno en curso. Con la auto-aprobación de
+    // lecturas activa, un modelo en bucle podría encadenar 'ls' para siempre:
+    // pasado el tope, la tarjeta se queda pendiente y decide el humano (el límite
+    // de turnos de Claude Code / Cline, en pequeño).
+    property int toolRounds: 0
+    readonly property int maxToolRounds: 8
+
+    // Permisos permanentes de ESTA conversación (el "session allowlist" de
+    // OpenWorker): el usuario pulsa "Siempre" en una tarjeta y esa herramienta
+    // deja de preguntar hasta que cambie de conversación. Efímero por diseño.
+    property var sessionAllow: ({})
+    function allowForSession(name) {
+        const m = Object.assign({}, sessionAllow)
+        m[name] = true
+        sessionAllow = m
+    }
+
+    // Política de UNA LLAMADA concreta: la del nombre, salvo en las consultas
+    // remotas, donde también cuentan los argumentos. Leer un servidor que el
+    // usuario ya guardó es rutina; asomarse por primera vez a una máquina que
+    // acaba de nombrar en el mensaje merece que se vea la tarjeta.
+    function callPolicy(name, argsJson) {
+        // Preguntar y proponer plan SIEMPRE esperan al usuario: son la pausa, no
+        // una acción que se pueda automatizar.
+        if (name === "ask_user" || name === "propose_plan")
+            return "ask"
+        // Permiso permanente de la conversación (solo para lo aprobable así).
+        if (sessionAllow[name] && TP.canStandingAllow(name))
+            return "auto"
+
+        const p = svc.toolPolicy(name)
+        const a = TU.repairJson(argsJson) || ({})
+
+        // Guardia de shell (idea de OpenWorker): un comando "auto" que encadena,
+        // redirige o sustituye vuelve a preguntar — "permite git status" no debe
+        // colar "git status; rm -rf ~".
+        if (p === "auto" && (name === "run_command" || name === "ssh_exec")
+                && TU.hasShellOps(a.command))
+            return "ask"
+
+        // Consulta a un servidor: aunque esté permitida (por política o por la
+        // auto-lectura), asomarse por primera vez a una máquina que acaba de
+        // salir del mensaje se enseña; a una ya guardada, no.
+        if (RT.CONSULTAS.indexOf(name) !== -1 && p === "auto") {
+            const h = RT.resolveHost(a.host, a, svc.toolCtx)
+            return (h && h.saved) ? "auto" : "ask"
+        }
+        return p
+    }
+
+    // ── Detección de bucles (idea de gemini-cli) ─────────────────────────────
+    // El atasco más típico de un modelo pequeño es repetir LA MISMA llamada una y
+    // otra vez porque no le gusta el resultado. El tope de pasos lo cortaría ocho
+    // turnos después, habiendo gastado contexto y tiempo; esto lo corta al tercer
+    // intento idéntico y se lo dice, que así cambia de táctica o pregunta.
+    // Idénticas = mismo nombre Y mismos argumentos. Solo cuenta DENTRO del
+    // encargo en curso (desde el último mensaje del usuario): repetir una consulta
+    // legítima tres veces a lo largo del día no es un bucle, es usar el
+    // asistente.
+    readonly property int loopThreshold: 3
+    function loopCount(name, argsJson) {
+        const sig = String(name) + "\u0000" + String(argsJson || "")
+        let start = 0
+        for (let i = messages.count - 1; i >= 0; i--)
+            if (messages.get(i).role === "user") {
+                start = i
+                break
+            }
+        let n = 0
+        for (let i = start; i < messages.count; i++) {
+            const m = messages.get(i)
+            if (m.role === "tool" && m.toolStatus !== "pending"
+                    && (String(m.toolName) + "\u0000" + String(m.toolArgs)) === sig)
+                n++
+        }
+        return n
+    }
+
+    // ── Resolver una tarjeta ─────────────────────────────────────────────────
+    // 'cap' permite a una herramienta concreta un tope distinto del genérico
+    // (use_skill: el texto de una habilidad vale más contexto que un ls).
+    function resolveTool(index, result, cap) {
+        messages.setProperty(index, "toolStatus", "done")
+        messages.setProperty(index, "toolResult",
+            TU.redactSecrets(String(result)).slice(0, cap || svc.toolResultCap))
+        conv.save()
+        // Aviso de "esto ya corrió": para registrar, medir o encadenar.
+        const done = messages.get(index)
+        if (done)
+            hooks.fire("post_tool_use", done.toolName,
+                       { QS_HOOK_TOOL: String(done.toolName || ""),
+                         QS_HOOK_ARGS: String(done.toolArgs || ""),
+                         QS_HOOK_RESULT: String(result).slice(0, 4000) })
+        advance()   // ¿otra herramienta del lote?; si no, sigue el modelo
+    }
+
+    // Una llamada vetada por un hook: se marca rechazada y el motivo vuelve al
+    // modelo, que así puede corregir en vez de reintentar a ciegas.
+    function blockTool(index, reason) {
+        const m = messages.get(index)
+        if (!m || m.toolStatus !== "pending")
+            return
+        messages.setProperty(index, "toolStatus", "rejected")
+        messages.setProperty(index, "toolResult",
+            I18n.tr("Blocked by a hook: ") + String(reason).slice(0, 2000))
+        conv.save()
+        advance()
+    }
+
+    function rejectTool(index) {
+        const m = messages.get(index)
+        if (!m || m.role !== "tool" || m.toolStatus !== "pending")
+            return
+        messages.setProperty(index, "toolStatus", "rejected")
+        messages.setProperty(index, "toolResult",
+            "El usuario rechazó ejecutar esta acción.")
+        conv.save()
+        if (!svc.busy)
+            svc.start()      // que el modelo reaccione al rechazo
+    }
+
+    // La respuesta del usuario a un ask_user: vuelve al modelo como resultado de
+    // la herramienta y la conversación sigue sola.
+    function answerQuestion(index, answer) {
+        const m = messages.get(index)
+        if (!m || m.role !== "tool" || m.toolStatus !== "pending"
+                || m.toolName !== "ask_user")
+            return
+        const a = String(answer).trim()
+        if (a === "")
+            return
+        resolveTool(index, a)
+    }
+
+    // Aprobar el plan que el agente propuso: luz verde y a ejecutarlo.
+    function approvePlan(index) {
+        const m = messages.get(index)
+        if (!m || m.toolName !== "propose_plan" || m.toolStatus !== "pending")
+            return
+        resolveTool(index, "El usuario APROBÓ el plan. Ejecútalo paso a paso, "
+            + "verificando como dijiste; anótalo con todo_write para que se "
+            + "vea el avance.")
+    }
+    function rejectPlan(index, feedback) {
+        const m = messages.get(index)
+        if (!m || m.toolName !== "propose_plan" || m.toolStatus !== "pending")
+            return
+        const f = String(feedback || "").trim()
+        resolveTool(index, "El usuario NO aprobó el plan"
+            + (f !== "" ? ". Dice: " + f : "")
+            + ". Revísalo y vuelve a proponerlo; no ejecutes nada aún.")
+    }
+
+    // ── Aprobar y ejecutar ───────────────────────────────────────────────────
+    property int _toolIndex: -1
+    property int _hookPassed: -1        // tarjeta cuyos hooks ya dieron paso
+
+    // "Aprobar siempre" (esta conversación): recuerda la herramienta y aprueba
+    // esta llamada. Solo tiene sentido para lo que se puede permitir en firme.
+    function approveToolAlways(index) {
+        const m = messages.get(index)
+        if (!m || m.role !== "tool")
+            return
+        if (TP.canStandingAllow(m.toolName))
+            allowForSession(m.toolName)
+        approveTool(index)
+    }
+
+    function approveTool(index) {
+        const m = messages.get(index)
+        if (!m || m.role !== "tool" || m.toolStatus !== "pending" || svc.busy
+                || svc.compacting)
+            return
+        runner._toolIndex = index
+        // Argumentos tolerantes: un modelo local manda JSON roto a menudo. Si ni
+        // con reparación sale, se le dice al modelo qué esperaba en vez de
+        // ejecutar con argumentos vacíos (que sería peor que fallar).
+        const parsed = TU.repairJson(m.toolArgs)
+        if (parsed === null) {
+            resolveTool(index, "No entendí los argumentos: no son JSON válido. "
+                + "Vuelve a llamar a " + m.toolName + " con un objeto JSON correcto.")
+            return
+        }
+        const args = parsed
+
+        // ask_user y propose_plan no se "aprueban": esperan al usuario. Su
+        // tarjeta se pinta distinta (pregunta con opciones / plan con "Empezar")
+        // y se resuelven por answerQuestion o approvePlan.
+        if (m.toolName === "ask_user" || m.toolName === "propose_plan")
+            return
+
+        // Hooks pre_tool_use: la última palabra del usuario antes de que algo
+        // corra. Se ejecutan UNA vez por llamada; si uno veta, la tarjeta se
+        // rechaza con su motivo y el modelo se entera.
+        if (_hookPassed !== index && hooks.hooksFor("pre_tool_use", m.toolName).length > 0) {
+            hooks.run("pre_tool_use", m.toolName,
+                      { QS_HOOK_TOOL: m.toolName, QS_HOOK_ARGS: String(m.toolArgs || ""),
+                        QS_HOOK_RISK: TP.riskClass(m.toolName) },
+                      index,
+                      () => { runner._hookPassed = index; runner.approveTool(index) })
+            return
+        }
+        _hookPassed = -1
+
+        // Herramienta de un servidor MCP: el nombre viaja con el esquema
+        // mcp__<servidor>__<tool> de Claude Code. Se enruta a su proceso.
+        if (m.toolName.startsWith("mcp__")) {
+            const parts = m.toolName.split("__")
+            if (parts.length < 3) { resolveTool(index, "Nombre MCP inválido."); return }
+            _mcpCall(index, parts[1], parts.slice(2).join("__"), args)
+            return
+        }
+
+        // Todo lo que no cambia nada (leer archivos, consultar el sistema,
+        // consultar un servidor) lo construye el mismo sitio que sirve al
+        // subagente: una sola jaula que auditar.
+        const built = svc.readOnlyCommand(m.toolName, args)
+        if (built !== null) {
+            if (built.error !== undefined) { resolveTool(index, built.error); return }
+            exec(built.cmd, built.env)
+            return
+        }
+
+        switch (m.toolName) {
+        // ── Herramientas de desarrollo (LSP, AST, depurador, celda) ──────────
+        // Asíncronas contra sus gestores: la tarjeta se resuelve cuando el
+        // servidor conteste, con el mismo tope y la misma redacción de
+        // secretos que todo lo demás.
+        case "lsp":
+            lsp.request(args, (r) => runner.resolveTool(index, r))
+            return
+        case "lsp_rename":
+            lsp.request(Object.assign({}, args, { op: "rename" }),
+                        (r) => runner.resolveTool(index, r))
+            return
+        case "lsp_fix":
+            lsp.request(Object.assign({}, args, { op: "fix" }),
+                        (r) => runner.resolveTool(index, r))
+            return
+        case "lsp_raw":
+            lsp.request(Object.assign({}, args, { op: "raw" }),
+                        (r) => runner.resolveTool(index, r))
+            return
+        // ── Trabajos en segundo plano ────────────────────────────────────────
+        case "job_start":
+            jobs.start(args, (r) => runner.resolveTool(index, r))
+            return
+        case "job_list":
+            resolveTool(index, jobs.list())
+            return
+        case "job_view":
+            jobs.view(args, (r) => runner.resolveTool(index, r))
+            return
+        case "job_input":
+            jobs.input(args, (r) => runner.resolveTool(index, r))
+            return
+        case "job_ctl":
+            jobs.ctl(args, (r) => runner.resolveTool(index, r))
+            return
+        case "ast_edit": {
+            const pv = svc._safePath(args.path)
+            if (pv === "") { resolveTool(index, "Ruta fuera de la carpeta personal."); return }
+            const bakA = backupFor(index, pv)
+            const built2 = LT.astEdit(args, svc.toolCtx, bakA, undoDir)
+            if (built2.error !== undefined) { resolveTool(index, built2.error); return }
+            exec(built2.cmd, built2.env)
+            return
+        }
+        case "python_exec":
+            repl.exec(args, (r) => runner.resolveTool(index, r))
+            return
+        case "debug_start":
+            dbg.start(args, (r) => runner.resolveTool(index, r))
+            return
+        case "debug_ctl":
+            dbg.ctl(args, (r) => runner.resolveTool(index, r))
+            return
+        case "debug_view":
+            dbg.view(args, (r) => runner.resolveTool(index, r))
+            return
+        case "debug_eval":
+            dbg.evaluate(args, (r) => runner.resolveTool(index, r))
+            return
+        case "ssh_exec": {
+            const cmd = String(args.command || "").trim()
+            if (cmd === "") { resolveTool(index, "Comando vacío."); return }
+            const c = RT.connect(args, "ssh", "-p", svc.toolCtx)
+            if (c.error !== undefined) { resolveTool(index, c.error); return }
+            // El comando remoto viaja como UN argumento a ssh; el shell remoto lo
+            // ejecuta tal cual. Es crudo a propósito (por eso lleva tarjeta).
+            exec(c.t.argv.concat(["--", cmd + " 2>&1 | tail -c 16000"]), c.t.env)
+            return
+        }
+        // Subir y bajar son el mismo scp con el origen y el destino cambiados de
+        // sitio: se resuelven juntos para que no puedan divergir.
+        case "sftp_get":
+        case "sftp_put": {
+            const down = m.toolName === "sftp_get"
+            const local = svc._safePath(args.local_path)
+            if (local === "") {
+                resolveTool(index, (down ? "El destino" : "El origen")
+                    + " local debe estar dentro de tu carpeta personal.")
+                return
+            }
+            const rp = String(args.remote_path || "").trim()
+            if (rp === "") { resolveTool(index, "Falta la ruta remota."); return }
+            const c = RT.connect(args, "scp", "-P", svc.toolCtx)
+            if (c.error !== undefined) { resolveTool(index, c.error); return }
+            // scp recibe las rutas como ARGUMENTOS (no dentro de un shell), así
+            // que un nombre raro no puede convertirse en otra orden. El último
+            // elemento del argv es el user@host; el resto son las opciones.
+            const dest = c.t.argv[c.t.argv.length - 1]
+            const base = c.t.argv.slice(0, c.t.argv.length - 1)
+            exec(base.concat(down ? [dest + ":" + rp, local]
+                                  : [local, dest + ":" + rp]), c.t.env)
+            return
+        }
+        case "service_ctl": {
+            const actions = ["start", "stop", "restart", "reload", "enable", "disable"]
+            const action = String(args.action || "")
+            const unit = String(args.unit || "").trim()
+            if (actions.indexOf(action) === -1) { resolveTool(index, "Acción inválida."); return }
+            if (unit === "" || unit[0] === "-") { resolveTool(index, "Unidad inválida."); return }
+            // Sin sh: systemctl recibe la unidad como argumento literal. Las de
+            // sistema pasarán por polkit (el agente propio del shell).
+            exec(args.user === true
+                    ? ["systemctl", "--user", action, "--", unit]
+                    : ["systemctl", action, "--", unit], ({}))
+            return
+        }
+        case "kill_process": {
+            const pid = parseInt(args.pid)
+            if (!isFinite(pid) || pid <= 1) { resolveTool(index, "PID inválido."); return }
+            const sigs = ["TERM", "KILL", "HUP", "INT"]
+            const sig = sigs.indexOf(String(args.signal || "")) !== -1 ? args.signal : "TERM"
+            exec(["sh", "-c",
+                'ps -p "$QS_PID" -o comm= 2>/dev/null; kill -s ' + sig + ' -- "$QS_PID" && echo "Señal ' + sig + ' enviada." || echo "No se pudo (PID inexistente o de otro usuario)."'],
+                ({ QS_PID: String(pid) }))
+            return
+        }
+        case "todo_write": {
+            // El plan visible (el TodoWrite de Claude Code): sustituye la lista
+            // entera; el panel la pinta encima de la entrada.
+            const list = Array.isArray(args.todos) ? args.todos : []
+            svc.todos = list.slice(0, 20).map(t => ({
+                content: String(t.content || "").slice(0, 200),
+                status: ["pending", "in_progress", "completed"]
+                            .indexOf(t.status) >= 0 ? t.status : "pending"
+            }))
+            const done = svc.todos.filter(t => t.status === "completed").length
+            resolveTool(index, "Plan actualizado: " + done + "/" + svc.todos.length
+                               + " pasos completados.")
+            return
+        }
+        case "web_search": {
+            const q = String(args.query || "").trim()
+            if (q === "") { resolveTool(index, "Consulta vacía."); return }
+            // Contra un SearXNG del usuario (ajuste aiSearchUrl), por su API
+            // JSON. Se probó scrapear DuckDuckGo y Bing: el primero bloquea
+            // ("anomaly") y el segundo sirve resultados-señuelo a los bots — un
+            // buscador que miente es peor que ninguno.
+            // De más específico a más general: lo que diga el mensaje, luego el
+            // ajuste si lo hay, y si no una instancia pública. La herramienta
+            // funciona SIEMPRE; configurarla solo cambia adónde va.
+            const base = TU.normalizeSearchBase(args.instance)
+                      || TU.normalizeSearchBase(Settings.aiSearchUrl)
+                      || "https://searx.be"
+            exec(["sh", "-c",
+                'curl -sSL --max-time 15 "$QS_B/search?format=json&q=$(python3 -c \'import urllib.parse,os; print(urllib.parse.quote(os.environ[\"QS_Q\"]))\')" | '
+                + 'python3 -c \''
+                + 'import sys,json\n'
+                + 'try: d=json.load(sys.stdin)\n'
+                + 'except Exception: print("El buscador no devolvio JSON (activa format=json en tu SearXNG)."); raise SystemExit\n'
+                + 'rs=d.get("results",[])[:8]\n'
+                + 'if not rs: print("(sin resultados)")\n'
+                + 'for r in rs:\n'
+                + '    print("- "+r.get("title","")+"\\n  "+r.get("url","")+"\\n  "+(r.get("content") or "")[:200])\n\''],
+                ({ QS_Q: q, QS_B: base }))
+            return
+        }
+        case "notify_user": {
+            const title = String(args.title || "").slice(0, 120)
+            if (title === "") { resolveTool(index, "Título vacío."); return }
+            Quickshell.execDetached(["notify-send", "-a", "Asistente IA",
+                                     title, String(args.body || "").slice(0, 400)])
+            resolveTool(index, "Notificación mostrada.")
+            return
+        }
+        case "subagent": {
+            const task = String(args.task || "").trim()
+            if (task === "") { resolveTool(index, "Encargo vacío."); return }
+            const why = svc.runSubagent(task, {
+                label: args.label, role: args.role,
+                output: args.output, max_rounds: args.max_rounds
+            }, (report) => runner.resolveTool(index, report))
+            if (why !== "")
+                resolveTool(index, why)
+            return
+        }
+        case "list_mcp_resources":
+            _mcpRpc(index, String(args.server || "").trim(), "resources/list", {},
+                (res) => {
+                    const rs = res.resources || []
+                    return rs.length === 0 ? "(sin recursos)"
+                        : rs.map(r => "- " + (r.name || "") + "  " + r.uri
+                              + (r.description
+                                 ? "\n  " + String(r.description).slice(0, 150) : ""))
+                            .join("\n")
+                })
+            return
+        case "read_mcp_resource":
+            _mcpRpc(index, String(args.server || "").trim(), "resources/read",
+                { uri: String(args.uri || "") },
+                (res) => runner.mcp.flatten(res.contents).trim() || "(recurso sin texto)")
+            return
+        case "edit_lines": {
+            const p = svc._safePath(args.path)
+            if (p === "") { resolveTool(index, "Ruta fuera de la carpeta personal."); return }
+            const st = parseInt(args.start), en = parseInt(args.end)
+            if (!(st >= 1) || !(en >= st)) { resolveTool(index, "Rango inválido: start debe ser ≥1 y end ≥ start."); return }
+            // Edición por rango con ANCLA: si el hash de los extremos ya no
+            // coincide, el archivo cambió desde que el modelo lo leyó y la
+            // edición se niega. Es lo que evita el destrozo clásico de editar por
+            // número de línea sobre un archivo que se movió.
+            const bakL = backupFor(index, p)
+            exec(["python3", "-c", LT.PY_HASH
+                + 'import os,sys,shutil\n'
+                + 'p=os.environ["QS_P"]; st=int(os.environ["QS_ST"]); en=int(os.environ["QS_EN"])\n'
+                + 'sh_=os.environ["QS_SH"]; eh=os.environ["QS_EH"]; new=os.environ["QS_TXT"]\n'
+                + 'try: lines=open(p,encoding="utf-8",errors="replace").read().split("\\n")\n'
+                + 'except OSError as e: print("No se pudo leer:",e); raise SystemExit\n'
+                + 'if en>len(lines): print(f"El archivo tiene {len(lines)} lineas; pediste hasta {en}."); raise SystemExit\n'
+                + 'if sh_ and h(lines[st-1])!=sh_:\n'
+                + '    print(f"La linea {st} ya no es la que viste (hash {h(lines[st-1])}, esperabas {sh_}). Vuelve a leer el archivo."); raise SystemExit\n'
+                + 'if eh and h(lines[en-1])!=eh:\n'
+                + '    print(f"La linea {en} ya no es la que viste (hash {h(lines[en-1])}, esperabas {eh}). Vuelve a leer el archivo."); raise SystemExit\n'
+                + 'os.makedirs(os.environ["QS_BD"],exist_ok=True); shutil.copy2(p,os.environ["QS_BAK"])\n'
+                + 'rep=new.split("\\n") if new!="" else []\n'
+                + 'out=lines[:st-1]+rep+lines[en:]\n'
+                + 'open(p,"w",encoding="utf-8").write("\\n".join(out))\n'
+                + 'print(f"Editado {p}: lineas {st}-{en} ({en-st+1}) sustituidas por {len(rep)}.")\n'],
+                ({ QS_P: p, QS_ST: String(st), QS_EN: String(en),
+                   QS_SH: String(args.start_hash || ""),
+                   QS_EH: String(args.end_hash || ""),
+                   QS_TXT: String(args.text || ""),
+                   QS_BAK: bakL, QS_BD: undoDir }))
+            return
+        }
+        case "edit_file": {
+            const p = svc._safePath(args.path)
+            if (p === "") { resolveTool(index, "Ruta fuera de la carpeta personal."); return }
+            // Sustitución exacta con la regla de unicidad del FileEditTool: 0
+            // apariciones = error, 2+ = error (pide más contexto), 1 = edita.
+            // Todo por entorno y en python3, que no re-interpreta nada.
+            const bakE = backupFor(index, p)
+            exec(["python3", "-c",
+                'import os,sys,shutil\n'
+                + 'p=os.environ["QS_P"]; old=os.environ["QS_OLD"]; new=os.environ["QS_NEW"]\n'
+                + 'try: s=open(p,encoding="utf-8",errors="replace").read()\n'
+                + 'except OSError as e: print("No se pudo leer:",e); sys.exit(0)\n'
+                + 'n=s.count(old)\n'
+                + 'if n==0: print("old_string no aparece en el archivo."); sys.exit(0)\n'
+                + 'if n>1: print("old_string aparece",n,"veces; amplia el contexto para que sea unico."); sys.exit(0)\n'
+                + 'os.makedirs(os.environ["QS_BD"],exist_ok=True); shutil.copy2(p,os.environ["QS_BAK"])\n'
+                + 'open(p,"w",encoding="utf-8").write(s.replace(old,new,1))\n'
+                + 'print("Editado:",p)'],
+                ({ QS_P: p,
+                   QS_OLD: String(args.old_string || ""),
+                   QS_NEW: String(args.new_string || ""),
+                   QS_BAK: bakE, QS_BD: undoDir }))
+            return
+        }
+        case "open_url": {
+            const url = args.url || ""
+            if (url !== "")
+                Quickshell.execDetached(["xdg-open", url])
+            resolveTool(index, url !== "" ? "URL abierta en el navegador."
+                                          : "URL inválida.")
+            return
+        }
+        case "write_file": {
+            const p = svc._safePath(args.path)
+            if (p === "") { resolveTool(index, "Ruta fuera de la carpeta personal."); return }
+            // El contenido viaja por entorno (nunca argv) y se escribe con
+            // printf; la carpeta destino se crea si falta. Copia de seguridad
+            // antes de sobrescribir: es lo que permite Deshacer. Si el archivo no
+            // existía, no hay nada que copiar (y deshacer significará borrarlo).
+            const bak = backupFor(index, p)
+            exec(["sh", "-c",
+                'mkdir -p "$QS_BD" "$(dirname -- "$QS_P")"; '
+                + '[ -f "$QS_P" ] && cp -a -- "$QS_P" "$QS_BAK"; '
+                + 'printf %s "$QS_C" > "$QS_P" && echo "Escrito: $QS_P ($(wc -c < "$QS_P") bytes)"'],
+                ({ QS_P: p, QS_C: args.content || "",
+                   QS_BAK: bak, QS_BD: undoDir }))
+            return
+        }
+        case "use_skill": {
+            // La habilidad se busca en el catálogo escaneado, nunca por la ruta
+            // que diga el modelo: pida lo que pida, solo puede acabar leyendo un
+            // SKILL.md de la carpeta de habilidades.
+            const want = String(args.name || "").trim()
+            const s = skills.find(want)
+            if (!s) {
+                // Puede que la habilidad se instalara DESPUÉS de arrancar el
+                // shell: se reescanea la carpeta y se reintenta una vez, en vez
+                // de contestar 404 sobre un catálogo viejo.
+                if (skills.rescanFor(want, index))
+                    return
+                resolveTool(index, "No hay ninguna habilidad activa con ese nombre. Disponibles: "
+                    + skills.activeSkills.map(x => x.name).join(", "))
+                return
+            }
+            // La habilidad puede acotar su propio vocabulario mientras esté en
+            // uso (allowed-tools del frontmatter): un manual de lectura no
+            // debería poder pedir un rm.
+            skills.activeSkillTools = (s.allowedTools && s.allowedTools.length > 0)
+                ? s.allowedTools.slice() : []
+            // El texto ya está en memoria desde el escaneo: no hace falta ir al
+            // disco otra vez. Y entra con el tope de habilidad, no con el
+            // genérico de resultados: son instrucciones, no salida de comando.
+            resolveTool(index, s.text, Math.max(svc.toolResultCap, skills.textCap))
+            return
+        }
+        case "memory_update": {
+            const n = memory.notes.slice()
+            const i = parseInt(args.id) - 1
+            if (!(i >= 0 && i < n.length)) { resolveTool(index, "No existe la nota [#" + args.id + "]."); return }
+            const txt = String(args.note || "").trim().slice(0, 400)
+            if (txt === "") { resolveTool(index, "Nota vacía."); return }
+            const before = n[i]
+            n[i] = txt
+            memory.setNotes(n)
+            resolveTool(index, "Nota [#" + (i + 1) + "] corregida.\nAntes: " + before + "\nAhora: " + txt)
+            return
+        }
+        case "memory_forget": {
+            const n = memory.notes.slice()
+            const i = parseInt(args.id) - 1
+            if (!(i >= 0 && i < n.length)) { resolveTool(index, "No existe la nota [#" + args.id + "]."); return }
+            const gone = n[i]
+            n.splice(i, 1)
+            memory.setNotes(n)
+            resolveTool(index, "Nota retirada: " + gone)
+            return
+        }
+        case "learn":
+            resolveTool(index, memory.addInstinct(args.lesson))
+            return
+        case "remember": {
+            const note = String(args.note || "").trim().slice(0, 400)
+            if (note === "") { resolveTool(index, "Nota vacía."); return }
+            memory.setNotes(memory.notes.concat([note]))
+            resolveTool(index, "Nota guardada en memoria.")
+            return
+        }
+        case "run_command": {
+            // Acotado a 20 s; stdout y stderr vuelven al modelo.
+            const cmd = args.command || ""
+            if (cmd === "") { resolveTool(index, "Comando vacío."); return }
+            exec(["timeout", "20", "sh", "-c", cmd], ({}))
+            return
+        }
+        default: {
+            // Nombre que no existe. Antes caía aquí run_command, así que un
+            // modelo que alucinaba un nombre con un argumento 'command' podía
+            // acabar ejecutando un comando bajo otra etiqueta. Ahora se rechaza y
+            // se le recuerda el vocabulario: los modelos locales se inventan
+            // nombres a menudo y así corrigen en el siguiente turno.
+            resolveTool(index, "No existe la herramienta '" + m.toolName
+                + "'. Las disponibles son: " + svc.knownToolNames().join(", "))
+        }
+        }
+    }
+
+    // Una llamada MCP que acaba resolviendo la tarjeta: el error se contesta
+    // igual siempre y 'render' pone cómo se lee el resultado bueno.
+    function _mcpRpc(index, server, method, params, render) {
+        mcp.rpc(server, method, params, (res, err) => {
+            runner.resolveTool(index, err !== "" ? err : render(res))
+        })
+    }
+    function _mcpCall(index, server, tool, args) {
+        _mcpRpc(index, server, "tools/call", { name: tool, arguments: args },
+            (res) => {
+                const out = runner.mcp.flatten((res.content || [])
+                                .filter(c => c.type === "text"))
+                return ((res.isError ? "[error de la herramienta] " : "") + out)
+                       .trim() || "(sin contenido)"
+            })
+    }
+
+    // Lanzar la herramienta aprobada. Un solo Process para todas (solo corre una
+    // cada vez, por diseño), así que arrancarlo era el mismo trío de líneas
+    // repetido veinte veces; aquí se dice una.
+    function exec(cmd, env) {
+        proc.command = cmd
+        proc.environment = env || ({})
+        proc.running = true
+    }
+
+    Process {
+        id: proc
+        stdout: StdioCollector { id: outCol }
+        stderr: StdioCollector { id: errCol }
+        onExited: (code) => {
+            let out = (outCol.text || "")
+            if ((errCol.text || "").trim() !== "")
+                out += (out !== "" ? "\n" : "") + "[stderr] " + errCol.text
+            if (out.trim() === "")
+                out = "(sin salida; código " + code + ")"
+            runner.resolveTool(runner._toolIndex, out)
+        }
+    }
+
+    // ── Deshacer una edición ─────────────────────────────────────────────────
+    readonly property string undoDir:
+        Quickshell.env("HOME") + "/.cache/quickshell-ai-undo"
+
+    // Dónde va la copia de seguridad de esta edición, anotada en la tarjeta: es
+    // lo que hace posible Deshacer. Las tres herramientas que escriben llevaban
+    // la misma línea de armar la ruta.
+    function backupFor(index, path) {
+        const bak = undoDir + "/" + Date.now() + "-" + path.split("/").pop()
+        messages.setProperty(index, "undoPath", bak)
+        return bak
+    }
+
+    // Devuelve el archivo a como estaba justo antes de la edición.
+    property string _undoTarget: ""
+    function undoEdit(index) {
+        const m = messages.get(index)
+        if (!m || String(m.undoPath || "") === "")
+            return
+        const a = TU.repairJson(m.toolArgs) || ({})
+        const target = svc._safePath(a.path)
+        if (target === "")
+            return
+        undoProc.command = ["sh", "-c",
+            'if [ -f "$QS_BAK" ]; then cp -a -- "$QS_BAK" "$QS_P" && echo restaurado; '
+            + 'else rm -f -- "$QS_P" && echo borrado; fi']
+        undoProc.environment = ({ QS_BAK: String(m.undoPath), QS_P: target })
+        undoProc.running = true
+        _undoTarget = target
+    }
+    Process {
+        id: undoProc
+        stdout: StdioCollector { id: undoOut }
+        onExited: (code) => {
+            conv.pushInfo(code === 0
+                ? ((undoOut.text || "").trim() === "borrado"
+                    ? I18n.tr("Undone: %1 removed (it didn't exist before).").arg(runner._undoTarget)
+                    : I18n.tr("Undone: %1 back as it was.").arg(runner._undoTarget))
+                : I18n.tr("Could not undo %1").arg(runner._undoTarget))
+        }
+    }
+
+    // ── Rutas reales: los enlaces simbólicos, a la vista ─────────────────────
+    // El cerco a $HOME no puede parar a un agente decidido (con run_command se
+    // sale por la puerta grande); sirve contra ACCIDENTES. Por eso un enlace que
+    // apunta fuera no se prohíbe —perderías rutas legítimas como ~/datos →
+    // /mnt/almacen— sino que se DESTAPA: se resuelve el destino real y, si sale
+    // de tu carpeta, esa llamada nunca se auto-aprueba y la tarjeta enseña adónde
+    // va de verdad. Escape visible en vez de prohibido.
+    property var pathReal: ({})        // índice de mensaje → {real, escapes}
+
+    function realPathFor(index) {
+        const r = pathReal[index]
+        return (r && r.escapes) ? r.real : ""
+    }
+
+    // El argumento que es una ruta LOCAL, según la herramienta.
+    function _pathArgOf(toolName, args) {
+        switch (toolName) {
+        case "read_file": case "list_dir": case "write_file": case "edit_file":
+        case "grep_files": case "glob_files":
+            return String(args.path || "")
+        case "sftp_get": case "sftp_put":
+            return String(args.local_path || "")
+        }
+        return ""
+    }
+
+    property int _resolveIndex: -1
+    function _resolvePath(index, p) {
+        const abs = svc._safePath(p)
+        if (abs === "") {                  // ya fuera del cerco: no hay nada que mirar
+            const m = Object.assign({}, pathReal)
+            m[index] = { real: "", escapes: false }
+            pathReal = m
+            advance()
+            return
+        }
+        _resolveIndex = index
+        // readlink -f canoniza siguiendo los enlaces; si el archivo aún no existe
+        // (write_file), resuelve igual la cadena de carpetas.
+        realProc.command = ["sh", "-c", 'readlink -f -- "$QS_P" 2>/dev/null || printf %s "$QS_P"']
+        realProc.environment = ({ QS_P: abs })
+        realProc.running = true
+    }
+    Process {
+        id: realProc
+        stdout: StdioCollector { id: realOut }
+        onExited: {
+            const home = Quickshell.env("HOME")
+            const real = (realOut.text || "").trim()
+            const escapes = real !== "" && !real.startsWith(home + "/") && real !== home
+            const m = Object.assign({}, runner.pathReal)
+            m[runner._resolveIndex] = { real: real, escapes: escapes }
+            runner.pathReal = m
+            runner._resolveIndex = -1
+            runner.advance()
+        }
+    }
+
+    // ── El coordinador del lote ──────────────────────────────────────────────
+    // El modelo puede pedir varias herramientas de golpe. Tras resolver una: si
+    // queda alguna pendiente, la auto-aprobable se ejecuta y la manual espera al
+    // usuario; solo cuando NO queda ninguna pendiente se devuelve todo al modelo
+    // con una única continuación. Así N llamadas paralelas no disparan N envíos.
+    function advance() {
+        if (svc.busy || svc.compacting)
+            return
+        if (_resolveIndex >= 0)        // resolviendo una ruta: se espera
+            return
+        // Un plan esperando visto bueno PARA todo lo demás, aunque el modelo lo
+        // haya pedido junto a otras herramientas: proponer y ejecutar a la vez
+        // sería proponer de boquilla.
+        for (let i = 0; i < messages.count; i++) {
+            const m = messages.get(i)
+            if (m.role === "tool" && m.toolStatus === "pending"
+                    && m.toolName === "propose_plan")
+                return
+        }
+        for (let i = 0; i < messages.count; i++) {
+            const m = messages.get(i)
+            if (m.role === "tool" && m.toolStatus === "pending") {
+                // Si la llamada lleva una ruta local, primero se averigua adónde
+                // apunta DE VERDAD (puede ser un enlace). Se hace una sola vez por
+                // tarjeta, y al volver se re-entra aquí.
+                const args = TU.repairJson(m.toolArgs) || ({})
+                const p = _pathArgOf(m.toolName, args)
+                if (p !== "" && pathReal[i] === undefined) {
+                    _resolvePath(i, p)
+                    return
+                }
+                // Hay pendientes: si esta es auto (y no se pasó el tope de pasos),
+                // se ejecuta sola; si es manual, se espera aquí. Una ruta que se
+                // va fuera de $HOME por un enlace NUNCA va sola, por muy "auto"
+                // que esté la herramienta: eso lo miras.
+                const escapes = pathReal[i] && pathReal[i].escapes
+                if (toolRounds <= maxToolRounds && !escapes
+                        && callPolicy(m.toolName, m.toolArgs) === "auto")
+                    approveTool(i)
+                return
+            }
+        }
+        // Nada pendiente: el lote está completo, se continúa la conversación.
+        svc.start()
+    }
+
+    // Todo lo que pertenece al HILO y no al historial: permisos dados de palabra,
+    // el plan a la vista, las rutas ya resueltas.
+    function resetThread() {
+        sessionAllow = ({})
+        pathReal = ({})
+        toolRounds = 0
+        _hookPassed = -1
+        _toolIndex = -1
+        _resolveIndex = -1
+    }
+
+    // Las rutas resueltas se indexan por POSICIÓN en el hilo, así que cualquier
+    // reordenación (compactar, borrar un mensaje, editar) las invalida: dejarlas
+    // haría que la tarjeta N heredara el veredicto de otra distinta — y un
+    // "no escapa" heredado por error sí abre la puerta a una auto-aprobación que
+    // no tocaba. Se tiran, que volver a resolverlas cuesta un readlink.
+    function forgetPaths() {
+        pathReal = ({})
+    }
+}

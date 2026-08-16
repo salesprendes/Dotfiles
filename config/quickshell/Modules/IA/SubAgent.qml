@@ -21,14 +21,46 @@ QtObject {
 
     property string label: ""
     property string task: ""
+    // El PAPEL moldea el encargo (la idea de roles de oh-my-pi, a nivel de
+    // subagente): un investigador rastrea, un revisor busca defectos, un
+    // diagnosticador acota una avería. Los tres son de solo lectura — lo que
+    // cambia es dónde miran y cómo redactan.
+    property string role: "research"    // research | review | debug
+    // La forma esperada del informe (el "yield tipado" de oh-my-pi, en versión
+    // ligera: no se valida un esquema —un modelo local no es de fiar para eso—
+    // pero se le pide la estructura y el jefe la lee directa).
+    property string expectedOutput: ""
     property int rounds: 0
-    readonly property int maxRounds: 8
+    property int maxRounds: 8            // configurable por llamada (1..12)
     property string state: "running"    // running | done | error
     property var msgs: []
     property var _calls: []             // tool_calls pendientes de la ronda
     property int _callIdx: 0
 
+    // Seguimiento para la tarjeta y el pie del informe (los "status cards con
+    // coste y duración" de oh-my-pi): cuándo empezó, cuánto llevó, cuántas
+    // herramientas gastó.
+    property double startedAt: 0
+    property int ms: 0
+    property int toolCalls: 0
+
     signal finished(string report)
+
+    // El encargo concreto de cada papel: qué priorizar y cómo cerrar.
+    readonly property var _roles: ({
+        research: "Eres un subagente de INVESTIGACIÓN. Rastrea, lee y reúne los "
+                + "hechos que pidió el encargo. Cierra con los hallazgos y sus "
+                + "fuentes (archivo:línea, comando, URL).",
+        review: "Eres un subagente REVISOR de código. Busca defectos concretos "
+              + "—correctitud, seguridad, rendimiento, casos límite— antes que "
+              + "estilo. Cita cada problema con archivo:línea y propón el arreglo. "
+              + "Si no encuentras nada serio, dilo con claridad.",
+        debug: "Eres un subagente de DIAGNÓSTICO. Acota una avería: reúne "
+             + "síntomas (logs, estado de servicios, procesos, red, disco), "
+             + "forma una hipótesis y señala la causa más probable con la prueba "
+             + "que la sostiene. No propongas cambios destructivos: eso lo hará "
+             + "el agente principal con aprobación."
+    })
 
     // Su vocabulario es EL del harness, filtrado a lo que no cambia nada:
     // leer archivos, consultar el sistema y consultar servidores remotos (así
@@ -39,15 +71,21 @@ QtObject {
     readonly property var roToolDefs: AiService.readOnlyDefs
 
     function start() {
+        sub.startedAt = Date.now()
+        const papel = _roles[sub.role] || _roles.research
+        let system = papel
+            + " Estás dentro de un asistente de escritorio (Arch + Hyprland). "
+            + "MODO SOLO LECTURA: tus herramientas no modifican nada y no puedes "
+            + "crear ni editar archivos. Trabaja rápido: busca, lee y responde. "
+            + "Tienes un máximo de " + sub.maxRounds + " rondas de herramientas; "
+            + "no las malgastes. Cuando necesites mirar varios sitios, pídelo "
+            + "TODO en el mismo turno con varias llamadas en paralelo. Termina "
+            + "SIEMPRE con un informe claro y conciso en el idioma del usuario: "
+            + "es lo único que verá el agente que te delegó."
+        if (sub.expectedOutput !== "")
+            system += " El informe DEBE tener esta forma: " + sub.expectedOutput
         sub.msgs = [
-            { role: "system", content:
-                "Eres un subagente de investigación de un asistente de escritorio "
-                + "(Arch + Hyprland). MODO SOLO LECTURA: tus herramientas no "
-                + "modifican nada y no puedes crear ni editar archivos. Trabaja "
-                + "rápido: busca, lee y responde. Tienes un máximo de "
-                + sub.maxRounds + " rondas de herramientas; no las malgastes. "
-                + "Termina SIEMPRE con un informe claro y conciso en el idioma "
-                + "del usuario: es lo único que verá el agente que te delegó." },
+            { role: "system", content: system },
             { role: "user", content: sub.task }
         ]
         sub._round(true)
@@ -141,8 +179,19 @@ QtObject {
             // no pinta nada ahí.
             const report = TU.splitThink(String(m.content || "")).text.trim()
             sub.state = "done"
-            sub.finished(report !== "" ? report : "(el subagente no redactó informe)")
+            sub.finished(sub._withFooter(
+                report !== "" ? report : "(el subagente no redactó informe)"))
         }
+    }
+
+    // El pie del informe: qué papel, cuánto tardó y qué gastó. Es lo que hace
+    // al jefe (y al usuario en la tarjeta) medir el coste de la delegación.
+    function _withFooter(report) {
+        sub.ms = Date.now() - sub.startedAt
+        const seg = (sub.ms / 1000).toFixed(1)
+        return report + "\n\n— subagente «" + sub.label + "» ("
+             + sub.role + "): " + sub.toolCalls + " herramientas · "
+             + sub.rounds + " rondas · " + seg + " s"
     }
 
     // ── Ejecución en serie de las herramientas de la ronda ──────────────────
@@ -152,6 +201,7 @@ QtObject {
             return
         }
         const tc = sub._calls[sub._callIdx]
+        sub.toolCalls++
         // Los argumentos pasan por el mismo reparador que usa el harness: un
         // modelo local manda JSON roto a menudo, y aquí nadie mira para
         // corregir.
