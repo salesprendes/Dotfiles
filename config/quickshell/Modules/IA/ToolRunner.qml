@@ -84,6 +84,55 @@ Scope {
             runningIndex = -1
     }
 
+    // ── El vigilante ─────────────────────────────────────────────────────────
+    // Hasta que existió, NADA tenía reloj: exec() arrancaba el proceso y se
+    // esperaba a que saliera, y de los treinta y dos constructores de comando
+    // solo tres traían un `timeout` propio. Un find sobre un montaje de red
+    // caído o un ssh a una máquina que se traga los paquetes dejaba la tarjeta
+    // en "Ejecutando…" para siempre — y como solo corre una herramienta a la
+    // vez, eso no colgaba una llamada: colgaba el turno entero, sin nada que
+    // pudiera desatascarlo salvo cambiar de conversación.
+    //
+    // El plazo sale de ToolPolicy, por nombre: el riesgo no dice nada de lo que
+    // tarda algo (read_file y disk_query son las dos "lectura").
+    readonly property Timer _reloj: Timer {
+        interval: runner.runningIndex >= 0
+                  ? runner._plazoDe(runner.runningIndex) + runner.margenReloj
+                  : 60000
+        running: runner.runningIndex >= 0
+        onTriggered: runner._colgada(runner.runningIndex)
+    }
+    function _plazoDe(index) {
+        const m = messages.get(index)
+        return TP.deadlineMs(m ? String(m.toolName || "") : "")
+    }
+
+    // El corte de verdad, para lo que es un PROCESO, lo pone `timeout` dentro
+    // del propio comando (ver exec): así el que mata es coreutils, el proceso
+    // sale por su propio pie y no hay ninguna carrera entre el reloj y la
+    // salida tardía. Este temporizador es la red por debajo, y cubre lo que
+    // NO es un proceso —el servidor de lenguaje, un servidor MCP, el depurador,
+    // una celda de Python, un subagente—, que se resuelve por callback y donde
+    // no hay ningún `timeout` que valga. Por eso espera un poco más que el
+    // plazo: si hay un proceso detrás, quien debe cortarlo es él.
+    readonly property int margenReloj: 15000
+
+    function _colgada(index) {
+        const m = messages.get(index)
+        if (!m || m.toolStatus !== "pending")
+            return
+        const nombre = String(m.toolName || "")
+        const ms = _plazoDe(index)
+        // Un subagente abandonado seguiría gastando turnos del modelo contra un
+        // informe que ya no va a leer nadie.
+        if (nombre === "subagent")
+            svc.dropSubagents()
+        audit.record({ src: "reloj", tool: nombre, args: m.toolArgs,
+                       decision: "timeout",
+                       why: "no terminó en " + Math.round(ms / 1000) + " s" })
+        resolveTool(index, TP.deadlineText(nombre, ms))
+    }
+
     // ── El pestillo de la búsqueda web ───────────────────────────────────────
     // Cuando no hay NINGÚN buscador que funcione, el fallo no es de la consulta:
     // es de configuración, y va a fallar igual las diez veces siguientes. Sin
@@ -145,6 +194,26 @@ Scope {
     // la política (para forzar la tarjeta) y la propia tarjeta (para pintarlo).
     function dangerOf(name, argsJson) {
         const a = TU.repairJson(argsJson) || ({})
+        // Una URL no solo TRAE datos: los SACA. Lo que viaje dentro se lo lleva
+        // quien esté al otro lado, y descargar admite permiso permanente, así
+        // que sin esto una página inyectada podía pedirle al asistente que
+        // "verificara" abriendo un recolector con una credencial en la consulta,
+        // sin que apareciera ninguna tarjeta. Taparla en la respuesta no sirve:
+        // para entonces ya ha viajado.
+        if (name === "fetch_url" || name === "open_url")
+            return TU.urlLeakScan(a.url)
+        // Una escritura en el sitio correcto es una ejecución con retardo: un
+        // .bashrc, un .desktop de autostart o un hook de git no son archivos,
+        // son comandos que esperan. La ejecución directa nunca se auto-aprueba,
+        // así que este es el rodeo que quedaba.
+        // Se lee el argumento a pelo y no por _pathArgOf: ese solo conoce las
+        // herramientas que resuelven enlaces, y aquí hacen falta TODAS las que
+        // escriben (edit_lines, ast_edit, lsp_fix… todas llevan 'path').
+        if (TP.riskClass(name) === "write") {
+            const p = String(a.path || a.local_path || "")
+            if (p !== "")
+                return TU.pathDangerScan(p)
+        }
         // Los tres sitios por donde entra texto que acaba en un shell.
         const cmd = a.command !== undefined ? a.command
                   : (name === "job_input" ? a.text : "")
@@ -235,6 +304,14 @@ Scope {
     // 'cap' permite a una herramienta concreta un tope distinto del genérico
     // (use_skill: el texto de una habilidad vale más contexto que un ls).
     function resolveTool(index, result, cap) {
+        // IDEMPOTENTE. Una tarjeta se resuelve una vez y solo una. No es celo:
+        // desde que hay un vigilante que corta lo que se cuelga, hay dos caminos
+        // que pueden llegar aquí con el mismo índice —el reloj y la salida
+        // tardía del propio proceso—, y sin esta guarda el segundo volvería a
+        // llamar a advance() y adelantaría el lote una posición de más.
+        const previo = messages.get(index)
+        if (!previo || previo.role !== "tool" || previo.toolStatus !== "pending")
+            return
         _finCurso(index)
         // ¿Esto viene de fuera? Se decide ANTES de tocar el texto.
         let externo = (index === _fenceIndex)
@@ -926,8 +1003,23 @@ Scope {
     // Lanzar la herramienta aprobada. Un solo Process para todas (solo corre una
     // cada vez, por diseño), así que arrancarlo era el mismo trío de líneas
     // repetido veinte veces; aquí se dice una.
+    // De QUIÉN es el proceso que corre ahora mismo. Se apunta al lanzarlo y NO
+    // se lee `_toolIndex` al volver: si una salida llega tarde —porque la
+    // tarjeta ya se dio por colgada y el lote siguió—, `_toolIndex` ya apunta a
+    // otra tarjeta, y resolverla con esta salida sería ponerle a una llamada el
+    // resultado de otra. Con el índice capturado, lo peor que puede pasar es
+    // que la resolución no haga nada, que es justo lo que debe pasar.
+    property int _procIndex: -1
+
     function exec(cmd, env) {
-        proc.command = cmd
+        // El reloj va DENTRO del comando. Quien mata es coreutils, así que el
+        // proceso sale por su propio pie, `onExited` llega una sola vez y no hay
+        // ninguna carrera que arbitrar desde QML. `-k 5`: si a los N segundos no
+        // se ha ido con un TERM educado, cinco después se le manda un KILL.
+        const m = messages.get(_toolIndex)
+        const seg = Math.round(TP.deadlineMs(m ? String(m.toolName || "") : "") / 1000)
+        _procIndex = _toolIndex
+        proc.command = ["timeout", "-k", "5", String(seg)].concat(cmd)
         proc.environment = env || ({})
         proc.running = true
     }
@@ -936,13 +1028,49 @@ Scope {
         id: proc
         stdout: StdioCollector { id: outCol }
         stderr: StdioCollector { id: errCol }
-        onExited: (code) => {
+        onExited: (code, estado) => {
+            const idx = runner._procIndex
+            const m = messages.get(idx)
+            const nombre = m ? String(m.toolName || "") : ""
+            const plazo = TP.deadlineMs(nombre)
+            // Un comando cortado suele traer salida A MEDIAS, y esa media salida
+            // es peor que nada: el modelo la leería como el resultado completo.
+            // Así que aquí se descarta y se dice lo que pasó de verdad.
+            //
+            // Tres formas de volver de un corte, y hay que reconocer las tres:
+            //   124  `timeout` cortó y salió por su cuenta.
+            //   137  cortó, hubo que rematar con KILL, y él sobrevivió.
+            //   muerte por señal — el caso normal en realidad: `timeout` mata al
+            //     GRUPO de procesos (que es lo que queremos, para que no queden
+            //     hijos sueltos), y en ese grupo está él mismo. Comprobado: sale
+            //     con exitStatus de caída y sin código.
+            // El último es ambiguo —un programa que revienta llega igual—, así
+            // que se desempata con el reloj: si murió al cumplirse el plazo, fue
+            // el plazo; si murió antes, reventó, y eso se dice como lo que es.
+            const señal = estado !== 0
+            const tarde = (Date.now() - runner.runningSince) >= plazo - 500
+            if (code === 124 || code === 137 || (señal && tarde)) {
+                audit.record({ src: "reloj", tool: nombre,
+                    args: m ? m.toolArgs : "", decision: "timeout",
+                    why: "cortado al cumplirse el plazo de "
+                         + Math.round(plazo / 1000) + " s" })
+                runner.resolveTool(idx, TP.deadlineText(nombre, plazo))
+                return
+            }
+            if (señal) {
+                runner.resolveTool(idx, "La herramienta " + nombre + " murió por "
+                    + "una señal antes de terminar (no fue el plazo: llevaba "
+                    + Math.round((Date.now() - runner.runningSince) / 1000)
+                    + " s). Lo que hubiera escrito hasta ahí está a medias y no "
+                    + "se usa.")
+                return
+            }
             let out = (outCol.text || "")
             if ((errCol.text || "").trim() !== "")
                 out += (out !== "" ? "\n" : "") + "[stderr] " + errCol.text
             if (out.trim() === "")
                 out = "(sin salida; código " + code + ")"
-            runner.resolveTool(runner._toolIndex, out)
+            runner.resolveTool(idx, out)
         }
     }
 

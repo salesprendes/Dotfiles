@@ -118,6 +118,77 @@ function neverAuto(name) {
     return riskClass(name) === "critical"
 }
 
+// ── El plazo de cada herramienta ─────────────────────────────────────────────
+// Cuánto se espera a que UNA llamada termine antes de darla por colgada.
+//
+// Por qué hace falta. Hasta ahora no había ningún reloj: el ejecutor arrancaba
+// el proceso y esperaba a que saliera, y de los treinta y dos constructores de
+// comando solo TRES traían su propio `timeout`. Un `find` sobre un montaje de
+// red caído, un `du` en un árbol enorme, un SSH a una máquina que se traga los
+// paquetes: la tarjeta se quedaba en "Ejecutando…" para siempre. Y como solo
+// corre una herramienta a la vez, eso no colgaba una llamada — colgaba el turno.
+//
+// El plazo va por NOMBRE y no por clase de riesgo, porque el riesgo no dice
+// nada de lo que tarda algo: `read_file` y `disk_query` son las dos "lectura", y
+// una contesta en un milisegundo y la otra puede recorrerte el disco. La clase
+// solo sirve de red para lo que no esté en la lista (una herramienta MCP nueva,
+// por ejemplo).
+//
+// Los números son generosos a propósito. Esto no es un ajuste de rendimiento:
+// es el interruptor que impide que algo se quede colgado para siempre, y matar
+// un trabajo legítimo por apretar el reloj sería cambiar un fallo raro por otro
+// peor y más frecuente.
+const PLAZO_S = ({
+    // Red y máquinas ajenas.
+    web_search: 50, fetch_url: 30, open_url: 10,
+    ssh_exec: 90, server_status: 60, server_logs: 60, hosting_query: 90,
+    sftp_ls: 60, sftp_get: 300, sftp_put: 300,
+    // Las que pueden recorrer medio disco.
+    glob_files: 45, grep_files: 45, ast_search: 45, ast_edit: 60,
+    list_dir: 30, read_files: 45, disk_query: 60, package_query: 90,
+    journal_query: 45, process_query: 30, network_query: 45,
+    // Las que hablan con un proceso de larga vida que ya está levantado.
+    lsp: 45, lsp_fix: 45, lsp_raw: 45, lsp_rename: 60,
+    debug_start: 60, debug_eval: 60, debug_ctl: 60, debug_view: 30,
+    // Una celda de Python puede ser un cálculo de verdad. Tres minutos es lo que
+    // separa "esto tarda" de "esto no va a terminar nunca".
+    python_exec: 180,
+    // Los trabajos en segundo plano se lanzan y se sueltan: lo que se espera
+    // aquí es el arranque, no el trabajo.
+    job_start: 30, job_ctl: 30, job_view: 30, job_list: 20, job_input: 20,
+    // Un subagente trae SU propio reloj (600 s como mucho). Esto es la red por
+    // debajo de esa red: solo salta si aquel no ha llegado a sonar.
+    subagent: 660,
+    // El comando del usuario ya va envuelto en `timeout 20` dentro del shell.
+    run_command: 40
+})
+const PLAZO_CLASE = ({ read: 30, external: 60, write: 45, exec: 60, critical: 60 })
+function deadlineMs(name) {
+    const s = PLAZO_S[name]
+    if (s !== undefined)
+        return s * 1000
+    // Un servidor MCP es de otro: puede tardar lo que quiera, y no hay forma de
+    // saber cuánto es razonable. Un minuto es suficiente para lo que contesta y
+    // corto para lo que no va a contestar.
+    if (String(name).startsWith("mcp__"))
+        return 60000
+    const c = PLAZO_CLASE[riskClass(name)]
+    return (c === undefined ? 30 : c) * 1000
+}
+
+// El texto que ve el MODELO cuando se le corta una llamada. Importa que diga
+// tres cosas: que fue el reloj y no la herramienta, cuánto esperó, y qué hacer
+// distinto. Sin lo tercero, un modelo pequeño vuelve a llamar exactamente igual.
+function deadlineText(name, ms) {
+    const seg = Math.round(ms / 1000)
+    return "La herramienta " + name + " no terminó en " + seg + " segundos y se "
+         + "ha cortado. NO es un error de tus argumentos ni de la herramienta: "
+         + "es que estaba tardando demasiado.\n"
+         + "Si la vuelves a usar, ACOTA el trabajo — una carpeta más concreta, "
+         + "menos resultados, un patrón más estrecho, un archivo en vez de un "
+         + "árbol entero. Repetir la misma llamada dará el mismo corte."
+}
+
 // El modo efectivo, tolerante con un ajuste corrompido o de una versión vieja.
 function mode(setting) {
     return MODOS.indexOf(setting) !== -1 ? setting : "normal"
