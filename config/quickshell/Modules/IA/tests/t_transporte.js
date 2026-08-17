@@ -6,7 +6,7 @@ const fs = require("fs")
 const { execFileSync, spawn, spawnSync } = require("child_process")
 
 const DIR = __dirname
-const IA = "/home/salesprendes/.config/quickshell/Modules/IA/"
+const IA = require("path").resolve(__dirname, "..") + "/"
 const PL = {}
 new Function("exports", fs.readFileSync(IA + "core/Payload.js", "utf8")
     .replace(/^\.pragma library$/m, "") + `
@@ -142,7 +142,7 @@ comprueba("y la sonda manda la clave",
 // Se mira el código fuente, no el comportamiento: un llamante nuevo que se
 // olvide del cuerpo no falla en ninguna prueba de las otras — simplemente no
 // envía nada. Aquí sí falla.
-const D = "/home/salesprendes/.config/quickshell/Modules/IA/";
+const D = require("path").resolve(__dirname, "..") + "/";
 for (const f of ["core/ChatClient.qml", "core/Compactor.qml",
                  "agents/SubAgent.qml", "agents/AgentSupervisor.qml",
                  "core/ConnectionProbe.qml"]) {

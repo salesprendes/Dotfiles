@@ -6,6 +6,7 @@ import qs.Modules.IA.core
 import "../TextUtils.js" as TU
 import "../tools/ToolPolicy.js" as TP
 import "../core/Schema.js" as SC
+import "../security/Gate.js" as GT
 
 // UN SUBAGENTE. No es "otro chat": es un trabajador con encargo, paredes,
 // presupuesto y un contrato de entrega.
@@ -497,40 +498,54 @@ QtObject {
             sub._memoKey = mk
         }
 
-        // Lo que va a traer texto de fuera se apunta antes de lanzarlo: el
-        // subagente lee la web igual que su jefe, así que le entra con el mismo
-        // marco de "esto son DATOS, no instrucciones". Un subagente es además el
-        // blanco más goloso para una inyección: trabaja solo y sin tarjetas.
-        sub._fenceSrc = name === "fetch_url" ? String(args.url || "una página web")
-                      : name === "web_search" ? "una búsqueda web" : ""
+        // EL PERMISO. La misma puerta que usan el agente principal y la celda
+        // de Python: ella decide el plazo, si lo que vuelva lo habrá escrito un
+        // desconocido y si esta llamada puede tocar la red de casa (un
+        // subagente NUNCA puede: trabaja solo y sin tarjetas, así que nadie ha
+        // leído a dónde va). Un subagente es además el blanco más goloso para
+        // una inyección, y por eso lee la web con el mismo marco que su jefe.
+        const permiso = GT.evaluar({ quien: "subagente", herramienta: name,
+                                     args: args })
 
         // El constructor es el MISMO que usa el agente principal, con la
         // concesión y el taller por delante: una sola jaula que auditar.
         const r = AiService.subagentCommand(name, args, sub.grant, sub.ws)
-        // Si no llega a salir a la red, la marca se retira: enmarcar como
-        // "escrito por un desconocido" un rechazo NUESTRO sería mentirle.
+        // Un rechazo NUESTRO no lleva marco: enmarcarlo como "escrito por un
+        // desconocido" sería mentirle sobre quién le está hablando. Por eso el
+        // permiso se suelta antes de contestar.
         if (r === null) {
-            sub._fenceSrc = ""
+            sub._permiso = null
             sub._memoKey = ""
             sub._pushResult(tc.id, "Herramienta fuera de tus permisos: " + name
                 + ". Tienes: " + sub.toolDefs.map(d => d["function"].name).join(", "))
             return
         }
         if (r.error !== undefined) {
-            sub._fenceSrc = ""
+            sub._permiso = null
             sub._memoKey = ""
             sub._pushResult(tc.id, r.error)
             return
         }
-        // El mismo reloj que el agente principal, y por el mismo motivo — con
-        // uno peor de fondo: aquí no hay nadie mirando. Una herramienta colgada
+        // El reloj lo pone la puerta, igual que en el ejecutor — y con él llegan
+        // el tope de salida y el cerco de enlaces simbólicos, que antes aquí no
+        // estaban: este camino montaba su propio `timeout` a mano y se quedaba
+        // sin las otras dos. El motivo del reloj es el mismo que allí, con uno
+        // peor de fondo: aquí no hay nadie mirando. Una herramienta colgada
         // dejaba al subagente esperando para siempre, y su presupuesto de tiempo
         // no lo salvaba: ese solo se mira al empezar la ronda siguiente, y la
         // ronda siguiente no llegaba nunca.
-        const seg = Math.round(TP.deadlineMs(name) / 1000)
+        const listo = GT.envolver(permiso, r.cmd, r.env)
+        if (listo === null) {
+            sub._permiso = null
+            sub._memoKey = ""
+            sub._pushResult(tc.id, "El harness no ha podido autorizar '" + name
+                + "'. No se ha ejecutado nada.")
+            return
+        }
+        sub._permiso = permiso
         sub._toolDesde = Date.now()
-        toolP.command = ["timeout", "-k", "5", String(seg)].concat(r.cmd)
-        toolP.environment = r.env || ({})
+        toolP.command = listo.cmd
+        toolP.environment = listo.env
         toolP.running = true
     }
 
@@ -573,7 +588,9 @@ QtObject {
     }
 
     // De dónde viene el texto que está a punto de llegar, si viene de fuera.
-    property string _fenceSrc: ""
+    // El permiso de la herramienta que corre ahora mismo: lleva dentro si lo
+    // que vuelva lo habrá escrito un desconocido.
+    property var _permiso: null
 
     // ── Lo ya pedido, y lo ya visto ──────────────────────────────────────────
     // Dos cuentas distintas y las dos hacen falta. La memoria evita REPETIR la
@@ -651,9 +668,9 @@ QtObject {
             const señal = estado !== 0
             const tarde = (Date.now() - sub._toolDesde) >= plazo - 500
             if (code === 124 || code === 137 || (señal && tarde)) {
-                // La marca de contenido externo se retira: lo que va a leer no
-                // lo ha escrito nadie de fuera, lo decimos nosotros.
-                sub._fenceSrc = ""
+                // El permiso se suelta: lo que va a leer no lo ha escrito nadie
+                // de fuera, lo decimos nosotros.
+                sub._permiso = null
                 sub._memoKey = ""
                 sub._trace({ t: "corte", n: sub.lastTool, ms: plazo })
                 sub._pushResult(sub._calls[sub._callIdx].id,
@@ -665,20 +682,18 @@ QtObject {
                 out += (out !== "" ? "\n" : "") + "[stderr] " + toolPErr.text
             if (out.trim() === "")
                 out = "(sin salida; código " + code + ")"
-            // Mismo trato que en el agente principal: la avería del buscador se
-            // explica entera (y no se disfraza de "no encontré nada"), los
-            // avisos del propio harness van sin marco, y lo que sí ha escrito un
-            // desconocido entra enmarcado.
-            const fuente = sub._fenceSrc
-            sub._fenceSrc = ""
-            if (fuente !== "") {
-                if (AiService.searchFailed(out))
-                    out = AiService.searchFailureText(out)
-                else if (AiService.fetchOwnMessage(out))
-                    out = AiService.stripFetchMark(out)
-                else
-                    out = AiService.fenceExternal(out, fuente)
+            // Mismo trato que en el agente principal, y ahora por el mismo
+            // código: la avería del buscador se explica entera (y no se
+            // disfraza de "no encontré nada"), y del marco se encarga la
+            // puerta, que ya sabe no enmarcar un aviso nuestro.
+            let permiso = sub._permiso
+            sub._permiso = null
+            if (permiso !== null && AiService.searchFailed(out)) {
+                out = AiService.searchFailureText(out)
+                permiso = null       // esto lo decimos NOSOTROS
             }
+            out = GT.marcar(permiso, out)
+            out = AiService.stripFetchMark(out)
             sub._pushResult(sub._calls[sub._callIdx].id, out)
         }
     }

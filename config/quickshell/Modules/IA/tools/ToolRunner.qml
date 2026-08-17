@@ -8,6 +8,8 @@ import "LocalTools.js" as LT
 import "RemoteTools.js" as RT
 import "../agents/Supervisor.js" as SV
 import "../integrations/WebSearch.js" as WS
+import "Dispatch.js" as DP
+import "../security/Gate.js" as GT
 
 // EL EJECUTOR: lo que pasa entre que el modelo propone una herramienta y el
 // resultado vuelve a su contexto. Aprobación, jaula, ejecución, resolución y
@@ -166,9 +168,28 @@ Scope {
     // así que una tanda de exploración legítima con algún fallo no se penaliza.
     readonly property int maxFetchSecos: 5
     property int fetchSecos: 0
-    // La tarjeta cuyo resultado viene de la web, y de dónde. Ver resolveTool.
-    property int _fenceIndex: -1
-    property string _fenceSrc: ""
+
+    // ── Los permisos ─────────────────────────────────────────────────────────
+    // El permiso con el que se aprobó cada tarjeta, por índice. Lo acuña la
+    // puerta (security/Gate.js) UNA vez por llamada y lleva dentro todo lo que
+    // hay que aplicarle: el plazo, si lo que vuelve lo escribió un desconocido,
+    // y si esta llamada concreta puede tocar la red de casa.
+    //
+    // Antes esto eran tres variables sueltas —_fenceIndex, _fenceSrc y una
+    // línea que levantaba QS_LAN— que cada rama del despachador tenía que
+    // acordarse de poner. El permiso las sustituye a las tres, y el ejecutor no
+    // acepta nada que no venga con uno.
+    property var _permisos: ({})
+    function _permisoDe(index) { return runner._permisos[index] || null }
+    function _olvidaPermiso(index) {
+        if (runner._permisos[index] === undefined)
+            return
+        const m = ({})
+        for (const k in runner._permisos)
+            if (Number(k) !== Number(index))
+                m[k] = runner._permisos[k]
+        runner._permisos = m
+    }
 
     Connections {
         target: Settings
@@ -321,10 +342,16 @@ Scope {
         if (!previo || previo.role !== "tool" || previo.toolStatus !== "pending")
             return
         _finCurso(index)
-        // ¿Esto viene de fuera? Se decide ANTES de tocar el texto.
-        let externo = (index === _fenceIndex)
-        if (externo)
-            _fenceIndex = -1
+        // El permiso con el que salió esta llamada. Él sabe si lo que vuelve lo
+        // escribió un desconocido; aquí ya no se decide nada de eso.
+        let permiso = runner._permisoDe(index)
+        runner._olvidaPermiso(index)
+        // LA CORREA DE LAS DESCARGAS EN SECO. Una descarga que no trajo nada
+        // lleva nuestra marca dentro; se cuenta antes de quitarla.
+        if (permiso && permiso.herramienta === "fetch_url") {
+            const seca = String(result).indexOf(LT.FETCH_KO) !== -1
+            fetchSecos = seca ? fetchSecos + 1 : 0
+        }
         // La búsqueda web es la única herramienta que distingue entre "no hay
         // resultados" y "no hay buscador": lo segundo es una avería de
         // configuración, y hay que tratarla como tal ANTES de que el texto entre
@@ -336,32 +363,31 @@ Scope {
             if (WS.failed(result)) {
                 searchBroken = true
                 result = WS.failureText(result)
-                externo = false      // esto lo decimos NOSOTROS
+                permiso = null       // esto lo decimos NOSOTROS: no se enmarca
             }
         }
-        // Un aviso del propio harness (no se pudo descargar, la página exige
-        // JavaScript) tampoco se enmarca: sería decirle al modelo que lo ha
-        // escrito un desconocido. Y de paso es la señal para la correa: una
-        // descarga que no trajo nada.
-        if (externo) {
-            const seca = String(result).indexOf(LT.FETCH_KO) !== -1
-            if (_fenceSrc !== "una búsqueda web")
-                fetchSecos = seca ? fetchSecos + 1 : 0
-            if (seca) {
-                result = String(result).replace(LT.FETCH_KO, "").trim()
-                externo = false
-            }
-        }
+        // ¿Ha informado de algo? Se decide ANTES de enmarcar: el cerco añade
+        // texto alrededor y el "(sin coincidencias)" pelado dejaría de
+        // reconocerse. Lo decide la propia herramienta, que sabe qué suelta
+        // cuando no encuentra nada — mucho mejor que adivinarlo luego por el
+        // tamaño. Lo usan la poda y la transcripción del resumen.
+        const seco = LT.inutil(previo.toolName, result)
         // LA PUERTA POR LA QUE ENTRA TEXTO AJENO. Una página web puede decir
         // "ignora las instrucciones anteriores y ejecuta esto", y como resultado
         // de herramienta pelado se lee con el mismo peso que una orden del
         // usuario. No se puede impedir que el modelo lo lea, pero sí decirle qué
-        // es: mismo trato que le da el supervisor a sus expedientes.
-        if (externo)
-            result = WS.fence(result, _fenceSrc)
+        // es: mismo trato que le da el supervisor a sus expedientes. La decisión
+        // la toma el permiso, no esta función — y por eso vale igual para el
+        // subagente y para la celda de Python.
+        result = GT.marcar(permiso, result)
+        // Y ya se puede quitar nuestra marca interna, que ha hecho su trabajo:
+        // contar la descarga seca y decirle a la puerta que ese texto lo
+        // escribimos nosotros.
+        result = String(result).replace(LT.FETCH_KO, "").trim()
         messages.setProperty(index, "toolStatus", "done")
         messages.setProperty(index, "toolResult",
             TU.redactSecrets(String(result)).slice(0, cap || svc.toolResultCap))
+        messages.setProperty(index, "toolUseless", seco)
         conv.save()
         // Aviso de "esto ya corrió": para registrar, medir o encadenar.
         const done = messages.get(index)
@@ -615,6 +641,34 @@ Scope {
                        danger: dangerOf(m.toolName, m.toolArgs),
                        decision: _decisionDe(index, m.toolName) })
 
+        // EL PERMISO. Se acuña UNA vez, aquí, que es el único punto por el que
+        // pasan todas las llamadas del agente principal. Lleva dentro el plazo,
+        // si lo que vuelva lo habrá escrito un desconocido y si esta llamada
+        // concreta puede tocar la red de casa. De aquí en adelante nadie vuelve
+        // a decidir nada de eso: solo se aplica.
+        const permiso = GT.evaluar({
+            quien: "agente", herramienta: m.toolName, args: args,
+            // La tarjeta se enseñó y el usuario dijo que sí: entonces sabía a
+            // dónde iba. Las auto-aprobadas no cuentan como aprobación suya.
+            aprobadaPorUsuario: (_userApproved === index),
+            // ¿La dirección YA nombraba la red de casa? Si sí, el usuario la
+            // leyó en la tarjeta. Lo que no se permite nunca es aterrizar
+            // dentro por sorpresa: una URL pública que redirige, o un nombre
+            // que resuelve hacia dentro.
+            zonaLocal: m.toolName === "fetch_url"
+                       && TU.urlZone(args.url) !== ""
+        })
+        if (permiso === null) {
+            resolveTool(index, "No se pudo autorizar la llamada a '"
+                + m.toolName + "'.")
+            return
+        }
+        const conPermiso = ({})
+        for (const k in runner._permisos)
+            conPermiso[k] = runner._permisos[k]
+        conPermiso[index] = permiso
+        runner._permisos = conPermiso
+
         // A partir de aquí la tarjeta está EN CURSO. Se marca aquí y no en
         // exec() para que valga también para las asíncronas (lsp, depurador,
         // celda de Python, subagente, MCP), que son justo las que más tardan.
@@ -657,144 +711,70 @@ Scope {
         const built = svc.readOnlyCommand(m.toolName, args)
         if (built !== null) {
             if (built.error !== undefined) { resolveTool(index, built.error); return }
-            // Lo que va a traer texto escrito por un desconocido se apunta aquí,
-            // y solo cuando de verdad va a salir a la red: al volver, su
-            // resultado entra al contexto enmarcado (ver resolveTool). Marcarlo
-            // antes de construir el comando enmarcaba también nuestros propios
-            // rechazos ("solo URLs http(s)"), que es justo lo contrario de lo
-            // que hace falta.
-            if (m.toolName === "fetch_url") {
-                _fenceIndex = index
-                _fenceSrc = String(args.url || "una página web")
-                // Si la dirección YA decía "192.168…" o "localhost", esta
-                // llamada ha pasado por una tarjeta con el motivo escrito y el
-                // usuario la aprobó: entonces sí puede aterrizar ahí. Lo que no
-                // se permite nunca es llegar a la red de casa por sorpresa,
-                // desde una URL pública que redirige o un nombre que resuelve
-                // hacia dentro.
-                built.env.QS_LAN = TU.urlZone(args.url) !== "" ? "1" : ""
-            }
-            exec(built.cmd, built.env)
+            // Ni marco ni QS_LAN aquí: los lleva el permiso, y los aplica el
+            // ejecutor. Esta rama solo construye el comando.
+            exec(permiso, built.cmd, built.env)
             return
         }
 
+        // ── 1. Las asíncronas: una TABLA, no un switch ──────────────────────
+        // Dieciséis casos que solo se diferenciaban en qué gestor y qué método,
+        // resueltos en seis líneas. La tarjeta se resuelve cuando el gestor
+        // conteste, con el mismo tope y la misma redacción de secretos que todo
+        // lo demás.
+        const asinc = DP.ASINCRONAS[m.toolName]
+        if (asinc) {
+            const gestor = asinc.gestor === "lsp" ? lsp
+                         : asinc.gestor === "jobs" ? jobs
+                         : asinc.gestor === "dbg" ? dbg : repl
+            gestor[asinc.metodo](DP.argsAsincrona(m.toolName, args),
+                                 (r) => runner.resolveTool(index, r))
+            return
+        }
+
+        // ── 2. Las que construyen un comando ────────────────────────────────
+        // Doce casos con la misma forma: construir {cmd, env} y entregárselo al
+        // ejecutor, que es quien pone el reloj y el cerco. Viven en Dispatch.js
+        // porque son JavaScript puro, así que se prueban sin levantar nada.
+        //
+        // La copia previa se apunta ANTES de construir: su ruta es parte del
+        // comando, y es lo que luego permite Deshacer desde la tarjeta.
+        const rutaEscr = DP.rutaDeEscritura(m.toolName, args)
+        let bak = ""
+        if (rutaEscr !== "" && DP.dejaCopia(m.toolName, args)) {
+            const pv = svc._safePath(rutaEscr)
+            if (pv !== "")
+                bak = backupFor(index, pv)
+        }
+        const orden = DP.construir(m.toolName, args, ({
+            home: svc.toolCtx.home, toolCtx: svc.toolCtx,
+            bak: bak, undoDir: undoDir, iaDir: svc.iaDir,
+            searchBroken: searchBroken,
+            searchCtx: m.toolName === "web_search"
+                       ? svc.searchCtx(args.instance) : null
+        }))
+        if (orden !== null) {
+            // La búsqueda web es la única que distingue "no hay resultados" de
+            // "no hay buscador": se apunta la tarjeta para mirarlo al volver.
+            // Si el pestillo YA estaba echado no hay nada que mirar.
+            if (m.toolName === "web_search" && orden.yaSabido !== true)
+                _searchIndex = index
+            if (orden.error !== undefined) {
+                resolveTool(index, orden.error)
+                return
+            }
+            exec(permiso, orden.cmd, orden.env)
+            return
+        }
+
+        // ── 3. Las que tocan estado del harness ─────────────────────────────
+        // Lo que no construye ningún comando: el plan visible, la memoria, el
+        // catálogo de habilidades, los recursos MCP. Se quedan en QML porque de
+        // verdad son QML.
         switch (m.toolName) {
-        // ── Herramientas de desarrollo (LSP, AST, depurador, celda) ──────────
-        // Asíncronas contra sus gestores: la tarjeta se resuelve cuando el
-        // servidor conteste, con el mismo tope y la misma redacción de
-        // secretos que todo lo demás.
-        case "lsp":
-            lsp.request(args, (r) => runner.resolveTool(index, r))
-            return
-        case "lsp_rename":
-            lsp.request(Object.assign({}, args, { op: "rename" }),
-                        (r) => runner.resolveTool(index, r))
-            return
-        case "lsp_fix":
-            lsp.request(Object.assign({}, args, { op: "fix" }),
-                        (r) => runner.resolveTool(index, r))
-            return
-        case "lsp_raw":
-            lsp.request(Object.assign({}, args, { op: "raw" }),
-                        (r) => runner.resolveTool(index, r))
-            return
-        // ── Trabajos en segundo plano ────────────────────────────────────────
-        case "job_start":
-            jobs.start(args, (r) => runner.resolveTool(index, r))
-            return
         case "job_list":
             resolveTool(index, jobs.list())
             return
-        case "job_view":
-            jobs.view(args, (r) => runner.resolveTool(index, r))
-            return
-        case "job_input":
-            jobs.input(args, (r) => runner.resolveTool(index, r))
-            return
-        case "job_ctl":
-            jobs.ctl(args, (r) => runner.resolveTool(index, r))
-            return
-        case "ast_edit": {
-            const pv = svc._safePath(args.path)
-            if (pv === "") { resolveTool(index, "Ruta fuera de la carpeta personal."); return }
-            const bakA = backupFor(index, pv)
-            const built2 = LT.astEdit(args, svc.toolCtx, bakA, undoDir)
-            if (built2.error !== undefined) { resolveTool(index, built2.error); return }
-            exec(built2.cmd, built2.env)
-            return
-        }
-        case "python_exec":
-            repl.exec(args, (r) => runner.resolveTool(index, r))
-            return
-        case "debug_start":
-            dbg.start(args, (r) => runner.resolveTool(index, r))
-            return
-        case "debug_ctl":
-            dbg.ctl(args, (r) => runner.resolveTool(index, r))
-            return
-        case "debug_view":
-            dbg.view(args, (r) => runner.resolveTool(index, r))
-            return
-        case "debug_eval":
-            dbg.evaluate(args, (r) => runner.resolveTool(index, r))
-            return
-        case "ssh_exec": {
-            const cmd = String(args.command || "").trim()
-            if (cmd === "") { resolveTool(index, "Comando vacío."); return }
-            const c = RT.connect(args, "ssh", "-p", svc.toolCtx)
-            if (c.error !== undefined) { resolveTool(index, c.error); return }
-            // El comando remoto viaja como UN argumento a ssh; el shell remoto lo
-            // ejecuta tal cual. Es crudo a propósito (por eso lleva tarjeta).
-            exec(c.t.argv.concat(["--", cmd + " 2>&1 | tail -c 16000"]), c.t.env)
-            return
-        }
-        // Subir y bajar son el mismo scp con el origen y el destino cambiados de
-        // sitio: se resuelven juntos para que no puedan divergir.
-        case "sftp_get":
-        case "sftp_put": {
-            const down = m.toolName === "sftp_get"
-            const local = svc._safePath(args.local_path)
-            if (local === "") {
-                resolveTool(index, (down ? "El destino" : "El origen")
-                    + " local debe estar dentro de tu carpeta personal.")
-                return
-            }
-            const rp = String(args.remote_path || "").trim()
-            if (rp === "") { resolveTool(index, "Falta la ruta remota."); return }
-            const c = RT.connect(args, "scp", "-P", svc.toolCtx)
-            if (c.error !== undefined) { resolveTool(index, c.error); return }
-            // scp recibe las rutas como ARGUMENTOS (no dentro de un shell), así
-            // que un nombre raro no puede convertirse en otra orden. El último
-            // elemento del argv es el user@host; el resto son las opciones.
-            const dest = c.t.argv[c.t.argv.length - 1]
-            const base = c.t.argv.slice(0, c.t.argv.length - 1)
-            exec(base.concat(down ? [dest + ":" + rp, local]
-                                  : [local, dest + ":" + rp]), c.t.env)
-            return
-        }
-        case "service_ctl": {
-            const actions = ["start", "stop", "restart", "reload", "enable", "disable"]
-            const action = String(args.action || "")
-            const unit = String(args.unit || "").trim()
-            if (actions.indexOf(action) === -1) { resolveTool(index, "Acción inválida."); return }
-            if (unit === "" || unit[0] === "-") { resolveTool(index, "Unidad inválida."); return }
-            // Sin sh: systemctl recibe la unidad como argumento literal. Las de
-            // sistema pasarán por polkit (el agente propio del shell).
-            exec(args.user === true
-                    ? ["systemctl", "--user", action, "--", unit]
-                    : ["systemctl", action, "--", unit], ({}))
-            return
-        }
-        case "kill_process": {
-            const pid = parseInt(args.pid)
-            if (!isFinite(pid) || pid <= 1) { resolveTool(index, "PID inválido."); return }
-            const sigs = ["TERM", "KILL", "HUP", "INT"]
-            const sig = sigs.indexOf(String(args.signal || "")) !== -1 ? args.signal : "TERM"
-            exec(["sh", "-c",
-                'ps -p "$QS_PID" -o comm= 2>/dev/null; kill -s ' + sig + ' -- "$QS_PID" && echo "Señal ' + sig + ' enviada." || echo "No se pudo (PID inexistente o de otro usuario)."'],
-                ({ QS_PID: String(pid) }))
-            return
-        }
         case "todo_write": {
             // El plan visible (el TodoWrite de Claude Code): sustituye la lista
             // entera; el panel la pinta encima de la entrada.
@@ -807,33 +787,6 @@ Scope {
             const done = svc.todos.filter(t => t.status === "completed").length
             resolveTool(index, "Plan actualizado: " + done + "/" + svc.todos.length
                                + " pasos completados.")
-            return
-        }
-        case "web_search": {
-            const q = String(args.query || "").trim()
-            if (q === "") { resolveTool(index, "Consulta vacía."); return }
-            // Ya se sabe de este encargo que no hay buscador: se contesta sin
-            // tocar la red. Antes cada intento costaba una conexión y, sobre
-            // todo, una ronda entera de razonamiento del modelo.
-            if (searchBroken) {
-                resolveTool(index, WS.failureText("", true))
-                return
-            }
-            // La cascada (tu SearXNG, el que nombre el mensaje, los locales, la
-            // API con clave) la arma WebSearch.js; aquí solo se le pasa la
-            // configuración y se recuerda qué tarjeta hay que vigilar al volver.
-            const built = WS.command(q, svc.searchCtx(args.instance),
-                                     TU.normalizeSearchBase, args)
-            if (built.error !== undefined) {
-                _searchIndex = index
-                resolveTool(index, built.error)
-                return
-            }
-            _searchIndex = index
-            // Los títulos y fragmentos también los escribe un desconocido.
-            _fenceIndex = index
-            _fenceSrc = "una búsqueda web"
-            exec(built.cmd, built.env)
             return
         }
         case "notify_user": {
@@ -880,41 +833,6 @@ Scope {
         // recuperación de anclas) y edit_lines es la puerta estrecha de
         // siempre, traducida a un parche de un solo hunk: así el anclaje vive
         // implementado en UN sitio y no puede divergir entre las dos.
-        case "edit_patch": {
-            const pv = svc._safePath(args.path)
-            if (pv === "") { resolveTool(index, "Ruta fuera de la carpeta personal."); return }
-            const bakP = args.dry_run === true ? "" : backupFor(index, pv)
-            const built = LT.hashPatch(args, svc.toolCtx, bakP, undoDir, svc.iaDir)
-            if (built.error !== undefined) { resolveTool(index, built.error); return }
-            exec(built.cmd, built.env)
-            return
-        }
-        case "edit_lines": {
-            const st = parseInt(args.start), en = parseInt(args.end)
-            if (!(st >= 1) || !(en >= st)) { resolveTool(index, "Rango inválido: start debe ser ≥1 y end ≥ start."); return }
-            const pl = svc._safePath(args.path)
-            if (pl === "") { resolveTool(index, "Ruta fuera de la carpeta personal."); return }
-            const hunk = {
-                op: String(args.text || "") === "" ? "delete" : "replace",
-                at: String(st) + (args.start_hash ? "#" + args.start_hash : ""),
-                to: String(en) + (args.end_hash ? "#" + args.end_hash : ""),
-                text: String(args.text || "")
-            }
-            const bakL = backupFor(index, pl)
-            const b2 = LT.hashPatch({ path: args.path, hunks: [hunk] },
-                                    svc.toolCtx, bakL, undoDir, svc.iaDir)
-            if (b2.error !== undefined) { resolveTool(index, b2.error); return }
-            exec(b2.cmd, b2.env)
-            return
-        }
-        case "edit_file": {
-            const p = svc._safePath(args.path)
-            if (p === "") { resolveTool(index, "Ruta fuera de la carpeta personal."); return }
-            const bE = LT.writes("edit_file", p, args, backupFor(index, p), undoDir,
-                                  svc.toolCtx)
-            exec(bE.cmd, bE.env)
-            return
-        }
         case "open_url": {
             const url = String(args.url || "").trim()
             // xdg-open no abre URLs: abre LO QUE SEA con el programa que le
@@ -931,14 +849,6 @@ Scope {
             }
             Quickshell.execDetached(["xdg-open", url])
             resolveTool(index, "URL abierta en el navegador.")
-            return
-        }
-        case "write_file": {
-            const p = svc._safePath(args.path)
-            if (p === "") { resolveTool(index, "Ruta fuera de la carpeta personal."); return }
-            const bW = LT.writes("write_file", p, args, backupFor(index, p), undoDir,
-                                  svc.toolCtx)
-            exec(bW.cmd, bW.env)
             return
         }
         case "use_skill": {
@@ -1000,37 +910,6 @@ Scope {
             resolveTool(index, "Nota guardada en memoria.")
             return
         }
-        case "run_command": {
-            const cmd = args.command || ""
-            if (cmd === "") { resolveTool(index, "Comando vacío."); return }
-            // Un solo reloj, y es el del envoltorio. Aquí había un `timeout 20`
-            // por dentro además del plazo de la política (40 s): ganaba el de
-            // dentro, así que la política decía una cosa y pasaba otra. Un plazo
-            // que no es el que se anuncia no es un plazo, es una sorpresa.
-            //
-            // La carpeta de trabajo pasa por la misma jaula que las rutas de las
-            // demás herramientas. Sin esto el modelo escribía `cd /x && …` en
-            // cada comando, que funciona pero mete un `cd` sin comprobar en
-            // todas partes.
-            // El comando viaja por ENTORNO, como todo lo demás del harness. En
-            // el argv lo leía cualquier proceso de la máquina en
-            // /proc/<pid>/cmdline mientras corría, y un comando puede llevar
-            // dentro una contraseña que el usuario acaba de dictar.
-            const env = ({ QS_CMD: String(cmd) })
-            if (String(args.cwd || "") !== "") {
-                const d = svc._safePath(args.cwd)
-                if (d === "") {
-                    resolveTool(index, "La carpeta de trabajo debe estar dentro "
-                        + "de la carpeta personal.")
-                    return
-                }
-                env.QS_CWD = d
-                env.QS_PARED = svc.toolCtx.home
-                env.QS_P = d          // para que el cerco de enlaces la mire
-            }
-            exec(["sh", "-c", LT.SH_MANDATO], env)
-            return
-        }
         default: {
             // Nombre que no existe. Antes caía aquí run_command, así que un
             // modelo que alucinaba un nombre con un argumento 'command' podía
@@ -1071,12 +950,31 @@ Scope {
     // que la resolución no haga nada, que es justo lo que debe pasar.
     property int _procIndex: -1
 
-    function exec(cmd, env) {
-        const m = messages.get(_toolIndex)
-        const seg = Math.round(TP.deadlineMs(m ? String(m.toolName || "") : "") / 1000)
+    // EL EJECUTOR NO RECIBE UN COMANDO: RECIBE UN PERMISO CON EL COMANDO.
+    //
+    // Antes esta función montaba el reloj por su cuenta y confiaba en que cada
+    // una de las doce ramas del despachador se hubiera acordado de apuntar el
+    // marco del texto ajeno y de decidir sobre la red de casa. Ahora todo eso
+    // viene dentro del permiso, lo aplica la puerta, y una rama que se olvide
+    // de pedirlo NO se salta las reglas en silencio: no ejecuta.
+    //
+    // Es la garantía honesta que se puede dar en QML, que no tiene visibilidad
+    // privada: no se puede impedir que alguien llame a proc.running, pero sí
+    // que un camino nuevo se cuele por aquí sin pasar por la puerta — y una
+    // prueba sobre el fuente vigila que nadie abra otro Process (t_puerta.js).
+    function exec(permiso, cmd, env) {
+        const listo = GT.envolver(permiso, cmd, env)
+        if (listo === null) {
+            // Fallar RUIDOSAMENTE. Ejecutar de todas formas sería exactamente
+            // el descuido que esto viene a cerrar.
+            resolveTool(_toolIndex, "El harness no ha podido autorizar esta "
+                + "ejecución (falta el permiso de la puerta). No se ha "
+                + "ejecutado nada.")
+            return
+        }
         _procIndex = _toolIndex
-        proc.command = LT.acotado(seg, cmd)
-        proc.environment = env || ({})
+        proc.command = listo.cmd
+        proc.environment = listo.env
         proc.running = true
     }
 
@@ -1372,6 +1270,14 @@ Scope {
         // pone a dar vueltas.
         if (sup)
             sup.observe()
+        // FRONTERA SEGURA. Aquí el lote está resuelto y todavía no se ha
+        // hablado con el modelo: es el único punto del bucle de herramientas
+        // donde se puede compactar sin dejar el protocolo a medias. Sin esto,
+        // un turno de veinte rondas llenaba la ventana y desbordaba antes de
+        // llegar a la comprobación de fin de turno. Si compacta, ella misma
+        // retoma el turno al terminar.
+        if (svc.maybeCompactMidTurn())
+            return
         svc.start()
     }
 
@@ -1387,7 +1293,7 @@ Scope {
         _toolIndex = -1
         _resolveIndex = -1
         _searchIndex = -1
-        _fenceIndex = -1
+        _permisos = ({})
         runningIndex = -1
         _colaClics = []
         fetchSecos = 0
@@ -1403,5 +1309,9 @@ Scope {
     function forgetPaths() {
         pathReal = ({})
         supVerdict = ({})
+        // Los permisos se guardan por el mismo índice y valen lo mismo: uno
+        // heredado por otra tarjeta traería el plazo y el marco de una llamada
+        // que no es esta.
+        _permisos = ({})
     }
 }

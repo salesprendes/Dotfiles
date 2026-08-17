@@ -7,7 +7,7 @@
 // exactamente el código que corre en el panel, no una copia.
 const fs = require("fs")
 
-const IA = "/home/salesprendes/.config/quickshell/Modules/IA/"
+const IA = require("path").resolve(__dirname, "..") + "/"
 const SUB = fs.readFileSync(IA + "agents/SubAgent.qml", "utf8")
 const TR = fs.readFileSync(IA + "tools/ToolRunner.qml", "utf8")
 

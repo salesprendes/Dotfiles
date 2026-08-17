@@ -3,7 +3,7 @@
 const fs = require("fs")
 const { execFileSync, spawnSync } = require("child_process")
 
-const IA = "/home/salesprendes/.config/quickshell/Modules/IA/"
+const IA = require("path").resolve(__dirname, "..") + "/"
 const src = fs.readFileSync(IA + "tools/ToolPolicy.js", "utf8").replace(/^\.pragma library$/m, "")
 const TP = new Function(src + `
 return { deadlineMs, deadlineText, riskClass, PLAZO_S, PLAZO_CLASE }`)()

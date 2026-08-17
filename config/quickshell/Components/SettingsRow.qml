@@ -35,4 +35,29 @@ Item {
     visible: srow.shown && srow.matches
 
     Layout.fillWidth: true
+
+    // ── El resaltado, para TODAS las filas ───────────────────────────────────
+    // Estaba solo en la fila de interruptor. El resultado era una página donde
+    // la mitad de las filas se encienden al pasar por encima y la otra mitad no
+    // reacciona: en el panel de IA, donde casi todo son selectores segmentados,
+    // deslizadores y desplegables, prácticamente nada respondía. Y no es un
+    // adorno — la banda es lo que dice DÓNDE ESTÁS en una lista larga de
+    // ajustes; sin ella el puntero se pierde entre filas del mismo alto.
+    //
+    // Va con HoverHandler y no con MouseArea a propósito: un HoverHandler solo
+    // escucha, no captura. Una MouseArea a lo ancho de la fila se tragaría los
+    // clics del propio control —arrastrar un deslizador, elegir un segmento—,
+    // que es exactamente por lo que estas filas no lo llevaban.
+    //
+    // La fila de interruptor mantiene el suyo (con onda de pulsación, porque
+    // ahí la fila ENTERA es pulsable) y apaga este.
+    property bool rowHighlight: srow.isSettingsRow
+
+    RowHighlight {
+        visible: srow.rowHighlight
+        hovered: srow.rowHighlight && hh.hovered
+        bleedX: Theme.space8
+        bleedY: Theme.space4
+    }
+    HoverHandler { id: hh }
 }

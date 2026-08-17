@@ -7,7 +7,7 @@ const fs = require("fs")
 const { execFileSync, spawn } = require("child_process")
 
 const DIR = __dirname
-const src = fs.readFileSync("/home/salesprendes/.config/quickshell/Modules/IA/tools/LocalTools.js",
+const src = fs.readFileSync(require("path").resolve(__dirname, "../tools/LocalTools.js"),
                             "utf8").replace(/^\.pragma library$/m, "")
 const mod = {}
 new Function("exports", src + "\nexports.files=files;exports.FETCH_KO=FETCH_KO;")(mod)

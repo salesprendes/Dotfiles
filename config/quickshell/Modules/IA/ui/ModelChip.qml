@@ -88,7 +88,9 @@ Rectangle {
         }
         Text {
             visible: chip.ready
-            text: AiService.provider.label
+            // providerLabel y no provider.label: el servidor propio se rotula
+            // con I18n, que una biblioteca pura no puede ver.
+            text: AiService.providerLabel
             color: Theme.fgMuted
             font.family: Theme.fontFamily
             font.pixelSize: Theme.typeLabelSmall

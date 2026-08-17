@@ -15,7 +15,7 @@ const fs = require("fs")
 const { execFileSync, spawn } = require("child_process")
 
 const DIR = __dirname
-const IA = "/home/salesprendes/.config/quickshell/Modules/IA/"
+const IA = require("path").resolve(__dirname, "..") + "/"
 const carga = (f, exports) => {
     const m = {}
     new Function("exports", fs.readFileSync(IA + f, "utf8")

@@ -1,6 +1,6 @@
 const fs=require("fs"),vm=require("vm"),cp=require("child_process");
 const { execFileSync, spawn } = cp;
-const D="/home/salesprendes/.config/quickshell/Modules/IA/";
+const D=require("path").resolve(__dirname, "..") + "/";
 function load(f,names){let s=fs.readFileSync(D+f,"utf8").replace(/^\.pragma.*$/mg,"");
   const c={};vm.createContext(c);vm.runInContext(s+"\n;__x={"+names.map(n=>n+":typeof "+n+"!==\"undefined\"?"+n+":null").join(",")+"};",c);return c.__x;}
 const TU=load("TextUtils.js",["urlZone","urlLeakScan"]);

@@ -1422,3 +1422,50 @@ function _hashPatch(args, ctx, bak, bakDir, iaDir) {
                         parseInt(args.recover_window) || 40))),
                     QS_BAK: bak, QS_BD: bakDir } }
 }
+
+// ── ¿Informó de algo esta llamada? ───────────────────────────────────────────
+// La bandera que se le pone a una tarjeta recién resuelta cuando su salida no
+// dice nada: cero coincidencias, ningún diagnóstico, ningún resultado, nada
+// nuevo en el trabajo de fondo. Es la idea que oh-my-pi llama `useless`, y su
+// valor está en QUIÉN lo decide: la propia herramienta, que conoce el texto
+// exacto que suelta cuando no encuentra nada. Adivinarlo desde fuera por el
+// tamaño del resultado es lo que hacía el podador antes, y se equivoca.
+//
+// La consumen tres sitios: la poda (se salta la ventana protegida, porque un
+// resultado que no informó de nada no vale nada a ninguna edad), la
+// transcripción para el resumen (se cae la pareja entera) y el medidor.
+//
+// Regla dura: si el resultado huele a FALLO, no es inútil — es justo lo
+// contrario. Un `grep` que no encuentra nada informa; un `grep` que no puede
+// leer la carpeta es un problema, y eso hay que conservarlo.
+const VACIOS = {
+    grep_files:  ["(sin salida; código 0)"],
+    glob_files:  ["(sin coincidencias)"],
+    ast_search:  ["(sin salida; código 0)"],
+    list_dir:    ["(sin salida; código 0)"],
+    web_search:  ["(sin resultados para esa consulta)"],
+    lsp:         ["Sin resultados.", "Sin información en esa posición.",
+                  "(no hay diagnósticos"],
+    job_view:    ["(sin salida todavía)"],
+    journal_query: ["(sin salida; código 0)"]
+}
+
+function inutil(nombre, resultado) {
+    const marcas = VACIOS[nombre]
+    if (!marcas)
+        return false
+    const t = String(resultado || "").trim()
+    if (t === "")
+        return true
+    // Un fallo NUNCA es inútil, por mucho que su texto se parezca a uno vacío.
+    if (/\[stderr\]|Traceback|Permission denied|No such file|command not found|c[oó]digo [1-9]/.test(t))
+        return false
+    // El texto tiene que ser SOLO la marca de vacío (más algún adorno corto):
+    // un listado de veinte archivos que además contenga la palabra no cuenta.
+    if (t.length > 200)
+        return false
+    for (let i = 0; i < marcas.length; i++)
+        if (t.indexOf(marcas[i]) !== -1)
+            return true
+    return false
+}

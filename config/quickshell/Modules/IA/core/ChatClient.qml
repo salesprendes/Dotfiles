@@ -45,6 +45,19 @@ Scope {
     function transient(msg) {
         return /429|rate.?limit|overloaded|unavailable|timed?.?out|502|503|500/i.test(msg)
     }
+
+    // EL CONTEXTO NO CABE. Cada servidor lo dice a su manera —y los locales, a
+    // la suya propia—, así que el reconocimiento es amplio a propósito: el
+    // castigo por acertar de más es compactar una vez sin necesidad, y el de
+    // fallar es dejar el turno muerto con un error que el usuario no puede
+    // arreglar salvo borrando la conversación.
+    function overflow(msg) {
+        return /context[_ ]?(length|window|limit|size)|maximum context|prompt is too long|input is too long|too many tokens|token count.{0,24}exceeds|exceeds? (the )?context|exceeds the maximum number of tokens|reduce the length|request too large|n_ctx|kv cache is full/i
+                   .test(msg)
+    }
+    // Una sola recuperación por turno: si tras compactar vuelve a desbordar, es
+    // que el problema no era el historial y reintentar sería un bucle.
+    property bool _desbordado: false
     Timer {
         id: retryTimer
         onTriggered: if (!chat.busy) chat.start()
@@ -360,6 +373,7 @@ Scope {
 
             if (text !== "" || think !== "") {
                 chat.retries = 0
+                chat._desbordado = false
                 conv.push({ role: "assistant",
                             content: text !== "" ? text : think,
                             reasoning: text !== "" ? think : "",
@@ -396,6 +410,14 @@ Scope {
                 retryTimer.interval = 200
                 retryTimer.restart()
                 return
+            }
+            // DESBORDAMIENTO: no es un fallo transitorio y reintentar igual
+            // volvería a fallar igual. Se compacta y se retoma el turno. Va
+            // antes que el reintento genérico justo por eso.
+            if (chat.overflow(msg) && !chat._desbordado) {
+                chat._desbordado = true
+                if (svc.recoverOverflow())
+                    return
             }
             const vacia = code === 0 && chat._errBuf.trim() === ""
             if ((chat.transient(msg) || vacia) && chat.retries < 2) {

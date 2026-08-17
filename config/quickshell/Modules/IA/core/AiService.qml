@@ -12,6 +12,7 @@ import "../TextUtils.js" as TU
 import "../tools/ToolDefs.js" as TD
 import "../tools/ToolPolicy.js" as TP
 import "ModelCatalog.js" as MC
+import "Endpoint.js" as EP
 import "ModelProfile.js" as MP
 import "../tools/LocalTools.js" as LT
 import "../tools/RemoteTools.js" as RT
@@ -84,96 +85,38 @@ Singleton {
     }
 
     // ── Proveedores y modelos ────────────────────────────────────────────────
-    // 'base' es la raíz /v1 del contrato OpenAI: de ahí salen SIEMPRE las dos
-    // direcciones que usa el harness (/chat/completions para hablar y /models
-    // para descubrir el catálogo). Los dos proveedores con URL de usuario la
-    // dejan vacía y la calculan en 'apiBase'.
-    readonly property var providers: ({
-        gemini: {
-            label: "Gemini",
-            base: "https://generativelanguage.googleapis.com/v1beta/openai",
-            needsKey: true,
-            userUrl: false
-        },
-        openrouter: {
-            label: "OpenRouter",
-            base: "https://openrouter.ai/api/v1",
-            needsKey: true,
-            userUrl: false
-        },
-        ollama: {
-            label: "Ollama",
-            base: "",           // la URL base la pone el usuario (aiOllamaUrl)
-            needsKey: false,
-            userUrl: true
-        },
-        // Cualquier servidor OpenAI-compatible, REMOTO o local: vLLM, TGI,
-        // LiteLLM, LM Studio publicado, un Ollama tras un proxy inverso… URL base
-        // /v1 configurable y clave OPCIONAL (needsKey false: sin clave no se
-        // bloquea el envío; si la pones, viaja como Bearer).
-        custom: {
-            label: I18n.tr("Server"),
-            base: "",
-            needsKey: false,
-            userUrl: true
-        }
+    // El catálogo, la normalización de URL y el reparto de "un modelo por
+    // proveedor" viven en core/Endpoint.js: son JavaScript puro, y sacarlos de
+    // aquí es lo que permite probar de una en una las docenas de formas en que
+    // una URL se pega mal (ver tests/t_endpoint.js). Lo que queda aquí son los
+    // enlaces con los ajustes, que es lo único que de verdad es QML.
+    readonly property var provider: EP.proveedorDe(Settings.aiProvider)
+    // La etiqueta del servidor propio se rotula aquí, que es donde se ve I18n.
+    readonly property string providerLabel:
+        Settings.aiProvider === "custom" ? I18n.tr("Server") : provider.label
+
+    readonly property var _modelos: ({
+        openrouter: Settings.aiModelOpenrouter, ollama: Settings.aiModelOllama,
+        custom: Settings.aiModelCustom, gemini: Settings.aiModelGemini
     })
+    function modelFor(id) { return EP.modeloDe(id, ai._modelos) }
+    readonly property string model: EP.modeloDe(Settings.aiProvider, _modelos)
 
-    readonly property var provider: providers[Settings.aiProvider] || providers.gemini
-
-    // El modelo elegido de CADA proveedor vive en su propio ajuste. Este par de
-    // funciones es el único sitio que conoce ese reparto: antes el mismo switch
-    // de cuatro ramas estaba copiado en cinco puntos del archivo.
-    function modelFor(id) {
-        return id === "openrouter" ? Settings.aiModelOpenrouter
-             : id === "ollama"     ? Settings.aiModelOllama
-             : id === "custom"     ? Settings.aiModelCustom
-                                   : Settings.aiModelGemini
-    }
-    function _setModelFor(id, name) {
-        if (id === "openrouter")  Settings.aiModelOpenrouter = name
-        else if (id === "ollama") Settings.aiModelOllama = name
-        else if (id === "custom") Settings.aiModelCustom = name
-        else                      Settings.aiModelGemini = name
-    }
-    readonly property string model: modelFor(Settings.aiProvider)
-
-    // Raíz /v1 efectiva del proveedor activo ("" si aún falta la URL). La
-    // normalización es deliberadamente indulgente: una URL remota se copia y se
-    // pega mal — sobran barras, falta el esquema, se pega el endpoint completo…
-    // Todo eso acaba en la misma base.
     readonly property string apiBase:
-        provider.userUrl
-            ? TU.normalizeBase(Settings.aiProvider === "ollama"
-                               ? Settings.aiOllamaUrl : Settings.aiCustomUrl)
-            : provider.base
-    readonly property string endpoint:
-        apiBase === "" ? "" : apiBase + "/chat/completions"
-    // Catálogo del servidor. Ollama publica el suyo fuera de /v1 (/api/tags); el
-    // resto, en el /models del contrato OpenAI.
-    readonly property string modelsUrl:
-        apiBase === "" ? ""
-        : Settings.aiProvider === "ollama"
-            ? apiBase.replace(/\/v1$/, "") + "/api/tags"
-            : apiBase + "/models"
+        EP.baseDe(Settings.aiProvider, ({ ollama: Settings.aiOllamaUrl,
+                                          custom: Settings.aiCustomUrl }))
+    readonly property string endpoint: EP.endpointDe(apiBase)
+    readonly property string modelsUrl: EP.modelosUrl(apiBase, Settings.aiProvider)
 
-    // Acepta la sintaxis "proveedor:modelo" de aisuite: "ollama:qwen3" cambia
-    // proveedor Y modelo en un gesto. Sin prefijo conocido, es solo el modelo del
-    // proveedor actual (los ":free" de OpenRouter no chocan: el prefijo se
-    // compara contra el catálogo de proveedores).
+    // "ollama:qwen3" cambia proveedor Y modelo en un gesto.
     function setModel(m) {
-        let target = Settings.aiProvider
-        let name = String(m).trim()
-        const colon = name.indexOf(":")
-        if (colon > 0) {
-            const prefix = name.slice(0, colon)
-            if (providers[prefix]) {
-                target = prefix
-                name = name.slice(colon + 1)
-            }
-        }
-        _setModelFor(target, name)
-        Settings.aiProvider = target
+        const r = EP.parseModelo(m, Settings.aiProvider)
+        const cual = EP.ajusteDe(r.proveedor)
+        if (cual === "openrouter")   Settings.aiModelOpenrouter = r.modelo
+        else if (cual === "ollama")  Settings.aiModelOllama = r.modelo
+        else if (cual === "custom")  Settings.aiModelCustom = r.modelo
+        else                         Settings.aiModelGemini = r.modelo
+        Settings.aiProvider = r.proveedor
     }
 
     function modelShort(id) { return MC.shortName(id) }
@@ -191,19 +134,20 @@ Singleton {
         active: Settings.aiProvider,
         model: ai.model,
         fetched: probe.fetchedModels,
-        labels: { gemini: providers.gemini.label,
-                  openrouter: providers.openrouter.label,
-                  ollama: providers.ollama.label,
-                  custom: providers.custom.label },
+        labels: { gemini: EP.PROVEEDORES.gemini.label,
+                  openrouter: EP.PROVEEDORES.openrouter.label,
+                  ollama: EP.PROVEEDORES.ollama.label,
+                  custom: ai.providerLabel },
         modelFor: ai.modelFor
     })
 
     // Falta algo para poder hablar: sin URL (los de servidor propio) o sin clave
     // (los de nube). El panel lo usa para invitar a configurar en vez de dejar
     // que el envío falle con un error de red.
-    readonly property bool urlMissing: provider.userUrl && apiBase === ""
-    readonly property bool keyMissing: provider.needsKey && apiKey === ""
-    readonly property bool notConfigured: urlMissing || keyMissing
+    readonly property var _faltan: EP.faltan(Settings.aiProvider, apiBase, apiKey)
+    readonly property bool urlMissing: _faltan.url
+    readonly property bool keyMissing: _faltan.clave
+    readonly property bool notConfigured: _faltan.alguna
 
     // ── Qué modelo hay delante ───────────────────────────────────────────────
     // Lo que ese modelo concreto admite (ventana, pensamiento, muestreo,
@@ -414,7 +358,6 @@ Singleton {
     // ── Política de aprobación ───────────────────────────────────────────────
     // UN control en vez de cuarenta: el usuario dice hasta dónde llega el agente
     // y ToolPolicy.js reparte según la clase de riesgo de cada herramienta.
-    readonly property var approvalModes: TP.MODOS
     readonly property string approvalMode: TP.mode(Settings.aiApproval)
 
     function riskClass(name)        { return TP.riskClass(name) }
@@ -544,12 +487,8 @@ Singleton {
 
     // El trato del texto que viene de fuera, en un solo sitio: lo usan el
     // ejecutor y también los subagentes, que leen la web igual que su jefe.
-    function fenceExternal(texto, fuente) { return WS.fence(texto, fuente) }
     function searchFailed(salida) { return WS.failed(salida) }
     function searchFailureText(salida) { return WS.failureText(salida) }
-    function fetchOwnMessage(salida) {
-        return String(salida).indexOf(LT.FETCH_KO) !== -1
-    }
     function stripFetchMark(salida) {
         return String(salida).replace(LT.FETCH_KO, "").trim()
     }
@@ -812,7 +751,6 @@ Singleton {
     property alias convMs: conv.convMs
     property alias contextFill: conv.contextFill
     function pushInfo(text) { conv.pushInfo(text) }
-    function saveHistory() { conv.save() }
 
     property alias toolRounds: tools.toolRounds
     property alias maxToolRounds: tools.maxToolRounds
@@ -839,7 +777,6 @@ Singleton {
     function supervisorOf(i) { return tools.supVerdict[i] || null }
     readonly property int supervisorWatching: supervisor.reviewing
     readonly property string supervisorMode: supervisor.modo
-    readonly property bool supervisorOn: supervisor.activo
     // La observación del consejero que viaja en la siguiente petición. Vive una
     // sola vuelta: es sobre el paso que se acaba de dar.
     property string advisorNote: ""
@@ -863,7 +800,50 @@ Singleton {
     function stop() { chat.stop() }
 
     property alias compacting: comp.compacting
-    function compact() { comp.compact() }
+    function compact() { comp.compact("") }
+    // Podar sin resumir: recorta los resultados de herramienta que ya no hacen
+    // falta literalmente y deja el hilo intacto. No cuesta una llamada. A mano
+    // va sin bridas; en automático manda la caché de prefijo.
+    function prune() { return comp.prune(false) }
+    // Sacudir: archiva a fichero los bloques enormes de los mensajes y deja la
+    // ruta en su hueco. Tampoco cuesta una llamada, y se puede recuperar.
+    function shake() { return comp.shake() }
+    // Traspasar: documento de continuación y conversación nueva.
+    function handoff() { return comp.handoff() }
+
+    // EL CONTEXTO DESBORDÓ. El modelo dice que no cabe lo que le mandamos.
+    // Hasta ahora eso era un error rojo y se acabó el turno; ahora se compacta
+    // y se REINTENTA, que es lo que separa un harness que se salva solo de uno
+    // que se rinde. Es viable porque el resumen ya no manda el historial entero
+    // sino una transcripción acotada: cabe justo cuando el turno no cabía.
+    function recoverOverflow() {
+        if (comp.compacting)
+            return false
+        // Compactar reescribe el historial, y eso no se hace a espaldas de
+        // quien pidió llevar el contexto a mano. Con "Auto" se rescata solo;
+        // con "Manual" o "Avisar" se dice qué pasó y qué tecla lo arregla, que
+        // ya es infinitamente mejor que un error del proveedor que el usuario
+        // no puede interpretar.
+        if (Settings.aiAutoCompact !== "auto") {
+            conv.pushInfo(I18n.tr("Context overflowed: the turn did not go out. Run /compact (or /prune) and send it again."))
+            return false
+        }
+        conv.pushInfo(I18n.tr("Context overflowed — compacting and retrying."))
+        return comp.compact("overflow")
+    }
+
+    // A MITAD DE TURNO. Un bucle de veinte rondas de herramienta puede llenar la
+    // ventana sin que el turno haya terminado, y hasta ahora la única
+    // comprobación estaba al final: se desbordaba antes de llegar a ella. El
+    // coordinador de herramientas llama aquí en su frontera segura —lote
+    // resuelto, nada pendiente— justo antes de devolverle la palabra al modelo.
+    function maybeCompactMidTurn() {
+        if (Settings.aiAutoCompact !== "auto" || comp.compacting)
+            return false
+        if (contextFill <= 0.85)
+            return false
+        return comp.compact("midturn")
+    }
 
     // Los trabajos en segundo plano: el panel enseña cuántos corren y puede
     // cortarlos (el freno de mano del usuario, sin pasar por el modelo).
@@ -872,7 +852,6 @@ Singleton {
     function stopJob(id) { jobRunner.ctl({ action: "kill", id: id }, () => {}) }
 
     property alias pendingAtts: att.pendingAtts
-    function addTextAttachment(label, text) { att.addText(label, text) }
     function removeAttachment(i) { att.removeAt(i) }
     function attachClipboard() { att.attachClipboard() }
     function attachSelection() { att.attachSelection() }
@@ -1158,6 +1137,10 @@ Singleton {
         // configuración. Reintentar cuesta una décima de segundo.
         tools.searchBroken = false
         chat.retries = 0
+        // Y turno nuevo, derecho nuevo a una recuperación por desbordamiento:
+        // que el anterior no cupiera ni siquiera compactado no significa que
+        // este tampoco vaya a caber.
+        chat._desbordado = false
         // Turno nuevo: el supervisor recupera su presupuesto de frenazos y
         // olvida las opiniones del anterior, y la nota del consejero caduca —
         // pertenecía al encargo que acaba de terminar.
@@ -1224,10 +1207,17 @@ Singleton {
         // "stop": el turno acabó. Para avisos propios (sonido, luz, registro).
         if (!busy)
             hookRunner.fire("stop", "", { QS_HOOK_TOKENS: String(convTokens) })
+        // PASADA DE PODA POR TURNO. Barata, determinista y con las bridas de la
+        // caché puestas: solo toca lo que sale a cuenta tocar. Es lo que evita
+        // llegar al umbral en primer lugar, y por eso va antes de mirarlo.
+        if (!busy && !compacting)
+            comp.prune(true)
         // Contexto casi lleno: según lo elegido, avisar o compactar solo.
         if (contextFill > 0.85 && !busy && !notConfigured) {
+            // "auto" = la pidió el umbral, no el usuario: si podando ya cabe,
+            // el archivero no llega a llamarse.
             if (Settings.aiAutoCompact === "auto")
-                comp.compact()
+                comp.compact("auto")
             else if (Settings.aiAutoCompact === "warn" && !comp.warned) {
                 comp.warned = true
                 conv.pushInfo(I18n.tr("Context almost full — /compact will summarize it."))

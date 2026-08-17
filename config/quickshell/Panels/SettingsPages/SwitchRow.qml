@@ -16,6 +16,11 @@ import qs.Panels.SettingsPages
 // el buscador.
 SettingsRow {
     id: sr
+    // Esta fila lleva el suyo, con onda de pulsación: aquí la fila ENTERA es
+    // pulsable (pulsar en cualquier sitio conmuta), y eso pide onda. El de la
+    // base solo escucha el ratón, que es lo que necesitan las filas cuyo
+    // control se maneja solo.
+    rowHighlight: false
     property string label: ""
     property string desc: ""
     // Glifo de la insignia que abre la fila. Sin él no se dibuja nada, así

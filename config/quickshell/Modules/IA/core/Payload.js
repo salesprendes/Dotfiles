@@ -13,7 +13,8 @@ function plainMsg(m) {
              toolName: m.toolName, toolArgs: m.toolArgs,
              toolId: m.toolId, toolResult: m.toolResult,
              toolStatus: m.toolStatus, attachNote: m.attachNote,
-             ts: m.ts, undoPath: m.undoPath, toolBatch: m.toolBatch }
+             ts: m.ts, undoPath: m.undoPath, toolBatch: m.toolBatch,
+             compactOf: m.compactOf, at: m.at, toolUseless: m.toolUseless }
 }
 
 // Tope de mensajes como red de seguridad detrás del presupuesto de caracteres.

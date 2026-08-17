@@ -2,6 +2,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import qs.Config
+import "../security/Gate.js" as GT
 
 // EJECUCIÓN PERSISTENTE (la celda de oh-my-pi): un Python que sigue VIVO entre
 // llamadas. Definir una función en una celda y usarla tres turnos después
@@ -181,26 +182,53 @@ Scope {
             responder(built.error)
             return
         }
+        // LA MISMA PUERTA QUE EL AGENTE. Aquí faltaban dos invariantes —el
+        // reloj y el marco de "esto lo escribió un desconocido"— no por falta
+        // de criterio, sino porque la regla vivía escrita en el ejecutor y en
+        // el subagente, y a la tercera puerta se olvidó. Una
+        // `tool('fetch_url', …)` traía una página web al contexto pelada.
+        //
+        // Ahora esto no decide nada: pide permiso y aplica lo que le den.
+        const permiso = GT.evaluar({ quien: "celda", herramienta: name, args: args })
+        const listo = GT.envolver(permiso, built.cmd, built.env)
+        if (listo === null) {
+            responder("El harness no ha podido autorizar '" + name
+                + "' desde la celda. No se ha ejecutado nada.")
+            return
+        }
+        loopProc.permiso = permiso
         loopProc.onDone = responder
-        loopProc.command = built.cmd
-        loopProc.environment = built.env || ({})
+        loopProc.command = listo.cmd
+        loopProc.environment = listo.env
         loopProc.running = true
     }
 
     Process {
         id: loopProc
         property var onDone: null
+        // El permiso con el que salió esto: él sabe si lo que vuelve lo
+        // escribió un desconocido.
+        property var permiso: null
         stdout: StdioCollector { id: loopOut }
         stderr: StdioCollector { id: loopErr }
         onExited: (code) => {
             const f = loopProc.onDone
+            const permiso = loopProc.permiso
             loopProc.onDone = null
+            loopProc.permiso = null
             if (!f)
                 return
             let out = (loopOut.text || "")
             if ((loopErr.text || "").trim() !== "")
                 out += (out !== "" ? "\n" : "") + "[stderr] " + loopErr.text
-            f(out.trim() === "" ? "(sin salida; código " + code + ")" : out)
+            if (out.trim() === "") {
+                f("(sin salida; código " + code + ")")
+                return
+            }
+            // El marco lo decide la puerta, con las mismas reglas que en el
+            // ejecutor y en el subagente — incluida la de no enmarcar un aviso
+            // NUESTRO, que sería mentirle al modelo sobre quién le habla.
+            f(GT.marcar(permiso, out))
         }
     }
 

@@ -54,6 +54,16 @@ Item {
     readonly property bool isInfo: role === "info"
     readonly property bool isAssistant: !isUser && !isError && !isTool && !isInfo
 
+    // ── Angosto ──────────────────────────────────────────────────────────────
+    // Con el panel en su ancho mínimo (340 px) la tarjeta de herramienta se
+    // quedaba con menos de trescientos para el contenido, y lo que sobraba eran
+    // sus propios márgenes. Por debajo de este umbral todo se ciñe: márgenes,
+    // separaciones y el avatar. Se mide el ancho de ESTA burbuja, no el de la
+    // ventana — es el sitio que tiene delante lo que decide si cabe.
+    readonly property bool angosto: bubble.width > 0 && bubble.width < Theme.dp(420)
+    readonly property int pad: angosto ? Theme.space8 : Theme.space12
+    readonly property int hueco: angosto ? Theme.space6 : Theme.space10
+
     // ── Herramienta EN CURSO ─────────────────────────────────────────────────
     // Entre aprobar y ver el resultado hay un rato en el que la tarjeta no
     // cambiaba nada: seguían puestos los botones de Aprobar y Rechazar, no había
@@ -369,6 +379,50 @@ Item {
         return out
     }
 
+    // ── El modelo VIVO de los trozos ─────────────────────────────────────────
+    // 'segments' se recalcula entero en CADA token, y devuelve un array nuevo.
+    // Un Repeater con un array por modelo no compara nada: si la identidad del
+    // array cambia, DESTRUYE todos sus delegates y los vuelve a crear. Medido:
+    // cuarenta tokens, cuarenta reconstrucciones.
+    //
+    // Con prosa se notaba poco. Con una TABLA se ve: cada reconstrucción tira
+    // el TextEdit —y con él el documento ya analizado, con sus columnas
+    // medidas— y vuelve a interpretar el Markdown desde cero. La tabla se
+    // rehace treinta veces por segundo, que es exactamente el "no se conserva
+    // el formato y luego se borra". Y de paso el alto de la burbuja daba
+    // tumbos en cada token, que es lo que hacía saltar el desplazamiento.
+    //
+    // Aquí el modelo se SINCRONIZA en el sitio: mientras la estructura no
+    // cambie (mismo número de trozos, mismo tipo, mismo lenguaje) solo se
+    // actualiza el texto, y el TextEdit sigue vivo. Reconstruir se reserva
+    // para cuando de verdad aparece un trozo nuevo — al abrirse un cercado de
+    // código, una vez.
+    readonly property ListModel segModel: ListModel {}
+
+    function _sincronizaSegs() {
+        const s = bubble.segments
+        let igual = segModel.count === s.length
+        if (igual)
+            for (let i = 0; i < s.length; i++) {
+                const v = segModel.get(i)
+                if (v.code !== s[i].code || v.lang !== s[i].lang) {
+                    igual = false
+                    break
+                }
+            }
+        if (!igual) {
+            segModel.clear()
+            for (let i = 0; i < s.length; i++)
+                segModel.append({ code: s[i].code, lang: s[i].lang,
+                                  text: s[i].text })
+            return
+        }
+        for (let i = 0; i < s.length; i++)
+            if (segModel.get(i).text !== s[i].text)
+                segModel.setProperty(i, "text", s[i].text)
+    }
+    onSegmentsChanged: bubble._sincronizaSegs()
+
     implicitHeight: isUser ? userCol.implicitHeight
                   : isError ? errBox.height
                   : isTool ? toolBox.height
@@ -395,6 +449,10 @@ Item {
     Component.onCompleted: {
         opacity = 1
         rise.y = 0
+        // Aquí y no en un segundo Component.onCompleted: un objeto solo admite
+        // UN manejador por señal, y declarar el mismo dos veces no es un aviso
+        // — es "Property value set multiple times" y el tipo no carga.
+        bubble._sincronizaSegs()
     }
     Behavior on opacity { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutQuad } }
 
@@ -412,7 +470,14 @@ Item {
             implicitWidth: userText.implicitWidth + Theme.space12 * 2
             implicitHeight: userText.implicitHeight + Theme.space10 * 2
             radius: Theme.shapeLg
+            // La esquina de arriba a la derecha, cerrada: es el espejo de la
+            // del asistente. Las dos apuntan hacia fuera, hacia quien habla, y
+            // esa asimetría es lo que hace que la conversación se lea como dos
+            // voces y no como una lista de cajas iguales.
+            topRightRadius: Theme.shapeXs
             color: SettingsPalette.selectedTint
+            border.width: Theme.hairline
+            border.color: Theme.withAlpha(Theme.accent, 0.22)
 
             TextEdit {
                 id: userText
@@ -432,8 +497,12 @@ Item {
         }
 
         // Pie del mensaje propio: adjuntos que llevaba + Editar/Eliminar.
-        RowLayout {
-            Layout.alignment: Qt.AlignRight
+        // Flow por el mismo motivo que el del asistente: una fila no se
+        // envuelve, y con la etiqueta de un adjunto larga se salía.
+        Flow {
+            id: pieUsuario
+            Layout.fillWidth: true
+            layoutDirection: Qt.RightToLeft
             spacing: Theme.space10
             visible: !bubble.live
 
@@ -446,12 +515,15 @@ Item {
             }
             Text {
                 visible: bubble.attachNote !== ""
+                // La etiqueta del adjunto es lo único que puede crecer aquí.
+                width: Math.max(0, Math.min(implicitWidth, pieUsuario.width))
+                elide: Text.ElideRight
                 text: "󰏢 " + bubble.attachNote
                 color: Theme.fgMuted
                 font.family: Theme.fontFamily
                 font.pixelSize: Theme.typeLabelSmall
             }
-            RowLayout {
+            Row {
                 spacing: Theme.space10
                 opacity: userHov.containsMouse ? 1 : 0
                 Behavior on opacity { NumberAnimation { duration: Theme.animFast } }
@@ -480,14 +552,22 @@ Item {
         visible: bubble.isAssistant
         anchors.left: parent.left
         anchors.right: parent.right
-        spacing: Theme.space10
+        spacing: bubble.hueco
 
+        // El avatar, con anillo. Un disco plano se leía como una mancha; el
+        // aro lo convierte en una pieza y lo separa del fondo del panel, que
+        // es translúcido y cambia con el fondo de escritorio.
         Rectangle {
             Layout.alignment: Qt.AlignTop
-            implicitWidth: Theme.dp(26)
-            implicitHeight: Theme.dp(26)
+            Layout.topMargin: Theme.space6
+            implicitWidth: bubble.angosto ? Theme.dp(22) : Theme.dp(28)
+            implicitHeight: implicitWidth
             radius: width / 2
             color: SettingsPalette.accentSoft
+            border.width: Theme.hairline
+            border.color: Theme.withAlpha(Theme.accent, bubble.live ? 0.55 : 0.28)
+            Behavior on border.color { ColorAnimation { duration: Theme.animNormal } }
+
             Text {
                 anchors.centerIn: parent
                 text: "󱙺"
@@ -495,10 +575,90 @@ Item {
                 font.family: Theme.fontFamily
                 font.pixelSize: Theme.sp(13)
             }
+            // Mientras escribe, el aro respira. Es la única señal de "sigue
+            // trabajando" que no ocupa sitio ni mueve nada de lo que ya está
+            // escrito — los puntos suspensivos empujaban la lista.
+            SequentialAnimation on scale {
+                running: bubble.live
+                loops: Animation.Infinite
+                NumberAnimation { to: 1.06; duration: Math.round(Theme.animLoop / 2)
+                                  easing.type: Easing.InOutSine }
+                NumberAnimation { to: 1.0; duration: Math.round(Theme.animLoop / 2)
+                                  easing.type: Easing.InOutSine }
+            }
         }
 
-        ColumnLayout {
+        // LA SUPERFICIE DE LA RESPUESTA. Antes no había ninguna: el mensaje del
+        // usuario iba en una píldora teñida y el del asistente era texto suelto
+        // sobre el fondo del panel. Con el fondo translúcido y un escritorio
+        // detrás, la respuesta —que es lo que uno viene a leer— era lo único
+        // sin sitio propio.
+        //
+        // La esquina de arriba a la izquierda va más cerrada que las demás:
+        // es la que mira al avatar, y esa asimetría es lo que hace que un
+        // rectángulo se lea como un bocadillo y no como una caja.
+        Rectangle {
             Layout.fillWidth: true
+            Layout.alignment: Qt.AlignTop
+            implicitHeight: aiCol.implicitHeight + (bubble.angosto ? Theme.space8 : Theme.space10) * 2
+            radius: Theme.shapeLg
+            topLeftRadius: Theme.shapeXs
+            color: SettingsPalette.settingsCard
+            border.width: Theme.hairline
+            border.color: SettingsPalette.settingsBorder
+
+            // MIENTRAS ESCRIBE: un filo que RECORRE el borde izquierdo, no un
+            // punto que parpadea. Un parpadeo dice "hay algo"; un recorrido
+            // dice "está pasando ahora", que es lo que uno quiere saber. Y va
+            // por el borde, fuera del texto, así que no compite con lo que
+            // estás leyendo — que es justo lo que hacían los tres puntitos.
+            //
+            // El carril tenue queda de fondo para que el filo no aparezca de
+            // la nada en cada vuelta: se ve el camino que recorre.
+            Rectangle {
+                id: carril
+                anchors.left: parent.left
+                anchors.top: parent.top
+                anchors.bottom: parent.bottom
+                anchors.margins: Theme.space6
+                width: Theme.dp(2)
+                radius: width
+                color: Theme.withAlpha(Theme.accent, 0.18)
+                opacity: bubble.live ? 1 : 0
+                clip: true
+                Behavior on opacity { NumberAnimation { duration: Theme.animNormal } }
+
+                Rectangle {
+                    id: viajero
+                    width: parent.width
+                    // Un tercio del alto, con un mínimo: en una respuesta corta
+                    // un tercio serían cuatro píxeles y no se vería viajar.
+                    height: Math.max(Theme.dp(18), Math.round(carril.height * 0.34))
+                    radius: width
+                    color: Theme.accent
+                    y: 0
+
+                    SequentialAnimation on y {
+                        running: bubble.live && carril.height > 0
+                        loops: Animation.Infinite
+                        NumberAnimation {
+                            from: -viajero.height
+                            to: carril.height
+                            duration: Theme.animLoop
+                            easing.type: Easing.InOutSine
+                        }
+                    }
+                }
+            }
+
+        ColumnLayout {
+            id: aiCol
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.leftMargin: bubble.pad
+            anchors.rightMargin: bubble.pad
+            anchors.topMargin: bubble.angosto ? Theme.space8 : Theme.space10
             spacing: Theme.space6
 
             // Chip del razonamiento, plegado por defecto.
@@ -553,16 +713,34 @@ Item {
 
             // El contenido, troceado: prosa en Markdown, código en lápidas.
             Repeater {
-                model: bubble.segments
+                model: bubble.segModel
                 delegate: Loader {
-                    required property var modelData
+                    id: seg
+                    // Del modelo vivo, por roles: así cambiar el texto NO
+                    // cambia 'sourceComponent' y el TextEdit de dentro
+                    // sobrevive al token siguiente con su tabla ya medida.
+                    required property bool code
+                    required property string lang
+                    required property string text
                     Layout.fillWidth: true
-                    sourceComponent: modelData.code ? codeComp : proseComp
+                    // EL LOADER PIDE POCO. Sin esto, el ancho que el Loader
+                    // le pide a la columna es el implicitWidth de su hijo — y
+                    // el de un TextEdit es el que tendría SIN ajustar, o sea
+                    // el de la línea más larga de un tirón. Una respuesta con
+                    // una ruta larga o una palabra sin espacios pedía dos mil
+                    // píxeles, la columna se los daba, y el texto se salía de
+                    // la tarjeta por la derecha. Pidiendo uno, manda el sitio
+                    // disponible; el hijo se ata abajo al ancho ya resuelto.
+                    Layout.preferredWidth: 1
+                    sourceComponent: code ? codeComp : proseComp
 
                     Component {
                         id: proseComp
                         TextEdit {
-                            text: modelData.text
+                            // Atado al ancho YA resuelto del Loader: es lo que
+                            // hace que el ajuste tenga contra qué ajustar.
+                            width: seg.width
+                            text: seg.text
                             textFormat: TextEdit.MarkdownText
                             readOnly: true
                             selectByMouse: true
@@ -579,6 +757,7 @@ Item {
                         id: codeComp
                         // Lápida de código: fondo propio, lenguaje y copiar.
                         Rectangle {
+                            width: seg.width
                             implicitHeight: codeCol.implicitHeight + Theme.space8 * 2
                             radius: Theme.shapeSm
                             color: Theme.withAlpha(Theme.bgAlt, 0.75)
@@ -598,7 +777,7 @@ Item {
                                     spacing: Theme.space8
                                     Text {
                                         Layout.fillWidth: true
-                                        text: modelData.lang !== "" ? modelData.lang : "code"
+                                        text: seg.lang !== "" ? seg.lang : "code"
                                         color: Theme.fgMuted
                                         font.family: Theme.fontFamily
                                         font.pixelSize: Theme.typeLabelSmall
@@ -607,7 +786,7 @@ Item {
                                     FootAction {
                                         label: codeCopied.running ? I18n.tr("Copied") : I18n.tr("Copy")
                                         onDo: () => {
-                                            Quickshell.execDetached(["wl-copy", modelData.text])
+                                            Quickshell.execDetached(["wl-copy", seg.text])
                                             codeCopied.restart()
                                         }
                                     }
@@ -615,7 +794,7 @@ Item {
                                 }
                                 TextEdit {
                                     Layout.fillWidth: true
-                                    text: modelData.text
+                                    text: seg.text
                                     readOnly: true
                                     selectByMouse: true
                                     selectionColor: Theme.accent
@@ -631,13 +810,27 @@ Item {
             }
 
             // Pie: modelo · tiempo · tokens + acciones, al posarse.
-            RowLayout {
+            //
+            // Flow y no RowLayout: una fila no se envuelve, así que con el
+            // panel estrecho "qwen3:32b · 14:22 · 3,4 s · 812 tok" más Copiar,
+            // Regenerar y Eliminar sumaban más ancho que la tarjeta y se salían
+            // por la derecha. Envolviendo, lo que no cabe baja a la línea
+            // siguiente; y la metainformación —lo único que puede crecer— se
+            // recorta antes de empujar a nadie.
+            Flow {
+                id: pieIA
+                Layout.fillWidth: true
                 visible: !bubble.live
                 spacing: Theme.space10
                 opacity: aiHov.containsMouse ? 1 : 0
                 Behavior on opacity { NumberAnimation { duration: Theme.animFast } }
 
                 Text {
+                    // Nunca negativo: con un ancho negativo el elide no recorta
+                    // nada y el texto se pinta entero (ver la nota de las
+                    // píldoras de opción).
+                    width: Math.max(0, Math.min(implicitWidth, pieIA.width))
+                    elide: Text.ElideRight
                     text: {
                         let parts = [bubble.modelName]
                         if (bubble.ts !== "")
@@ -671,6 +864,7 @@ Item {
                 Timer { id: copied; interval: 1500 }
             }
         }
+        }
     }
     MouseArea {
         id: aiHov
@@ -686,7 +880,7 @@ Item {
         visible: bubble.isTool
         anchors.left: parent.left
         anchors.right: parent.right
-        height: toolCol.implicitHeight + Theme.space12 * 2
+        height: toolCol.implicitHeight + bubble.pad * 2
         radius: Theme.shapeMd
         color: SettingsPalette.groupFill
         border.width: Theme.hairline
@@ -700,7 +894,7 @@ Item {
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.top: parent.top
-            anchors.margins: Theme.space12
+            anchors.margins: bubble.pad
             spacing: Theme.space8
 
             // Si el modelo dijo algo antes de proponer, se enseña.
@@ -726,6 +920,10 @@ Item {
                 Text {
                     Layout.fillWidth: true
                     text: bubble.toolHeadline
+                    // Se ajusta: un titular largo ("El asistente quiere leer
+                    // archivos:") no cabe en el panel estrecho, y sin esto se
+                    // salía de la tarjeta en vez de pasar a la línea siguiente.
+                    wrapMode: Text.WordWrap
                     color: Theme.fgDim
                     font.family: Theme.fontFamily
                     font.pixelSize: Theme.typeLabelLarge
@@ -931,6 +1129,7 @@ Item {
                 visible: bubble.toolName === "ask_user" && bubble.toolStatus === "pending"
 
                 Flow {
+                    id: opciones
                     Layout.fillWidth: true
                     spacing: Theme.space6
                     Repeater {
@@ -938,7 +1137,27 @@ Item {
                         delegate: Rectangle {
                             id: optChip
                             required property var modelData
-                            width: optText.implicitWidth + Theme.space12 * 2
+                            // CON TOPE. Aquí la píldora se hacía tan ancha como
+                            // su texto y punto: una opción larga —"Sí, borra los
+                            // tres y vuelve a compilar"— se salía de la tarjeta
+                            // por la derecha, y en un panel estrecho eso es casi
+                            // cualquier opción. El Flow tampoco podía ayudar:
+                            // envuelve entre hijos, pero no encoge a uno que ya
+                            // no cabe.
+                            //
+                            // Nunca más ancha que el sitio que hay, y si no
+                            // cabe, el texto elide. El valor que se contesta es
+                            // el entero, no el recortado.
+                            readonly property real natural:
+                                optText.implicitWidth + Theme.space12 * 2
+                            // El tope solo cuando el Flow YA tiene ancho. En el
+                            // primer pase de disposición vale 0, y un Math.min
+                            // contra 0 deja la píldora en nada y el hueco del
+                            // texto en NEGATIVO — y con ancho negativo el elide
+                            // no recorta: pinta la frase entera, que es
+                            // exactamente el texto saliéndose de la píldora.
+                            width: opciones.width > 0
+                                   ? Math.min(natural, opciones.width) : natural
                             height: Theme.dp(30)
                             radius: height / 2
                             color: optMa.containsMouse ? SettingsPalette.accentSoft
@@ -949,6 +1168,11 @@ Item {
                             Text {
                                 id: optText
                                 anchors.centerIn: parent
+                                // Nunca negativo, por el mismo motivo.
+                                width: Math.max(0, Math.min(implicitWidth,
+                                    optChip.width - Theme.space12 * 2))
+                                elide: Text.ElideRight
+                                horizontalAlignment: Text.AlignHCenter
                                 text: String(optChip.modelData)
                                 color: optMa.containsMouse ? Theme.accentText : Theme.fg
                                 font.family: Theme.fontFamily
@@ -1028,17 +1252,29 @@ Item {
             }
 
             // Pendiente: las dos decisiones. Resuelta: el veredicto + salida.
-            RowLayout {
+            // LAS DECISIONES, Y QUE QUEPAN. Esto era un RowLayout, y un
+            // RowLayout no se envuelve: cuando el panel se estrecha aprieta a
+            // sus hijos por debajo de su ancho natural, así que "Rechazar",
+            // "Siempre" y "Aprobar" se salían de la tarjeta con las etiquetas
+            // cortadas. Justo los tres botones que hay que poder leer ANTES de
+            // pulsar uno.
+            //
+            // Un Flow sí se envuelve: caben en una línea mientras quepan, y si
+            // no, bajan a la siguiente. De derecha a izquierda para que
+            // "Aprobar" siga siendo el de la esquina, que es donde la mano ya
+            // lo busca.
+            Flow {
                 Layout.fillWidth: true
                 spacing: Theme.space8
+                layoutDirection: Qt.RightToLeft
                 visible: bubble.toolStatus === "pending" && !bubble.toolRunning
                          && bubble.toolName !== "ask_user"
                          && bubble.toolName !== "propose_plan"
 
-                Item { Layout.fillWidth: true }
                 TextButton {
-                    text: I18n.tr("Reject")
-                    onClicked: AiService.rejectTool(bubble.msgIndex)
+                    text: I18n.tr("Approve")
+                    primary: true
+                    onClicked: AiService.approveToolByUser(bubble.msgIndex)
                 }
                 // "Siempre" (esta conversación): solo donde se puede permitir
                 // en firme — leer y externos benignos; lo que ejecuta o
@@ -1049,13 +1285,16 @@ Item {
                     onClicked: AiService.approveToolAlways(bubble.msgIndex)
                 }
                 TextButton {
-                    text: I18n.tr("Approve")
-                    primary: true
-                    onClicked: AiService.approveToolByUser(bubble.msgIndex)
+                    text: I18n.tr("Reject")
+                    onClicked: AiService.rejectTool(bubble.msgIndex)
                 }
             }
 
-            RowLayout {
+            // El veredicto y sus acciones. Flow por lo mismo que los pies: con
+            // "Ejecutada · Ocultar salida · Deshacer" en un panel estrecho, una
+            // fila rígida se sale por la derecha.
+            Flow {
+                Layout.fillWidth: true
                 visible: bubble.toolStatus !== "pending" && bubble.toolStatus !== ""
                 spacing: Theme.space6
                 Text {

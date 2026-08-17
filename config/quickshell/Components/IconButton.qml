@@ -29,14 +29,24 @@ Rectangle {
     border.color: Theme.focusRing
     Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
 
-    // Crece un punto al pasar el ratón (con un leve rebote) y se encoge al
-    // pulsar, como los botones de energía del centro de control.
-    scale: ma.pressed ? 0.92 : (hovered ? 1.06 : 1.0)
+    // Crece un punto al pasar el ratón y se hunde al pulsar.
+    //
+    // EL REBOTE NO PUEDE IR EN LA PULSACIÓN, y ahí estaba el "achafado": la
+    // curva OutBack se PASA del destino antes de asentarse, que es justo lo
+    // que la hace agradable al crecer… y lo que la arruina al encoger, porque
+    // pasarse hacia abajo de 0,92 es bajar a ~0,85 y el botón se ve aplastado
+    // durante un instante. Encima iba con la duración larga, así que el
+    // aplastamiento se veía entero.
+    //
+    // Un clic quiere lo contrario que un hover: acuse INMEDIATO y sin adorno.
+    // Así que la curva depende de hacia dónde va — al pulsar, corta y sin
+    // rebote; al soltar y al pasar el ratón, la de siempre.
+    scale: ma.pressed ? 0.96 : (hovered ? 1.05 : 1.0)
     Behavior on scale {
         NumberAnimation {
-            duration: Theme.animNormal
-            easing.type: Easing.OutBack
-            easing.overshoot: 2.2
+            duration: ma.pressed ? Theme.animFast : Theme.animNormal
+            easing.type: ma.pressed ? Easing.OutCubic : Easing.OutBack
+            easing.overshoot: 1.7
         }
     }
 

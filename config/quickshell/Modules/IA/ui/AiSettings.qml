@@ -461,7 +461,7 @@ Rectangle {
                         }
                         Hint {
                             Layout.leftMargin: 0
-                            text: I18n.tr("At 85% of the context: Warn suggests /compact; Auto does it by itself.")
+                            text: I18n.tr("At 85% of the context: Warn suggests /compact; Auto does it by itself, also mid-turn, and rescues the turn if the context overflows.")
                         }
                     }
                 }
@@ -578,10 +578,9 @@ Rectangle {
                         }
                         Repeater {
                             model: AiService.skills
-                            delegate: SwitchRow {
+                            delegate: SkillRow {
                                 required property var modelData
-                                glyph: "󰠮"
-                                label: modelData.name
+                                name: modelData.name
                                 desc: modelData.description
                                 shown: skillQ.text.trim() === ""
                                     || (modelData.name + " " + modelData.description)

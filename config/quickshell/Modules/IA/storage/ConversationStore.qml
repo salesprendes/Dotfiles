@@ -16,6 +16,10 @@ import "../core/Payload.js" as PL
 //   attachNote: etiqueta de adjuntos ("captura", …) para pintarla en la burbuja
 //   undoPath: copia previa a una edición (es lo que permite Deshacer)
 //   toolBatch: qué tarjetas nacieron en la misma ronda del modelo
+//   compactOf: >0 solo en un resumen de compactación (cuántos mensajes
+//              sustituyó); es lo que permite compactar INCREMENTALMENTE
+//   at: la hora en ms (ts es la de enseñar; esta es la de calcular)
+//   toolUseless: la herramienta dice que su salida no informó de nada
 Scope {
     id: store
 
@@ -66,14 +70,31 @@ Scope {
             toolName: m.toolName || "", toolArgs: m.toolArgs || "",
             toolId: m.toolId || "", toolResult: m.toolResult || "",
             toolStatus: m.toolStatus || "", attachNote: m.attachNote || "",
-            ts: m.ts || "", undoPath: m.undoPath || "", toolBatch: m.toolBatch || ""
+            ts: m.ts || "", undoPath: m.undoPath || "", toolBatch: m.toolBatch || "",
+            // Cuántos mensajes sustituyó este resumen: 0 en todo lo demás. Es
+            // lo que permite a la compactación siguiente reconocer el ESTADO
+            // ACUMULADO y actualizarlo en vez de volver a resumirlo.
+            compactOf: m.compactOf || 0,
+            // La hora de MÁQUINA (ms). 'ts' es para enseñarla; esta es para
+            // decidir con ella: sin una marca real no se puede saber si la
+            // caché de prefijo del servidor sigue caliente, y de eso depende
+            // que podar salga a cuenta o cueste más de lo que ahorra.
+            at: m.at || 0,
+            // La puso la propia herramienta: su salida no informó de nada
+            // (cero coincidencias, ningún diagnóstico, nada nuevo). Verdad de
+            // origen, que vale mucho más que adivinarlo por el tamaño.
+            toolUseless: m.toolUseless === true
         })
     }
 
     function push(m) {
-        // Hora del mensaje: se estampa al nacer, no se deriva luego.
+        // Hora del mensaje: se estampa al nacer, no se deriva luego. Dos veces
+        // —para leerla y para calcular con ella—, porque "14:32" no sirve para
+        // saber cuánto lleva parada la conversación y la caché del servidor.
         if (!m.ts)
             m.ts = new Date().toLocaleTimeString(Qt.locale(), "HH:mm")
+        if (!m.at)
+            m.at = Date.now()
         append(m)
         save()
         // Con el panel cerrado, la llegada se avisa por el sistema de

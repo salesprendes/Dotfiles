@@ -10,7 +10,7 @@
 # Python levantan el servidor falso que haga falta (buscador, web, web hostil,
 # LLM, proceso colgado).
 cd "$(dirname "$0")" || exit 1
-BATERIAS="t_transporte t_redteam t_reloj t_websearch t_subagente t_fetch t_ssrf t_recetas t_depurador t_cerco"
+BATERIAS="t_transporte t_redteam t_reloj t_websearch t_subagente t_fetch t_ssrf t_recetas t_depurador t_cerco t_podar t_guion t_puerta t_despacho t_endpoint"
 
 for pasada in 1 2; do
     total=0; malas=0
