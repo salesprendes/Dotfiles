@@ -1,6 +1,7 @@
 ---
 name: "Construir un servidor MCP"
 description: "Cómo diseñar y escribir un servidor MCP que un modelo sepa usar: nombres de herramientas, esquemas, errores que enseñan y cómo probarlo. Úsala para conectar el asistente a una API, a un servicio o a datos que aún no puede tocar."
+triggers: "mcp, model context protocol, stdio, jsonrpc, esquema de la herramienta, exponer una api al modelo"
 source: "adaptada de anthropics/skills (mcp-builder), Apache-2.0"
 ---
 

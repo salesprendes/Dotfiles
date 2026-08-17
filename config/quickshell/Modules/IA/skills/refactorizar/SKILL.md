@@ -1,6 +1,7 @@
 ---
 name: "Refactorizar sin romper"
-description: "Refactoriza código sin cambiar el comportamiento, en pasos pequeños con verificación entre medias. Úsala cuando el usuario diga «refactoriza», «limpia este código», «extrae la función», «renombra esto», «este archivo es un lío», o quiera migrar de código viejo a nuevo sin romper."
+description: "Refactoriza código sin cambiar el comportamiento, en pasos pequeños con verificación entre medias. Úsala cuando el usuario diga «refactoriza», «limpia este código», «extrae este bloque», «renombra esto», «este archivo es un lío», o quiera migrar de código viejo a nuevo sin romper."
+triggers: "refactoriza, refactor, limpia, extrae, extraer, renombra, renombrar, duplicado, deuda tecnica, reorganiza, es un lio, legacy, dividir en piezas"
 ---
 
 # Refactorizar sin romper

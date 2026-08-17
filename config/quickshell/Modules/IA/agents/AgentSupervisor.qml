@@ -92,7 +92,14 @@ Scope {
 
     // extra = { politica, danger, escapa }
     function review(index, m, extra, cb) {
-        const firma = String(m.toolName) + "\u0000" + String(m.toolArgs || "")
+        // La firma canonica agrupa las LECTURAS repetidas: un diagnostico son
+        // treinta `kubectl get` distintos que merecen exactamente el mismo
+        // veredicto. Cae a la firma exacta para todo lo demas: si
+        // TP.verdictKey no reconoce el comando como de solo lectura devuelve
+        // null y aqui no cambia nada. Medido: 21 veredictos identicos en una
+        // sola sesion, con esperas de hasta 90 s cada uno.
+        const firma = TP.verdictKey(m.toolName, m.toolArgs)
+                   || (String(m.toolName) + "\u0000" + String(m.toolArgs || ""))
         if (sup._cache[firma] !== undefined) {
             cb(sup._cache[firma])
             return
@@ -319,6 +326,19 @@ Scope {
         sup.bloqueos = 0
         sup._aconsejado = false
         sup._cache = ({})
+    }
+
+    // El turno se ha interrumpido: el veredicto que estuviera pensando ya no
+    // vale para nada —su tarjeta está cancelada— y dejarlo llegar reanimaría
+    // una llamada que el usuario acaba de matar. Los veredictos ya emitidos se
+    // conservan: siguen siendo ciertos para el turno siguiente.
+    function cancel() {
+        gProc.running = false
+        aProc.running = false
+        sup._gBody = ""
+        sup._aBody = ""
+        sup._gDone = null
+        sup.reviewing = -1
     }
     function resetThread() {
         gProc.running = false

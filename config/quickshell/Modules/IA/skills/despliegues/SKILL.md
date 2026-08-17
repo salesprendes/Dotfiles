@@ -1,6 +1,7 @@
 ---
 name: "Desplegar sin sustos (deploy, canary, rollback)"
 description: "Preparar y ejecutar despliegues con lista go/no-go, migraciones compatibles hacia atrás, canary o blue-green según el caso, y rollback probado. Úsala cuando haya que desplegar, subir a producción, hacer un release, migrar la base de datos, hacer rollback o revertir un despliegue que ha salido mal."
+triggers: "deploy, desplegar, despliegue, release, rollback, revertir, canary, blue-green, produccion, migracion de esquema, ventana de despliegue, feature flag"
 ---
 
 # Desplegar sin sustos

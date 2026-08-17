@@ -1,6 +1,7 @@
 ---
 name: "Crear habilidades"
 description: "Cómo escribir una habilidad (SKILL.md) para este asistente que se active cuando toca: la descripción es el disparador, el cuerpo son instrucciones. Úsala para enseñarle algo nuevo al asistente o arreglar una habilidad que no se usa nunca."
+triggers: "habilidad, habilidades, skill.md, disparadores, triggers, frontmatter, catalogo, use_skill, no se activa, ensenarte, aprende esto"
 source: "adaptada de anthropics/skills (skill-creator), Apache-2.0"
 ---
 
@@ -46,10 +47,58 @@ su raíz de SEIS letras, así que «caducidad» NO casa con «caducado» — usa
 la forma que el usuario diría, no el sustantivo abstracto. Las tildes sí se
 pliegan: «código» y «codigo» casan igual.
 
+## triggers: sinónimos que disparan sin ensuciar la descripción
+
+En el frontmatter, **obligatorio** desde que se midió lo que costaba no
+tenerlo, en una línea separada por comas:
+
+```yaml
+triggers: "502, se cae, caida, hosting, panel"
+```
+
+Las palabras de `triggers` puntúan como si estuvieran en el NOMBRE (peso 4)
+pero NO salen en el catálogo que ve el modelo: ahí van las formas coloquiales
+y los códigos de error que en la descripción visible serían ruido. Les
+aplican las mismas reglas que al resto: raíz de seis letras y descuento de
+palabra común.
+
+Qué poner: el vocabulario CRUDO con el que se llama a la puerta. Nombres de
+comando (`certbot`, `kubectl`, `mdadm`, `iperf3`), cadenas de error
+(`crashloopbackoff`, `err-disabled`), modelos de aparato (`s5700`, `hap`) y
+la forma coloquial («no arranca», «me da miedo», «antes iba»). Lo que NO:
+palabras que ya se defienden solas desde el nombre, y verbos genéricos
+—«revisa», «mira», «arregla»—, que reclaman frases de cualquier tema.
+
+**Con 33 habilidades sin triggers, solo 45 de 114 frases reales se
+resolvían solas y 25 acababan en la habilidad equivocada. Con ellos: 113 y
+ninguna equivocada.** La batería `t_disparadores` mide exactamente eso; si
+tocas una descripción y baja, el fallo es real.
+
+### Las tres formas de romper el enrutado
+
+Se descubrieron midiendo, y todas parecen inofensivas al escribirlas:
+
+1. **Subcadena.** El puntuador busca la raíz DENTRO del texto, sin respetar
+   los límites de palabra: `layer-shell` capturaba «ayer» y se llevaba
+   «la caída de ayer» a Quickshell; `repasa` capturaba «pasa» y se llevaba
+   «mira qué pasa» a revisión de código. Antes de añadir un disparador,
+   pregúntate qué palabras cortas viven dentro de él.
+2. **Palabra común.** Nombrar de pasada «Plesk» en dos descripciones ajenas
+   la puso en tres habilidades: pasó a valer 1 en vez de 4 y la habilidad
+   de Plesk dejó de ganar con su propio nombre. Nombrar a otra habilidad en
+   tu descripción se lo cobra ella.
+3. **Empate.** Dos habilidades con la misma puntuación no deciden nada y la
+   elección cae al router. Es el modo BUENO: mejor preguntar que acertar
+   por los pelos. No fuerces un desempate a base de repetir palabras.
+
 ## Cómo puntúa el cargador (medido, no supuesto)
 
-El harness compara el último mensaje del usuario con el nombre y la
-descripción de cada habilidad. Pesos por palabra que casa:
+El harness compara el último mensaje del usuario con el nombre (más los
+`triggers`, que cuentan como nombre) y la descripción de cada habilidad.
+Puntúan las palabras de TRES letras para arriba —el corte estaba en cuatro y
+tiraba justo el vocabulario que más distingue: ssh, dns, qml, sql, git, vps,
+lxc, pct, nat, mtu, whm, ssl, hap— más las siglas en mayúsculas. Pesos por
+palabra que casa:
 
 | dónde casa        | palabra rara | palabra común (está en 3+ habilidades) |
 |-------------------|--------------|----------------------------------------|
@@ -57,8 +106,13 @@ descripción de cada habilidad. Pesos por palabra que casa:
 | en la descripción | 1            | 0                                      |
 
 La primera del ranking se carga sola si puntúa 2 o más Y le saca 2 o más a
-la segunda. Ante un empate no se carga nada: cargar la equivocada cuesta
-más que no cargar. Consecuencias prácticas:
+la segunda. La consulta no es solo el último mensaje: se puntúa contra una
+ventana de los últimos tres mensajes del usuario, así que un «y ahora el
+certificado» hereda el tema del mensaje anterior. Y cuando el léxico NO
+decide (nada puntúa o hay empate) y el hilo aún no lleva habilidad, el
+harness le pregunta al propio modelo con el catálogo delante en una llamada
+mínima aparte — o sea que una descripción bien escrita dispara aunque el
+usuario no comparta ni una palabra con ella. Consecuencias prácticas:
 
 - **Las palabras fuertes van al NOMBRE**, que pesa el cuádruple: «SQL
   lento e índices» dispara con «índice», «Refactorizar sin romper» con
@@ -70,6 +124,38 @@ más que no cargar. Consecuencias prácticas:
   dentro, no el id de la carpeta repetido.
 - Con muchas habilidades el catálogo tiene presupuesto: la cola se anuncia
   solo por nombre. Otra razón para que el nombre se defienda solo.
+
+## Se carga… y se DESCARGA
+
+Una habilidad cargada no se queda hasta el final del hilo. Si el tema se va
+de ella, se suelta: sus instrucciones dejan de inyectarse y el contexto
+queda libre. Esto no lo puede hacer Claude Code —allí la skill entra como
+resultado de herramienta y vive en el historial— y aquí sí, porque el prompt
+se rehace en cada petición.
+
+Cuándo se descarga, exactamente: cuando la ventana de los últimos mensajes
+del usuario trae palabras con contenido y la habilidad cargada **no casa ni
+una**. Tres salvaguardas para que no pase a destiempo:
+
+- Un mensaje de continuar («vale», «hazlo», «adelante», «sigue») no dice de
+  qué se habla: no descarga nada. Son palabras vacías a todos los efectos.
+- La prueba es **cero coincidencias**, no «va segunda». Una sola palabra
+  compartida basta para seguir puesta.
+- Se decide solo al empezar el turno del usuario, nunca dentro del bucle de
+  herramientas: una habilidad que se evaporara entre el plan y su ejecución
+  sería peor que no tenerla.
+
+Y para cambiar de tema manda **lo reciente**: si el último mensaje solo ya
+decide con claridad, ese es el tema nuevo aunque la ventana venga llena del
+viejo. Al descargar sin sustituta se le pregunta al modelo, por si el encaje
+de la nueva era semántico y no léxico.
+
+Qué significa esto al escribir una habilidad: si la tuya se usa en tareas
+largas donde el usuario va soltando mensajes cortos, **mete en `triggers` el
+vocabulario que aparece durante el trabajo**, no solo el del arranque. La
+habilidad de k3s se queda puesta porque «pod», «kubectl» y «namespace»
+salen en cada mensaje; una habilidad cuyas palabras solo aparecen en la
+primera frase se descolgará a las tres.
 
 ## El cuerpo
 

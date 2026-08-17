@@ -1,6 +1,7 @@
 ---
 name: "Redes en el centro de datos"
 description: "Diagnosticar red de servidor con método: enlace, IP, ruta, DNS y puerto por capas, más VLANs, bonding/LACP, bridges, MTU y medir ancho de banda con iperf3. Úsala si se habla de red caída, latencia, paquetes perdidos, VLAN, bonding o un puerto que no conecta."
+triggers: "iperf3, mtu, bonding, lacp, latencia, paquetes perdidos, traceroute, mtr, ethtool, tcpdump, ping, gateway, arp, puerto cerrado, ancho de banda"
 ---
 
 # Redes en el centro de datos
@@ -33,6 +34,19 @@ Para lo demás, `ssh_exec` con lo de arriba.
 el porcentaje, y `mtr -n --report -c 100 <destino>` señala EN QUÉ salto se
 pierde. Pérdida intermitente con el enlace UP huele a duplex mismatch,
 cable malo o un puerto de switch saturado.
+
+## Una llamada, muchas lecturas
+
+Los peldaños de la escalera son todos lectura: pídelos en UN comando y ten la
+foto entera de una vez, en lugar de una tarjeta de aprobación por peldaño.
+
+```sh
+ip -br link; ip -br addr; ip route; cat /etc/resolv.conf; ss -tulpn | head -30
+```
+
+Lo que MIDE (iperf3, un ping largo, un tcpdump) va aparte y con su plazo: son
+las que tardan, y una lectura rápida atrapada detrás de una lenta se pierde
+si el harness corta a los 90 s.
 
 ## Averías con nombre y apellidos
 

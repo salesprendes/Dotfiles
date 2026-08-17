@@ -1,6 +1,7 @@
 ---
 name: "Git como herramienta de investigación"
-description: 'Usar la historia del repositorio para averiguar cuándo y por qué algo dejó de funcionar, y para preparar cambios en commits limpios. Úsala cuando algo "antes iba", al entender código ajeno, o al preparar un commit.'
+description: 'Usar la historia del repositorio para averiguar cuándo y por qué algo dejó de funcionar, y para preparar cambios en commits ordenados. Úsala cuando algo "antes iba", al entender código ajeno, o al preparar un commit.'
+triggers: "commit, commits, bisect, blame, reflog, historial, rebase, stash, cherry-pick, antes iba, quien toco, cuando se rompio, commits limpios, commits ordenados"
 ---
 
 # Git como herramienta de investigación

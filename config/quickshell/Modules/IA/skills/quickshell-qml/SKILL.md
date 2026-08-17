@@ -1,6 +1,7 @@
 ---
 name: "Quickshell y QML"
 description: "Cómo trabajar en la configuración de Quickshell del usuario (~/.config/quickshell) sin romperla: cómo verificar un cambio, y las trampas de QML que ya han costado un fallo real aquí. Úsala antes de editar cualquier .qml o .js de este shell."
+triggers: "qml, qmllint, quickshell, shell.qml, binding loop, flickable, listview, delegate, singleton, wayland, hyprland, recargar el shell"
 ---
 
 # Quickshell y QML

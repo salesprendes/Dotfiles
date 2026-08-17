@@ -1,6 +1,7 @@
 ---
 name: "Huawei VRP"
-description: "Operar switches y routers Huawei (VRP: series S, CE, AR) por SSH o consola: comandos display, system-view, VLANs con port trunk, eth-trunk, guardar con save, y el commit de los CloudEngine. Úsala si se habla de un Huawei, VRP, un switch S5700 o similar, un CloudEngine o comandos display."
+description: "Operar switches y routers Huawei (VRP: series S, CE, AR) por SSH o consola: comandos display, system-view, VLANs con port trunk, eth-trunk, guardar con save, y la confirmación de cambios de los CloudEngine. Úsala si se habla de un Huawei, VRP, un switch S5700 o similar, un CloudEngine o comandos display."
+triggers: "vrp, display, system-view, eth-trunk, cloudengine, netengine, s5700, s5720, port trunk, undo, quit, guardar con save"
 ---
 
 # Huawei VRP
@@ -50,6 +51,26 @@ En `display interface brief` la columna de errores y el `InUti/OutUti`
 (uso del puerto) responden rápido a «va lento»: un puerto al 99 % o con
 errores subiendo es el diagnóstico. `ping -c 5 <ip>` y `tracert` existen
 tal cual dentro del propio equipo.
+
+## Una sesión, muchos comandos
+
+**No abras una conexión por `display`.** Cada llamada cuesta una tarjeta de
+aprobación y una espera; los `display` de arriba son lectura pura y caben en
+una sola sesión:
+
+```sh
+ssh -T admin@switch <<'EOF'
+screen-length 0 temporary
+display version
+display device
+display interface brief
+display vlan
+EOF
+```
+
+`screen-length 0 temporary` primero (el equivalente VRP de quitar la
+paginación) y `temporary` para no dejarlo tocado en la configuración. Entrar
+en `system-view` y cambiar cosas va en llamada aparte.
 
 ## Averías con nombre y apellidos
 

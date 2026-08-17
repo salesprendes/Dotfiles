@@ -198,13 +198,22 @@ ShellRoot {
         id: slot
         property bool open: false
         property bool closing: false
-        activeAsync: open || closing
+        // Para paneles CAROS de construir (la conversación de la IA: un
+        // markdown analizado por mensaje): destruirlos al cerrar convertía
+        // cada apertura en volver a construirlo todo, y el contenido llegaba
+        // con retraso visible. Con keepAlive la primera apertura construye y
+        // las siguientes solo muestran — Popout re-anima vía onShownChanged,
+        // así que reabrir funciona igual. Oculto no pinta (visible false);
+        // el coste es solo la memoria del panel.
+        property bool keepAlive: false
+        property bool _built: false
+        activeAsync: open || closing || (keepAlive && _built)
 
         // El cierre animado se RESERVA al abrir, no cuando el panel avisa: la
         // primera señal de 'visible' puede dispararse mientras el loader aún
         // no ha publicado 'item' (carga asíncrona), y de perderla el panel se
         // destruiría a mitad de la animación de cierre.
-        onOpenChanged: if (open) closing = true
+        onOpenChanged: if (open) { closing = true; _built = true }
 
         // Con el loader inactivo 'item' es null y Connections simplemente no
         // escucha; al cargar, el target se reengancha solo. El guard cubre la
@@ -289,6 +298,7 @@ ShellRoot {
             }
             PanelSlot {
                 open: Globals.aiOpen && scr.showsPanels
+                keepAlive: true
                 AiPanel { modelData: scr.modelData }
             }
 

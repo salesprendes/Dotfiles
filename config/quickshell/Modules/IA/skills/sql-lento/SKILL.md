@@ -1,6 +1,7 @@
 ---
 name: "SQL lento e índices"
-description: "Diagnostica consultas SQL lentas con EXPLAIN y el registro de consultas lentas, y diseña índices en MySQL/MariaDB o PostgreSQL. Úsala cuando «la consulta tarda», «MySQL va lento», «la base de datos carga el servidor», haga falta crear un índice en una tabla o un panel Plesk/cPanel se arrastre."
+description: "Diagnostica consultas SQL lentas con EXPLAIN y el registro de consultas lentas, y diseña índices en MySQL/MariaDB o PostgreSQL. Úsala cuando «la consulta tarda», «MySQL va lento», «la base de datos carga el servidor», haga falta crear un índice en una tabla o el panel de un hosting se arrastre."
+triggers: "explain, indice, indices, mysql, mariadb, postgres, postgresql, consulta lenta, slow query, innodb, join, cardinalidad, analyze, tabla enorme"
 ---
 
 # Consultas lentas e índices

@@ -1,6 +1,7 @@
 ---
 name: "Tests y TDD"
 description: "Escribe tests que demuestran comportamiento y guía el ciclo TDD: rojo, verde, limpiar. Úsala cuando el usuario diga «escribe los tests», «haz TDD», «testea esto», «este test es flaky», «sube la cobertura» o al arreglar un bug que necesita test de regresión."
+triggers: "test, tests, tdd, pytest, jest, unittest, cobertura, mock, fixture, testear, ciclo rojo verde, probar una funcion, test unitario"
 ---
 
 # Tests que valen y TDD pragmático

@@ -1,6 +1,7 @@
 ---
 name: "Ubiquiti UniFi (WiFi)"
 description: "Desplegar y diagnosticar WiFi con puntos de acceso Ubiquiti UniFi: adopción de un AP, set-inform por SSH, estados raros (adopting, isolated, managed by other), canales y potencia, roaming, VLANs por SSID y copias del controlador. Úsala si se habla de UniFi, Ubiquiti, un AP, WiFi lento o que va mal, cobertura o un punto de acceso que no adopta."
+triggers: "unifi, ubiquiti, set-inform, adopting, adoptar, adopcion, ssid, roaming, wifi, cobertura, punto de acceso, uap, canal, potencia, isolated"
 ---
 
 # Ubiquiti UniFi

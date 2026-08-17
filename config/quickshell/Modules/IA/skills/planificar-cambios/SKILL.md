@@ -1,6 +1,7 @@
 ---
 name: "Planificar cambios"
 description: "Convierte un encargo en un plan por fases verificables antes de escribir código. Úsala cuando el encargo sea grande o ambiguo, cuando el usuario diga «planifica esto», «cómo lo harías», «diseña el cambio», o antes de tocar varios archivos a la vez."
+triggers: "planifica, planificar, plan, fases, hoja de ruta, disena, como lo harias, alcance, requisitos, antes de escribir codigo, por donde empiezo"
 ---
 
 # Del encargo al plan

@@ -261,7 +261,10 @@ const CENSO = {
     "agents/AgentWorkspace.qml": 1, "integrations/LspManager.qml": 3,
     "integrations/DebugSession.qml": 2, "integrations/McpManager.qml": 1,
     "storage/KeyStore.qml": 5, "storage/Attachments.qml": 3,
-    "storage/SkillStore.qml": 1, "storage/ConversationStore.qml": 1,
+    // SkillStore: el escaneo de SKILL.md y el router de habilidades. Los dos
+    // corren comandos fijos del harness (el router es el mismo transporte curl
+    // que el Compactor: el modelo no elige el comando, solo contesta un id).
+    "storage/SkillStore.qml": 2, "storage/ConversationStore.qml": 1,
     "storage/AuditLog.qml": 1, "ui/MessageBubble.qml": 1,
     // Los hooks del USUARIO: los escribe él, no el modelo.
     "tools/HookRunner.qml": 1

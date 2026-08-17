@@ -153,6 +153,18 @@ Scope {
         return ""
     }
 
+    // Los últimos N mensajes del usuario, juntos y en orden. Es la consulta
+    // contra la que se miden las habilidades: un "y ahora el certificado" no
+    // trae las palabras del tema, pero el mensaje anterior sí — puntuar solo
+    // contra el último perdía ese contexto justo cuando más servía.
+    function recentUserText(n) {
+        const out = []
+        for (let i = messages.count - 1; i >= 0 && out.length < n; i--)
+            if (messages.get(i).role === "user")
+                out.unshift(messages.get(i).content)
+        return out.join("\n")
+    }
+
     // ── Guardado con freno ───────────────────────────────────────────────────
     // Antes cada mensaje reescribía todo el JSON a disco (instantánea de N
     // mensajes + serialización + escritura); en un hilo largo y con streaming eso

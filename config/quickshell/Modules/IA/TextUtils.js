@@ -110,15 +110,24 @@ function fold(s) {
 }
 
 // Palabras vacías: son las que aparecen en TODAS las frases, así que puntuar
-// con ellas es puntuar ruido. Solo las de cuatro letras o más, que las cortas
-// ya las descarta el filtro de longitud.
+// con ellas es puntuar ruido.
+//
+// El bloque de tres letras es el peaje de admitirlas (ver keywords): sin él,
+// "que", "los" o "del" entrarían a puntuar y arrasarían con cualquier señal.
 var STOP = ("para como esta este esto estos estas cuando donde porque pero unas "
     + "unos sobre entre desde hasta tiene tienen hacer hace haga hago puede "
     + "pueden quiero necesito tengo poner pon dime dame sabes creo algo alguna "
     + "algun todo toda todos todas nada mucho muy mas menos bien mal ahora "
     + "luego antes despues aqui alli asi cual cuales quien mismo misma otra "
     + "otro cosa cosas vez veces favor gracias hola sale salen mira mirar ver "
-    + "dice dicen anda va van esos esas cada solo sola tambien").split(" ")
+    + "dice dicen anda va van esos esas cada solo sola tambien "
+    + "que los las una uno del por con sin hay tan aun sus sea ser son fue "
+    + "era han has ese esa eso ahi dos tal nos les vas voy dio pue hoy "
+    // Las de CONTINUAR. No dicen de qué se habla, dicen "sigue": si contaran
+    // como contenido, un "vale, hazlo" parecería un cambio de tema y
+    // descargaría la habilidad justo cuando el agente iba a usarla.
+    + "vale hazlo haz sigue continua continuar adelante venga dale okey "
+    + "correcto exacto perfecto genial claro").split(" ")
 
 // La raíz aproximada de una palabra: sus primeras seis letras. Así "historial"
 // casa con "historia" y "logs" con "log", sin montar un lematizador. Se aplica
@@ -128,8 +137,19 @@ function stem(w) {
     return w.length >= 7 ? w.slice(0, 6) : w
 }
 
-// Palabras con las que vale la pena puntuar: de cuatro letras para arriba, o
-// siglas en mayúsculas (QML, SSH, DNS, WHM), que son cortas pero clavan el tema.
+// Palabras con las que vale la pena puntuar: de TRES letras para arriba, o
+// siglas en mayúsculas (QML, SSH, DNS, WHM), que son aún más cortas y clavan
+// el tema.
+//
+// Tres, no cuatro. El corte en cuatro tiraba a la basura justo el vocabulario
+// que más distingue en este oficio —ssh, dns, qml, sql, git, vps, lxc, pct,
+// nat, mtu, whm, ssl, api, hap— salvo que el usuario las escribiera en
+// MAYÚSCULAS, que no es como escribe nadie. Medido sobre un corpus de 114
+// frases reales: "el hap no hace nat" y "arranca el contenedor lxc con pct" no
+// dejaban ni una sola palabra puntuable.
+//
+// El precio son los "que/los/del" de tres letras, que entran a saco; van todos
+// al bloque nuevo de STOP.
 function keywords(text) {
     const raw = String(text || "").split(/[^\wáéíóúüñÁÉÍÓÚÜÑ]+/)
     const out = []
@@ -138,7 +158,7 @@ function keywords(text) {
         if (w === "")
             continue
         const sigla = w.length >= 2 && w.length <= 5 && /^[A-Z0-9]+$/.test(w)
-        if (!sigla && w.length < 4)
+        if (!sigla && w.length < 3)
             continue
         const f = fold(w)
         if (!sigla && STOP.indexOf(f) !== -1)
@@ -166,8 +186,11 @@ function keywords(text) {
 // ingenua plegaba seiscientas veces los mismos textos.
 function rankSkills(skills, text) {
     const words = keywords(text)
+    // Los triggers del frontmatter puntúan como el NOMBRE (peso 4): son los
+    // sinónimos que el usuario escribe de verdad ("502", "se cae") y que no
+    // quedarían bien en la descripción visible del catálogo.
     const folded = skills.map(s => ({
-        name: fold((s.name || "") + " " + (s.id || "")),
+        name: fold((s.name || "") + " " + (s.id || "") + " " + (s.triggers || "")),
         desc: fold(s.description || "")
     }))
     // 2 = está en el nombre, 1 = en la descripción, 0 = no está.
@@ -196,6 +219,74 @@ function rankSkills(skills, text) {
     })
     out.sort((a, b) => (b.score - a.score) || (a.i - b.i))
     return out
+}
+
+// QUÉ HABILIDAD DEBE ESTAR CARGADA DESPUÉS DE ESTE MENSAJE, cargas y DESCARGAS.
+//
+// Cargar era la mitad del problema. La otra mitad es que una habilidad cargada
+// se quedaba puesta hasta el final del hilo: diagnosticabas un Proxmox y, tres
+// temas después, el modelo seguía recibiendo las instrucciones de Proxmox en
+// cada petición —contexto gastado y, peor, sesgo: "verifícalo con qm status"
+// cuando ya se hablaba de otra cosa—. Los harness grandes no pueden hacer esto:
+// en Claude Code la skill entra como resultado de herramienta, o sea que vive en
+// el historial y de ahí no se la saca. Aquí las instrucciones se inyectan en
+// cada petición, así que descargar es posible de verdad.
+//
+// Descargar en cuanto el último mensaje no la menciona sería el desastre de
+// siempre: un "sí, hazlo" la tiraría a mitad de tarea. Las cuatro reglas que lo
+// hacen seguro:
+//
+//   1. UN MENSAJE SIN PALABRAS CON CONTENIDO NO ES INFORMACIÓN. "vale", "sigue",
+//      "hazlo" no dicen que el tema haya cambiado; no descargan nunca.
+//   2. LA PRUEBA ES CERO, no "va segunda". Mientras la cargada comparta una
+//      sola palabra con la ventana, el tema no se ha ido de ella. Que otra
+//      puntúe más ya se resuelve por la vía normal (la sustituye si se despega).
+//   3. LA VENTANA DA LA HISTÉRESIS. La relevancia se mide contra los últimos
+//      mensajes del usuario, no contra el último: un comentario suelto de otro
+//      tema no descarga nada, hace falta que el tema viejo desaparezca de la
+//      ventana entera.
+//   4. LO RECIENTE MANDA PARA CAMBIAR. Si el ÚLTIMO mensaje solo ya decide con
+//      claridad, ese es el tema nuevo y se cambia ya. Sin esto, el tema viejo
+//      seguía en la ventana empatando con el nuevo y el cambio tardaba tres
+//      mensajes en llegar.
+//
+// Devuelve { id, owner, ask, ranked }: 'id' es la habilidad que debe quedar
+// cargada ("" = ninguna), 'owner' quién conserva el veto de vocabulario que
+// dejó un use_skill (que caduca por lo mismo y con la misma regla), y 'ask' si
+// hay que preguntarle al modelo (nada cargado y el mensaje sí traía tema).
+function decideSkill(skills, ultimo, ventana, sticky, owner, floor, margin) {
+    const vent = String(ventana || ultimo || "")
+    const rv = rankSkills(skills, vent)
+    const claro = (r) => r.length > 0 && r[0].score >= floor
+                      && (r.length === 1 || r[0].score - r[1].score >= margin)
+    // Lo reciente primero: el tema nuevo no tiene por qué ganarle a la inercia
+    // de los dos mensajes anteriores.
+    let gana = ""
+    const ru = String(ultimo || "") === vent ? rv : rankSkills(skills, String(ultimo || ""))
+    if (claro(ru))
+        gana = ru[0].skill.id
+    else if (claro(rv))
+        gana = rv[0].skill.id
+
+    const hay = keywords(vent).length > 0
+    const puntos = (id) => {
+        for (let i = 0; i < rv.length; i++)
+            if (rv[i].skill.id === id)
+                return rv[i].score
+        return -1                       // ya no está en el catálogo: se cae sola
+    }
+    // ¿Sigue viniendo a cuento lo que ya estaba puesto?
+    const vigente = (id) => {
+        if (!id)
+            return false
+        const p = puntos(id)
+        return p > 0 || (p === 0 && !hay)
+    }
+
+    const id = gana !== "" ? gana : (vigente(sticky) ? sticky : "")
+    const own = !owner ? ""
+              : (owner === id || vigente(owner)) ? owner : ""
+    return { id: id, owner: own, ask: id === "" && hay, ranked: rv }
 }
 
 // Repara los defectos típicos de un JSON generado por un modelo pequeño:

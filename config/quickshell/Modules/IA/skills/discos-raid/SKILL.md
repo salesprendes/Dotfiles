@@ -1,6 +1,7 @@
 ---
 name: "Discos, RAID y SMART"
 description: "Salud de discos y arrays: leer SMART sin alarmismo, mdadm y ZFS degradados, sustituir un disco sin perder datos y qué hacer ante sectores reubicados o errores de E/S. Úsala si se habla de un disco que falla, SMART, RAID, mdadm, un pool ZFS o errores de E/S."
+triggers: "smart, smartctl, mdadm, zfs, zpool, raid, sectores, reubicados, badblocks, resync, degradado, nvme, sata, scrub, disco fallando, errores de lectura"
 ---
 
 # Discos, RAID y SMART
@@ -52,6 +53,18 @@ el serial es el único nombre que no baila entre arranques.
 El otro testigo: `journalctl -k | grep -i "ata\|nvme\|i/o error"`. Errores
 de E/S en el kernel con SMART limpio apuntan a cable, controladora o
 alimentación antes que al plato.
+
+## Una llamada, muchas lecturas
+
+El inventario es lectura pura y cabe en un solo comando:
+
+```sh
+lsblk -o NAME,SIZE,TYPE,MOUNTPOINT,MODEL; cat /proc/mdstat; zpool status 2>/dev/null; df -h
+```
+
+Los SMART largos y un `badblocks` NO se agrupan: tardan de más y arrastrarían
+al resto por el plazo. Y nada que escriba en un disco comparte llamada con
+nada.
 
 ## mdadm (RAID por software)
 

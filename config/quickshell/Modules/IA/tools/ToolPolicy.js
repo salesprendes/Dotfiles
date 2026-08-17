@@ -408,3 +408,133 @@ function grantCaps(grant) {
 function grantNeedsApproval(grant) {
     return !!(grant && grant.write)
 }
+
+// ── Comandos de SOLO LECTURA ─────────────────────────────────────────────────
+// Un diagnóstico son treinta lecturas parecidas: `kubectl get pods -n a`,
+// `-n b`, `describe pod x`… Sirve para dos cosas que cuestan lo mismo de
+// medir: cachear el veredicto del supervisor (contestaba lo mismo treinta
+// veces, con esperas de hasta 90 s) y ofrecer al usuario aprobar la ráfaga
+// entera en vez de tarjeta a tarjeta.
+//
+// La lista es blanca y corta a propósito: lo que no se reconoce NO es de
+// lectura, y paga su veredicto y su tarjeta como siempre. Un falso positivo
+// sería reutilizar el visto bueno de un `ls` para un `rm`, así que la regla
+// es "si dudas, no".
+const LEER_BIN = ["cat", "head", "tail", "less", "ls", "ll", "stat", "file",
+    "wc", "grep", "egrep", "rg", "awk", "sed", "cut", "sort", "uniq", "tr",
+    "find", "df", "du", "free", "uptime", "uname", "hostname", "hostnamectl",
+    "date", "timedatectl", "id", "whoami", "ps", "top", "pgrep", "ss",
+    "netstat", "ip", "ping", "dig", "host", "nslookup", "journalctl", "dmesg",
+    "lsblk", "lsof", "mount", "env", "printenv", "which", "command", "echo",
+    "printf", "true", "test", "vmstat", "iostat", "sensors", "nvidia-smi",
+    "docker", "podman", "kubectl", "k3s", "systemctl", "git", "curl", "wget",
+    "openssl", "sudo", "busctl", "loginctl", "pacman", "dpkg", "rpm"]
+// Subcomandos de lectura de los binarios que hacen las DOS cosas: si el
+// binario está aquí, su primer argumento tiene que estar en su lista.
+const LEER_SUB = ({
+    kubectl:   ["get", "describe", "logs", "top", "explain", "api-resources",
+                "api-versions", "cluster-info", "version", "config", "auth"],
+    k3s:       ["kubectl", "check-config"],
+    systemctl: ["status", "is-active", "is-enabled", "is-failed", "list-units",
+                "list-unit-files", "list-timers", "show", "cat", "get-default"],
+    docker:    ["ps", "images", "logs", "inspect", "stats", "version", "info"],
+    podman:    ["ps", "images", "logs", "inspect", "stats", "version", "info"],
+    git:       ["status", "log", "diff", "show", "branch", "remote", "config"],
+    pacman:    ["-Q", "-Qi", "-Qs", "-Ss", "-Si", "-Qe", "-Ql"],
+    dpkg:      ["-l", "-L", "-s"],
+    rpm:       ["-q", "-qa", "-qi", "-ql"],
+    ip:        ["a", "addr", "l", "link", "r", "route", "n", "neigh"]
+})
+// Formas SIN subcomando que también son leer: `systemctl --failed` es el
+// vistazo de siempre y no tiene positional. Se exige al menos una bandera y
+// que TODAS estén en la lista — así `systemctl` a secas (que sin argumentos
+// pagina la lista entera) y cualquier bandera desconocida siguen fuera.
+const LEER_FLAG = ({
+    systemctl: ["--failed", "--all", "--type", "--no-pager", "--user",
+                "--system", "--full", "--plain", "--no-legend", "--state",
+                "--quiet", "--recursive"]
+})
+// Lo que descalifica el comando entero pase lo que pase: escribe, redirige, o
+// abre un intérprete donde ya no se ve qué pasa.
+const NO_LECTURA = new RegExp(
+    "(^|\\s)(rm|mv|cp|dd|mkfs|fdisk|parted|chmod|chown|chattr|ln|touch|tee|"
+  + "truncate|kill|pkill|killall|reboot|shutdown|halt|poweroff|init|swapoff|"
+  + "iptables|nft|useradd|userdel|passwd|visudo|crontab|at|nc|ncat|socat|bash|"
+  + "sh|zsh|python|python3|perl|ruby|node|make|npm|pip|cargo|go)(\\s|$)"
+  + "|>|\\$\\(|`|\\|\\s*(tee|xargs)")
+
+// ¿Es este comando de solo lectura? Público porque se prueba solo.
+function readOnlyCommand(cmd) {
+    const s = String(cmd || "")
+    if (s === "" || s.length > 2000 || NO_LECTURA.test(s))
+        return false
+    // Cada tramo se juzga por separado: basta uno que no lea para descalificar
+    // el conjunto.
+    const tramos = s.split(/;|&&|\|\||\||\n/)
+    let vistos = 0
+    for (let i = 0; i < tramos.length; i++) {
+        const t = tramos[i].trim()
+        if (t === "")
+            continue
+        vistos++
+        // Variables de entorno delante (FOO=1 cmd) y sudo: se saltan hasta el
+        // binario de verdad, que es quien decide.
+        let piezas = t.split(/\s+/).filter(p => p !== "")
+        while (piezas.length > 0
+               && (/^[A-Za-z_][A-Za-z0-9_]*=/.test(piezas[0])
+                   || piezas[0] === "sudo" || piezas[0] === "-S"))
+            piezas = piezas.slice(1)
+        if (piezas.length === 0)
+            return false
+        const bin = piezas[0].replace(/^.*\//, "")      // /usr/bin/ls → ls
+        if (LEER_BIN.indexOf(bin) === -1)
+            return false
+        const subs = LEER_SUB[bin]
+        if (subs) {
+            const sub = piezas.slice(1).find(p => !p.startsWith("--"))
+            if (sub === undefined) {
+                // Sin subcomando: solo pasa si el binario admite forma de
+                // banderas y TODAS las suyas son de mirar.
+                const flags = piezas.slice(1)
+                const permitidas = LEER_FLAG[bin]
+                if (!permitidas || flags.length === 0)
+                    return false
+                for (let f = 0; f < flags.length; f++)
+                    if (permitidas.indexOf(flags[f].split("=")[0]) === -1)
+                        return false
+                continue
+            }
+            if (subs.indexOf(sub) === -1)
+                return false
+            // `k3s kubectl <sub>`: la decisión real es la de kubectl.
+            if (bin === "k3s" && sub === "kubectl") {
+                const resto = piezas.slice(piezas.indexOf("kubectl") + 1)
+                const sub2 = resto.find(p => !p.startsWith("-"))
+                if (sub2 === undefined || LEER_SUB.kubectl.indexOf(sub2) === -1)
+                    return false
+            }
+        }
+        // curl/wget solo leen si no bajan a disco ni mandan cuerpo.
+        if ((bin === "curl" || bin === "wget")
+                && /(^|\s)(-o|-O|--output|-d|--data|-T|--upload-file)(\s|$)/.test(t))
+            return false
+    }
+    return vistos > 0
+}
+
+// La firma con la que cachear el veredicto del supervisor, o null si no se
+// puede canonizar (entonces se usa la firma exacta de siempre). Misma
+// herramienta y mismo destino: el veredicto de "leer aquí" no depende de QUÉ
+// se lee. El host va dentro porque leer en tu equipo y leer en un servidor
+// ajeno no son la misma pregunta.
+function verdictKey(name, argsJson) {
+    if (name !== "ssh_exec" && name !== "run_command")
+        return null
+    let a = null
+    try { a = JSON.parse(String(argsJson || "")) } catch (e) { return null }
+    if (!a || typeof a !== "object")
+        return null
+    if (!readOnlyCommand(String(a.command || a.cmd || "")))
+        return null
+    return name + " RO " + String(a.host || "")
+}

@@ -1,6 +1,7 @@
 ---
 name: "Correo y entregabilidad"
 description: "Por qué el correo de un dominio rebota o cae en spam y cómo arreglarlo: SPF, DKIM, DMARC, listas negras, colas de Exim/Postfix y lectura de rebotes. Úsala si se habla de correos que no llegan, spam, rebotes, blacklists o un buzón que no envía."
+triggers: "spf, dkim, dmarc, postfix, exim, dovecot, mailq, rebote, rebotes, bounce, spam, blacklist, buzon, smtp, imap, entregabilidad, no llegan los correos"
 ---
 
 # Correo y entregabilidad

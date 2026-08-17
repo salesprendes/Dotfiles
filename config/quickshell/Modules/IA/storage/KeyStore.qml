@@ -209,13 +209,50 @@ Scope {
         const m = Object.assign({}, sshPass)
         if (pw === "") delete m[name]; else m[name] = pw
         sshPass = m
+        // El respaldo en claro, con el MISMO contrato que las claves de
+        // proveedor (setKey): sin llavero —o si falla— la contraseña se queda
+        // en Settings, porque solo en memoria moría con la sesión y el
+        // servidor "guardado" dejaba de entrar al siguiente arranque del
+        // shell. Con llavero funcional, la copia en claro se borra una vez
+        // COMPROBADO el guardado, no antes.
+        const enClaro = (v) => {
+            const p = Object.assign({}, Settings.aiSshPasswords)
+            if (v === "") delete p[name]; else p[name] = v
+            Settings.aiSshPasswords = p
+        }
+        if (!haveKeyring) {
+            enClaro(pw)
+            return
+        }
         // Aquí el nombre lo escribe el usuario y antes se interpolaba dentro de
         // un `sh -c`: un host llamado `x"; rm -rf ~; #` era un comando. Ahora va
         // como argumento suelto y no hay shell que interpretar.
-        if (haveKeyring)
-            keys._guardar({ servicio: "quickshell-ai-ssh", campo: "host",
-                            valor: name, secreto: pw,
-                            etiqueta: "Quickshell SSH " + name })
+        keys._guardar({ servicio: "quickshell-ai-ssh", campo: "host",
+                        valor: name, secreto: pw,
+                        etiqueta: "Quickshell SSH " + name,
+                        hecho: (bien) => {
+                            if (bien) {
+                                enClaro("")
+                            } else {
+                                enClaro(pw)
+                                keys.keyringWarn = I18n.tr("The system keyring did not accept the key, so it stays in the settings file. Check that a keyring daemon is running.")
+                            }
+                        } })
+    }
+
+    // Al arrancar, las copias en claro entran a la memoria de sesión; si
+    // además hay llavero, sus lecturas (el Instantiator de abajo) llegan
+    // después y pisan con la fuente de verdad.
+    Component.onCompleted: {
+        const p = Settings.aiSshPasswords || ({})
+        let m = null
+        for (const n in p) {
+            if (m === null)
+                m = Object.assign({}, sshPass)
+            m[n] = p[n]
+        }
+        if (m !== null)
+            sshPass = m
     }
 
     // Carga de contraseñas del llavero, una por host registrado.

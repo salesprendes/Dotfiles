@@ -28,6 +28,12 @@ PanelWindow {
     // de escalarse y fundirse. El contenido no se deforma ni se desplaza: se va
     // descubriendo, y funde con retardo (ver Theme.revealOpacity).
     property real openProgress: 0
+    // ESC cierra… salvo que el panel tenga algo que cortar primero. Es el
+    // gesto de Claude Code: la primera pulsación interrumpe lo que esté en
+    // marcha y la segunda ya cierra. Quien lo quiera declara 'escapeAction' y
+    // devuelve true si ha consumido la tecla; sin declararla, ESC cierra como
+    // siempre.
+    property var escapeAction: null
     readonly property int openAnimDuration: Settings.popoutAnimationMs
     // El cierre va un punto más ágil que la apertura: lo que entra se
     // disfruta, lo que se despide no debe hacerse esperar.
@@ -141,7 +147,11 @@ PanelWindow {
         // la tarjeta captura ESC; si un hijo tiene el foco (buscador), el evento no
         // consumido burbujea hasta aquí.
         focus: true
-        Keys.onEscapePressed: Globals.closeAll()
+        Keys.onEscapePressed: {
+            if (win.escapeAction && win.escapeAction())
+                return
+            Globals.closeAll()
+        }
 
         // Absorbe clicks para que no cierre.
         MouseArea {

@@ -1,6 +1,7 @@
 ---
 name: "Cisco IOS"
 description: "Operar switches y routers Cisco (IOS, IOS-XE) por SSH o consola: comandos show, VLANs y trunks, spanning-tree, EtherChannel, puertos err-disabled, guardar la configuración y cambiar cosas sin quedarte fuera. Úsala si se habla de un Cisco, un Catalyst, IOS, un switch o router Cisco, o comandos como show run."
+triggers: "catalyst, nexus, switchport, err-disabled, errdisable, portfast, etherchannel, spanning, show running, enable secret, ios-xe, vtp, cdp, wr mem"
 ---
 
 # Cisco IOS / IOS-XE
@@ -45,6 +46,27 @@ show running-config             ← la configuración entera en marcha
 en `show mac address-table address xxxx.xxxx.xxxx` da el puerto, y `show
 cdp neighbors` dice si ese puerto va a otro switch (entonces se sigue por
 ahí) o al equipo final.
+
+## Una sesión, muchos comandos
+
+**No abras una conexión por `show`.** Cada llamada es una tarjeta que el
+usuario aprueba y un veredicto del supervisor: diez `show` sueltos son diez
+esperas que cabían en una. Todos los de arriba son lectura pura y van juntos
+en una sola sesión:
+
+```sh
+ssh -T admin@switch <<'EOF'
+terminal length 0
+show version
+show ip interface brief
+show interfaces status
+show vlan brief
+EOF
+```
+
+`terminal length 0` primero, o el equipo pagina y la sesión se queda
+esperando un espacio que nadie va a pulsar. La CONFIGURACIÓN no se agrupa
+con las lecturas: quien aprueba tiene que poder leer qué cambia.
 
 ## Averías con nombre y apellidos
 

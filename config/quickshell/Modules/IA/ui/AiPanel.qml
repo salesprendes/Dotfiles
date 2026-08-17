@@ -18,9 +18,20 @@ Popout {
     cardWidth: Settings.aiWide ? 660 : 480
     cardMinWidth: 340
     shown: Globals.aiOpen
-    Behavior on cardWidth {
-        NumberAnimation { duration: Theme.animNormal; easing.type: Theme.reflowEasing }
-    }
+    // El contenido puede superar el alto máximo de la tarjeta (primer arranque
+    // con la lámina de configuración abierta, p.ej.): sin esto se recortaba en
+    // silencio y el cajetín de entrada quedaba fuera, inalcanzable.
+    scrollable: true
+    // SIN Behavior sobre cardWidth, a propósito: animar el ancho re-maqueta la
+    // conversación ENTERA fotograma a fotograma (cada burbuja re-envuelve su
+    // Markdown) — la misma pelea que el carril de la barra evita midiendo en
+    // diferido. El cambio de ancho es un salto seco, y así debe quedarse.
+
+    // ESC: primero PARA, después cierra. Con el agente trabajando, cerrar el
+    // panel no era lo que se pedía —el turno seguía por detrás—, y era el
+    // único gesto que la mano busca sin pensar. Segunda pulsación (ya sin nada
+    // que cortar) cierra como siempre.
+    escapeAction: () => AiService.interrupt()
 
     property bool configOpen: AiService.notConfigured && AiService.messages.count === 0
     property bool convOpen: false
@@ -436,6 +447,14 @@ Popout {
             : Math.max(Theme.dp(250), Math.ceil(
                 Math.min(Settings.aiWide ? Theme.dp(560) : Theme.dp(460),
                          contentHeight + Theme.space8) / 8) * 8)
+        // SIN Behavior sobre este alto, y no por falta de ganas: se probó a
+        // interpolar los saltos de ocho píxeles para que el crecimiento se
+        // leyera continuo, y el remedio fue peor. El alto de la lista entra en
+        // la cuenta del final (_finY = contentHeight - height), así que
+        // animarlo mueve el destino del seguimiento en CADA fotograma
+        // mientras el modelo escribe: el pegado persigue un blanco que no
+        // para, y eso en pantalla es exactamente el temblor que se veía. El
+        // escalón de ocho píxeles es menor que un interlineado; el temblor no.
         clip: true
         spacing: Theme.space12
         model: AiService.messages
@@ -509,7 +528,22 @@ Popout {
             // haber crecido (el modelo sigue escribiendo), así que el destino
             // que se calculó al salir ya no es el final. Sin esto, el botón
             // dejaba la vista a unos píxeles del fondo y volvía a aparecer.
-            onStopped: chat._pegarAbajo()
+            //
+            // SOLO si el parón es por llegada: onMovementStarted también
+            // dispara stop(), y rematar ahí escribía contentY contra el gesto
+            // del usuario — el primer toque de rueda durante el viaje te
+            // devolvía al fondo de un tirón.
+            onStopped: {
+                if (chat.moving || chat.dragging)
+                    return
+                // El remate es INCONDICIONAL, no pasa por _pegarAbajo: quien
+                // pulsó el botón quiere el final, y el guardián de "te has ido
+                // arriba" no pinta nada aquí — de hecho, con una estimación
+                // corta el propio viaje podía dejar la vista por encima del
+                // umbral y soltar el seguimiento justo al llegar.
+                chat.follow = true
+                chat._alFinal()
+            }
         }
 
         // Visible en reposo (no solo al usarla): con conversación larga, la
@@ -523,14 +557,27 @@ Popout {
         //
         // Se le reserva su carril y las tarjetas se ciñen a él — solo cuando la
         // barra está, para que sin desplazamiento se aproveche todo el ancho.
-        // Sin Behavior: un vínculo de solo lectura no se puede animar (el motor
-        // lo rechaza y el tipo entero se queda sin cargar), y animarlo tampoco
-        // sería buena idea — cambiaría el ancho de TODAS las tarjetas fotograma
-        // a fotograma, que es rehacer la maqueta de la conversación entera.
-        readonly property int carril:
-            contentHeight > height + 1 ? Theme.dp(5) + Theme.space6 : 0
+        // Sin Behavior: animarlo cambiaría el ancho de TODAS las tarjetas
+        // fotograma a fotograma, que es rehacer la maqueta de la conversación
+        // entera.
+        //
+        // Y MEDIDO, no vinculado: el vínculo directo era un bucle en toda
+        // regla (contentHeight → carril → ancho de tarjetas → alturas →
+        // contentHeight) que Qt denunciaba en cada carga del panel y se
+        // pagaba en pasadas de maquetación de más. Converge solo —añadir
+        // carril estrecha, estrechar solo puede ALARGAR el contenido, así
+        // que la condición no se deshace—, pero el motor no lo sabe: se
+        // mide DESPUÉS del pase de disposición (Qt.callLater, abajo con
+        // _pegarAbajo) y el ciclo desaparece.
+        property int carril: 0
+        function _mideCarril() {
+            const quiere = contentHeight > height + 1 ? Theme.dp(5) + Theme.space6 : 0
+            if (quiere !== carril)
+                carril = quiere
+        }
 
         ScrollBar.vertical: ThinScrollBar {
+            id: barra
             policy: chat.contentHeight > chat.height + 1
                 ? ScrollBar.AlwaysOn : ScrollBar.AlwaysOff
             rightPadding: 0
@@ -555,21 +602,195 @@ Popout {
         //     pase de disposición en curso y no dentro de él. Es lo que rompe
         //     la reentrada.
         property bool follow: true
-        readonly property bool atBottom:
-            contentY >= contentHeight - height - Theme.dp(48)
-        readonly property real _finY: Math.max(0, contentHeight - height)
+        // EL FINAL DE VERDAD LLEVA 'originY'. Una lista de alturas variables no
+        // guarda su contenido en el intervalo [0, contentHeight]: lo que aún no
+        // se ha creado se estima por la media de lo que sí, y el motor absorbe
+        // esa corrección moviendo el ORIGEN del contenido. El tope real de
+        // contentY es 'originY + contentHeight - height'.
+        //
+        // Faltando ese sumando fallaban las dos cosas a la vez, y con el mismo
+        // origen:
+        //   · Origen POSITIVO → el pegado se quedaba corto y la vista dejaba de
+        //     bajar aunque la conversación siguiera creciendo. Se notaba justo
+        //     cuando entran dos tarjetas de golpe, que es cuando la media —y
+        //     con ella el origen— pega el salto más gordo.
+        //   · Origen NEGATIVO → el pegado se pasaba de largo. Y escribir
+        //     contentY a mano NO recorta contra los límites (eso solo lo hace
+        //     el gesto), así que la vista se quedaba clavada en el vacío de
+        //     debajo del último mensaje: el "limbo" sin nada que mirar.
+        readonly property real _finY: originY + Math.max(0, contentHeight - height)
+        readonly property bool atBottom: contentY >= _finY - Theme.dp(48)
+
+        // ¿SE HA MOVIDO ALGUIEN, O SE HA MOVIDO LA MAQUETA? El contenedor solo
+        // marca estas banderas cuando el movimiento viene de fuera —rueda,
+        // arrastre, tirador de la barra—; una recolocación por cambio de
+        // contenido no las levanta. Es la diferencia que el umbral en píxeles
+        // nunca supo hacer solo.
+        readonly property bool _gesto: dragging || flicking || moving || barra.pressed
+
+        // Al engancharse se toma la foto de dónde está la vista y dónde el
+        // final: es el punto de partida con el que compara onContentYChanged.
+        onFollowChanged: if (follow) { _prevY = contentY; _prevFin = _finY }
+
+        // LA VENTANA DEL TRASPASO. Al acabar el turno pasan dos cosas seguidas:
+        // el pie se vacía (la respuesta deja de estar ahí) y la tarjeta entra
+        // en la lista. Entre medias el contenido encoge y el contenedor sube la
+        // vista él solo para no salirse.
+        //
+        // Y las dos ocurren en el MISMO ciclo, así que el pegado —que va en
+        // diferido y se funde en una sola pasada— no llega a ver el encogido:
+        // solo ve el resultado, "la vista está más arriba", que es idéntico a
+        // haber subido con la rueda. De ahí que el enganche se soltara justo al
+        // aparecer la respuesta.
+        //
+        // Mientras dura el traspaso no se suelta por nada: cualquier movimiento
+        // de aquí es de la maqueta, no del usuario.
+        property bool _traspaso: false
+
+        // CERROJO DE REENTRADA. Escribir contentY notifica, y notificar puede
+        // acabar llamando aquí otra vez: sin este pestillo, una sola pasada
+        // que no converja se convierte en un bucle que se come el hilo
+        // gráfico — y como Quickshell ES el escritorio, se lo lleva por
+        // delante. Ya pasó una vez; no se vuelve a tocar este archivo sin él.
+        property bool _pegando: false
+
+        // QUIÉN SUELTA EL ENGANCHE, y por qué se decide AQUÍ y no en el pegado.
+        //
+        // El pegado va en diferido (Qt.callLater) y varias notificaciones del
+        // mismo ciclo se funden en UNA pasada: cuando se ejecuta, el encogido
+        // del fin de turno y el recrecido posterior ya han pasado los dos, y
+        // lo único que se ve es "la vista está más arriba" — indistinguible de
+        // haber subido con la rueda. Por eso el enganche se soltaba justo al
+        // aparecer la respuesta por más vueltas que le diera al heurístico.
+        //
+        // Esta señal, en cambio, llega en el MOMENTO de cada cambio, así que
+        // el estado de al lado todavía es el de antes y las tres situaciones se
+        // distinguen sin ambigüedad:
+        //
+        //   · Lo hemos escrito nosotros (_pegando) → no es gesto de nadie.
+        //   · El contenido ENCOGE y el contenedor recoloca la vista para no
+        //     salirse (fin de turno) → tampoco.
+        //   · La vista sube sin que el final se mueva → ese SÍ eres tú.
+        property real _prevY: 0
+        property real _prevFin: 0
+        //
+        // Y ADEMÁS TIENE QUE SER UN GESTO (_gesto). El umbral en píxeles por sí
+        // solo no distinguía una rueda hacia arriba de un reajuste del origen
+        // —que mueve la vista sin que nadie la toque—, y cada reajuste soltaba
+        // el enganche a media respuesta.
+        onContentYChanged: {
+            if (!_pegando && follow && !_traspaso && _gesto
+                    && _prevY - contentY > Theme.dp(4)
+                    && !(_finY < _prevFin - 1))
+                follow = false
+            _prevY = contentY
+            _prevFin = _finY
+        }
 
         function _pegarAbajo() {
-            if (!follow || scrollToEnd.running)
+            if (_pegando || scrollToEnd.running)
                 return
+            // RESCATE DEL LIMBO, antes que nada y con el enganche puesto o no.
+            // Escribir contentY a mano no pasa por los límites del contenedor,
+            // así que basta con que la estimación del final se acorte DESPUÉS
+            // de haber escrito para que la vista se quede colgada en el vacío
+            // de debajo del último mensaje, sin nada que mirar y sin nadie que
+            // la devuelva. Solo si no hay gesto en marcha: recortar contra el
+            // dedo del usuario es peor que el limbo.
+            if (!_gesto && (contentY > _finY + Theme.dp(4)
+                            || contentY < originY - Theme.dp(4))) {
+                _pegando = true
+                contentY = Math.max(originY, Math.min(_finY, contentY))
+                _pegando = false
+            }
+            if (!follow)
+                return
+            // Sin heurísticos: si el enganche sigue puesto, al fondo. Quién lo
+            // quita se decide arriba, en el instante del gesto.
             // Media décima de píxel no es un movimiento: escribirla solo
             // dispara otra vuelta de notificaciones.
-            if (Math.abs(contentY - _finY) > 0.5)
+            //
+            // Y se escribe contentY A SECAS, que es la operación que no
+            // sorprende a nadie: fija un número y termina. Aquí llegó a
+            // llamarse a positionViewAtEnd() en cada cambio de contenido y
+            // eso CONGELÓ el escritorio: crea los delegates que le faltan
+            // para medir el final de verdad, con lo que la altura vuelve a
+            // cambiar, lo que llama otra vez a este pegado… y como el sitio
+            // donde aterriza no es exactamente el 'contentHeight - height'
+            // estimado, la condición de arriba nunca se apagaba. Bucle
+            // infinito en el hilo gráfico. El posicionado exacto se reserva
+            // para el botón de bajar, que se pulsa una vez y no se realimenta.
+            if (Math.abs(contentY - _finY) > 0.5) {
+                _pegando = true
                 contentY = _finY
+                _pegando = false
+            }
         }
-        onContentHeightChanged: Qt.callLater(_pegarAbajo)
-        onHeightChanged: Qt.callLater(_pegarAbajo)
-        onMovementEnded: follow = atBottom
+
+        // EL FINAL EXACTO, SOLO BAJO PETICIÓN. 'contentHeight' en una lista de
+        // alturas variables es una ESTIMACIÓN: los delegates que aún no se han
+        // creado se cuentan por la media de los que sí, y con mensajes muy
+        // desiguales (una tarjeta de tres líneas y un informe de cien) se pasa
+        // de largo — el "limbo" por debajo del último mensaje.
+        //
+        // positionViewAtEnd() no estima: crea lo que haga falta y coloca el
+        // final real —footer incluido— al pie de la vista. Cuesta esa creación
+        // de delegates, así que se usa UNA vez al aterrizar el botón, jamás en
+        // el camino caliente del seguimiento (ver arriba por qué).
+        function _alFinal() {
+            if (_pegando)
+                return
+            _pegando = true
+            positionViewAtEnd()
+            if (contentY > _finY)
+                contentY = _finY
+            _prevY = contentY
+            _prevFin = _finY
+            _pegando = false
+        }
+        onContentHeightChanged: { Qt.callLater(_pegarAbajo); Qt.callLater(_mideCarril) }
+        onHeightChanged: { Qt.callLater(_pegarAbajo); Qt.callLater(_mideCarril) }
+        // EL ORIGEN TAMBIÉN MUEVE EL FINAL, y lo hace sin tocar contentHeight:
+        // la lista reajusta su media al crear o soltar tarjetas y desplaza el
+        // contenido entero. Sin escuchar esto, el pegado se enteraba del nuevo
+        // final solo cuando llegaba el siguiente token — o nunca, si el turno
+        // ya había acabado.
+        onOriginYChanged: Qt.callLater(_pegarAbajo)
+        // UNA TARJETA NUEVA ES CONTENIDO NUEVO, y de eso trata seguir la
+        // conversación. No basta con contentHeight: una tarjeta entra con su
+        // animación de entrada, así que su altura llega a plazos y el pegado
+        // de aquel momento se quedaba corto — la conversación avanzaba y la
+        // vista se iba quedando atrás tarjeta a tarjeta. Al terminar la
+        // transición se vuelve a pegar, que es cuando el sitio ya es el
+        // definitivo.
+        onCountChanged: { Qt.callLater(_pegarAbajo); repegar.restart() }
+        Timer {
+            id: repegar
+            // Lo bastante para que la tarjeta nueva haya terminado de entrar
+            // (su animación, más el retardo escalonado de las que llegan en
+            // lote): antes de eso su altura aún no es la definitiva.
+            interval: Theme.animNormal * 2 + 80
+            onTriggered: {
+                chat._pegarAbajo()
+                // Se cierra la ventana DESPUÉS del último pegado: a partir de
+                // aquí, si la vista se aleja del fondo es que la has movido tú.
+                chat._traspaso = false
+            }
+        }
+        // Soltar el enganche es cosa del USUARIO, no de cualquier meneo. Al
+        // acabar el turno, la respuesta pasa del footer a la lista: por un
+        // instante el contenido ENCOGE, el Flickable se recoloca dentro de sus
+        // límites solo, y ese movimiento —que nadie ha pedido— llegaba aquí
+        // como "ya no está abajo" y apagaba el seguimiento. Resultado: la
+        // vista se quedaba arriba justo al aparecer la tarjeta de la
+        // respuesta. Solo cuenta como marcharse si de verdad se ha SUBIDO
+        // respecto al último pegado.
+        // Llegar al fondo por tu propio pie vuelve a enganchar: es lo que uno
+        // hace cuando quiere volver a ver lo que va saliendo. Soltarlo ya no
+        // se decide aquí (ver onContentYChanged): este aviso llega cuando el
+        // movimiento ha terminado, y para entonces la maqueta puede haberse
+        // movido por su cuenta.
+        onMovementEnded: if (atBottom) follow = true
         // Arrastrar con el dedo o la rueda cancela el viaje: si no, el botón
         // seguiría tirando de la vista mientras el usuario intenta subir.
         onMovementStarted: scrollToEnd.stop()
@@ -582,16 +803,45 @@ Popout {
         Connections {
             target: AiService
             function onBusyChanged() {
-                if (!AiService.busy)
+                // FIN DE TURNO: el traspaso. Lo que se estaba escribiendo vivía
+                // en el footer y ahora nace como tarjeta de la lista, con su
+                // animación de entrada — o sea que la altura definitiva llega
+                // unos fotogramas después. Un solo pegado en este instante mide
+                // el hueco intermedio y deja la vista arriba, que es justo el
+                // salto que se veía al aparecer la respuesta. Se pega ahora y
+                // otra vez cuando la entrada ha terminado.
+                if (!AiService.busy) {
+                    if (chat.follow) {
+                        chat._traspaso = true
+                        Qt.callLater(chat._pegarAbajo)
+                        repegar.restart()
+                    }
                     return
+                }
                 scrollToEnd.stop()
-                chat.follow = true
+                // 'follow' NO se toca aquí. Se probó a re-engancharlo con
+                // atBottom y era justo lo contrario de lo que parece: cuando
+                // el turno arranca, el mensaje del usuario YA está puesto y el
+                // contenido ya ha crecido, así que atBottom daba falso y el
+                // seguimiento se apagaba para todo el turno — el modelo
+                // escribía y la vista no se movía.
+                //
+                // Quien decide es el usuario y ya lo ha dicho antes: al enviar
+                // se engancha (ver submit()), y al subir a leer se suelta. Una
+                // vuelta más de herramientas dentro del mismo turno no cambia
+                // ninguna de las dos cosas.
                 Qt.callLater(chat._pegarAbajo)
             }
         }
 
         // ── Estado vacío: la invitación ──────────────────────────────────────
         Item {
+            // Un Item declarado dentro de un Flickable se reparenta a su
+            // contentItem, cuyo alto es contentHeight — que con cero mensajes
+            // vale CERO: la invitación quedaba centrada en y=0, medio cortada
+            // por el clip. Se re-cuelga del propio ListView para que las
+            // anclas midan contra el viewport, que es lo que se ve.
+            parent: chat
             anchors.fill: parent
             visible: AiService.messages.count === 0 && !AiService.busy
 
@@ -703,12 +953,20 @@ Popout {
         }
 
         // Burbuja EN VIVO en el footer: no reconstruye la lista por token.
+        //
+        // El 'spacing' del ListView separa DELEGATES; al footer no le llega, y
+        // el hueco que se reservaba aquí abajo dejaba la respuesta naciendo
+        // pegada al último mensaje —renglón contra renglón— hasta que la lista
+        // se rehacía y saltaba a su sitio. El hueco va ARRIBA, que es donde
+        // hace falta, y así la burbuja viva nace ya separada y no se mueve
+        // después.
         footer: Item {
             width: chat.width - chat.carril
             height: AiService.busy ? liveCol.implicitHeight + Theme.space12 : 0
 
             ColumnLayout {
                 id: liveCol
+                y: Theme.space12
                 width: parent.width
                 visible: AiService.busy
                 spacing: Theme.space6
@@ -716,7 +974,12 @@ Popout {
                 MessageBubble {
                     Layout.fillWidth: true
                     visible: AiService.liveText !== ""
-                    live: true
+                    // 'busy', no 'true': con live fijo, sus animaciones de
+                    // "sigue trabajando" (el aro que respira, el filo viajero)
+                    // giraban en bucle infinito desde que el panel se construía
+                    // — y con keepAlive el panel ya no muere al cerrarse, así
+                    // que giraban PARA SIEMPRE, panel oculto incluido.
+                    live: AiService.busy
                     role: "assistant"
                     content: AiService.liveText
                     modelName: AiService.model
@@ -803,6 +1066,11 @@ Popout {
 
         // Botón de "volver abajo".
         IconButton {
+            // Mismo caso que la invitación: dentro del Flickable acababa en el
+            // contentItem, o sea anclado al fondo del CONTENIDO — fuera de
+            // pantalla justo cuando toca verlo, y bajando con cada token. Del
+            // viewport, como corresponde a un control flotante.
+            parent: chat
             anchors.horizontalCenter: parent.horizontalCenter
             anchors.bottom: parent.bottom
             anchors.bottomMargin: Theme.space8
@@ -823,6 +1091,11 @@ Popout {
                 scrollToEnd.stop()
                 chat.follow = true
                 scrollToEnd.from = chat.contentY
+                // El destino es la ESTIMACIÓN, y por eso el viaje se remata
+                // con _alFinal() al llegar (ver onStopped): así el trayecto se
+                // ve, pero quien decide dónde para es el contenido medido, no
+                // una media. Sin el remate, una estimación larga dejaba el
+                // viaje en el vacío de debajo del último mensaje.
                 scrollToEnd.to = chat._finY
                 scrollToEnd.start()
             }
@@ -1028,6 +1301,10 @@ Popout {
                     duration: Theme.animLoop * 3
                     loops: Animation.Infinite
                 }
+                // El mismo reset que su gemelo del supervisor: al acabar el
+                // último trabajo la animación se corta donde esté y el glifo
+                // se quedaba torcido en un ángulo arbitrario.
+                onRotationChanged: if (AiService.runningJobs.length === 0 && rotation !== 0) rotation = 0
             }
             Text {
                 Layout.fillWidth: true
@@ -1416,6 +1693,12 @@ Popout {
         }
         if (t === "" && AiService.pendingAtts.length === 0)
             return
+        // PREGUNTAR ES QUERER VER LA RESPUESTA: enviar re-engancha el
+        // seguimiento aunque te hubieras ido a leer más arriba. Es el único
+        // gesto que dice sin lugar a dudas "mira aquí abajo", y va antes del
+        // envío para que el mensaje propio ya entre con la vista pegada.
+        chat.follow = true
+        Qt.callLater(chat._pegarAbajo)
         // Ocupado incluido: el servicio lo encola y sale al terminar.
         AiService.send(t)
         input.text = ""

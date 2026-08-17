@@ -1,6 +1,7 @@
 ---
 name: "MikroTik RouterOS"
 description: "Operar routers y switches MikroTik (RouterOS) por SSH o WinBox: safe mode, firewall, NAT, bridge con VLANs, colas, copias con /export y las trampas que te dejan fuera del equipo. Úsala si se habla de MikroTik, RouterOS, WinBox, un hAP, un CRS o un CCR."
+triggers: "routeros, winbox, hap, crs, ccr, chr, safe mode, mangle, srcnat, masquerade, netinstall, export compact, vlan filtering"
 ---
 
 # MikroTik RouterOS
@@ -59,6 +60,18 @@ Herramientas de diagnóstico propias que conviene conocer:
 - `/interface ethernet monitor ether1 once` — velocidad y dúplex
   negociados de verdad, y `/interface ethernet print stats` los
   contadores finos por puerto.
+
+## Una llamada, muchas lecturas
+
+**RouterOS encadena con `;`**, así que todo el vistazo de arriba es UNA
+llamada en vez de seis tarjetas de aprobación:
+
+```sh
+ssh admin@router "/system resource print; /system identity print; /interface print; /ip address print; /ip route print"
+```
+
+Las escrituras van solas y bajo Safe Mode, que es justo lo contrario: ahí lo
+que quieres es ver una por una qué cambia.
 
 ## Firewall: las dos cadenas que importan
 

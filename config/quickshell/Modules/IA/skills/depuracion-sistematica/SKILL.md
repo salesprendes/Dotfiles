@@ -1,6 +1,7 @@
 ---
 name: "Depuración sistemática"
-description: 'Método para encontrar la causa REAL de un fallo en vez de parchear síntomas: reproducir, acotar, formular una hipótesis que se pueda falsar y comprobarla. Úsala siempre que algo "no funciona", falla, se cuelga o da un resultado raro.'
+description: 'Método para dar con la causa REAL de un fallo en vez de parchear síntomas: reproducir, acotar, formular una hipótesis que se pueda falsar y comprobarla. Úsala siempre que algo "no funciona", falla, se cuelga o da un resultado raro.'
+triggers: "no funciona, no va, bug, intermitente, causa raiz, hipotesis, reproducir, acotar, sintoma, se cuelga, deja de funcionar, depurar, debug, comportamiento raro"
 ---
 
 # Depuración sistemática

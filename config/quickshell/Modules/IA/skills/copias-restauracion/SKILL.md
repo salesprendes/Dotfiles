@@ -1,6 +1,7 @@
 ---
 name: "Copias y restauración"
 description: "Diseñar y comprobar copias de seguridad que restauran de verdad: regla 3-2-1, rsync/borg/vzdump, restauraciones de prueba y cómo actuar cuando hay que restaurar en caliente. Úsala si se habla de backups, copias, restaurar algo borrado o un plan de recuperación."
+triggers: "backup, backups, borg, restic, rsync, vzdump, snapshot, restaurar, restauracion, retencion, incremental, plan de recuperacion, borrado por error, punto de restauracion"
 ---
 
 # Copias y restauración

@@ -1,6 +1,7 @@
 ---
-name: karpathy-guidelines
-description: Behavioral guidelines to reduce common LLM coding mistakes. Use when writing, reviewing, or refactoring code to avoid overcomplication, make surgical changes, surface assumptions, and define verifiable success criteria.
+name: "Directrices de Karpathy"
+description: "Cómo NO escribir código como un modelo descuidado: no complicar de más, tocar lo mínimo, decir en voz alta las suposiciones y dejar un criterio de éxito comprobable. Úsala cuando el usuario pida que no te compliques, que hagas el cambio mínimo, que digas qué estás dando por supuesto, o antes de un cambio grande."
+triggers: "karpathy, sobreingenieria, complicar, compliques, complicado, quirurgico, minimo, suposiciones, supuestos, asumir, criterio de exito, sin inventar"
 license: MIT
 ---
 

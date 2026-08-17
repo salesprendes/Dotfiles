@@ -49,8 +49,13 @@ Scope {
 
     // ── El escaneo ───────────────────────────────────────────────────────────
     // Vocabulario acotado por la habilidad en uso (allowed-tools). Vacío = sin
-    // límite. Se olvida al cambiar de conversación.
+    // límite. Se olvida al cambiar de conversación… y también al cambiar de
+    // TEMA (ver update): un use_skill sobre un manual de solo lectura dejaba el
+    // vocabulario recortado para todo el hilo, y tres temas después el modelo
+    // seguía sin poder pedir una escritura sin saber por qué.
     property var activeSkillTools: []
+    // Quién puso ese recorte. Sin dueño no se sabe cuándo caduca.
+    property string toolsOwner: ""
 
     // Estado del reintento tras reescanear (habilidad creada tras arrancar).
     property string _retryName: ""
@@ -90,7 +95,7 @@ Scope {
                 const id = parts[i].slice(0, nl).trim()
                 const head = parts[i].slice(nl + 1)     // el archivo entero
                 // Frontmatter: el bloque entre las dos primeras líneas "---".
-                let name = id, desc = "", allowed = []
+                let name = id, desc = "", allowed = [], trig = ""
                 const fm = head.match(/^---\s*\n([\s\S]*?)\n---/)
                 if (fm) {
                     // allowed-tools: la habilidad puede declarar a QUÉ
@@ -114,12 +119,20 @@ Scope {
                     const d = fm[1].match(/^description:\s*(.+)$/m)
                     if (n) name = n[1].trim().replace(/^["']|["']$/g, "")
                     if (d) desc = d[1].trim().replace(/^["']|["']$/g, "")
+                    // triggers: sinónimos de disparo, en línea y separados por
+                    // comas. Puntúan como el nombre (ver rankSkills) pero no
+                    // salen en el catálogo: ahí van "502" o "se cae", que en la
+                    // descripción visible serían ruido.
+                    const tg = fm[1].match(/^triggers:\s*(.+)$/m)
+                    if (tg)
+                        trig = tg[1].trim().replace(/^\[|\]$/g, "")
+                                    .replace(/["']/g, "").replace(/,/g, " ")
                 }
                 // 'text' es lo que devuelve use_skill (el archivo tal cual) y
                 // 'body' lo que se inyecta al cargarla sola: sin el frontmatter,
                 // que en el prompt no aporta nada.
                 found.push({ id: id, name: name, description: desc,
-                             allowedTools: allowed,
+                             triggers: trig, allowedTools: allowed,
                              text: head.trim(),
                              body: (fm ? head.slice(fm[0].length) : head).trim() })
             }
@@ -173,36 +186,137 @@ Scope {
     readonly property int floorScore: 2
     readonly property int margin: 2
 
-    // La habilidad cargada es PEGAJOSA: una vez dentro, acompaña a la
-    // conversación hasta que otra le gane el puesto o el hilo muera. Antes se
-    // recalculaba contra el ÚLTIMO mensaje y nada más: un "sí, hazlo" sin
-    // palabras clave la descargaba a mitad de tarea — justo cuando el agente
-    // empezaba a ejecutar lo que la habilidad enseña. Es lo mismo que hacen los
-    // harness grandes: en Claude Code una skill invocada queda en el hilo, no se
-    // evapora con el siguiente mensaje.
+    // La habilidad cargada es PEGAJOSA, pero no eterna: acompaña a la
+    // conversación hasta que otra le gane el puesto, el TEMA se vaya de ella
+    // (ver update y TU.decideSkill) o el hilo muera. Antes se recalculaba
+    // contra el ÚLTIMO mensaje y nada más: un "sí, hazlo" sin palabras clave la
+    // descargaba a mitad de tarea — justo cuando el agente empezaba a ejecutar
+    // lo que la habilidad enseña. De ahí la ventana de mensajes y las palabras
+    // de continuar en STOP.
+    //
+    // Que se pueda descargar es una ventaja de este harness, no una copia: en
+    // Claude Code la skill entra como resultado de herramienta, vive en el
+    // historial y de ahí ya no se la saca. Aquí las instrucciones se inyectan en
+    // cada petición, así que soltarlas libera contexto de verdad.
     property string stickyId: ""
     readonly property var autoSkill:
         activeSkills.find(s => s.id === stickyId) || null
 
-    // La decisión, al enviar cada mensaje del usuario: si hay un ganador claro se
-    // carga (o sustituye a la anterior — el tema cambió); si no lo hay, se queda
-    // la que estuviera, que la ausencia de palabras clave en un "vale, sigue" no
-    // es información.
-    function update(text) {
+    // La decisión, al enviar cada mensaje del usuario. Toda la lógica vive en
+    // TU.decideSkill —función pura, con su batería— y aquí solo se aplica:
+    // se carga la que gane claro, se conserva la que siga viniendo a cuento, y
+    // se DESCARGA la que se haya quedado fuera del tema. Descargar también
+    // suelta el recorte de vocabulario que hubiera dejado un use_skill.
+    //
+    // Solo se decide AQUÍ, al empezar el turno del usuario: nunca dentro del
+    // bucle de herramientas. Una habilidad que se evaporara entre el plan y su
+    // ejecución sería peor que no tenerla.
+    function update(ultimo, ventana) {
         if (!svc || !svc.agentMode)
             return
-        const r = TU.rankSkills(activeSkills, text)
-        if (r.length === 0 || r[0].score < floorScore)
-            return
-        if (r.length > 1 && r[0].score - r[1].score < margin)
-            return
-        stickyId = r[0].skill.id
+        const vent = (ventana === undefined || ventana === "") ? ultimo : ventana
+        const d = TU.decideSkill(activeSkills, ultimo, vent,
+                                 stickyId, toolsOwner, floorScore, margin)
+        if (d.id !== stickyId)
+            stickyId = d.id
+        if (d.owner !== toolsOwner) {
+            toolsOwner = d.owner
+            if (d.owner === "")
+                activeSkillTools = []
+        }
+        // Nada cargado y el mensaje sí traía tema (o acaba de descargarse por
+        // cambio de tema): que lo mire el modelo con el catálogo delante, por si
+        // el encaje es semántico y no léxico.
+        if (d.ask)
+            _askRouter(vent)
     }
 
     // Todo lo que pertenece al HILO y no al catálogo.
     function resetThread() {
         stickyId = ""
         activeSkillTools = []
+        toolsOwner = ""
+        _routerAsked = ""
+        router.running = false
+    }
+
+    // ── El desempate semántico ───────────────────────────────────────────────
+    // El puntuador léxico solo ve palabras compartidas: "se me cae la página
+    // cada noche" no comparte ninguna raíz con "Servidores remotos" y la
+    // habilidad se queda sin cargar. Cuando el léxico no decide, se hace lo
+    // mismo que hace Claude Code —que decida el modelo leyendo descripciones—
+    // pero sin esperar a que el turno principal se acuerde de use_skill: una
+    // llamada mínima aparte (sin streaming, sin razonamiento, contesta un id o
+    // «ninguna»). Llega en asíncrono: si aterriza después de que el turno haya
+    // salido, la habilidad entra en la siguiente petición del bucle de
+    // herramientas, que rehace el prompt de sistema en cada vuelta.
+    property string _routerAsked: ""   // el último texto preguntado: no se repite
+    property string _routerBody: ""
+
+    function _askRouter(text) {
+        const t = String(text || "").trim()
+        if (t === "" || t === _routerAsked || activeSkills.length === 0
+                || router.running || !svc || svc.urlMissing || svc.keyMissing)
+            return
+        // Un "vale, sigue" sin ninguna palabra con contenido no es una tarea
+        // nueva: preguntar por él sería pagar una llamada por ruido.
+        if (TU.keywords(t).length === 0)
+            return
+        _routerAsked = t
+        let cat = ""
+        for (let i = 0; i < activeSkills.length; i++)
+            cat += "- " + activeSkills[i].id + ": "
+                 + activeSkills[i].description + "\n"
+        const req = { model: svc.model,
+                      messages: [
+            { role: "system", content:
+                "Eres el selector de habilidades de un asistente. Debajo va la "
+              + "lista instalada (id: cuándo se usa) y el mensaje del usuario. "
+              + "Contesta SOLO con el id de la habilidad que claramente encaja "
+              + "con la tarea del mensaje, o la palabra ninguna si no encaja "
+              + "ninguna. Ante la duda, ninguna. Nada más: sin explicación." },
+            { role: "user", content: cat + "\nMensaje del usuario:\n" + t.slice(0, 2000) }
+                      ],
+                      temperature: 0, stream: false, max_tokens: 64 }
+        // Trabajo mecánico: esfuerzo mínimo y sin razonamiento, como el resumen.
+        svc.tuneRequest(req, "guard", false)
+        const c = svc.chatCommand(req, 20)
+        _routerBody = c.body
+        router.command = c.cmd
+        router.environment = c.env
+        router.stdinEnabled = true
+        router.running = true
+    }
+
+    Process {
+        id: router
+        stdout: StdioCollector { id: routerOut }
+        stderr: StdioCollector {}
+        onStarted: {
+            router.write(store._routerBody)
+            store._routerBody = ""
+            router.stdinEnabled = false
+        }
+        onExited: (code) => {
+            if (code !== 0)
+                return                     // mejor sin habilidad que sin turno
+            let j = null
+            try { j = JSON.parse(routerOut.text) } catch (e) {}
+            const m = j && j.choices && j.choices[0] && j.choices[0].message
+            const ans = m ? TU.splitThink(String(m.content || "")).text
+                              .trim().toLowerCase() : ""
+            if (ans === "" || ans.indexOf("ninguna") !== -1)
+                return
+            // La respuesta llega tarde por definición: si mientras tanto el
+            // léxico o el modelo ya cargaron algo, eso manda.
+            if (store.stickyId !== "")
+                return
+            const hit = store.activeSkills.find(s =>
+                    ans.indexOf(s.id.toLowerCase()) !== -1
+                 || ans.indexOf(s.name.toLowerCase()) !== -1)
+            if (hit)
+                store.stickyId = hit.id
+        }
     }
 
     // ── Lo que entra al prompt ───────────────────────────────────────────────

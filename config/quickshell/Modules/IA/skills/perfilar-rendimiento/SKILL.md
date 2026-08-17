@@ -1,6 +1,7 @@
 ---
 name: "Perfilar rendimiento"
 description: "Perfila el código antes de optimizar y demuestra la mejora con mediciones. Úsala cuando algo «va lento», «tarda mucho», «se come la CPU», haya que perfilar un script Python o un proceso, comparar tiempos con hyperfine, o decidir si una optimización merece la pena."
+triggers: "perfilar, perfil, profiler, cprofile, py-spy, hyperfine, benchmark, cuello de botella, tarda mucho, optimizar, flamegraph, medir tiempos, se come la cpu"
 ---
 
 # Perfilar antes de optimizar

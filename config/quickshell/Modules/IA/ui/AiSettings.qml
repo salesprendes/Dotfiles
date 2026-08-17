@@ -876,24 +876,37 @@ Rectangle {
                                 }
                             }
                         }
-                        // Alta: nombre, user@host, puerto y contraseña
-                        // (opcional; con clave se deja vacía).
+                        // Alta: alias y el destino EN PIEZAS — usuario, host y
+                        // puerto por separado. El campo combinado "root@1.2.3.4"
+                        // se quedaba vacío sin que se notara cuál faltaba, y
+                        // cada campo con su etiqueta encima no necesita
+                        // explicación. Pegar "usuario@ip" entero en el host
+                        // sigue valiendo: el alta lo reparte.
                         RowLayout {
                             Layout.fillWidth: true
                             spacing: Theme.space8
                             DraftField {
                                 id: sshName
-                                Layout.preferredWidth: Theme.dp(96)
-                                placeholder: I18n.tr("name")
+                                Layout.preferredWidth: Theme.dp(110)
+                                label: I18n.tr("name")
+                                placeholder: "servidor-ia"
                             }
                             DraftField {
-                                id: sshDest
+                                id: sshUser
+                                Layout.preferredWidth: Theme.dp(110)
+                                label: I18n.tr("user")
+                                placeholder: "root"
+                            }
+                            DraftField {
+                                id: sshHost
                                 Layout.fillWidth: true
-                                placeholder: "root@1.2.3.4"
+                                label: I18n.tr("host or IP")
+                                placeholder: "192.168.1.10"
                             }
                             DraftField {
                                 id: sshPort
-                                Layout.preferredWidth: Theme.dp(56)
+                                Layout.preferredWidth: Theme.dp(64)
+                                label: I18n.tr("port")
                                 placeholder: "22"
                             }
                         }
@@ -911,29 +924,57 @@ Rectangle {
                                 outlined: true
                                 onClicked: {
                                     const n = sshName.draft.trim().replace(/[^A-Za-z0-9_.-]/g, "")
-                                    let dest = sshDest.draft.trim()
-                                    if (n === "" || dest === "")
-                                        return
-                                    let user = "root"
-                                    const at = dest.indexOf("@")
+                                    let host = sshHost.draft.trim()
+                                    let user = sshUser.draft.trim()
+                                    // Tolerancia con la forma vieja: si el host
+                                    // trae "usuario@ip" entero, se reparte (el
+                                    // usuario tecleado aparte manda).
+                                    const at = host.indexOf("@")
                                     if (at > 0) {
-                                        user = dest.slice(0, at)
-                                        dest = dest.slice(at + 1)
+                                        if (user === "")
+                                            user = host.slice(0, at)
+                                        host = host.slice(at + 1)
                                     }
+                                    if (user === "")
+                                        user = "root"
+                                    console.log("[ssh-alta] name='" + n + "' user='"
+                                                + user + "' host='" + host + "'")
+                                    // Un campo vacío retornaba EN SILENCIO:
+                                    // "le doy a añadir y no pasa nada". El
+                                    // culpable se enciende en rojo (y se apaga
+                                    // al volver a teclear en él). Ojo: el
+                                    // nombre puede quedar vacío tras el saneo
+                                    // (solo letras, números y _ . -).
+                                    sshName.invalid = (n === "")
+                                    sshHost.invalid = (host === "")
+                                    if (n === "" || host === "")
+                                        return
                                     const port = parseInt(sshPort.draft) || 22
                                     Settings.aiSshHosts = (Settings.aiSshHosts || [])
                                         .filter(h => h.name !== n)
-                                        .concat([{ name: n, host: dest, user: user, port: port }])
+                                        .concat([{ name: n, host: host, user: user, port: port }])
                                     if (sshPw.draft.trim() !== "")
                                         AiService.setSshPassword(n, sshPw.draft.trim())
-                                    sshName.reset(); sshDest.reset()
+                                    sshName.reset(); sshUser.reset(); sshHost.reset()
                                     sshPort.reset(); sshPw.reset()
                                 }
                             }
                         }
                         Hint {
                             Layout.leftMargin: 0
+                            shown: AiService.haveKeyring
                             text: I18n.tr("Optional: saved servers let you say \"web1\" instead of repeating credentials. You can always give host and password in the message. Passwords go to the system keyring; password login needs 'sshpass'.")
+                        }
+                        // Sin llavero la promesa de arriba es falsa: las
+                        // contraseñas caen en claro a settings.json (respaldo
+                        // de KeyStore.setSshPassword). Decirlo aquí, en
+                        // amarillo, es la diferencia entre una decisión del
+                        // usuario y una sorpresa al abrir el archivo.
+                        Hint {
+                            Layout.leftMargin: 0
+                            shown: !AiService.haveKeyring
+                            color: Theme.yellow
+                            text: I18n.tr("Optional: saved servers let you say \"web1\" instead of repeating credentials. No system keyring found: passwords are stored as plain text in settings.json. Password login needs 'sshpass'.")
                         }
                     }
                 }
@@ -1054,7 +1095,7 @@ Rectangle {
     component DraftField: TextField {
         property string draft: ""
         label: ""
-        onEdited: (t) => draft = t
-        function reset() { draft = ""; clear() }
+        onEdited: (t) => { draft = t; invalid = false }
+        function reset() { draft = ""; invalid = false; clear() }
     }
 }

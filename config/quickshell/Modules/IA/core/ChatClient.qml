@@ -63,9 +63,37 @@ Scope {
         onTriggered: if (!chat.busy) chat.start()
     }
 
+    // PARAR DE VERDAD. Matar el curl no bastaba: onExited sigue su camino
+    // normal —rescata las llamadas a medias, monta sus tarjetas y encadena la
+    // ronda siguiente—, así que "parar" mientras el modelo escribía dejaba una
+    // tanda de tarjetas recién nacidas y el turno vivo. La marca dice que lo
+    // que llegue ya no vale para nada.
+    property bool aborted: false
+
     function stop() {
-        if (proc.running)
-            proc.running = false
+        if (!proc.running)
+            return                  // nada que cortar: no se deja marca puesta
+        aborted = true
+        // EL CORTE SE VE AL INSTANTE. Antes se esperaba a que el proceso
+        // muriera para apagar 'busy', y matar un curl que está recibiendo un
+        // stream no es inmediato: el panel seguía diciendo "pensando" varios
+        // segundos y el aviso de interrumpido aparecía tarde — que es
+        // exactamente lo que lleva a pulsar el botón cinco veces.
+        //
+        // Así que el turno se cierra AQUÍ, con lo que hubiera escrito, y lo
+        // que el proceso tarde en morir ya no lo mira nadie: su onExited ve la
+        // marca y sale sin tocar el hilo.
+        const dicho = TU.splitThink(chat.streamBuf).text.trim()
+        chat.streamBuf = ""
+        chat.reasonBuf = ""
+        chat._tc = ({})
+        chat.busy = false
+        proc.running = false
+        if (dicho !== "")
+            conv.push({ role: "assistant", content: dicho, modelName: svc.model })
+        conv.pushInfo(I18n.tr("Interrupted."))
+        conv.save()
+        svc.replied()
     }
 
     // El vocabulario que se le enseña a ESTE turno. Las herramientas solo existen
@@ -126,6 +154,11 @@ Scope {
     }
 
     function start() {
+        // Turno nuevo, marca limpia. Sin esto, un stop pulsado cuando ya no
+        // había nada corriendo —el botón se pulsa varias veces seguidas justo
+        // porque parece que no responde— dejaba la marca puesta y MATABA el
+        // turno siguiente nada más nacer.
+        chat.aborted = false
         chat.streamBuf = ""
         chat.reasonBuf = ""
         chat._errBuf = ""
@@ -222,6 +255,13 @@ Scope {
 
         stdout: SplitParser {
             onRead: (line) => {
+                // Ya se paró: lo que siga llegando por la tubería mientras el
+                // proceso muere no entra en el hilo. Sin esto el razonamiento
+                // seguía acumulándose después del corte —el panel seguía
+                // "pensando" con el turno ya cerrado— y podía resucitar
+                // llamadas a herramientas que nadie había aprobado.
+                if (chat.aborted)
+                    return
                 const l = line.trim()
                 if (l === "" || l.startsWith(":"))     // keep-alive de SSE
                     return
@@ -290,6 +330,17 @@ Scope {
 
         onExited: (code) => {
             chat.busy = false
+            // Interrumpido: el turno ya se cerró en stop() —con lo que hubiera
+            // escrito y su aviso—, así que este final tardío no toca nada. Solo
+            // se tira lo que siguió llegando por la tubería mientras el proceso
+            // moría: sin tarjetas, sin ronda siguiente, sin segundo aviso.
+            if (chat.aborted) {
+                chat.aborted = false
+                chat.streamBuf = ""
+                chat.reasonBuf = ""
+                chat._tc = ({})
+                return
+            }
             const parts = TU.splitThink(chat.streamBuf)
             const think = (chat.reasonBuf + parts.think).trim()
             let text = parts.text.trim()

@@ -1,6 +1,7 @@
 ---
 name: "Plesk"
 description: "Administrar y diagnosticar un servidor Plesk por SSH: utilidades plesk bin, plesk repair, dónde está cada log e incidencias típicas (web caída, correo, certificados, disco). Úsala si se habla de Plesk, de una suscripción o de un dominio alojado."
+triggers: "sw-engine, psa, obsidian, suscripcion, plesk repair, plesk bin, dominio alojado"
 ---
 
 # Plesk (Linux)
@@ -47,6 +48,18 @@ administrador: es la salida cuando «se perdió la contraseña del panel»,
 sin tocar la base de datos. Y `plesk installer` gestiona componentes y
 actualizaciones del propio Plesk (es SU gestor, apt/yum no actualizan el
 panel).
+
+## Una llamada, muchas lecturas
+
+Agrupa las consultas en un solo comando separado por `;`: cada llamada es una
+tarjeta que aprobar y una espera, y el vistazo típico cabe entero en una.
+
+```sh
+plesk version; plesk bin subscription --list; systemctl is-active sw-cp-server psa nginx; df -h /var/www/vhosts
+```
+
+`plesk repair` y cualquier cosa que escriba van SOLAS, y en modo consulta
+antes que en modo arreglo (ver más abajo).
 
 ## La base de datos del panel (psa)
 

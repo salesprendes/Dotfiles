@@ -352,8 +352,24 @@ Item {
     // cerrar cuenta como código hasta el final).
     readonly property var segments: {
         if (!isAssistant) return []
+        let all = content
+        // EN VIVO, una fila de TABLA a medias se retiene hasta su salto de
+        // línea: el parser de Markdown, con la fila cortada a mitad de celda
+        // ("| cel"), deja de ver la tabla como tabla y la descompone en texto
+        // suelto — en cada token, o sea parpadeando. Con filas siempre
+        // completas la tabla se parsea estable. SOLO filas de tabla (la línea
+        // empieza por "|") y SOLO fuera de un cercado de código abierto (un
+        // "|" dentro de ``` es una tubería de shell, no una tabla): retener
+        // prosa normal haría la escritura a saltos de línea en vez de fluida.
+        if (live) {
+            const nl = all.lastIndexOf("\n")
+            const cola = all.slice(nl + 1)
+            const enCodigo = (all.match(/```/g) || []).length % 2 === 1
+            if (!enCodigo && cola.startsWith("|"))
+                all = nl === -1 ? "" : all.slice(0, nl + 1)
+        }
         const out = []
-        let rest = content
+        let rest = all
         while (true) {
             const i = rest.indexOf("```")
             if (i === -1) {
@@ -443,18 +459,20 @@ Item {
         wrapMode: Text.WordWrap
     }
 
-    // Entrada: nace un punto abajo y translúcida, y se asienta.
-    opacity: 0
-    transform: Translate { id: rise; y: Theme.dp(6) }
-    Component.onCompleted: {
-        opacity = 1
-        rise.y = 0
-        // Aquí y no en un segundo Component.onCompleted: un objeto solo admite
-        // UN manejador por señal, y declarar el mismo dos veces no es un aviso
-        // — es "Property value set multiple times" y el tipo no carga.
-        bubble._sincronizaSegs()
-    }
-    Behavior on opacity { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutQuad } }
+    // La entrada la anima el ListView (su Transition 'add'), no la burbuja:
+    // aquí había un segundo fundido 0→1 que peleaba con aquel — dos curvas
+    // distintas escribiendo la misma opacity — y que además se re-ejecutaba
+    // cada vez que el ListView RECREABA el delegate al hacer scroll (sin
+    // reuseItems los delegates mueren al salir del cacheBuffer): los mensajes
+    // parpadeaban al desplazarse, no solo al llegar.
+    //
+    // Y el modelo de segmentos se puebla EN DIFERIDO: Component.onCompleted
+    // de un delegate corre DENTRO del pase de disposición del ListView, y
+    // sincronizar ahí instanciaba los TextEdit y parseaba el Markdown de cada
+    // mensaje en pleno layout — al abrir el panel con una conversación larga,
+    // todos a la vez, con el GUI thread clavado. Un tick después, fuera del
+    // pase, cuesta lo mismo y no bloquea la disposición.
+    Component.onCompleted: Qt.callLater(bubble._sincronizaSegs)
 
     // ── Usuario ──────────────────────────────────────────────────────────────
     ColumnLayout {
@@ -636,14 +654,21 @@ Item {
                     height: Math.max(Theme.dp(18), Math.round(carril.height * 0.34))
                     radius: width
                     color: Theme.accent
-                    y: 0
+                    // Se anima un escalar 0→1 y la 'y' sale por vínculo: una
+                    // NumberAnimation captura from/to AL ARRANCAR y los bucles
+                    // no los reevalúan, así que animando 'y' directamente el
+                    // recorrido se quedaba congelado en el alto que la burbuja
+                    // tenía en el primer token (unos píxeles), mientras el
+                    // carril real crecía a cientos.
+                    property real t: 0
+                    y: Math.round((carril.height + height) * t) - height
 
-                    SequentialAnimation on y {
+                    SequentialAnimation on t {
                         running: bubble.live && carril.height > 0
                         loops: Animation.Infinite
                         NumberAnimation {
-                            from: -viajero.height
-                            to: carril.height
+                            from: 0
+                            to: 1
                             duration: Theme.animLoop
                             easing.type: Easing.InOutSine
                         }
@@ -1283,6 +1308,17 @@ Item {
                     visible: AiService.canStandingAllow(bubble.toolName)
                     text: I18n.tr("Always")
                     onClicked: AiService.approveToolAlways(bubble.msgIndex)
+                }
+                // La RÁFAGA: un diagnóstico son treinta comandos de mirar
+                // contra la misma máquina, y eran treinta tarjetas. Solo
+                // aparece cuando esta llamada concreta es de solo lectura
+                // reconocida, y vale para las iguales de ESTE turno — no es
+                // el "siempre" de arriba, que ssh_exec no admite.
+                TextButton {
+                    visible: AiService.canBurstCall(bubble.toolName, bubble.toolArgs)
+                             && !AiService.canStandingAllow(bubble.toolName)
+                    text: I18n.tr("Allow reads")
+                    onClicked: AiService.approveToolBurst(bubble.msgIndex)
                 }
                 TextButton {
                     text: I18n.tr("Reject")

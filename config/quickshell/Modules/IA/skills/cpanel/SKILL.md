@@ -1,6 +1,7 @@
 ---
 name: "cPanel y WHM"
 description: "Administrar y diagnosticar un servidor cPanel/WHM por SSH: APIs whmapi1 y uapi, dónde está cada log, scripts de servicio e incidencias típicas (correo, disco, cuotas, error 500). Úsala si se habla de cPanel, WHM o una cuenta de hosting."
+triggers: "whm, whmapi1, uapi, cpsrvd, easyapache, cphulk, cuota, hosting compartido, addon domain, scripts de cpanel"
 ---
 
 # cPanel y WHM
@@ -48,6 +49,18 @@ casualidad sobre la cuenta equivocada, sí.
 
 Lo más común ya lo trae el harness: `hosting_query {panel:"cpanel", op:…}`
 con `version`, `accounts`, `account_info`, `domains` y `disk`.
+
+## Una llamada, muchas lecturas
+
+Agrupa las consultas en un solo comando separado por `;`: cada llamada
+remota cuesta una tarjeta de aprobación y una espera.
+
+```sh
+/usr/local/cpanel/cpanel -V; whmapi1 servicestatus | head -40; df -h /home; exim -bpc
+```
+
+Las escrituras (crear cuentas, tocar cuotas, `/scripts/*` que instalan o
+reparan) van siempre solas.
 
 ## Dónde está cada log
 

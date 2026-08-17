@@ -136,9 +136,17 @@ Singleton {
     property string aiKeySearch: ""
     // Servidores remotos de confianza (lista blanca para SSH/SFTP/hosting):
     // lista de {name, host, user, port}. El modelo solo puede conectarse a los
-    // registrados aquí, por su nombre. Las contraseñas NO viven en este
-    // archivo: van al llavero (o en memoria de sesión).
+    // registrados aquí, por su nombre. Las contraseñas van al llavero; SIN
+    // llavero caen a aiSshPasswords, abajo — antes se quedaban solo en memoria
+    // de sesión y morían con el shell: el servidor "guardado" dejaba de entrar
+    // al siguiente arranque.
     property var    aiSshHosts: []
+    // Respaldo en claro de las contraseñas SSH (mapa nombre → contraseña),
+    // solo cuando no hay llavero o falló: el mismo trato que las claves de
+    // proveedor (aiKeyGemini y compañía), que ya viven aquí en claro en esa
+    // situación. Es un archivo local del usuario; con llavero funcional este
+    // mapa se queda vacío.
+    property var    aiSshPasswords: ({})
     // Temperatura del modelo (parámetro universal del contrato).
     property real   aiTemperature: 0.7
     // Ventana de contexto del modelo, en tokens. 0 = automático (32k si el
@@ -542,7 +550,7 @@ Singleton {
         "aiSupervisor": "risky", "aiSupervisorModel": "",
         "aiToolPolicies": {}, "aiSkills": {}, "aiMcpServers": [],
         "aiSearchBackend": "searxng", "aiSearchUrl": "", "aiKeySearch": "",
-        "aiSshHosts": [], "aiTemperature": 0.7, "aiContextTokens": 0,
+        "aiSshHosts": [], "aiSshPasswords": {}, "aiTemperature": 0.7, "aiContextTokens": 0,
         "aiAutoCompact": "warn", "aiCompactKeep": 1, "aiThink": "auto",
         "aiEffort": "auto", "aiModelTuning": true, "aiKeepThinking": true,
         "uiScale": 1.0, "autoDensity": true, "animationSpeed": 2, "customAnimationDuration": 500, "barOpacity": 0.78,

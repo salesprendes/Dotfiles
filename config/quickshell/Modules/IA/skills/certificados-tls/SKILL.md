@@ -1,6 +1,7 @@
 ---
 name: "Certificados TLS"
 description: "Diagnosticar y renovar certificados HTTPS: certificado caducado o que caducó, cadena incompleta, SAN que no casa, Let's Encrypt que no renueva, wildcard y los avisos del navegador. Úsala si se habla de un certificado, de HTTPS roto, de un candado en rojo o de SSL."
+triggers: "certbot, acme, letsencrypt, well-known, acme-challenge, wildcard, fullchain, privkey, openssl, s_client, caducado, caducar, expirado, candado, https, ssl, tls, pfx, csr, cadena incompleta, intermedio, reemitir, renovacion, dns-01, http-01"
 ---
 
 # Certificados TLS

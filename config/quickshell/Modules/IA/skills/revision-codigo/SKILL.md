@@ -1,6 +1,7 @@
 ---
 name: "Revisión de código"
 description: "Cómo revisar código por orden de importancia (corrección, seguridad y luego lo demás) dando cada hallazgo con su caso concreto de fallo. Úsala si piden revisar o auditar código, y antes de dar por buenos tus propios cambios."
+triggers: "revisar el codigo, revision de codigo, auditar, auditoria, code review, pull request, hallazgos, dame tu opinion del codigo"
 ---
 
 # Revisión de código

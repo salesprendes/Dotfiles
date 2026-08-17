@@ -1,6 +1,7 @@
 ---
 name: "Proxmox VE"
 description: "Administrar y diagnosticar un Proxmox por SSH: VMs con qm, contenedores LXC con pct, almacenamiento, copias vzdump, clúster y quórum, y las averías típicas (VM bloqueada, interfaz caída, nodo en gris, /etc/pve de solo lectura). Úsala si se habla de Proxmox, PVE, un hipervisor, una VM, un contenedor o un nodo."
+triggers: "pve, qm, pct, lxc, vzdump, hipervisor, quorum, corosync, ceph, qemu, kvm, maquina virtual, nodo del cluster"
 ---
 
 # Proxmox VE

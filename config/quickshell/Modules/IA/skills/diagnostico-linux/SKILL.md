@@ -1,6 +1,7 @@
 ---
 name: "Diagnóstico de Linux"
 description: "Método para diagnosticar un equipo Arch/systemd que va lento, no arranca un servicio, se queda sin disco o falla al actualizar. Úsala en cuanto el usuario describa un síntoma del sistema, ANTES de tocar nada."
+triggers: "systemd, systemctl, journalctl, dmesg, pacman, arch, no arranca, disco lleno, sin espacio, carga alta, uptime, fstab, kernel, unidad en fallo, actualizar el sistema"
 ---
 
 # Diagnóstico de Linux

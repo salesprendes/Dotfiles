@@ -1,6 +1,7 @@
 ---
 name: "Shell y scripts robustos"
 description: "Cómo escribir comandos y scripts de shell que no destrocen nada por un espacio en un nombre o una variable vacía, y que se puedan repetir sin duplicar efectos. Úsala al escribir cualquier script, cron, unidad de systemd o comando destructivo."
+triggers: "bash, script, cron, crontab, set -euo, comillas, borrado accidental, idempotente, xargs, sed, trap, here-doc, comando destructivo, peligroso, sin querer, me da miedo, espacios en el nombre"
 ---
 
 # Shell y scripts robustos

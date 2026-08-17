@@ -1,6 +1,7 @@
 ---
 name: "Incidentes en producción"
 description: "Cómo actuar cuando algo está CAÍDO y hay presión: estabilizar antes que explicar, no destruir pruebas, comunicar estado y hacer el análisis después. Úsala si algo está caído en producción, hay clientes afectados o el usuario tiene prisa y nervios."
+triggers: "caido, caida, urgente, prisa, clientes afectados, produccion parada, no va nada, postmortem, incidencia, escalar, guardia, fuego"
 ---
 
 # Incidentes en producción

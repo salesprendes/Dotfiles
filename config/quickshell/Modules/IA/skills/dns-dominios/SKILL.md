@@ -1,6 +1,7 @@
 ---
 name: "DNS y dominios"
 description: "Diagnosticar DNS con método: registros A/AAAA/CNAME/MX/TXT, delegación, TTL y propagación, y los fallos típicos al migrar un dominio o estrenar servidor. Úsala si se habla de un dominio que no resuelve, de DNS, de nameservers o de una migración."
+triggers: "dig, nslookup, nameserver, nameservers, delegacion, propagacion, resuelve, cname, registro txt, whois, zona, glue, dnssec, apunta a otra ip"
 ---
 
 # DNS y dominios

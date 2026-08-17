@@ -1,6 +1,7 @@
 ---
 name: "Pipelines de CI que fallan o van lentos"
-description: "Depurar y acelerar pipelines de CI (GitHub Actions, GitLab CI, Jenkins): encontrar el fallo real en el log, cachés envenenadas, secretos que no llegan, tests flaky, y medir antes de optimizar. Úsala cuando el pipeline falla, el build se rompe en CI pero va en local, un job se cuelga o tarda demasiado, o un workflow da error a veces sí y a veces no."
+description: "Depurar y acelerar pipelines de CI (GitHub Actions, GitLab CI, Jenkins): localizar el fallo real en el log, cachés envenenadas, secretos que no llegan, tests flaky, y medir antes de optimizar. Úsala cuando el pipeline falla, el build se rompe en CI pero va en local, un job se cuelga o tarda demasiado, o un workflow da error a veces sí y a veces no."
+triggers: "actions, gitlab, jenkins, pipeline, runner, workflow, build, compilacion, artefacto, cache envenenada, job, etapa, checkout, yaml del ci"
 ---
 
 # Pipelines de CI que fallan o van lentos

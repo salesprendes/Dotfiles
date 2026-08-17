@@ -785,6 +785,11 @@ Singleton {
         return m ? tools.dangerOf(m.toolName, m.toolArgs) : ""
     }
     function approveToolAlways(i) { tools.approveToolAlways(i) }
+    // La ráfaga de lecturas: aprueba esta llamada y las iguales de este turno
+    // (misma herramienta, mismo destino, solo lectura). La tarjeta pregunta
+    // antes con canBurstCall si tiene sentido ofrecerla.
+    function approveToolBurst(i) { tools.approveToolBurst(i) }
+    function canBurstCall(name, argsJson) { return tools.canBurst(name, argsJson) }
     function rejectTool(i) { tools.rejectTool(i) }
     function answerQuestion(i, a) { tools.answerQuestion(i, a) }
     function approvePlan(i) { tools.approvePlan(i) }
@@ -797,7 +802,35 @@ Singleton {
     property alias liveThink: chat.liveThink
     function isTransient(msg) { return chat.transient(msg) }
     function start() { chat.start() }
-    function stop() { chat.stop() }
+    // PARAR EL TURNO ENTERO, como el ESC de Claude Code. El botón antes solo
+    // mataba la petición en vuelo, así que parar mientras el agente trabajaba
+    // dejaba vivo todo lo demás: las tarjetas ya propuestas seguían esperando
+    // aprobación, la herramienta en marcha seguía corriendo y la cola de
+    // mensajes arrancaba el turno siguiente. Un botón de parar que no para es
+    // peor que no tenerlo: se pulsa creyendo que se ha cortado.
+    //
+    // Devuelve si había algo que parar, para que quien llama (la tecla ESC)
+    // sepa si el gesto se ha consumido aquí o tiene que hacer otra cosa.
+    function interrupt() {
+        // "Pensando" cuenta como estar haciendo algo: el supervisor juzgando
+        // una tarjeta es un turno vivo aunque el modelo ya haya callado, y ESC
+        // tiene que cortarlo ahí también — si no, la primera pulsación cerraba
+        // el panel dejando el trabajo por detrás.
+        const habia = busy || compacting || tools.runningIndex >= 0
+                   || sendQueue.length > 0 || tools.hasPending()
+                   || supervisor.reviewing >= 0
+        // La cola primero: si no, el turno que se corta arrastra al siguiente
+        // y parece que no ha parado nada.
+        sendQueue = []
+        chat.stop()
+        comp.cancel()
+        tools.cancelAll()
+        // El supervisor también: su veredicto en vuelo pertenece a una tarjeta
+        // que acaba de morir, y dejarlo llegar la reanimaría.
+        supervisor.cancel()
+        return habia
+    }
+    function stop() { interrupt() }
 
     property alias compacting: comp.compacting
     function compact() { comp.compact("") }
@@ -1000,7 +1033,7 @@ Singleton {
     function _restoreLastUser() {
         lastUserText = conv.lastUserText()
         if (lastUserText !== "")
-            skillStore.update(lastUserText)
+            skillStore.update(lastUserText, conv.recentUserText(3))
     }
 
     function newConversation() {
@@ -1132,6 +1165,10 @@ Singleton {
         // pregunta anterior condicionara la siguiente sería castigar al usuario
         // por un error del modelo que ya quedó atrás.
         tools.fetchSecos = 0
+        // Y la ráfaga de lecturas se apaga: se concedió viendo UNA tanda de
+        // comandos concreta en marcha, así que no sobrevive al encargo. El
+        // siguiente vuelve a enseñar su tarjeta.
+        tools.burstAllow = ({})
         // Y buscador nuevo, por el mismo motivo: la avería de la pregunta
         // anterior pudo ser una cuarentena de quince minutos, no una falta de
         // configuración. Reintentar cuesta una décima de segundo.
@@ -1180,7 +1217,13 @@ Singleton {
         att.pendingAtts = []
         conv.push({ role: "user", content: t, attachNote: note.join(" · ") })
         lastUserText = t
-        skillStore.update(t)
+        // Las habilidades se miden contra el último mensaje Y contra una
+        // VENTANA de los tres últimos del usuario (el de ahora ya está
+        // empujado, así que la ventana lo incluye). El último decide los
+        // cambios de tema —lo reciente manda— y la ventana da la inercia: un
+        // "y ahora el certificado" hereda de qué se venía hablando, y un "sí,
+        // hazlo" no descarga nada.
+        skillStore.update(t, conv.recentUserText(3))
         hookRunner.fire("user_prompt_submit", "", { QS_HOOK_PROMPT: t.slice(0, 4000) })
         chat.start()
     }

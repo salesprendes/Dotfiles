@@ -1,6 +1,7 @@
 ---
 name: "Servidores remotos y hosting"
-description: "Cómo entrar por SSH a un servidor y diagnosticarlo (web caída, correo, certificados, disco, Plesk o cPanel) sin romper nada. Úsala cuando el usuario hable de un servidor, un dominio, un VPS o un panel de hosting."
+description: "Cómo entrar por SSH a un servidor y diagnosticarlo (web caída, correo, certificados, disco, panel de hosting) sin romper nada. Úsala cuando el usuario hable de un servidor, un dominio, un VPS o un panel de hosting."
+triggers: "ssh, sftp, scp, vps, hosting, conectate, entra en el servidor, maquina remota, acceso remoto, panel de hosting"
 ---
 
 # Servidores remotos y hosting
@@ -17,6 +18,23 @@ la línea de comandos.
 
 Si falta `sshpass`, el harness te lo dirá: díselo al usuario tal cual
 (`pacman -S sshpass`) en vez de reintentar.
+
+## Una llamada, muchas lecturas
+
+**Agrupa las lecturas relacionadas en UN solo comando**, separadas por `;`.
+Cada llamada remota cuesta una tarjeta que el usuario tiene que aprobar y un
+veredicto del supervisor: cuarenta comandos sueltos son cuarenta esperas, y
+casi siempre cabían en cinco. Un vistazo típico es una sola llamada:
+
+```sh
+uptime; free -h; df -h; systemctl --failed
+```
+
+Dos reglas para que agrupar no se vuelva en contra: las ESCRITURAS y lo
+irreversible van SIEMPRE solas (quien aprueba tiene que poder leer qué
+cambia), y todo lo que pueda colgarse lleva su plazo — el harness corta a
+los 90 s y un comando cortado no deja ni el resultado de los que ya habían
+salido bien.
 
 ## Orden de las lecturas
 

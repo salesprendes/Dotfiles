@@ -1,6 +1,7 @@
 ---
 name: "Secretos y tokens en el código"
-description: "Prevenir y reaccionar ante credenciales filtradas en un repositorio: rotar la clave primero, escanear con gitleaks o trufflehog, limpiar el historial con git filter-repo y blindar el repo para que no vuelva a pasar. Úsala si se ha filtrado una clave, hay una contraseña o token en un commit, aparece un API key en el código, o hay que escanear secretos antes de publicar un repo."
+description: "Prevenir y reaccionar ante credenciales filtradas en un repositorio: rotar la clave primero, escanear con gitleaks o trufflehog, borrar del historial con git filter-repo y blindar el repo para que no vuelva a pasar. Úsala si se ha filtrado una clave, hay una contraseña o token en un commit, aparece un API key en el código, o hay que escanear secretos antes de publicar un repo."
+triggers: "gitleaks, trufflehog, filter-repo, token, api key, apikey, credencial, credenciales, contrasena, historial del repositorio, commit con la clave, clave en el repo, rotar, secreto, secretos, filtrado, expuesta, fichero env"
 ---
 
 # Secretos en el código

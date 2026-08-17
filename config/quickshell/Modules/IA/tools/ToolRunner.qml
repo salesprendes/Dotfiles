@@ -211,6 +211,42 @@ Scope {
         sessionAllow = m
     }
 
+    // ── La ráfaga de lecturas ────────────────────────────────────────────────
+    // Un diagnóstico remoto son treinta comandos de MIRAR contra la misma
+    // máquina, y hasta ahora eran treinta tarjetas: medido, 23 clics en una
+    // sesión, con el turno parado esperando cada uno.
+    //
+    // Esto NO es un "siempre" para ssh_exec —eso sigue prohibido a conciencia
+    // (TP.neverAuto): ejecutar en una máquina jamás se auto-aprueba por el
+    // nombre de la herramienta—. Lo que se recuerda es una firma mucho más
+    // estrecha: MISMA herramienta, MISMO destino y comando de SOLO LECTURA
+    // reconocido por lista blanca (TP.verdictKey → TP.readOnlyCommand). Un
+    // `rm`, una redirección, un `bash -c` o un destino distinto no casan con
+    // la firma y vuelven a pedir su tarjeta.
+    //
+    // Y dura UN TURNO, no la conversación: se concede viendo una ráfaga
+    // concreta en marcha, así que se apaga con ella. El siguiente encargo
+    // vuelve a preguntar.
+    property var burstAllow: ({})
+    function allowBurst(name, argsJson) {
+        const k = TP.verdictKey(name, argsJson)
+        if (k === null)
+            return false
+        const m = Object.assign({}, burstAllow)
+        m[k] = true
+        burstAllow = m
+        return true
+    }
+    // ¿Hay ráfaga concedida para esta llamada concreta?
+    function inBurst(name, argsJson) {
+        const k = TP.verdictKey(name, argsJson)
+        return k !== null && burstAllow[k] === true
+    }
+    // Lo que la tarjeta necesita para decidir si ofrece el botón.
+    function canBurst(name, argsJson) {
+        return TP.verdictKey(name, argsJson) !== null
+    }
+
     // El motivo por el que una llamada concreta es peligrosa, si lo es. Lo usan
     // la política (para forzar la tarjeta) y la propia tarjeta (para pintarlo).
     function dangerOf(name, argsJson) {
@@ -262,8 +298,16 @@ Scope {
         // depurador) no se auto-aprueba jamás. Se comprueba ANTES que el
         // permiso permanente para que ni un "siempre" concedido a la ligera
         // pueda saltárselo.
+        //
+        // La ÚNICA excepción es la ráfaga de lecturas, y por eso va aquí
+        // dentro y no fuera: el usuario tiene delante una tarjeta con este
+        // mismo comando, ve qué se va a leer y en qué máquina, y concede
+        // explícitamente las siguientes IGUALES de este turno. La firma exige
+        // mismo destino y comando de solo lectura por lista blanca, así que
+        // un `rm` o una redirección no pueden colarse por aquí — y sigue sin
+        // existir ningún "siempre" para ssh_exec a secas.
         if (TP.neverAuto(name))
-            return "ask"
+            return inBurst(name, argsJson) ? "auto" : "ask"
         // Un comando destructivo se enseña SIEMPRE, diga lo que diga la
         // política: la clase de riesgo mira la herramienta, esto mira lo que
         // esa llamada concreta va a hacer.
@@ -501,6 +545,49 @@ Scope {
     }
     property int _userApproved: -1
 
+    // ¿Queda alguna tarjeta esperando al usuario? Lo pregunta la interrupción
+    // para saber si el ESC tenía algo que cortar.
+    function hasPending() {
+        for (let i = messages.count - 1; i >= 0; i--) {
+            const m = messages.get(i)
+            if (m.role === "tool" && m.toolStatus === "pending")
+                return true
+        }
+        return false
+    }
+
+    // CORTARLO TODO: la herramienta que esté corriendo y las tarjetas que
+    // esperan aprobación. Sin esto, parar el turno dejaba el `find` en marcha
+    // en un servidor y cuatro tarjetas pendientes que, al aprobarlas después,
+    // resucitaban un turno que el usuario creía muerto.
+    //
+    // Las pendientes NO se rechazan una a una con rejectTool: eso llama a
+    // advance(), que es justo lo que se quiere evitar — el resultado volvería
+    // al modelo y el turno seguiría. Se marcan y se calla.
+    function cancelAll() {
+        if (proc.running)
+            proc.running = false
+        runningIndex = -1
+        _colaClics = []
+        _toolIndex = -1
+        _hookPassed = -1
+        _userApproved = -1
+        let tocadas = 0
+        for (let i = 0; i < messages.count; i++) {
+            const m = messages.get(i)
+            if (m.role !== "tool" || m.toolStatus !== "pending")
+                continue
+            messages.setProperty(i, "toolStatus", "rejected")
+            messages.setProperty(i, "toolResult",
+                "El usuario interrumpió el turno antes de ejecutar esto.")
+            audit.record({ src: "card", tool: m.toolName, args: m.toolArgs,
+                           decision: "interrupted" })
+            tocadas++
+        }
+        if (tocadas > 0)
+            conv.save()
+    }
+
     function rejectTool(index) {
         const m = messages.get(index)
         if (!m || m.role !== "tool" || m.toolStatus !== "pending")
@@ -569,6 +656,17 @@ Scope {
             return
         if (TP.canStandingAllow(m.toolName))
             allowForSession(m.toolName)
+        _userApproved = index
+        approveTool(index)
+    }
+
+    // "Aprobar las lecturas iguales de este turno": la ráfaga. Misma
+    // herramienta, mismo destino y solo lectura — ver burstAllow.
+    function approveToolBurst(index) {
+        const m = messages.get(index)
+        if (!m || m.role !== "tool")
+            return
+        allowBurst(m.toolName, m.toolArgs)
         _userApproved = index
         approveTool(index)
     }
@@ -870,8 +968,11 @@ Scope {
             // La habilidad puede acotar su propio vocabulario mientras esté en
             // uso (allowed-tools del frontmatter): un manual de lectura no
             // debería poder pedir un rm.
+            // Con dueño: el recorte caduca cuando su habilidad deja de venir a
+            // cuento (ver SkillStore.update), no al final del hilo.
             skills.activeSkillTools = (s.allowedTools && s.allowedTools.length > 0)
                 ? s.allowedTools.slice() : []
+            skills.toolsOwner = skills.activeSkillTools.length > 0 ? s.id : ""
             // El texto ya está en memoria desde el escaneo: no hace falta ir al
             // disco otra vez. Y entra con el tope de habilidad, no con el
             // genérico de resultados: son instrucciones, no salida de comando.
@@ -1285,6 +1386,7 @@ Scope {
     // el plan a la vista, las rutas ya resueltas.
     function resetThread() {
         sessionAllow = ({})
+        burstAllow = ({})
         pathReal = ({})
         supVerdict = ({})
         toolRounds = 0
