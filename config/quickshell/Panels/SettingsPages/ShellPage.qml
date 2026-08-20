@@ -157,27 +157,28 @@ SettingsPage {
                     source: Settings.avatarPath
                     initial: shellPage.userInitial
                     initialPixelSize: Theme.sp(20)
+                    tint: Theme.accent
+                    fontFamily: Theme.fontFamily
+                    isDark: Theme.isDark
                 }
 
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: Theme.dp(1)
-                    Text {
+                    ThemedText {
                         Layout.fillWidth: true
                         text: shellPage.userName
                         color: Theme.fg
-                        font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontSize + 1
                         font.bold: true
                         elide: Text.ElideRight
                     }
-                    Text {
+                    ThemedText {
                         Layout.fillWidth: true
                         text: shellPage.greeterStatus !== ""
                             ? shellPage.greeterStatus
                             : I18n.tr("Round image, applied to the login screen")
                         color: Theme.fgMuted
-                        font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontSize - 2
                         elide: Text.ElideRight
                     }

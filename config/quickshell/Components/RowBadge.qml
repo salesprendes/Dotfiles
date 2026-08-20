@@ -42,11 +42,10 @@ Rectangle {
 
     Behavior on color { ColorAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
 
-    Text {
+    ThemedText {
         anchors.centerIn: parent
         text: badge.glyph
         color: badge.active ? Theme.accentText : Theme.fgDim
-        font.family: Theme.fontFamily
         font.pixelSize: Theme.iconSize - Theme.dp(1)
         Behavior on color { ColorAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
     }

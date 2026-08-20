@@ -94,7 +94,7 @@ Popout {
                 Behavior on width { enabled: !fsDrag.dragging; NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
             }
 
-            Text {
+            ThemedText {
                 anchors.left: parent.left
                 // Margen e icono un punto menores: con la píldora más fina el
                 // glifo tiene que seguir cabiendo dentro del relleno mínimo.
@@ -102,7 +102,6 @@ Popout {
                 anchors.verticalCenter: parent.verticalCenter
                 text: fs.icon
                 color: Theme.bg
-                font.family: Theme.fontFamily
                 font.pixelSize: Theme.iconSize - 1
             }
         }
@@ -146,19 +145,16 @@ Popout {
             RowLayout {
                 Layout.fillWidth: true
                 spacing: Theme.space8
-                Text {
+                ThemedText {
                     Layout.fillWidth: true
                     text: sc.title
                     color: Theme.fg
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSize
                     font.bold: true
                     elide: Text.ElideRight
                 }
-                Text {
+                ThemedText {
                     text: sc.valueText
                     color: Theme.fgMuted
-                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSize - 2
                 }
             }
@@ -206,11 +202,10 @@ Popout {
                 color: Theme.withAlpha(Theme.accent, 0.16)
                 border.width: Theme.hairline
                 border.color: Theme.withAlpha(Theme.accent, 0.45)
-                Text {
+                ThemedText {
                     anchors.centerIn: parent
                     text: SysMon.distroGlyph
                     color: Theme.accent
-                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.iconSize + 6
                 }
             }
@@ -218,21 +213,19 @@ Popout {
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: Theme.space2
-                Text {
+                ThemedText {
                     Layout.fillWidth: true
                     text: SysMon.hostname || SysMon.distroName || I18n.tr("System")
                     color: Theme.fg
-                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSize + 1
                     font.bold: true
                     elide: Text.ElideRight
                 }
-                Text {
+                ThemedText {
                     Layout.fillWidth: true
                     visible: SysMon.uptime !== ""
                     text: I18n.tr("up") + " " + SysMon.uptime
                     color: Theme.fgMuted
-                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSize - 3
                     elide: Text.ElideRight
                 }
@@ -302,11 +295,10 @@ Popout {
                                      ? (pwMa.pressed ? Qt.darker(btn.modelData.col, 1.15) : btn.modelData.col)
                                      : Theme.withAlpha(btn.modelData.col, 0)
                                 Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
-                                Text {
+                                ThemedText {
                                     anchors.centerIn: parent
                                     text: btn.modelData.ic
                                     color: pwMa.containsMouse ? Theme.bg : Theme.fgDim
-                                    font.family: Theme.fontFamily
                                     font.pixelSize: Theme.iconSize - 1
                                     // El glifo funde a la vez que el fondo, en vez
                                     // de saltar de color.

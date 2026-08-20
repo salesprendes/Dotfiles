@@ -17,6 +17,18 @@ Singleton {
             || node?.properties?.["media.name"] || node?.name || "—"
     }
 
+    // Ordena nodos de Pipewire dejando el predeterminado primero y el resto por
+    // nombre. Los paneles de salida y de micrófono tenían esta misma función
+    // duplicada (deviceSort / inputSort), idéntica salvo por cuál era el nodo
+    // predeterminado.
+    function pwSortByDefault(nodes, defaultNode) {
+        return nodes.slice().sort(function (a, b) {
+            if (a === defaultNode && b !== defaultNode) return -1
+            if (b === defaultNode && a !== defaultNode) return 1
+            return pwDeviceName(a).localeCompare(pwDeviceName(b))
+        })
+    }
+
     // Glifo de volumen según nivel (0..1) y silencio. Compartido por la barra,
     // el OSD y el panel de audio para que los umbrales no diverjan.
     function volumeGlyph(volume01, muted) {

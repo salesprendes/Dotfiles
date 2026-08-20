@@ -89,11 +89,11 @@ Item {
         height: Theme.dp(32)
         width: trigRow.implicitWidth + Theme.dp(26)
         radius: height / 2
-        color: trigger.lit ? Theme.alpha(Theme.surfaceHi, 0.9)
-                           : Theme.alpha(Theme.surface, 0.5)
+        color: trigger.lit ? Theme.withAlpha(Theme.surfaceHi, 0.9)
+                           : Theme.withAlpha(Theme.surface, 0.5)
         border.width: 1
-        border.color: trigger.focused ? Theme.alpha(Theme.accent, 0.6)
-                                       : Theme.alpha(Theme.overlay, 0.4)
+        border.color: trigger.focused ? Theme.withAlpha(Theme.accent, 0.6)
+                                       : Theme.withAlpha(Theme.overlay, 0.4)
         Behavior on color { ColorAnimation { duration: 140 } }
         Behavior on border.color { ColorAnimation { duration: 140 } }
 
@@ -105,7 +105,7 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 text: "󰧨"
                 color: trigger.lit ? Theme.accent : Theme.fgMuted
-                font.family: Theme.font
+                font.family: Theme.fontFamily
                 font.pixelSize: Theme.sp(13)
                 Behavior on color { ColorAnimation { duration: 140 } }
             }
@@ -113,7 +113,7 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 text: GreeterState.currentSession ? GreeterState.currentSession.name : I18n.tr("Sesión", "Session")
                 color: trigger.lit ? Theme.fg : Theme.fgDim
-                font.family: Theme.font
+                font.family: Theme.fontFamily
                 font.pixelSize: Theme.sp(12)
                 Behavior on color { ColorAnimation { duration: 140 } }
             }
@@ -121,7 +121,7 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 text: "󰅀"
                 color: trigger.lit ? Theme.accent : Theme.fgMuted
-                font.family: Theme.font
+                font.family: Theme.fontFamily
                 font.pixelSize: Theme.sp(11)
                 rotation: sp.open ? 180 : 0
                 Behavior on rotation { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
@@ -161,9 +161,9 @@ Item {
             width: parent.width
             height: menuCol.implicitHeight + Theme.dp(10)
             radius: Theme.dp(14)
-            color: Theme.alpha(Theme.surface, 0.97)
+            color: Theme.withAlpha(Theme.surface, 0.97)
             border.width: 1
-            border.color: Theme.alpha(Theme.overlay, 0.5)
+            border.color: Theme.withAlpha(Theme.overlay, 0.5)
             antialiasing: true
 
             Column {
@@ -188,8 +188,8 @@ Item {
                         // "transparent" (negro con alfa 0) dejaba un rastro
                         // oscuro al mover el ratón rápido entre filas.
                         readonly property bool hilite: index === sp.hi
-                        color: hilite ? Theme.alpha(Theme.surfaceHi, 0.9)
-                             : current ? Theme.alpha(Theme.accent, 0.14)
+                        color: hilite ? Theme.withAlpha(Theme.surfaceHi, 0.9)
+                             : current ? Theme.withAlpha(Theme.accent, 0.14)
                              : "transparent"
 
                         // Cascada: cada fila se revela un pelín tras la anterior.
@@ -207,7 +207,7 @@ Item {
                             elide: Text.ElideRight
                             color: row.current ? Theme.accent
                                  : row.hilite ? Theme.fg : Theme.fgDim
-                            font.family: Theme.font
+                            font.family: Theme.fontFamily
                             font.pixelSize: Theme.sp(12)
                             font.bold: row.current
                         }
@@ -218,7 +218,7 @@ Item {
                             visible: row.current
                             text: "󰄬"
                             color: Theme.accent
-                            font.family: Theme.font
+                            font.family: Theme.fontFamily
                             font.pixelSize: Theme.sp(13)
                         }
                         MouseArea {

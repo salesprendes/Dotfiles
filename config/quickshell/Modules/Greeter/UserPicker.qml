@@ -1,6 +1,6 @@
 //  PASO 1 · Selector de usuario (teclado ↑/↓/Tab/Enter + ratón).
 import QtQuick
-import Quickshell.Widgets
+import qs.Components
 import qs.Modules.Greeter
 
 FocusScope {
@@ -28,7 +28,7 @@ FocusScope {
             anchors.horizontalCenter: parent.horizontalCenter
             text: I18n.tr("Selecciona usuario", "Select user")
             color: Theme.fgDim
-            font.family: Theme.font
+            font.family: Theme.fontFamily
             font.pixelSize: Theme.sp(14)
             bottomPadding: Theme.dp(2)
         }
@@ -43,10 +43,10 @@ FocusScope {
                 height: Theme.dp(58)
                 radius: Theme.dp(13)
                 readonly property bool active: index === sel.hi || urowMa.containsMouse
-                color: active ? Theme.alpha(Theme.surfaceHi, 0.85)
-                              : Theme.alpha(Theme.surface, 0.35)
+                color: active ? Theme.withAlpha(Theme.surfaceHi, 0.85)
+                              : Theme.withAlpha(Theme.surface, 0.35)
                 border.width: active ? 1 : 0
-                border.color: Theme.alpha(Theme.accent, 0.45)
+                border.color: Theme.withAlpha(Theme.accent, 0.45)
                 // Resalte instantáneo: el fundido de 130 ms dejaba dos filas
                 // marcadas a la vez al mover el ratón rápido.
 
@@ -56,42 +56,19 @@ FocusScope {
                     anchors.rightMargin: Theme.dp(12)
                     spacing: Theme.dp(12)
 
-                    Rectangle {
+                    Avatar {
                         anchors.verticalCenter: parent.verticalCenter
-                        width: Theme.dp(38); height: Theme.dp(38); radius: width / 2
-                        color: Theme.alpha(Theme.accent, urow.active ? 0.22 : 0.14)
-                        border.width: 1
-                        border.color: Theme.alpha(Theme.accent, 0.5)
-                        // Inicial de fondo; si este usuario tiene avatar propio
-                        // en AccountsService, se pinta encima recortado.
-                        Text {
-                            anchors.centerIn: parent
-                            visible: rowAvatar.status !== Image.Ready
-                            text: (urow.modelData.full || urow.modelData.name).charAt(0).toUpperCase()
-                            color: Theme.accent
-                            font.family: Theme.font
-                            font.pixelSize: Theme.sp(16)
-                            font.bold: true
-                        }
-                        ClippingRectangle {
-                            anchors.fill: parent
-                            radius: width / 2
-                            color: "transparent"
-                            visible: rowAvatar.status === Image.Ready
-                            Image {
-                                id: rowAvatar
-                                anchors.fill: parent
-                                source: {
-                                    const p = Config.avatarFor(urow.modelData.name)
-                                    return p !== "" ? "file://" + p : ""
-                                }
-                                fillMode: Image.PreserveAspectCrop
-                                asynchronous: true
-                                cache: false
-                                sourceSize.width: Math.round(parent.width * 2)
-                                sourceSize.height: Math.round(parent.height * 2)
-                            }
-                        }
+                        diameter: Theme.dp(38)
+                        source: Config.avatarFor(urow.modelData.name)
+                        initial: (urow.modelData.full || urow.modelData.name).charAt(0).toUpperCase()
+                        initialPixelSize: Theme.sp(16)
+                        tint: Theme.accent
+                        initialColor: Theme.accent
+                        fontFamily: Theme.fontFamily
+                        isDark: Theme.isDark
+                        bgAlpha: urow.active ? 0.22 : 0.14
+                        borderWidth: 1
+                        borderColor: Theme.withAlpha(Theme.accent, 0.5)
                     }
                     Column {
                         anchors.verticalCenter: parent.verticalCenter
@@ -99,7 +76,7 @@ FocusScope {
                         Text {
                             text: urow.modelData.full
                             color: Theme.fg
-                            font.family: Theme.font
+                            font.family: Theme.fontFamily
                             font.pixelSize: Theme.sp(15)
                             font.bold: true
                         }
@@ -107,7 +84,7 @@ FocusScope {
                             visible: urow.modelData.full !== urow.modelData.name
                             text: urow.modelData.name
                             color: Theme.fgMuted
-                            font.family: Theme.font
+                            font.family: Theme.fontFamily
                             font.pixelSize: Theme.sp(12)
                         }
                     }
@@ -119,8 +96,8 @@ FocusScope {
                     anchors.verticalCenter: parent.verticalCenter
                     visible: GreeterState.lastUser !== "" && urow.modelData.name === GreeterState.lastUser
                     text: "󰋚"
-                    color: Theme.alpha(Theme.accent, 0.8)
-                    font.family: Theme.font
+                    color: Theme.withAlpha(Theme.accent, 0.8)
+                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.sp(13)
                 }
                 MouseArea {
@@ -139,7 +116,7 @@ FocusScope {
             visible: GreeterState.users.length === 0
             text: I18n.tr("No se han encontrado usuarios", "No users found")
             color: Theme.fgMuted
-            font.family: Theme.font
+            font.family: Theme.fontFamily
             font.pixelSize: Theme.sp(13)
         }
     }

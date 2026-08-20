@@ -409,10 +409,9 @@ FloatingWindow {
             Layout.rightMargin: cfg.spaceXs
             spacing: cfg.spaceMd
 
-            Text {
+            ThemedText {
                 text: I18n.tr("Settings")
                 color: Theme.fg
-                font.family: Theme.fontFamily
                 font.pixelSize: Theme.typeTitleLarge
                 font.bold: true
                 font.letterSpacing: -Theme.dp(0.3)
@@ -488,11 +487,10 @@ FloatingWindow {
                     anchors.right: parent.right
                     anchors.verticalCenter: parent.verticalCenter
                     spacing: cfg.spaceXs + Theme.dp(4)
-                    Text {
+                    ThemedText {
                         visible: !cfg.headerCompact
                         text: I18n.tr("Modified only")
                         color: SettingsFilter.modifiedOnly ? Theme.fg : Theme.fgDim
-                        font.family: Theme.fontFamily
                         font.pixelSize: Theme.typeLabelLarge
                         font.bold: SettingsFilter.modifiedOnly
                     }
@@ -622,11 +620,10 @@ FloatingWindow {
                     Behavior on opacity { NumberAnimation { duration: Theme.animFast } }
                 }
 
-                Text {
+                ThemedText {
                     anchors.centerIn: parent
                     text: "󰅖"
                     color: closeBtn.hot ? Theme.fg : Theme.fgDim
-                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.sp(18)
                     rotation: closeBtn.hot ? 90 : 0
                     Behavior on rotation { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutBack; easing.overshoot: 1.6 } }
@@ -743,25 +740,26 @@ FloatingWindow {
                                 source: Settings.avatarPath
                                 initial: cfg.userName.charAt(0).toUpperCase()
                                 initialPixelSize: Theme.sp(18)
+                                tint: Theme.accent
+                                fontFamily: Theme.fontFamily
+                                isDark: Theme.isDark
                             }
                             ColumnLayout {
                                 Layout.fillWidth: true
                                 visible: !cfg.navCompact
                                 spacing: 0
-                                Text {
+                                ThemedText {
                                     Layout.fillWidth: true
                                     text: cfg.userName
                                     color: Theme.fg
-                                    font.family: Theme.fontFamily
                                     font.pixelSize: Theme.typeTitleMedium
                                     font.bold: true
                                     elide: Text.ElideRight
                                 }
-                                Text {
+                                ThemedText {
                                     Layout.fillWidth: true
                                     text: SysMon.hostname !== "" ? SysMon.hostname : SysMon.distroName
                                     color: profileTab.sel ? Theme.fgDim : Theme.fgMuted
-                                    font.family: Theme.fontFamily
                                     font.pixelSize: Theme.typeLabelMedium
                                     elide: Text.ElideRight
                                     Behavior on color { ColorAnimation { duration: Theme.animFast } }
@@ -771,12 +769,11 @@ FloatingWindow {
                             // Galón: la ficha abre una página, como las
                             // pestañas de abajo. Sin él no había nada que lo
                             // dijera y parecía una cabecera decorativa.
-                            Text {
+                            ThemedText {
                                 visible: !cfg.navCompact
                                 text: "󰅂"
                                 color: profileTab.sel ? Theme.accentText : Theme.fgMuted
                                 opacity: profileTab.sel || profileMa.containsMouse ? 1 : 0.4
-                                font.family: Theme.fontFamily
                                 font.pixelSize: Theme.iconSize
                                 Behavior on opacity { NumberAnimation { duration: Theme.animFast } }
                                 Behavior on color { ColorAnimation { duration: Theme.animFast } }
@@ -949,7 +946,7 @@ FloatingWindow {
                 // no decora, identifica dónde estás sin competir con el texto.
                 // Fuera en "Acerca de": esa página ya trae su propia tarjeta
                 // ilustrada (avatar + logo) y la marca de agua le hacía sombra.
-                Text {
+                ThemedText {
                     anchors.top: parent.top
                     anchors.right: parent.right
                     anchors.topMargin: -Theme.dp(28)
@@ -958,7 +955,6 @@ FloatingWindow {
                     text: cfg.catGlyph
                     color: Theme.accent
                     opacity: cfg.pageOpacity * (Theme.isDark ? 0.07 : 0.05)
-                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.sp(150)
                     // Paralaje: al desplazar la página, la marca de agua se va
                     // más despacio que el contenido. Es lo que le da a la
@@ -1035,11 +1031,10 @@ FloatingWindow {
                         // ruido (por eso se quitó el antetítulo), pero el riel
                         // las esconde — y entonces la miga es la única pista
                         // de en qué grupo estás.
-                        Text {
+                        ThemedText {
                             visible: cfg.navCompact && cfg.catGroupLabel !== ""
                             text: cfg.catGroupLabel
                             color: Theme.fgMuted
-                            font.family: Theme.fontFamily
                             font.pixelSize: Theme.typeLabelMedium
                             font.weight: Font.Medium
                             elide: Text.ElideRight
@@ -1058,10 +1053,9 @@ FloatingWindow {
                             // Crece con el reloj de entrada de la página: nace
                             // pequeño y se asienta con las tarjetas, sin
                             // animación propia.
-                            Text {
+                            ThemedText {
                                 text: cfg.catGlyph
                                 color: Theme.accentText
-                                font.family: Theme.fontFamily
                                 font.pixelSize: cfg.headerCompact ? Theme.sp(22) : Theme.sp(26)
                                 scale: 0.6 + 0.4 * SettingsMotion.reveal(0)
                             }
@@ -1070,11 +1064,10 @@ FloatingWindow {
                             // página y se quedaba corto frente a las tarjetas.
                             // En compacto baja un escalón para no comerse el
                             // ancho.
-                            Text {
+                            ThemedText {
                                 Layout.fillWidth: true
                                 text: cfg.catLabel
                                 color: Theme.fg
-                                font.family: Theme.fontFamily
                                 font.pixelSize: cfg.headerCompact
                                     ? Theme.typeHeadlineSmall : Theme.typeHeadlineMedium
                                 font.weight: Font.Medium
@@ -1113,10 +1106,9 @@ FloatingWindow {
                             anchors.margins: cfg.spaceMd
                             spacing: cfg.spaceXs
 
-                            Text {
+                            ThemedText {
                                 text: I18n.tr("Results in other sections")
                                 color: Theme.fgMuted
-                                font.family: Theme.fontFamily
                                 font.pixelSize: Theme.typeLabelSmall
                                 font.bold: true
                                 font.capitalization: Font.AllUppercase
@@ -1151,37 +1143,32 @@ FloatingWindow {
                                                 // destino, igual que en la nav:
                                                 // se ve a dónde te lleva el
                                                 // resultado antes de leerlo.
-                                                Text {
+                                                ThemedText {
                                                     Layout.preferredWidth: Theme.dp(22)
                                                     horizontalAlignment: Text.AlignHCenter
                                                     text: crossGroup.modelData.info.glyph
                                                     color: Theme.fgDim
-                                                    font.family: Theme.fontFamily
                                                     font.pixelSize: Theme.sp(15)
                                                 }
                                                 ColumnLayout {
                                                     Layout.fillWidth: true
                                                     spacing: 0
-                                                    Text {
+                                                    ThemedText {
                                                         Layout.fillWidth: true
                                                         text: resultRow.modelData.label
                                                         color: Theme.fg
-                                                        font.family: Theme.fontFamily
-                                                        font.pixelSize: Theme.fontSize
                                                         elide: Text.ElideRight
                                                     }
-                                                    Text {
+                                                    ThemedText {
                                                         Layout.fillWidth: true
                                                         text: crossGroup.modelData.info.label
                                                         color: Theme.fgMuted
-                                                        font.family: Theme.fontFamily
                                                         font.pixelSize: Theme.fontSize - 4
                                                     }
                                                 }
-                                                Text {
+                                                ThemedText {
                                                     text: "󰁔"
                                                     color: Theme.fgMuted
-                                                    font.family: Theme.fontFamily
                                                     font.pixelSize: Theme.iconSize - 2
                                                 }
                                             }
@@ -1272,7 +1259,7 @@ FloatingWindow {
                     // El filtro ha escondido toda la página. Se ancla al ancho
                     // del Flickable (no a su contentItem, que es tan alto como
                     // la página y descolocaba el centrado).
-                    Text {
+                    ThemedText {
                         anchors.horizontalCenter: parent.horizontalCenter
                         anchors.top: parent.top
                         anchors.topMargin: Theme.dp(64)
@@ -1283,7 +1270,6 @@ FloatingWindow {
                             ? I18n.tr("Nothing modified on this page")
                             : I18n.tr("No settings match your search")
                         color: Theme.fgMuted
-                        font.family: Theme.fontFamily
                         font.pixelSize: Theme.typeBodyMedium
                     }
                 }
@@ -1510,13 +1496,12 @@ FloatingWindow {
             // acento allí donde está la píldora. Ancho fijo para que las
             // etiquetas queden alineadas aunque el glifo varíe; en riel se
             // estira para centrarse.
-            Text {
+            ThemedText {
                 Layout.preferredWidth: Theme.dp(30)
                 Layout.fillWidth: cfg.navCompact
                 horizontalAlignment: Text.AlignHCenter
                 text: tab.glyph
                 color: tab.active ? Theme.accentText : Theme.fgDim
-                font.family: Theme.fontFamily
                 font.pixelSize: Theme.sp(22)
                 // El glifo de la pestaña activa crece un punto: en Material el
                 // indicador no solo se pinta, el propio icono gana cuerpo.
@@ -1529,14 +1514,13 @@ FloatingWindow {
                     }
                 }
             }
-            Text {
+            ThemedText {
                 Layout.fillWidth: true
                 visible: !cfg.navCompact
                 text: tab.label
                 // Acento donde está la píldora; la negrita marca la SELECCIÓN
                 // (no el simple hover), para distinguirla del paso del ratón.
                 color: tab.active ? Theme.accentText : Theme.fg
-                font.family: Theme.fontFamily
                 font.pixelSize: Theme.typeLabelLarge
                 font.bold: tab.sel
                 elide: Text.ElideRight

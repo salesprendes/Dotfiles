@@ -1,7 +1,7 @@
 //  PASO 2 · Contraseña. Puntos nítidos + caret propio, botón "ver",
 //  botón Enter, estado de error / indicador de login y selector de sesión.
 import QtQuick
-import Quickshell.Widgets
+import qs.Components
 import qs.Modules.Greeter
 
 Item {
@@ -46,48 +46,26 @@ Item {
         // Config.avatarPath, esa imagen recortada en círculo encima. La
         // inicial va SIEMPRE debajo: si la foto no existe o no carga, no
         // queda hueco (fallback seguro, nada que pueda romper el login).
-        Rectangle {
+        Avatar {
             id: avatarBox
             anchors.horizontalCenter: parent.horizontalCenter
-            width: Theme.dp(76); height: Theme.dp(76); radius: width / 2
-            color: Theme.alpha(Theme.accent, 0.16)
-            border.width: 1
-            border.color: Theme.alpha(Theme.accent, 0.55)
-            Text {
-                anchors.centerIn: parent
-                text: GreeterState.selectedUser.charAt(0).toUpperCase()
-                color: Theme.accent
-                font.family: Theme.font
-                font.pixelSize: Theme.sp(32)
-                font.bold: true
-            }
-
-            ClippingRectangle {
-                anchors.fill: parent
-                radius: width / 2
-                color: "transparent"
-                visible: avatarImg.status === Image.Ready
-                Image {
-                    id: avatarImg
-                    anchors.fill: parent
-                    // Avatar del usuario seleccionado (vacío = sin foto → inicial).
-                    source: {
-                        const p = Config.avatarFor(GreeterState.selectedUser)
-                        return p !== "" ? "file://" + p : ""
-                    }
-                    fillMode: Image.PreserveAspectCrop
-                    asynchronous: true
-                    cache: false
-                    sourceSize.width: Math.round(parent.width * 2)
-                    sourceSize.height: Math.round(parent.height * 2)
-                }
-            }
+            diameter: Theme.dp(76)
+            source: Config.avatarFor(GreeterState.selectedUser)
+            initial: GreeterState.selectedUser.charAt(0).toUpperCase()
+            initialPixelSize: Theme.sp(32)
+            tint: Theme.accent
+            initialColor: Theme.accent
+            fontFamily: Theme.fontFamily
+            isDark: Theme.isDark
+            bgAlpha: 0.16
+            borderWidth: 1
+            borderColor: Theme.withAlpha(Theme.accent, 0.55)
         }
         Text {
             anchors.horizontalCenter: parent.horizontalCenter
             text: GreeterState.selectedUser
             color: Theme.fg
-            font.family: Theme.font
+            font.family: Theme.fontFamily
             font.pixelSize: Theme.sp(18)
             font.bold: true
         }
@@ -104,11 +82,11 @@ Item {
                 width: parent.width - enterBtn.width - parent.spacing
                 height: Theme.dp(46)
                 radius: Theme.dp(12)
-                color: Theme.alpha(Theme.bg, 0.55)
+                color: Theme.withAlpha(Theme.bg, 0.55)
                 border.width: pwInput.activeFocus ? 2 : 1
                 border.color: GreeterState.error !== "" ? Theme.red
                             : pwInput.activeFocus ? Theme.accent
-                            : Theme.alpha(Theme.overlay, 0.5)
+                            : Theme.withAlpha(Theme.overlay, 0.5)
                 Behavior on border.color { ColorAnimation { duration: 150 } }
 
                 Text {
@@ -118,7 +96,7 @@ Item {
                     anchors.verticalCenter: parent.verticalCenter
                     text: "󰌾"
                     color: pwInput.activeFocus ? Theme.accent : Theme.fgMuted
-                    font.family: Theme.font
+                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.sp(16)
                 }
 
@@ -132,8 +110,8 @@ Item {
                     anchors.verticalCenter: parent.verticalCenter
                     // Resalte del fondo: entra/sale con suavidad; más marcado y
                     // teñido de acento al pulsar.
-                    color: revealMa.pressed ? Theme.alpha(Theme.accent, 0.22)
-                         : revealMa.containsMouse ? Theme.alpha(Theme.surfaceHi, 0.9)
+                    color: revealMa.pressed ? Theme.withAlpha(Theme.accent, 0.22)
+                         : revealMa.containsMouse ? Theme.withAlpha(Theme.surfaceHi, 0.9)
                          : "transparent"
                     Behavior on color { ColorAnimation { duration: 170; easing.type: Easing.OutCubic } }
                     // Pequeño "pop" elástico: crece al pasar el ratón, se hunde al
@@ -147,7 +125,7 @@ Item {
                         text: GreeterState.revealSecret ? "󰈈" : "󰈉"
                         color: GreeterState.revealSecret ? Theme.accent
                              : revealMa.containsMouse ? Theme.fg : Theme.fgMuted
-                        font.family: Theme.font
+                        font.family: Theme.fontFamily
                         font.pixelSize: Theme.sp(15)
                         // El color del icono transiciona suave, sin saltos.
                         Behavior on color { ColorAnimation { duration: 170; easing.type: Easing.OutCubic } }
@@ -200,7 +178,7 @@ Item {
                         visible: pwInput.text.length === 0 && !pwInput.activeFocus
                         text: GreeterState.prompt
                         color: Theme.fgMuted
-                        font.family: Theme.font
+                        font.family: Theme.fontFamily
                         font.pixelSize: Theme.sp(15)
                     }
                     Row {
@@ -245,7 +223,7 @@ Item {
                             visible: !GreeterState.masked && pwInput.activeFocus
                                      && !GreeterState.busy
                         }
-                        font.family: Theme.font
+                        font.family: Theme.fontFamily
                         font.pixelSize: Theme.sp(15)
                         clip: true
                         enabled: !GreeterState.busy && GreeterState.selectedUser !== ""
@@ -290,13 +268,13 @@ Item {
                 Keys.onEnterPressed:  if (active) pw._sendPassword()
                 Keys.onSpacePressed:  if (active) pw._sendPassword()
 
-                color: !active ? Theme.alpha(Theme.surfaceHi, 0.55)
+                color: !active ? Theme.withAlpha(Theme.surfaceHi, 0.55)
                      : enterMa.pressed ? Qt.darker(Theme.accent, 1.12)
                      : enterMa.containsMouse ? Qt.lighter(Theme.accent, 1.08)
                      : Theme.accent
                 Behavior on color { ColorAnimation { duration: 120 } }
                 border.width: active ? 0 : 1
-                border.color: Theme.alpha(Theme.overlay, 0.7)
+                border.color: Theme.withAlpha(Theme.overlay, 0.7)
                 scale: enterMa.pressed && active ? 0.94 : 1
                 Behavior on scale { NumberAnimation { duration: 90; easing.type: Easing.OutQuad } }
 
@@ -307,7 +285,7 @@ Item {
                     radius: width / 2
                     color: "transparent"
                     border.width: Theme.dp(2)
-                    border.color: Theme.alpha(Theme.accent, 0.55)
+                    border.color: Theme.withAlpha(Theme.accent, 0.55)
                     visible: enterBtn.activeFocus
                 }
 
@@ -315,7 +293,7 @@ Item {
                     anchors.centerIn: parent
                     text: "󰁔"                          // flecha →
                     color: enterBtn.active ? Theme.bg : Theme.fgMuted
-                    font.family: Theme.font
+                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.sp(18)
                     font.bold: true
                 }
@@ -340,7 +318,7 @@ Item {
                 visible: GreeterState.error !== "" && !GreeterState.busy
                 text: GreeterState.error
                 color: Theme.red
-                font.family: Theme.font
+                font.family: Theme.fontFamily
                 font.pixelSize: Theme.sp(12)
                 elide: Text.ElideRight
             }
@@ -355,7 +333,7 @@ Item {
                     anchors.verticalCenter: parent.verticalCenter
                     text: I18n.tr("Cargando", "Loading")
                     color: Theme.fgMuted
-                    font.family: Theme.font
+                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.sp(12)
                 }
                 Row {

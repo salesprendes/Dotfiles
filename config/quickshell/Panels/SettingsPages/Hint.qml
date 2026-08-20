@@ -26,13 +26,12 @@ SettingsRow {
     Layout.leftMargin: Theme.dp(28) + Theme.space10
     implicitHeight: body.implicitHeight
 
-    Text {
+    ThemedText {
         id: body
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.top: parent.top
         color: Theme.fgMuted
-        font.family: Theme.fontFamily
         font.pixelSize: Theme.typeBodySmall
         wrapMode: Text.WordWrap
     }

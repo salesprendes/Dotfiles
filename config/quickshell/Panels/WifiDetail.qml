@@ -34,11 +34,10 @@ ColumnLayout {
         header: [
             Spinner { visible: Net.wifiEnabled && Net.scanning },
             // Engranaje: ajustes IP de la conexión activa (wifi/ethernet).
-            Text {
+            ThemedText {
                 visible: Net.online
                 text: "󰒓"
                 color: gearMa.containsMouse ? Theme.accent : Theme.fgMuted
-                font.family: Theme.fontFamily
                 font.pixelSize: Theme.iconSize + 1
                 Behavior on color { ColorAnimation { duration: Theme.animFast } }
                 MouseArea {
@@ -57,7 +56,7 @@ ColumnLayout {
         ]
 
         // Estado vacío.
-        Text {
+        ThemedText {
             Layout.fillWidth: true
             Layout.topMargin: Theme.space2
             Layout.bottomMargin: Theme.space2
@@ -65,7 +64,6 @@ ColumnLayout {
             horizontalAlignment: Text.AlignHCenter
             text: Net.scanning ? I18n.tr("Searching networks...") : I18n.tr("No networks found")
             color: Theme.fgMuted
-            font.family: Theme.fontFamily
             font.pixelSize: Theme.fontSize - 2
         }
 
@@ -100,19 +98,17 @@ ColumnLayout {
         subtitleColor: conn ? Theme.green : Theme.fgMuted
 
         // % de cobertura de la red.
-        Text {
+        ThemedText {
             text: nr.sig + "%"
             color: nr.conn ? Theme.accent : Theme.fgMuted
-            font.family: Theme.fontFamily
             font.pixelSize: Theme.fontSize - 3
             font.bold: nr.conn
         }
         // Candado para redes protegidas.
-        Text {
+        ThemedText {
             visible: nr.secured
             text: "󰌾"
             color: Theme.fgMuted
-            font.family: Theme.fontFamily
             font.pixelSize: Theme.fontSize - 2
         }
 

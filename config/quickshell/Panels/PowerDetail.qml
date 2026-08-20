@@ -53,19 +53,17 @@ ColumnLayout {
         title: info?.label ?? ""
         onClicked: Power.set(info.value)
 
-        Text {
+        ThemedText {
             visible: pr.active
             text: I18n.tr("Active")
             color: pr.accent
-            font.family: Theme.fontFamily
             font.pixelSize: Theme.fontSize - 4
             font.bold: true
         }
-        Text {
+        ThemedText {
             visible: pr.active
             text: "󰓏"
             color: pr.accent
-            font.family: Theme.fontFamily
             font.pixelSize: Theme.iconSize
         }
     }

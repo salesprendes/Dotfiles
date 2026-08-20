@@ -13,11 +13,10 @@ Rectangle {
     width: Theme.dp(14); height: Theme.dp(14); radius: height / 2
     color: badgeColor
 
-    Text {
+    ThemedText {
         anchors.centerIn: parent
         text: badge.count > 9 ? "9+" : badge.count
         color: Theme.bg
-        font.family: Theme.fontFamily
         font.pixelSize: Theme.sp(9)
         font.bold: true
     }

@@ -428,14 +428,13 @@ PanelWindow {
                                 onEdited: (text) => ScreenCapture.videoFilename = text
                             }
 
-                            Text {
+                            ThemedText {
                                 Layout.fillWidth: true
                                 text: ScreenCapture.status !== "" ? ScreenCapture.status
                                     : ScreenCapture.gsrAvailable ? ""
                                     : "gpu-screen-recorder no está instalado; las capturas funcionan, grabar queda pendiente."
                                 visible: text !== ""
                                 color: ScreenCapture.gsrAvailable ? Theme.fgMuted : Theme.yellow
-                                font.family: Theme.fontFamily
                                 font.pixelSize: Theme.fontSize - 3
                                 wrapMode: Text.WordWrap
                             }
@@ -473,12 +472,10 @@ PanelWindow {
         Layout.fillWidth: true
         spacing: Theme.space8
 
-        Text {
+        ThemedText {
             Layout.fillWidth: true
             text: row.label
             color: Theme.fg
-            font.family: Theme.fontFamily
-            font.pixelSize: Theme.fontSize
             elide: Text.ElideRight
         }
         Switch {
@@ -517,11 +514,10 @@ PanelWindow {
         Keys.onEnterPressed: btn.clicked()
         Keys.onSpacePressed: btn.clicked()
 
-        Text {
+        ThemedText {
             anchors.centerIn: parent
             text: btn.icon
             color: btn.active ? btn.tint : (btn.hovered ? Theme.fg : Theme.fgDim)
-            font.family: Theme.fontFamily
             font.pixelSize: Theme.iconSize + 7
             // El glifo funde a la vez que el fondo, en lugar de saltar.
             Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
@@ -566,19 +562,16 @@ PanelWindow {
         RowLayout {
             anchors.centerIn: parent
             spacing: Theme.space8
-            Text {
+            ThemedText {
                 text: btn.icon
                 color: Theme.bg
-                font.family: Theme.fontFamily
                 font.pixelSize: Theme.iconSize + 7
             }
-            Text {
+            ThemedText {
                 id: label
                 visible: !btn.compact
                 text: btn.text
                 color: Theme.bg
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontSize
                 font.bold: true
             }
         }

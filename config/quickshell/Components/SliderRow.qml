@@ -51,7 +51,7 @@ SettingsRow {
                     font.family: Theme.fontFamily; font.pixelSize: Theme.fontSize
                     elide: Text.ElideRight
                 }
-                Text {
+                ThemedText {
                     id: readout
 
                     // Hueco reservado que solo crece MIENTRAS arrastras.
@@ -77,7 +77,6 @@ SettingsRow {
 
                     text: slr.valueText
                     color: Theme.accentText
-                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSize - 1
                     font.bold: true
                 }

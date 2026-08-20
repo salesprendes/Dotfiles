@@ -198,12 +198,11 @@ Rectangle {
                 }
 
                 // Sin icono: campana, como fallback.
-                Text {
+                ThemedText {
                     anchors.centerIn: parent
                     visible: item.img === ""
                     text: "󰂚"
                     color: Theme.fgDim
-                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.sp(item.hasActions ? 24 : 20)
                 }
             }
@@ -214,11 +213,10 @@ Rectangle {
                 spacing: Theme.dp(2)
 
                 // Título. Reserva a su derecha el hueco del botón de cerrar.
-                Text {
+                ThemedText {
                     Layout.preferredWidth: item.titleWidth
                     text: item.summary
                     color: Theme.fg
-                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.sp(16)          // fontSizeTitle
                     font.bold: true
                     wrapMode: Text.WordWrap
@@ -227,12 +225,11 @@ Rectangle {
                     textFormat: Text.PlainText
                 }
 
-                Text {
+                ThemedText {
                     Layout.preferredWidth: item.textColWidth
                     visible: item.hasBody
                     text: item.body
                     color: Theme.fgDim
-                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.sp(14)          // fontSizeBody
                     wrapMode: Text.WordWrap
                     maximumLineCount: 3                    // kToastMaxBodyLines
@@ -262,13 +259,12 @@ Rectangle {
                             border.color: Theme.overlay
                             Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Theme.enterEasing } }
 
-                            Text {
+                            ThemedText {
                                 id: aTxt
                                 anchors.centerIn: parent
                                 width: Math.min(parent.width - Theme.dp(16), implicitWidth)
                                 text: parent.action && parent.action.text ? parent.action.text : ""
                                 color: Theme.fg
-                                font.family: Theme.fontFamily
                                 font.pixelSize: Theme.sp(13)     // fontSizeCaption
                                 elide: Text.ElideRight
                                 horizontalAlignment: Text.AlignHCenter
@@ -290,13 +286,12 @@ Rectangle {
 
                 // Pie: nombre de la app, alineado a la derecha. El toast no
                 // lleva marca de tiempo (sólo la lista del historial).
-                Text {
+                ThemedText {
                     Layout.preferredWidth: item.textColWidth
                     Layout.topMargin: Theme.dp(4)
                     horizontalAlignment: Text.AlignRight
                     text: item.appName
                     color: Theme.fgDim
-                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.sp(11)          // fontSizeMini
                     elide: Text.ElideRight
                     maximumLineCount: 1
@@ -320,11 +315,10 @@ Rectangle {
                                    : Theme.withAlpha(Theme.surfaceHi, 0)
         Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Theme.enterEasing } }
 
-        Text {
+        ThemedText {
             anchors.centerIn: parent
             text: "󰅖"
             color: Theme.fg
-            font.family: Theme.fontFamily
             font.pixelSize: Theme.sp(12)
             opacity: closeButton.hovered ? 1.0 : 0.55
             Behavior on opacity { NumberAnimation { duration: Theme.animFast; easing.type: Theme.enterEasing } }

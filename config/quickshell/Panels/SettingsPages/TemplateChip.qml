@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import qs.Config
+import qs.Components
 
 // Casilla cuadrada de una plantilla (Ajustes → Plantillas). Toda la casilla
 // es el área de toque; no lleva interruptor aparte. 'active' solo decide el
@@ -33,13 +34,12 @@ Rectangle {
     // parrilla entera se veía teñida y no había forma de saber si eso
     // significaba activa o simplemente "es una casilla". La marca lo dice sin
     // depender de comparar unas con otras.
-    Text {
+    ThemedText {
         anchors.top: parent.top
         anchors.right: parent.right
         anchors.margins: Theme.space6
         text: "󰄬"
         color: Theme.accent
-        font.family: Theme.fontFamily
         font.pixelSize: Theme.sp(12)
         opacity: chip.active ? 1 : 0
         // Entra creciendo desde el centro de su esquina, no aparece de golpe.
@@ -65,19 +65,17 @@ Rectangle {
         anchors.centerIn: parent
         spacing: Theme.space2
 
-        Text {
+        ThemedText {
             Layout.alignment: Qt.AlignHCenter
             text: chip.glyph
             color: chip.active ? Theme.accent : Theme.fgDim
-            font.family: Theme.fontFamily
             font.pixelSize: Theme.iconSize + 1
         }
-        Text {
+        ThemedText {
             Layout.alignment: Qt.AlignHCenter
             Layout.maximumWidth: chip.width - Theme.space8
             text: chip.label
             color: chip.active ? Theme.fg : Theme.fgMuted
-            font.family: Theme.fontFamily
             font.pixelSize: Theme.fontSize - 3
             font.bold: chip.active
             elide: Text.ElideRight

@@ -276,13 +276,6 @@ Singleton {
         return optionText(modeOptions, captureMode)
     }
 
-    function monitorLabel(value) {
-        for (let i = 0; i < monitorOptions.length; i++)
-            if (monitorOptions[i].value === value)
-                return monitorOptions[i].text
-        return value === "focused" ? "Enfocado" : value
-    }
-
     function notify(summary, body) {
         if (showNotify && notifyAvailable)
             Quickshell.execDetached(["notify-send", summary, body || ""])

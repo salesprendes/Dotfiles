@@ -67,12 +67,11 @@ ModalWindow {
     }
 
     // Error.
-    Text {
+    ThemedText {
         Layout.fillWidth: true
         visible: modal.err !== ""
         text: modal.err
         color: Theme.red
-        font.family: Theme.fontFamily
         font.pixelSize: Theme.fontSize - 2
         wrapMode: Text.WordWrap
     }

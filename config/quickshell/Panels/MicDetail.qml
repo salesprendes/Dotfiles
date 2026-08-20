@@ -12,7 +12,7 @@ ColumnLayout {
 
     readonly property var source: Pipewire.defaultAudioSource
     readonly property var nodes: Pipewire.nodes?.values ?? []
-    readonly property var sources: nodes.filter(n => n.audio && !n.isSink && !n.isStream).sort(inputSort)
+    readonly property var sources: Utils.pwSortByDefault(nodes.filter(n => n.audio && !n.isSink && !n.isStream), source)
 
     function deviceName(node) {
         return Utils.pwDeviceName(node)
@@ -28,14 +28,6 @@ ColumnLayout {
 
     function micIcon(audio) {
         return (!audio || audio.muted || audio.volume <= 0) ? "󰍭" : "󰍬"
-    }
-
-    function inputSort(a, b) {
-        if (a === root.source && b !== root.source)
-            return -1
-        if (b === root.source && a !== root.source)
-            return 1
-        return root.deviceName(a).localeCompare(root.deviceName(b))
     }
 
     PwObjectTracker {
@@ -89,12 +81,11 @@ ColumnLayout {
                     onClicked: Pipewire.preferredDefaultAudioSource = modelData
                 }
             }
-            Text {
+            ThemedText {
                 visible: root.sources.length === 0
                 Layout.fillWidth: true
                 text: I18n.tr("No input devices found")
                 color: Theme.fgMuted
-                font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontSize - 3
                 wrapMode: Text.WordWrap
             }
@@ -116,17 +107,15 @@ ColumnLayout {
 
         RowLayout {
             Layout.fillWidth: true
-            Text {
+            ThemedText {
                 Layout.fillWidth: true
                 text: row.label
                 color: Theme.fg
-                font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontSize - 1
             }
-            Text {
+            ThemedText {
                 text: row.valueText
                 color: row.accent
-                font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontSize - 2
                 font.bold: true
             }
@@ -140,11 +129,10 @@ ColumnLayout {
                 implicitHeight: Theme.controlM
                 radius: Theme.pillRadius
                 color: muteMa.containsMouse ? Qt.rgba(row.accent.r, row.accent.g, row.accent.b, 0.18) : "transparent"
-                Text {
+                ThemedText {
                     anchors.centerIn: parent
                     text: row.icon
                     color: row.accent
-                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.iconSize
                 }
                 MouseArea {

@@ -80,20 +80,17 @@ SettingsPage {
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: Theme.space2
-                    Text {
+                    ThemedText {
                         Layout.fillWidth: true
                         text: Settings.themeOptions.find(o => o.value === Settings.themeName)?.text || Settings.themeName
                         color: Theme.fg
-                        font.family: Theme.fontFamily
-                        font.pixelSize: Theme.fontSize
                         font.bold: true
                         elide: Text.ElideRight
                     }
-                    Text {
+                    ThemedText {
                         Layout.fillWidth: true
                         text: I18n.tr("Basic accent") + " · " + I18n.tr(Settings.accentLabel(Settings.accentName))
                         color: Theme.fgMuted
-                        font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontSize - 3
                         elide: Text.ElideRight
                     }
@@ -106,11 +103,10 @@ SettingsPage {
                     color: Theme.pillBg
                     border.width: Theme.hairline
                     border.color: Theme.accent
-                    Text {
+                    ThemedText {
                         anchors.centerIn: parent
                         text: Settings.darkMode ? I18n.tr("Dark") : I18n.tr("Light")
                         color: Theme.fgDim
-                        font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontSize - 3
                         font.bold: true
                     }

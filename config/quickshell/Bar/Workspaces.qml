@@ -84,12 +84,11 @@ Pill {
             }
             Behavior on color { ColorAnimation { duration: Theme.animFast } }
 
-            Text {
+            ThemedText {
                 anchors.centerIn: parent
                 visible: ws.active
                 text: ws.modelData ? ws.modelData.id : ""
                 color: Theme.bg
-                font.family: Theme.fontFamily
                 font.pixelSize: Theme.sp(11)
                 font.bold: true
             }

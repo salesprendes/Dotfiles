@@ -32,18 +32,15 @@ Rectangle {
             id: headerRow
             Layout.fillWidth: true
             spacing: Theme.space8
-            Text {
+            ThemedText {
                 text: card.icon
                 color: card.iconColor
-                font.family: Theme.fontFamily
                 font.pixelSize: Theme.iconSize + 1
             }
-            Text {
+            ThemedText {
                 Layout.fillWidth: true
                 text: card.title
                 color: Theme.fg
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontSize
                 font.bold: true
                 elide: Text.ElideRight
             }

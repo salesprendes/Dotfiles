@@ -112,12 +112,11 @@ ModalWindow {
     }
 
     // Error.
-    Text {
+    ThemedText {
         Layout.fillWidth: true
         visible: NetConfig.error !== ""
         text: NetConfig.error
         color: Theme.red
-        font.family: Theme.fontFamily
         font.pixelSize: Theme.fontSize - 2
         wrapMode: Text.WordWrap
     }
@@ -155,11 +154,10 @@ ModalWindow {
         border.width: on ? Math.max(1, Theme.dp(2)) : Theme.hairline
         border.color: on ? Theme.accent : Theme.withAlpha(Theme.overlay, 0.34)
         Behavior on color { ColorAnimation { duration: Theme.animFast } }
-        Text {
+        ThemedText {
             anchors.centerIn: parent
             text: parent.label
             color: parent.on ? Theme.accent : Theme.fgDim
-            font.family: Theme.fontFamily
             font.pixelSize: Theme.fontSize - 1
             font.bold: parent.on
         }

@@ -65,10 +65,9 @@ Rectangle {
         anchors.rightMargin: Theme.space12
         spacing: Theme.space8
 
-        Text {
+        ThemedText {
             text: "󰍉"   // lupa
             color: root.accentIconOnFocus && input.activeFocus ? Theme.accent : Theme.fgMuted
-            font.family: Theme.fontFamily
             font.pixelSize: Theme.iconSize
             Behavior on color { ColorAnimation { duration: Theme.animFast } }
         }
@@ -105,11 +104,10 @@ Rectangle {
             implicitWidth: Theme.dp(22); implicitHeight: Theme.dp(22)
             radius: width / 2
             color: Theme.withAlpha(Theme.overlay, clearMa.containsMouse ? 0.5 : 0)
-            Text {
+            ThemedText {
                 anchors.centerIn: parent
                 text: "󰅖"
                 color: clearMa.containsMouse ? Theme.fg : Theme.fgMuted
-                font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontSize - 2
             }
             MouseArea {

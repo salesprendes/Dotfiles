@@ -99,11 +99,10 @@ Rectangle {
         // Marca dentro de la bolita encendida. No es adorno: dice el estado
         // sin depender del color, que es lo que necesita quien no distingue
         // el acento del gris de la pista apagada.
-        Text {
+        ThemedText {
             anchors.centerIn: parent
             text: "󰄬"
             color: sw.onColor
-            font.family: Theme.fontFamily
             font.pixelSize: Math.round(parent.height * 0.62)
             opacity: sw.checked ? 1 : 0
             scale: sw.checked ? 1 : 0.5

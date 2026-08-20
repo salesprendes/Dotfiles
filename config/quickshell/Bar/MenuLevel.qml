@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import Quickshell
 import qs.Config
+import qs.Components
 
 // Contenido del menú del tray. QML no deja tipos recursivos, así que los
 // submenús se navegan cambiando el menú mostrado, con una fila "atrás".
@@ -64,18 +65,14 @@ Column {
                 anchors.leftMargin: Theme.space8
                 anchors.rightMargin: Theme.space8
                 spacing: Theme.space8
-                Text {
+                ThemedText {
                     text: "‹"
                     color: Theme.accent
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSize
                 }
-                Text {
+                ThemedText {
                     Layout.fillWidth: true
                     text: level.backLabel
                     color: Theme.fgDim
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSize
                     elide: Text.ElideRight
                     verticalAlignment: Text.AlignVCenter
                 }
@@ -153,15 +150,13 @@ Column {
                         spacing: Theme.space8
 
                         // Check / radio.
-                        Text {
+                        ThemedText {
                             Layout.preferredWidth: Theme.iconSize
                             horizontalAlignment: Text.AlignHCenter
                             visible: entry.modelData.buttonType !== QsMenuButtonType.None
                             text: entry.modelData.buttonType === QsMenuButtonType.RadioButton ? "●" : "✓"
                             opacity: entry.modelData.checkState === Qt.Checked ? 1 : 0
                             color: Theme.accent
-                            font.family: Theme.fontFamily
-                            font.pixelSize: Theme.fontSize
                         }
 
                         // Icono propio de la entrada.
@@ -176,23 +171,19 @@ Column {
                         }
 
                         // Texto.
-                        Text {
+                        ThemedText {
                             Layout.fillWidth: true
                             text: entry.modelData.text ?? ""
                             color: entry.modelData.enabled ? Theme.fg : Theme.fgMuted
-                            font.family: Theme.fontFamily
-                            font.pixelSize: Theme.fontSize
                             elide: Text.ElideRight
                             verticalAlignment: Text.AlignVCenter
                         }
 
                         // Flecha de submenú.
-                        Text {
+                        ThemedText {
                             visible: entry.modelData.hasChildren
                             text: "›"
                             color: Theme.fgMuted
-                            font.family: Theme.fontFamily
-                            font.pixelSize: Theme.fontSize
                         }
                     }
 

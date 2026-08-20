@@ -11,7 +11,7 @@ ColumnLayout {
 
     readonly property var sink: Pipewire.defaultAudioSink
     readonly property var nodes: Pipewire.nodes?.values ?? []
-    readonly property var sinks: nodes.filter(n => n.audio && n.isSink && !n.isStream).sort(deviceSort)
+    readonly property var sinks: Utils.pwSortByDefault(nodes.filter(n => n.audio && n.isSink && !n.isStream), sink)
     readonly property var playbackStreams: nodes.filter(n => n.audio && n.isSink && n.isStream)
 
     function deviceName(node) {
@@ -40,14 +40,6 @@ ColumnLayout {
         if (!audio)
             return "󰝟"
         return Utils.volumeGlyph(audio.volume, audio.muted)
-    }
-
-    function deviceSort(a, b) {
-        if (a === root.sink && b !== root.sink)
-            return -1
-        if (b === root.sink && a !== root.sink)
-            return 1
-        return root.deviceName(a).localeCompare(root.deviceName(b))
     }
 
     PwObjectTracker {
@@ -94,17 +86,15 @@ ColumnLayout {
             Layout.topMargin: Theme.space4
             visible: root.playbackStreams.length > 0
             spacing: Theme.space8
-            Text {
+            ThemedText {
                 text: "󰎆"
                 color: Theme.green
-                font.family: Theme.fontFamily
                 font.pixelSize: Theme.iconSize - 1
             }
-            Text {
+            ThemedText {
                 Layout.fillWidth: true
                 text: I18n.tr("Playback")
                 color: Theme.fgDim
-                font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontSize - 2
                 font.bold: true
             }
@@ -159,11 +149,10 @@ ColumnLayout {
                     implicitHeight: Theme.controlM
                     radius: height / 2
                     color: muteMa.containsMouse ? Qt.rgba(streamRow.accent.r, streamRow.accent.g, streamRow.accent.b, 0.18) : "transparent"
-                    Text {
+                    ThemedText {
                         anchors.centerIn: parent
                         text: root.volumeIcon(streamRow.stream?.audio)
                         color: (streamRow.stream?.audio?.muted ?? false) ? Theme.fgMuted : streamRow.accent
-                        font.family: Theme.fontFamily
                         font.pixelSize: Theme.iconSize
                     }
                     MouseArea {
@@ -177,18 +166,16 @@ ColumnLayout {
                         }
                     }
                 }
-                Text {
+                ThemedText {
                     Layout.fillWidth: true
                     text: streamRow.title
                     color: Theme.fg
-                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSize - 1
                     elide: Text.ElideRight
                 }
-                Text {
+                ThemedText {
                     text: (streamRow.stream?.audio?.muted ?? false) ? I18n.tr("off") : Math.round((streamRow.stream?.audio?.volume ?? 0) * 100) + "%"
                     color: streamRow.accent
-                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSize - 3
                     font.bold: true
                 }

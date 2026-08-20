@@ -66,12 +66,11 @@ Rectangle {
             Behavior on color { ColorAnimation { duration: Theme.animFast } }
             Behavior on border.color { ColorAnimation { duration: Theme.animFast } }
 
-            Text {
+            ThemedText {
                 anchors.centerIn: parent
                 text: root.icon
                 // Activo: acento. Inactivo: atenuado (se ve "apagado").
                 color: root.active ? root.accent : Theme.fgDim
-                font.family: Theme.fontFamily
                 font.pixelSize: Theme.iconSize + 2
                 Behavior on color { ColorAnimation { duration: Theme.animFast } }
             }
@@ -90,21 +89,18 @@ Rectangle {
         ColumnLayout {
             Layout.fillWidth: true
             spacing: Theme.space2
-            Text {
+            ThemedText {
                 Layout.fillWidth: true
                 text: root.title
                 color: Theme.fg
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontSize
                 font.bold: true
                 elide: Text.ElideRight
             }
-            Text {
+            ThemedText {
                 Layout.fillWidth: true
                 visible: root.subtitle !== ""
                 text: root.subtitle
                 color: Theme.fgMuted
-                font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontSize - 3
                 elide: Text.ElideRight
             }

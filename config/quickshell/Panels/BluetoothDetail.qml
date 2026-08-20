@@ -42,7 +42,7 @@ ColumnLayout {
         ]
 
         // Estado vacío.
-        Text {
+        ThemedText {
             Layout.fillWidth: true
             Layout.topMargin: Theme.space2
             Layout.bottomMargin: Theme.space2
@@ -50,7 +50,6 @@ ColumnLayout {
             horizontalAlignment: Text.AlignHCenter
             text: BT.discovering ? I18n.tr("Searching...") : I18n.tr("No devices found")
             color: Theme.fgMuted
-            font.family: Theme.fontFamily
             font.pixelSize: Theme.fontSize - 2
         }
 
@@ -92,11 +91,10 @@ ColumnLayout {
         subtitleColor: (batAvail || conn) ? Theme.green : Theme.fgMuted
 
         // Glifo de batería a la derecha cuando hay nivel disponible.
-        Text {
+        ThemedText {
             visible: br.batAvail
             text: br.bat >= 80 ? "󰁹" : br.bat >= 60 ? "󰂀" : br.bat >= 40 ? "󰁾" : br.bat >= 20 ? "󰁻" : "󰁺"
             color: br.bat <= 20 ? Theme.red : Theme.green
-            font.family: Theme.fontFamily
             font.pixelSize: Theme.iconSize
         }
 

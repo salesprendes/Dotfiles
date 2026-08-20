@@ -91,11 +91,10 @@ Popout {
 
     RowLayout {
         Layout.fillWidth: true
-        Text {
+        ThemedText {
             Layout.fillWidth: true
             text: I18n.tr("Clipboard")
             color: Theme.fg
-            font.family: Theme.fontFamily
             font.pixelSize: Theme.fontSize + 2
             font.bold: true
         }
@@ -106,11 +105,10 @@ Popout {
             radius: height / 2
             color: refreshMa.containsMouse ? Theme.surfaceHi : Theme.surface
             Behavior on color { ColorAnimation { duration: Theme.animFast } }
-            Text {
+            ThemedText {
                 anchors.centerIn: parent
                 text: Clipboard.loading ? "󰑓" : "󰑐"
                 color: Theme.fgDim
-                font.family: Theme.fontFamily
                 font.pixelSize: Theme.iconSize
                 RotationAnimation on rotation {
                     running: Clipboard.loading
@@ -151,10 +149,9 @@ Popout {
         onUpPressed: panel.moveSelection(-1)
 
         // Contador de resultados en el lado derecho del campo.
-        Text {
+        ThemedText {
             text: Clipboard.filteredEntries.length
             color: Theme.fgMuted
-            font.family: Theme.fontFamily
             font.pixelSize: Theme.fontSize - 2
         }
     }
@@ -168,13 +165,11 @@ Popout {
         border.width: Theme.hairline
         border.color: Theme.withAlpha(Theme.orange, 0.35)
 
-        Text {
+        ThemedText {
             anchors.fill: parent
             anchors.margins: Theme.space12
             text: I18n.tr("Install %1 to use history").arg(Clipboard.missingTools)
             color: Theme.yellow
-            font.family: Theme.fontFamily
-            font.pixelSize: Theme.fontSize
             wrapMode: Text.WordWrap
             verticalAlignment: Text.AlignVCenter
         }
@@ -187,14 +182,12 @@ Popout {
         Layout.preferredHeight: clearState.bodyHeight
         clip: true
 
-        Text {
+        ThemedText {
             anchors.centerIn: parent
             visible: Clipboard.available && (Clipboard.filteredEntries.length === 0 || clearState.showingClearedState) && clearState.emptyMessageReady
             opacity: visible ? 1 : 0
             text: Clipboard.search === "" ? I18n.tr("No history yet") : I18n.tr("No results")
             color: Theme.fgMuted
-            font.family: Theme.fontFamily
-            font.pixelSize: Theme.fontSize
 
             Behavior on opacity { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
         }
@@ -328,22 +321,19 @@ Popout {
                         color: modelData.type === "image"
                             ? Theme.withAlpha(Theme.magenta, 0.20)
                             : Theme.withAlpha(Theme.accent, 0.16)
-                        Text {
+                        ThemedText {
                             anchors.centerIn: parent
                             text: modelData.type === "image" ? "󰋩" : "󰉿"
                             color: modelData.type === "image" ? Theme.magenta : Theme.accent
-                            font.family: Theme.fontFamily
                             font.pixelSize: Theme.iconSize
                         }
                     }
 
-                    Text {
+                    ThemedText {
                         id: preview
                         Layout.fillWidth: true
                         text: modelData.preview
                         color: Theme.fg
-                        font.family: Theme.fontFamily
-                        font.pixelSize: Theme.fontSize
                         maximumLineCount: 3
                         elide: Text.ElideRight
                         wrapMode: Text.WordWrap
@@ -354,11 +344,10 @@ Popout {
                         implicitHeight: Theme.controlS
                         radius: height / 2
                         color: deleteMa.containsMouse ? Theme.withAlpha(Theme.red, 0.22) : "transparent"
-                        Text {
+                        ThemedText {
                             anchors.centerIn: parent
                             text: "󰆴"
                             color: deleteMa.containsMouse ? Theme.red : Theme.fgMuted
-                            font.family: Theme.fontFamily
                             font.pixelSize: Theme.iconSize - 1
                         }
                         MouseArea {

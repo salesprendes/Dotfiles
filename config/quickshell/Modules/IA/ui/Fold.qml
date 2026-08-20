@@ -64,28 +64,24 @@ ColumnLayout {
                 glyph: fold.glyph
                 active: fold.open
             }
-            Text {
+            ThemedText {
                 Layout.fillWidth: true
                 text: fold.title
                 color: Theme.fg
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontSize
                 elide: Text.ElideRight
             }
-            Text {
+            ThemedText {
                 text: fold.summary
                 color: fold.warn ? Theme.red : Theme.fgMuted
-                font.family: Theme.fontFamily
                 font.pixelSize: Theme.typeLabelMedium
                 elide: Text.ElideRight
                 Layout.maximumWidth: Theme.dp(150)
                 Behavior on color { ColorAnimation { duration: Theme.animFast } }
             }
-            Text {
+            ThemedText {
                 text: "󰅀"
                 rotation: fold.open ? 180 : 0
                 color: fold.open ? Theme.accentText : Theme.fgMuted
-                font.family: Theme.fontFamily
                 font.pixelSize: Theme.sp(13)
                 Behavior on rotation {
                     NumberAnimation {

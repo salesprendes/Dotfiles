@@ -58,11 +58,10 @@ SettingsPage {
                 font.bold: true
                 font.letterSpacing: Theme.dp(2)
             }
-            Text {
+            ThemedText {
                 Layout.alignment: Qt.AlignHCenter
                 text: I18n.tr("Handcrafted Quickshell desktop.")
                 color: Theme.fgMuted
-                font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontSize - 3
                 font.capitalization: Font.AllUppercase
                 font.letterSpacing: Theme.dp(1.5)
@@ -148,20 +147,18 @@ SettingsPage {
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 0
-                    Text {
+                    ThemedText {
                         Layout.fillWidth: true
                         text: "Álvaro Prendes"
                         color: Theme.fg
-                        font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontSize + 2
                         font.bold: true
                         elide: Text.ElideRight
                     }
-                    Text {
+                    ThemedText {
                         Layout.fillWidth: true
                         text: I18n.tr("Creator and developer")
                         color: Theme.fgMuted
-                        font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontSize - 2
                         elide: Text.ElideRight
                     }
@@ -193,31 +190,28 @@ SettingsPage {
                     color: SettingsPalette.accentSoft
                     border.width: Theme.hairline
                     border.color: Theme.withAlpha(Theme.accent, 0.4)
-                    Text {
+                    ThemedText {
                         anchors.centerIn: parent
                         text: SysMon.distroGlyph
                         color: Theme.accent
-                        font.family: Theme.fontFamily
                         font.pixelSize: Theme.iconSize + 12
                     }
                 }
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 0
-                    Text {
+                    ThemedText {
                         Layout.fillWidth: true
                         text: SysMon.distroName !== "" ? SysMon.distroName : "Linux"
                         color: Theme.fg
-                        font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontSize + 2
                         font.bold: true
                         elide: Text.ElideRight
                     }
-                    Text {
+                    ThemedText {
                         Layout.fillWidth: true
                         text: about.isArch ? "Keep It Simple · rolling release" : SysMon.distroId
                         color: Theme.fgMuted
-                        font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontSize - 2
                         elide: Text.ElideRight
                     }

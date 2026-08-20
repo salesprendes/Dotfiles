@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import qs.Config
 import qs.Services
+import qs.Components
 
 Rectangle {
     id: root
@@ -39,19 +40,17 @@ Rectangle {
             Layout.fillWidth: true
             spacing: Theme.space8
 
-            Text {
+            ThemedText {
                 text: "󰊢  " + I18n.tr("Processes")
                 color: Theme.fg
-                font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontSize + 1
                 font.bold: true
                 Layout.fillWidth: true
             }
 
-            Text {
+            ThemedText {
                 text: I18n.tr("%1 processes").arg(root.processes.length)
                 color: Theme.fgMuted
-                font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontSize - 2
             }
         }
@@ -80,13 +79,12 @@ Rectangle {
                 border.width: active ? Theme.hairline : 0
                 border.color: Theme.withAlpha(Theme.accent, 0.45)
 
-                Text {
+                ThemedText {
                     anchors.verticalCenter: parent.verticalCenter
                     anchors.left: parent.left
                     anchors.leftMargin: Theme.space6
                     text: I18n.tr("Name") + " " + (nameChip.active ? (root.nameSortDesc ? "↓" : "↑") : "↕")
                     color: nameChip.active ? Theme.accent : Theme.fgMuted
-                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSize - 3
                     font.bold: nameChip.active
                 }
@@ -161,19 +159,17 @@ Rectangle {
                     anchors.rightMargin: Theme.space8
                     spacing: Theme.space8
 
-                    Text {
+                    ThemedText {
                         text: SysMon.processIcon(row.modelData.name)
                         color: Theme.accent
-                        font.family: Theme.fontFamily
                         font.pixelSize: Theme.iconSize
                         opacity: 0.9
                     }
 
-                    Text {
+                    ThemedText {
                         Layout.fillWidth: true
                         text: row.modelData.name
                         color: Theme.fgDim
-                        font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontSize - 1
                         elide: Text.ElideRight
                     }
@@ -215,12 +211,10 @@ Rectangle {
                             Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
                         }
 
-                        Text {
+                        ThemedText {
                             anchors.centerIn: parent
                             text: "󰅖"
                             color: killMa.containsMouse ? Theme.red : Theme.fgMuted
-                            font.family: Theme.fontFamily
-                            font.pixelSize: Theme.fontSize
                             Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
                         }
 
@@ -267,11 +261,10 @@ Rectangle {
         border.width: active ? Theme.hairline : 0
         border.color: Theme.withAlpha(Theme.accent, 0.45)
 
-        Text {
+        ThemedText {
             anchors.centerIn: parent
             text: chip.label + " " + (chip.active ? (chip.desc ? "↓" : "↑") : "↕")
             color: chip.active ? Theme.accent : Theme.fgMuted
-            font.family: Theme.fontFamily
             font.pixelSize: Theme.fontSize - 3
             font.bold: chip.active
         }

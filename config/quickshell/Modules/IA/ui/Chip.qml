@@ -42,14 +42,13 @@ Rectangle {
 
     Ripple { id: ripple }
 
-    Text {
+    ThemedText {
         id: txt
         anchors.centerIn: parent
         text: chip.label
         color: !chip.enabled ? Theme.fgMuted
              : ma.containsMouse ? (chip.danger ? Theme.red : Theme.accentText)
              : Theme.fgDim
-        font.family: Theme.fontFamily
         font.pixelSize: Theme.typeLabelMedium
         Behavior on color { ColorAnimation { duration: Theme.animFast } }
     }

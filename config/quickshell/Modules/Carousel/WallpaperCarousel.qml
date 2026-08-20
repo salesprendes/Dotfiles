@@ -9,6 +9,7 @@ import Quickshell.Wayland
 import Quickshell.Io
 import qs.Config
 import qs.Services
+import qs.Components
 
 Scope {
     id: plugin
@@ -273,13 +274,12 @@ Scope {
             }
 
             // Título.
-            Text {
+            ThemedText {
                 anchors.horizontalCenter: parent.horizontalCenter
                 anchors.top: parent.top
                 anchors.topMargin: Math.round(parent.height * 0.09)
                 text: I18n.tr("Wallpaper")
                 color: Theme.fg
-                font.family: Theme.fontFamily
                 font.pixelSize: Theme.sp(22)
                 font.bold: true
             }
@@ -522,11 +522,10 @@ Scope {
                     }
                 }
 
-                Text {
+                ThemedText {
                     anchors.horizontalCenter: parent.horizontalCenter
                     text: I18n.tr("Loading...")
                     color: Theme.fgMuted
-                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.sp(12)
                 }
             }
@@ -536,18 +535,16 @@ Scope {
                 anchors.centerIn: parent
                 spacing: Theme.space8
                 visible: plugin.count === 0 && !plugin.loading
-                Text {
+                ThemedText {
                     anchors.horizontalCenter: parent.horizontalCenter
                     text: "󰋫"
                     color: Theme.fgMuted
-                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.dp(48)
                 }
-                Text {
+                ThemedText {
                     anchors.horizontalCenter: parent.horizontalCenter
                     text: I18n.tr("No results")
                     color: Theme.fgMuted
-                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.sp(14)
                 }
             }
@@ -560,30 +557,27 @@ Scope {
                 spacing: Theme.space6
                 visible: plugin.count > 0
 
-                Text {
+                ThemedText {
                     anchors.horizontalCenter: parent.horizontalCenter
                     text: plugin.curName
                     color: Theme.fg
-                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.sp(15)
                     font.bold: true
                     elide: Text.ElideMiddle
                     width: Math.min(implicitWidth, root.width * 0.6)
                     horizontalAlignment: Text.AlignHCenter
                 }
-                Text {
+                ThemedText {
                     anchors.horizontalCenter: parent.horizontalCenter
                     text: (plugin.selectedIndex + 1) + " / " + plugin.count
                     color: Theme.accent
-                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.sp(12)
                     font.bold: true
                 }
-                Text {
+                ThemedText {
                     anchors.horizontalCenter: parent.horizontalCenter
                     text: "←  →   ·   Enter   ·   Esc"
                     color: Theme.fgMuted
-                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.sp(11)
                 }
             }

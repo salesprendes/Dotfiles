@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import qs.Config
 import qs.Panels.SettingsPages
+import qs.Components
 
 // Grupo de ajustes al modo de ChromeOS: el rótulo va FUERA, encima de la
 // tarjeta, y dentro las filas se pegan unas a otras separadas por un filete.
@@ -148,7 +149,7 @@ Item {
 
     // Rótulo del grupo. Caja normal, peso medio, alineado al canto izquierdo de
     // la tarjeta: es el patrón de ChromeOS y de Material 3 actual.
-    Text {
+    ThemedText {
         id: heading
         anchors.left: parent.left
         anchors.right: parent.right
@@ -157,7 +158,6 @@ Item {
         visible: cardRoot.title !== ""
         text: cardRoot.title
         color: Theme.fgDim
-        font.family: Theme.fontFamily
         font.pixelSize: Theme.typeLabelLarge
         font.weight: Font.Medium
         elide: Text.ElideRight
@@ -165,7 +165,7 @@ Item {
 
     // Subtítulo de la sección. Se ajusta de línea y llega hasta el borde de la
     // tarjeta: es texto para leer, no un rótulo.
-    Text {
+    ThemedText {
         id: subtitle
         anchors.left: parent.left
         anchors.right: parent.right
@@ -175,7 +175,6 @@ Item {
         visible: cardRoot.description !== ""
         text: cardRoot.description
         color: Theme.fgMuted
-        font.family: Theme.fontFamily
         font.pixelSize: Theme.typeBodySmall
         wrapMode: Text.WordWrap
     }

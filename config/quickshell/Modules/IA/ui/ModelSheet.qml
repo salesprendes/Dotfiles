@@ -159,11 +159,10 @@ ColumnLayout {
                                      : Theme.fgMuted
                                 Behavior on color { ColorAnimation { duration: Theme.animNormal } }
                             }
-                            Text {
+                            ThemedText {
                                 Layout.fillWidth: true
                                 text: grupo.modelData.label.toUpperCase()
                                 color: grupo.modelData.active ? Theme.accentText : Theme.fgMuted
-                                font.family: Theme.fontFamily
                                 font.pixelSize: Theme.typeLabelSmall
                                 font.bold: true
                                 font.letterSpacing: Theme.typeLabelTracking
@@ -203,12 +202,11 @@ ColumnLayout {
                                     // La marca del elegido. Reserva su sitio
                                     // siempre, así los nombres no bailan a
                                     // izquierda y derecha al cambiar de modelo.
-                                    Text {
+                                    ThemedText {
                                         Layout.preferredWidth: Theme.dp(14)
                                         horizontalAlignment: Text.AlignHCenter
                                         text: fila.sel ? "󰄲" : ""
                                         color: Theme.accentText
-                                        font.family: Theme.fontFamily
                                         font.pixelSize: Theme.sp(13)
                                     }
                                     // El NOMBRE, grande; la ruta entera, debajo
@@ -216,11 +214,10 @@ ColumnLayout {
                                     ColumnLayout {
                                         Layout.fillWidth: true
                                         spacing: 0
-                                        Text {
+                                        ThemedText {
                                             Layout.fillWidth: true
                                             text: AiService.modelShort(fila.modelData)
                                             color: fila.sel ? Theme.fg : Theme.fgDim
-                                            font.family: Theme.fontFamily
                                             font.pixelSize: Theme.typeLabelLarge
                                             font.weight: fila.sel ? Font.DemiBold : Font.Normal
                                             elide: Text.ElideRight
@@ -269,12 +266,11 @@ ColumnLayout {
                                         implicitHeight: Theme.dp(18)
                                         radius: height / 2
                                         color: Theme.withAlpha(Theme.green, 0.16)
-                                        Text {
+                                        ThemedText {
                                             id: tagTxt
                                             anchors.centerIn: parent
                                             text: AiService.modelTag(fila.modelData)
                                             color: Theme.green
-                                            font.family: Theme.fontFamily
                                             font.pixelSize: Theme.typeLabelSmall
                                             font.bold: true
                                         }
@@ -321,12 +317,11 @@ ColumnLayout {
             anchors.rightMargin: Theme.space10
             spacing: Theme.space8
 
-            Text {
+            ThemedText {
                 Layout.preferredWidth: Theme.dp(14)
                 horizontalAlignment: Text.AlignHCenter
                 text: "󰏫"
                 color: Theme.fgMuted
-                font.family: Theme.fontFamily
                 font.pixelSize: Theme.sp(13)
             }
             Text {

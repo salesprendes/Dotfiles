@@ -72,28 +72,25 @@ PanelWindow {
             RowLayout {
                 Layout.fillWidth: true
                 spacing: Theme.space10
-                Text {
+                ThemedText {
                     text: modal.icon
                     color: Theme.accent
-                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.iconSize + 6
                 }
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 0
-                    Text {
+                    ThemedText {
                         text: modal.heading
                         color: Theme.fg
-                        font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontSize + 1
                         font.bold: true
                     }
-                    Text {
+                    ThemedText {
                         Layout.fillWidth: true
                         visible: modal.subheading !== ""
                         text: modal.subheading
                         color: Theme.accent
-                        font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontSize - 1
                         elide: Text.ElideRight
                     }

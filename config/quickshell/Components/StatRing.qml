@@ -48,12 +48,11 @@ Item {
             }
         }
     }
-    Text {
+    ThemedText {
         visible: sr.glyph !== ""
         anchors.centerIn: parent
         text: sr.glyph
         color: Theme.accent
-        font.family: Theme.fontFamily
         font.pixelSize: Theme.iconSize + 6.5
     }
 }

@@ -377,13 +377,11 @@ SettingsRow {
             offBorderColor: root.borderColor
         }
 
-        Text {
+        ThemedText {
             Layout.fillWidth: true
             text: root.label
             visible: root.label !== ""
             color: Theme.fg
-            font.family: Theme.fontFamily
-            font.pixelSize: Theme.fontSize
             elide: Text.ElideRight
         }
 
@@ -460,19 +458,17 @@ SettingsRow {
                 font.pixelSize: Theme.fontSize
                 elide: Text.ElideRight
             }
-            Text {
+            ThemedText {
                 visible: root.detailText !== ""
                 text: root.detailText
                 color: Theme.fgMuted
-                font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontSize - 4
             }
-            Text {
+            ThemedText {
                 text: "󰅀"
                 rotation: root.open ? 180 : 0
                 Behavior on rotation { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
                 color: Theme.fgMuted
-                font.family: Theme.fontFamily
                 font.pixelSize: Theme.iconSize - 1
             }
         }
@@ -725,11 +721,10 @@ SettingsRow {
                             font.bold: optionRow.sel
                             elide: Text.ElideRight
                         }
-                        Text {
+                        ThemedText {
                             visible: optionRow.sel
                             text: "󰄬"
                             color: Theme.accent
-                            font.family: Theme.fontFamily
                             font.pixelSize: Theme.iconSize - 1
                         }
                     }

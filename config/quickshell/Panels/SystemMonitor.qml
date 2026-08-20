@@ -118,12 +118,11 @@ Popout {
                 smooth: true
                 asynchronous: true
             }
-            Text {
+            ThemedText {
                 anchors.centerIn: parent
                 visible: SysMon.hasGlyph || SysMon.distroLogoIcon === ""
                 text: SysMon.distroGlyph
                 color: Theme.accent
-                font.family: Theme.fontFamily
                 font.pixelSize: Theme.sp(46)
             }
         }
@@ -132,29 +131,26 @@ Popout {
             Layout.fillWidth: true
             spacing: Theme.hairline
 
-            Text {
+            ThemedText {
                 Layout.fillWidth: true
                 text: SysMon.distroName !== "" ? SysMon.distroName : "Linux"
                 color: Theme.fg
-                font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontSize + 3
                 font.bold: true
                 elide: Text.ElideRight
             }
-            Text {
+            ThemedText {
                 Layout.fillWidth: true
                 text: SysMon.hostname + "  ·  " + SysMon.arch
                 color: Theme.fgDim
-                font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontSize - 2
                 elide: Text.ElideRight
                 visible: SysMon.hostname !== ""
             }
-            Text {
+            ThemedText {
                 Layout.fillWidth: true
                 text: "󰌽 " + SysMon.kernel + "    󰅐 " + SysMon.uptime
                 color: Theme.fgMuted
-                font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontSize - 2
                 elide: Text.ElideRight
             }
@@ -181,24 +177,21 @@ Popout {
                 Layout.fillWidth: true
                 spacing: Theme.space8
 
-                Text {
+                ThemedText {
                             text: "󰓅  " + I18n.tr("Resources")
                     color: Theme.fg
-                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSize + 1
                     font.bold: true
                     Layout.fillWidth: true
                 }
-                Text {
+                ThemedText {
                     text: I18n.tr("Load %1").arg(SysMon.loadAvg)
                     color: Theme.fgMuted
-                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSize - 2
                 }
-                Text {
+                ThemedText {
                     text: I18n.tr("%1 proc.").arg(SysMon.procCount)
                     color: Theme.fgMuted
-                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSize - 2
                 }
             }
@@ -208,141 +201,22 @@ Popout {
                 Layout.fillHeight: true
                 spacing: Theme.space10
 
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.preferredWidth: 0
-                    Layout.fillHeight: true
-                    radius: Theme.pillRadius
-                    color: Theme.withAlpha(Theme.bgAlt, 0.7)
-                    border.width: Theme.hairline
-                    border.color: Theme.withAlpha(Theme.overlay, 0.5)
-
-                    ColumnLayout {
-                        anchors.fill: parent
-                        anchors.margins: Theme.space10
-                        spacing: Theme.space8
-
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: Theme.space8
-                            Text {
-                                text: "󰻠"
-                                color: Theme.accent
-                                font.family: Theme.fontFamily
-                                font.pixelSize: Theme.iconSize + 3
-                                Layout.preferredWidth: 22
-                                horizontalAlignment: Text.AlignHCenter
-                            }
-                            Text {
-                                text: "CPU"
-                                color: Theme.fgDim
-                                font.family: Theme.fontFamily
-                                font.pixelSize: Theme.fontSize
-                                Layout.fillWidth: true
-                            }
-                            Text {
-                                text: Math.round(SysMon.cpu) + "%"
-                                color: Theme.accent
-                                font.family: Theme.fontFamily
-                                font.pixelSize: Theme.fontSize + 4
-                                font.bold: true
-                                Layout.preferredWidth: 54
-                                horizontalAlignment: Text.AlignRight
-                            }
-                        }
-
-                        Rectangle {
-                            Layout.fillWidth: true
-                            implicitHeight: Theme.dp(9)
-                            radius: 5
-                            color: Theme.withAlpha(Theme.overlay, 0.32)
-                            Rectangle {
-                                height: parent.height
-                                radius: parent.radius
-                                width: parent.width * Math.min(1, SysMon.cpu / 100)
-                                color: Theme.accent
-                                Behavior on width { enabled: sm.shown; NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
-                            }
-                        }
-
-                        Text {
-                            Layout.fillWidth: true
-                            text: SysMon.cpuModel !== "" ? SysMon.cpuModel : I18n.tr("Current usage")
-                            color: Theme.fgMuted
-                            font.family: Theme.fontFamily
-                            font.pixelSize: Theme.fontSize - 2
-                            elide: Text.ElideRight
-                        }
-                    }
+                MetricCard {
+                    icon: "󰻠"
+                    label: "CPU"
+                    value: Math.round(SysMon.cpu) + "%"
+                    ratio: SysMon.cpu / 100
+                    caption: SysMon.cpuModel !== "" ? SysMon.cpuModel : I18n.tr("Current usage")
+                    animate: sm.shown
                 }
 
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.preferredWidth: 0
-                    Layout.fillHeight: true
-                    radius: Theme.pillRadius
-                    color: Theme.withAlpha(Theme.bgAlt, 0.7)
-                    border.width: Theme.hairline
-                    border.color: Theme.withAlpha(Theme.overlay, 0.5)
-
-                    ColumnLayout {
-                        anchors.fill: parent
-                        anchors.margins: Theme.space10
-                        spacing: Theme.space8
-
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: Theme.space8
-                            Text {
-                                text: "󰍛"
-                                color: Theme.accent
-                                font.family: Theme.fontFamily
-                                font.pixelSize: Theme.iconSize + 3
-                                Layout.preferredWidth: 22
-                                horizontalAlignment: Text.AlignHCenter
-                            }
-                            Text {
-                                text: I18n.tr("Memory")
-                                color: Theme.fgDim
-                                font.family: Theme.fontFamily
-                                font.pixelSize: Theme.fontSize
-                                Layout.fillWidth: true
-                                elide: Text.ElideRight
-                            }
-                            Text {
-                                text: Math.round(SysMon.memPercent) + "%"
-                                color: Theme.accent
-                                font.family: Theme.fontFamily
-                                font.pixelSize: Theme.fontSize + 4
-                                font.bold: true
-                                Layout.preferredWidth: 54
-                                horizontalAlignment: Text.AlignRight
-                            }
-                        }
-
-                        Rectangle {
-                            Layout.fillWidth: true
-                            implicitHeight: Theme.dp(9)
-                            radius: 5
-                            color: Theme.withAlpha(Theme.overlay, 0.32)
-                            Rectangle {
-                                height: parent.height
-                                radius: parent.radius
-                                width: parent.width * Math.min(1, SysMon.memPercent / 100)
-                                color: Theme.accent
-                                Behavior on width { enabled: sm.shown; NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
-                            }
-                        }
-
-                        Text {
-                            Layout.fillWidth: true
-                            text: SysMon.memUsedGB.toFixed(1) + " / " + SysMon.memTotalGB.toFixed(1) + " GB"
-                            color: Theme.fgMuted
-                            font.family: Theme.fontFamily
-                            font.pixelSize: Theme.fontSize - 2
-                            elide: Text.ElideRight
-                        }
-                    }
+                MetricCard {
+                    icon: "󰍛"
+                    label: I18n.tr("Memory")
+                    value: Math.round(SysMon.memPercent) + "%"
+                    ratio: SysMon.memPercent / 100
+                    caption: SysMon.memUsedGB.toFixed(1) + " / " + SysMon.memTotalGB.toFixed(1) + " GB"
+                    animate: sm.shown
                 }
             }
         }
@@ -409,12 +283,11 @@ Popout {
 
                 // Cabecera real (mismo texto y fuente que la lista) para que
                 // la altura reservada coincida al píxel con la definitiva.
-                Text {
+                ThemedText {
                     id: skelHeader
                     Layout.fillWidth: true
                     text: "󰊢  " + I18n.tr("Processes")
                     color: Theme.fg
-                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSize + 1
                     font.bold: true
                 }
@@ -436,11 +309,10 @@ Popout {
                             border.width: Math.max(1, Theme.hairline)
                             border.color: Theme.withAlpha(Theme.accent, 0.45)
 
-                            Text {
+                            ThemedText {
                                 anchors.centerIn: parent
                                 text: "󰒓"
                                 color: Theme.accent
-                                font.family: Theme.fontFamily
                                 font.pixelSize: Theme.sp(26)
                                 RotationAnimation on rotation {
                                     running: processSkeleton.visible && sm.shown
@@ -451,11 +323,10 @@ Popout {
                             }
                         }
 
-                        Text {
+                        ThemedText {
                             Layout.alignment: Qt.AlignHCenter
                             text: I18n.tr("Loading services...")
                             color: Theme.fgDim
-                            font.family: Theme.fontFamily
                             font.pixelSize: Theme.fontSize - 1
                             SequentialAnimation on opacity {
                                 running: processSkeleton.visible && sm.shown

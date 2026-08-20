@@ -809,13 +809,28 @@ GREETD_THEME_DST=/etc/greetd/quickshell
 # a la consola VT1 y se verían un instante al arrancar.
 GREETD_COMMAND='cage -s -- env QT_WAYLAND_DISABLE_WINDOWDECORATION=1 qs -p /etc/greetd/quickshell >/dev/null 2>&1'
 
-# Copia el módulo Greeter (desde la config recién instalada del usuario) y
-# genera el shell.qml raíz que quickshell exige en la raíz de su config.
+# Ficheros de la config de usuario que el módulo Greeter importa por su ruta
+# QML y que, por tanto, hay que replicar en el árbol de greetd con la MISMA
+# estructura de carpetas. Theme.qml hace `import qs.Config` para reutilizar
+# Scale.qml (densidad según el monitor); si falta, quickshell aborta con
+# «module "qs.Config" is not installed», no llega a instanciar ninguna ventana
+# y greetd reinicia en bucle hasta el start-limit-hit (pantalla negra).
+# Si el greeter pasa a importar más módulos compartidos, añádelos aquí.
+GREETD_SHARED_QML=(Config/Scale.qml Config/DynamicPalette.qml Components/Avatar.qml)
+
+# Copia el módulo Greeter y sus dependencias compartidas (desde la config
+# recién instalada del usuario) y genera el shell.qml raíz que quickshell
+# exige en la raíz de su config.
 deploy_greetd_theme() {
-  local src="$1"
+  local qs_root="$1"
   run_as_root mkdir -p "${GREETD_THEME_DST}/Modules"
   run_as_root rm -rf "${GREETD_THEME_DST}/Modules/Greeter"
-  run_as_root cp -r "${src}" "${GREETD_THEME_DST}/Modules/Greeter"
+  run_as_root cp -r "${qs_root}/Modules/Greeter" "${GREETD_THEME_DST}/Modules/Greeter"
+  local rel
+  for rel in "${GREETD_SHARED_QML[@]}"; do
+    run_as_root mkdir -p "${GREETD_THEME_DST}/$(dirname "${rel}")"
+    run_as_root install -m 644 "${qs_root}/${rel}" "${GREETD_THEME_DST}/${rel}"
+  done
   run_as_root tee "${GREETD_THEME_DST}/shell.qml" >/dev/null <<'EOF'
 //  shell.qml — punto de entrada que Quickshell busca en la raíz de la
 //  config. Solo instancia el Greeter. (Generado por script.sh)
@@ -909,14 +924,24 @@ enable_greetd_service() {
 setup_greetd() {
   install_group "greetd (pantalla de login)" "${GREETD_PACKAGES[@]}"
 
-  local theme_src="${INSTALL_HOME}/.config/quickshell/Modules/Greeter"
-  if [[ ! -d "${theme_src}" ]]; then
-    warn "No se encontró el tema del greeter en ${theme_src}; se omite greetd."
+  local qs_root="${INSTALL_HOME}/.config/quickshell"
+  if [[ ! -d "${qs_root}/Modules/Greeter" ]]; then
+    warn "No se encontró el tema del greeter en ${qs_root}/Modules/Greeter; se omite greetd."
+    return 0
+  fi
+  # Desplegar el greeter sin sus dependencias compartidas lo deja arrancando
+  # en bucle (ver GREETD_SHARED_QML): mejor no tocar greetd que romperlo.
+  local rel missing=()
+  for rel in "${GREETD_SHARED_QML[@]}"; do
+    [[ -f "${qs_root}/${rel}" ]] || missing+=("${rel}")
+  done
+  if (( ${#missing[@]} > 0 )); then
+    warn "Faltan dependencias del greeter en ${qs_root}: ${missing[*]}; se omite greetd."
     return 0
   fi
 
   with_spinner "Desplegando tema del greeter en ${GREETD_THEME_DST}" \
-    deploy_greetd_theme "${theme_src}"
+    deploy_greetd_theme "${qs_root}"
 
   if [[ -f /etc/greetd/config.toml ]] \
       && grep -qF "${GREETD_COMMAND}" /etc/greetd/config.toml; then

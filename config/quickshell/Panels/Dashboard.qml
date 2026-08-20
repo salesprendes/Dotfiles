@@ -224,21 +224,19 @@ Popout {
 
                             ColumnLayout {
                                 spacing: 0
-                                Text {
+                                ThemedText {
                                     text: Qt.formatDateTime(clock.date, Settings.clock24h ? "HH:mm" : "hh:mm")
                                     color: Theme.fg
-                                    font.family: Theme.fontFamily
                                     font.pixelSize: Theme.sp(46)
                                     font.bold: true
                                 }
-                                Text {
+                                ThemedText {
                                     readonly property string day:
                                         clock.date.toLocaleDateString(I18n.locale(), "dddd d MMMM")
                                     text: day.charAt(0).toUpperCase() + day.slice(1)
                                           + (!Settings.clock24h ? " \u00b7 " + Qt.formatDateTime(clock.date, "AP") : "")
                                           + (Settings.clockShowSeconds ? " \u00b7 " + Qt.formatDateTime(clock.date, "ss") + "s" : "")
                                     color: Theme.fgMuted
-                                    font.family: Theme.fontFamily
                                     font.pixelSize: Theme.fontSize - 2
                                     font.bold: true
                                 }
@@ -256,26 +254,23 @@ Popout {
                                 RowLayout {
                                     Layout.alignment: Qt.AlignRight
                                     spacing: Theme.space6
-                                    Text {
+                                    ThemedText {
                                         text: Weather.icon
                                         color: Theme.yellow
-                                        font.family: Theme.fontFamily
                                         font.pixelSize: Theme.sp(28)
                                     }
-                                    Text {
+                                    ThemedText {
                                         text: Weather.temp
                                         color: Theme.fg
-                                        font.family: Theme.fontFamily
                                         font.pixelSize: Theme.fontSize + 7
                                         font.bold: true
                                     }
                                 }
-                                Text {
+                                ThemedText {
                                     Layout.fillWidth: true
                                     horizontalAlignment: Text.AlignRight
                                     text: Weather.condition
                                     color: Theme.fgMuted
-                                    font.family: Theme.fontFamily
                                     font.pixelSize: Theme.fontSize - 3
                                     wrapMode: Text.WordWrap
                                     maximumLineCount: 2
@@ -301,22 +296,20 @@ Popout {
                     RowLayout {
                         Layout.fillWidth: true
                         spacing: Theme.space6
-                        Text {
+                        ThemedText {
                             text: Weather.icon
                             color: Theme.yellow
-                            font.family: Theme.fontFamily
                             font.pixelSize: Theme.iconSize
                         }
-                        Text {
+                        ThemedText {
                             Layout.fillWidth: true
                             text: Weather.location
                             color: Theme.fgDim
-                            font.family: Theme.fontFamily
                             font.pixelSize: Theme.fontSize - 1
                             font.bold: true
                             elide: Text.ElideRight
                         }
-                        Text {
+                        ThemedText {
                             readonly property var bits: [
                                 Settings.weatherShowDetails ? "ST " + Weather.feels : "",
                                 Settings.weatherShowDetails ? "\u{f058e} " + Weather.humidity : "",
@@ -326,7 +319,6 @@ Popout {
                             visible: bits.length > 0
                             text: bits.join("  \u00b7  ")
                             color: Theme.fgMuted
-                            font.family: Theme.fontFamily
                             font.pixelSize: Theme.fontSize - 3
                         }
                     }
@@ -336,11 +328,10 @@ Popout {
                         Layout.fillWidth: true
                         spacing: Theme.space8
                         readonly property bool sun: Settings.weatherShowSun && Weather.sunrise !== ""
-                        Text {
+                        ThemedText {
                             visible: wxDivider.sun
                             text: "\u{f059c} " + Weather.sunrise
                             color: Theme.fgMuted
-                            font.family: Theme.fontFamily
                             font.pixelSize: Theme.fontSize - 3
                         }
                         Rectangle {
@@ -348,11 +339,10 @@ Popout {
                             implicitHeight: Theme.hairline
                             color: Theme.withAlpha(Theme.overlay, 0.25)
                         }
-                        Text {
+                        ThemedText {
                             visible: wxDivider.sun
                             text: "\u{f059b} " + Weather.sunset
                             color: Theme.fgMuted
-                            font.family: Theme.fontFamily
                             font.pixelSize: Theme.fontSize - 3
                         }
                     }
@@ -387,44 +377,39 @@ Popout {
                                     anchors.right: parent.right
                                     anchors.verticalCenter: parent.verticalCenter
                                     spacing: Theme.dp(1)
-                                    Text {
+                                    ThemedText {
                                         Layout.alignment: Qt.AlignHCenter
                                         text: dayCell.modelData.label
                                         color: dayCell.today ? Theme.fg : Theme.fgMuted
-                                        font.family: Theme.fontFamily
                                         font.pixelSize: Theme.fontSize - 4
                                         font.bold: dayCell.today
                                     }
-                                    Text {
+                                    ThemedText {
                                         Layout.alignment: Qt.AlignHCenter
                                         text: dayCell.modelData.glyph
                                         color: Theme.yellow
-                                        font.family: Theme.fontFamily
                                         font.pixelSize: Theme.iconSize + 1
                                     }
-                                    Text {
+                                    ThemedText {
                                         Layout.alignment: Qt.AlignHCenter
                                         text: dayCell.modelData.max + "\u00b0"
                                         color: Theme.fg
-                                        font.family: Theme.fontFamily
                                         font.pixelSize: Theme.fontSize - 2
                                         font.bold: true
                                     }
-                                    Text {
+                                    ThemedText {
                                         visible: Settings.weatherShowRain
                                                  && dayCell.modelData.rain !== undefined
                                                  && dayCell.modelData.rain >= 0
                                         Layout.alignment: Qt.AlignHCenter
                                         text: "\u{f058c} " + dayCell.modelData.rain + "%"
                                         color: Theme.cyan
-                                        font.family: Theme.fontFamily
                                         font.pixelSize: Theme.fontSize - 4
                                     }
-                                    Text {
+                                    ThemedText {
                                         Layout.alignment: Qt.AlignHCenter
                                         text: dayCell.modelData.min + "\u00b0"
                                         color: Theme.fgMuted
-                                        font.family: Theme.fontFamily
                                         font.pixelSize: Theme.fontSize - 3
                                     }
                                 }
@@ -675,10 +660,9 @@ Popout {
                                   leftMargin: Theme.space12; rightMargin: Theme.space12 }
                         spacing: Theme.space4
 
-                        Text {
+                        ThemedText {
                             text: I18n.tr("System")
                             color: Theme.accent
-                            font.family: Theme.fontFamily
                             font.pixelSize: Theme.fontSize - 3
                             font.bold: true
                             font.capitalization: Font.AllUppercase
@@ -704,10 +688,9 @@ Popout {
                                   leftMargin: Theme.space12; rightMargin: Theme.space12 }
                         spacing: Theme.space4
 
-                        Text {
+                        ThemedText {
                             text: I18n.tr("Resources")
                             color: Theme.accent
-                            font.family: Theme.fontFamily
                             font.pixelSize: Theme.fontSize - 3
                             font.bold: true
                             font.capitalization: Font.AllUppercase
@@ -763,11 +746,10 @@ Popout {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 visible: !dash.hasMedia
-                Text {
+                ThemedText {
                     anchors.centerIn: parent
                     text: "󰝛"
                     color: Theme.withAlpha(Theme.fgMuted, 0.55)
-                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.sp(110)
                 }
             }
@@ -954,18 +936,16 @@ Popout {
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 0
-                    Text {
+                    ThemedText {
                         text: I18n.tr("Wallpapers title")
                         color: Theme.fg
-                        font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontSize + 2
                         font.bold: true
                     }
-                    Text {
+                    ThemedText {
                         text: Wallpaper.scanning ? I18n.tr("Searching...")
                                                  : I18n.tr("%1 wallpapers").arg(Wallpaper.list.length)
                         color: Theme.fgMuted
-                        font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontSize - 3
                     }
                 }
@@ -1050,12 +1030,10 @@ Popout {
                               leftMargin: Theme.space12; rightMargin: Theme.space12; bottomMargin: Theme.space10 }
                     spacing: Theme.space8
 
-                    Text {
+                    ThemedText {
                         Layout.fillWidth: true
                         text: wallpaperPage.wpName(Wallpaper.current)
                         color: Qt.rgba(1, 1, 1, 0.95)
-                        font.family: Theme.fontFamily
-                        font.pixelSize: Theme.fontSize
                         font.bold: true
                         elide: Text.ElideRight
                     }
@@ -1064,12 +1042,11 @@ Popout {
                         implicitHeight: Theme.dp(20)
                         radius: height / 2
                         color: Theme.accent
-                        Text {
+                        ThemedText {
                             id: heroChip
                             anchors.centerIn: parent
                             text: "󰄬 " + I18n.tr("Active")
                             color: Theme.bg
-                            font.family: Theme.fontFamily
                             font.pixelSize: Theme.fontSize - 4
                             font.bold: true
                         }
@@ -1177,12 +1154,11 @@ Popout {
                                 GradientStop { position: 0.0; color: "transparent" }
                                 GradientStop { position: 1.0; color: Qt.rgba(0, 0, 0, 0.65) }
                             }
-                            Text {
+                            ThemedText {
                                 anchors { left: parent.left; right: parent.right; bottom: parent.bottom
                                           leftMargin: Theme.space6; rightMargin: Theme.space6; bottomMargin: Theme.space4 }
                                 text: wallpaperPage.wpName(wpCell.modelData)
                                 color: Qt.rgba(1, 1, 1, 0.95)
-                                font.family: Theme.fontFamily
                                 font.pixelSize: Theme.fontSize - 4
                                 font.bold: true
                                 elide: Text.ElideRight
@@ -1274,11 +1250,10 @@ Popout {
                     animated: dash.shown
                     Behavior on tint { ColorAnimation { duration: Theme.animNormal } }
                 }
-                Text {
+                ThemedText {
                     anchors.centerIn: parent
                     text: cell.percent + "%"
                     color: Theme.fg
-                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSize + 1
                     font.bold: true
                 }
@@ -1287,17 +1262,15 @@ Popout {
             RowLayout {
                 Layout.alignment: Qt.AlignHCenter
                 spacing: Theme.space4
-                Text {
+                ThemedText {
                     text: cell.glyph
                     color: cell.loadColor
-                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSize - 1
                     Behavior on color { ColorAnimation { duration: Theme.animNormal } }
                 }
-                Text {
+                ThemedText {
                     text: cell.label
                     color: Theme.fgMuted
-                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSize - 2
                     font.bold: true
                 }
@@ -1313,12 +1286,11 @@ Popout {
         readonly property bool sel: dash.tab === key
         implicitWidth: dash.railTabSize
         implicitHeight: dash.railTabSize
-        Text {
+        ThemedText {
             anchors.centerIn: parent
             text: parent.glyph
             color: parent.sel ? Theme.accent
                  : tbMa.containsMouse ? Theme.fg : Theme.fgMuted
-            font.family: Theme.fontFamily
             font.pixelSize: Theme.iconSize + 3
             Behavior on color { ColorAnimation { duration: dash.tabAnim } }
             // El glifo crece un punto con rebote bajo el puntero y se encoge
@@ -1363,10 +1335,9 @@ Popout {
             anchors.fill: parent
             anchors.margins: Theme.space10
             spacing: Theme.space4
-            Text {
+            ThemedText {
                 text: parent.parent.title
                 color: Theme.accent
-                font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontSize - 3
                 font.bold: true
                 font.capitalization: Font.AllUppercase
@@ -1377,11 +1348,10 @@ Popout {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
             }
-            Text {
+            ThemedText {
                 Layout.alignment: Qt.AlignHCenter
                 text: parent.parent.footer
                 color: Theme.fgMuted
-                font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontSize - 3
             }
         }
@@ -1444,17 +1414,15 @@ Popout {
         property string text: ""
         Layout.fillWidth: true
         spacing: Theme.space6
-        Text {
+        ThemedText {
             text: parent.glyph
             color: Theme.accent
-            font.family: Theme.fontFamily
             font.pixelSize: Theme.fontSize - 1
         }
-        Text {
+        ThemedText {
             Layout.fillWidth: true
             text: parent.text
             color: Theme.fg
-            font.family: Theme.fontFamily
             font.pixelSize: Theme.fontSize - 2
             elide: Text.ElideRight
         }
@@ -1467,23 +1435,20 @@ Popout {
         property string value: ""
         Layout.fillWidth: true
         spacing: Theme.space6
-        Text {
+        ThemedText {
             text: parent.glyph
             color: Theme.accent
-            font.family: Theme.fontFamily
             font.pixelSize: Theme.fontSize - 1
         }
-        Text {
+        ThemedText {
             Layout.fillWidth: true
             text: parent.label
             color: Theme.fgMuted
-            font.family: Theme.fontFamily
             font.pixelSize: Theme.fontSize - 2
         }
-        Text {
+        ThemedText {
             text: parent.value
             color: Theme.fg
-            font.family: Theme.fontFamily
             font.pixelSize: Theme.fontSize - 2
             font.bold: true
         }

@@ -283,7 +283,7 @@ PanelWindow {
 
     // Pie discreto anclado abajo: da contexto ("algo está arrancando") sin
     // competir con el logo. Entra con la barra y se va con todo lo demás.
-    Text {
+    ThemedText {
         anchors {
             horizontalCenter: parent.horizontalCenter
             bottom: parent.bottom
@@ -291,7 +291,6 @@ PanelWindow {
         }
         text: I18n.tr("Starting the desktop…")
         color: Theme.fgMuted
-        font.family: Theme.fontFamily
         font.pixelSize: Theme.fontSize - 1
         font.letterSpacing: Theme.dp(2)
         opacity: !splash.shown ? 0 : (splash.trailIn ? 0.75 : 0)

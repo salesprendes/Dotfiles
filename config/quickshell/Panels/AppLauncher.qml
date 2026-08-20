@@ -239,12 +239,11 @@ Popout {
                         smooth: false
                         asynchronous: true
                     }
-                    Text {
+                    ThemedText {
                         anchors.centerIn: parent
                         visible: appRow.iconSrc === ""
                         text: "󰣆"
                         color: Theme.fgDim
-                        font.family: Theme.fontFamily
                         font.pixelSize: Theme.iconSize + 2
                     }
                 }
@@ -252,22 +251,19 @@ Popout {
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 0
-                    Text {
+                    ThemedText {
                         Layout.fillWidth: true
                         text: modelData.entry?.name ?? ""
                         color: Theme.fg
-                        font.family: Theme.fontFamily
-                        font.pixelSize: Theme.fontSize
                         font.bold: true
                         elide: Text.ElideRight
                     }
-                    Text {
+                    ThemedText {
                         Layout.fillWidth: true
                         readonly property string desc: modelData.entry?.comment || modelData.entry?.genericName || ""
                         visible: desc !== ""
                         text: desc
                         color: Theme.fgMuted
-                        font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontSize - 3
                         elide: Text.ElideRight
                     }
@@ -280,11 +276,10 @@ Popout {
                     implicitHeight: Theme.dp(26)
                     radius: Theme.dp(8)
                     color: Theme.accent
-                    Text {
+                    ThemedText {
                         anchors.centerIn: parent
                         text: "󰌑"
                         color: Theme.bg
-                        font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontSize - 1
                     }
                 }
@@ -308,19 +303,17 @@ Popout {
         Layout.topMargin: Theme.space16
         Layout.bottomMargin: Theme.space16
         spacing: Theme.space8
-        Text {
+        ThemedText {
             Layout.alignment: Qt.AlignHCenter
             text: "󰍉"
             color: Theme.fgMuted
             opacity: 0.55
-            font.family: Theme.fontFamily
             font.pixelSize: Theme.dp(34)
         }
-        Text {
+        ThemedText {
             Layout.alignment: Qt.AlignHCenter
             text: I18n.tr("No results")
             color: Theme.fgMuted
-            font.family: Theme.fontFamily
             font.pixelSize: Theme.fontSize - 1
         }
     }
@@ -336,13 +329,12 @@ Popout {
         Layout.fillWidth: true
         spacing: Theme.space8
 
-        Text {
+        ThemedText {
             Layout.fillWidth: true
             text: launcher.powerOpen
                   ? (launcher.hoverAction !== "" ? launcher.hoverAction : I18n.tr("Session"))
                   : I18n.tr("%1 apps").arg(launcher.apps.length)
             color: launcher.powerOpen && launcher.hoverAction !== "" ? Theme.fg : Theme.fgMuted
-            font.family: Theme.fontFamily
             font.pixelSize: Theme.fontSize - 2
             elide: Text.ElideRight
         }
@@ -383,11 +375,10 @@ Popout {
                         opacity: rp
                         scale: 0.6 + 0.4 * rp
                         Behavior on color { ColorAnimation { duration: Theme.animFast } }
-                        Text {
+                        ThemedText {
                             anchors.centerIn: parent
                             text: pbtn.modelData.ic
                             color: pbMa.containsMouse ? Theme.bg : pbtn.modelData.col
-                            font.family: Theme.fontFamily
                             font.pixelSize: Theme.iconSize
                         }
                         MouseArea {
@@ -415,11 +406,10 @@ Popout {
                         : Theme.withAlpha(Theme.overlay, 0.4)
             Behavior on color { ColorAnimation { duration: Theme.animFast } }
             Behavior on border.color { ColorAnimation { duration: Theme.animFast } }
-            Text {
+            ThemedText {
                 anchors.centerIn: parent
                 text: launcher.powerOpen ? "󰅖" : "󰐥"
                 color: launcher.powerOpen || ptMa.containsMouse ? Theme.red : Theme.fgDim
-                font.family: Theme.fontFamily
                 font.pixelSize: Theme.iconSize
                 rotation: launcher.powerOpen ? 90 : 0
                 Behavior on rotation { NumberAnimation { duration: 240; easing.type: Easing.OutCubic } }
@@ -456,11 +446,10 @@ Popout {
                           : Theme.withAlpha(Theme.overlay, 0.25)
         Behavior on color { ColorAnimation { duration: Theme.animFast } }
 
-        Text {
+        ThemedText {
             anchors.centerIn: parent
             text: chip.glyph
             color: chip.sel ? Theme.accent : Theme.fgDim
-            font.family: Theme.fontFamily
             font.pixelSize: Theme.iconSize
             Behavior on color { ColorAnimation { duration: Theme.animFast } }
         }

@@ -446,7 +446,7 @@ Item {
                   : aiRow.implicitHeight
 
     // Nota del sistema (exportado, compactado…): centrada y apagada.
-    Text {
+    ThemedText {
         id: infoText
         visible: bubble.isInfo
         anchors.left: parent.left
@@ -454,7 +454,6 @@ Item {
         horizontalAlignment: Text.AlignHCenter
         text: bubble.isInfo ? bubble.content : ""
         color: Theme.fgMuted
-        font.family: Theme.fontFamily
         font.pixelSize: Theme.typeLabelSmall
         wrapMode: Text.WordWrap
     }
@@ -524,21 +523,19 @@ Item {
             spacing: Theme.space10
             visible: !bubble.live
 
-            Text {
+            ThemedText {
                 visible: bubble.ts !== ""
                 text: bubble.ts
                 color: Theme.fgMuted
-                font.family: Theme.fontFamily
                 font.pixelSize: Theme.typeLabelSmall
             }
-            Text {
+            ThemedText {
                 visible: bubble.attachNote !== ""
                 // La etiqueta del adjunto es lo único que puede crecer aquí.
                 width: Math.max(0, Math.min(implicitWidth, pieUsuario.width))
                 elide: Text.ElideRight
                 text: "󰏢 " + bubble.attachNote
                 color: Theme.fgMuted
-                font.family: Theme.fontFamily
                 font.pixelSize: Theme.typeLabelSmall
             }
             Row {
@@ -586,11 +583,10 @@ Item {
             border.color: Theme.withAlpha(Theme.accent, bubble.live ? 0.55 : 0.28)
             Behavior on border.color { ColorAnimation { duration: Theme.animNormal } }
 
-            Text {
+            ThemedText {
                 anchors.centerIn: parent
                 text: "󱙺"
                 color: Theme.accentText
-                font.family: Theme.fontFamily
                 font.pixelSize: Theme.sp(13)
             }
             // Mientras escribe, el aro respira. Es la única señal de "sigue
@@ -702,23 +698,20 @@ Item {
                     id: thinkRow
                     anchors.centerIn: parent
                     spacing: Theme.space4
-                    Text {
+                    ThemedText {
                         text: "󰟃"
                         color: bubble.showReasoning ? Theme.accentText : Theme.fgMuted
-                        font.family: Theme.fontFamily
                         font.pixelSize: Theme.sp(12)
                     }
-                    Text {
+                    ThemedText {
                         text: I18n.tr("Reasoning")
                         color: bubble.showReasoning ? Theme.accentText : Theme.fgMuted
-                        font.family: Theme.fontFamily
                         font.pixelSize: Theme.typeLabelSmall
                         font.bold: bubble.showReasoning
                     }
-                    Text {
+                    ThemedText {
                         text: bubble.showReasoning ? "󰅀" : "󰅂"
                         color: Theme.fgMuted
-                        font.family: Theme.fontFamily
                         font.pixelSize: Theme.sp(11)
                     }
                 }
@@ -800,11 +793,10 @@ Item {
                                 RowLayout {
                                     Layout.fillWidth: true
                                     spacing: Theme.space8
-                                    Text {
+                                    ThemedText {
                                         Layout.fillWidth: true
                                         text: seg.lang !== "" ? seg.lang : "code"
                                         color: Theme.fgMuted
-                                        font.family: Theme.fontFamily
                                         font.pixelSize: Theme.typeLabelSmall
                                         font.bold: true
                                     }
@@ -850,7 +842,7 @@ Item {
                 opacity: aiHov.containsMouse ? 1 : 0
                 Behavior on opacity { NumberAnimation { duration: Theme.animFast } }
 
-                Text {
+                ThemedText {
                     // Nunca negativo: con un ancho negativo el elide no recorta
                     // nada y el texto se pinta entero (ver la nota de las
                     // píldoras de opción).
@@ -867,7 +859,6 @@ Item {
                         return parts.join(" · ")
                     }
                     color: Theme.fgMuted
-                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.typeLabelSmall
                 }
                 FootAction {
@@ -923,26 +914,23 @@ Item {
             spacing: Theme.space8
 
             // Si el modelo dijo algo antes de proponer, se enseña.
-            Text {
+            ThemedText {
                 Layout.fillWidth: true
                 visible: bubble.content !== ""
                 text: bubble.content
                 color: Theme.fg
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontSize
                 wrapMode: Text.WordWrap
             }
 
             RowLayout {
                 Layout.fillWidth: true
                 spacing: Theme.space8
-                Text {
+                ThemedText {
                     text: bubble.toolGlyph
                     color: Theme.accentText
-                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.iconSize
                 }
-                Text {
+                ThemedText {
                     Layout.fillWidth: true
                     text: bubble.toolHeadline
                     // Se ajusta: un titular largo ("El asistente quiere leer
@@ -950,7 +938,6 @@ Item {
                     // salía de la tarjeta en vez de pasar a la línea siguiente.
                     wrapMode: Text.WordWrap
                     color: Theme.fgDim
-                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.typeLabelLarge
                     font.weight: Font.Medium
                 }
@@ -985,17 +972,15 @@ Item {
                 Layout.fillWidth: true
                 spacing: Theme.space6
                 visible: bubble.dangerWhy !== ""
-                Text {
+                ThemedText {
                     text: "󰀪"
                     color: Theme.red
-                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.sp(13)
                 }
-                Text {
+                ThemedText {
                     Layout.fillWidth: true
                     text: I18n.tr("Careful — %1").arg(bubble.dangerWhy)
                     color: Theme.red
-                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.typeLabelSmall
                     font.weight: Font.Medium
                     wrapMode: Text.WordWrap
@@ -1012,10 +997,9 @@ Item {
                 spacing: Theme.space6
                 visible: bubble.toolStatus === "pending"
                          && (bubble._supWatching || bubble._sup !== null)
-                Text {
+                ThemedText {
                     text: bubble._supWatching ? "󰛐" : "󰭎"
                     color: bubble._supColor
-                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.sp(13)
                     opacity: bubble._supWatching ? 0.6 : 1
                     SequentialAnimation on opacity {
@@ -1025,11 +1009,10 @@ Item {
                         NumberAnimation { to: 0.45; duration: Theme.animSlow }
                     }
                 }
-                Text {
+                ThemedText {
                     Layout.fillWidth: true
                     text: bubble._supText
                     color: bubble._supColor
-                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.typeLabelSmall
                     font.weight: Font.Medium
                     wrapMode: Text.WordWrap
@@ -1044,10 +1027,9 @@ Item {
                 Layout.fillWidth: true
                 spacing: Theme.space6
                 visible: AiService.realPathFor(bubble.msgIndex) !== ""
-                Text {
+                ThemedText {
                     text: "󰌷"
                     color: Theme.orange
-                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.sp(12)
                 }
                 Text {
@@ -1190,7 +1172,7 @@ Item {
                             border.width: Theme.hairline
                             border.color: SettingsPalette.settingsBorder
                             Behavior on color { ColorAnimation { duration: Theme.animFast } }
-                            Text {
+                            ThemedText {
                                 id: optText
                                 anchors.centerIn: parent
                                 // Nunca negativo, por el mismo motivo.
@@ -1200,7 +1182,6 @@ Item {
                                 horizontalAlignment: Text.AlignHCenter
                                 text: String(optChip.modelData)
                                 color: optMa.containsMouse ? Theme.accentText : Theme.fg
-                                font.family: Theme.fontFamily
                                 font.pixelSize: Theme.typeLabelMedium
                             }
                             MouseArea {
@@ -1250,10 +1231,9 @@ Item {
                 Layout.fillWidth: true
                 spacing: Theme.space6
                 visible: bubble.toolRunning
-                Text {
+                ThemedText {
                     text: "󰑮"
                     color: Theme.accentText
-                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.sp(13)
                     // Late en vez de girar: una rotación continua pide la mirada
                     // todo el rato, y esto pasa DENTRO de una conversación que
@@ -1265,13 +1245,12 @@ Item {
                         NumberAnimation { to: 0.45; duration: Theme.animSlow }
                     }
                 }
-                Text {
+                ThemedText {
                     Layout.fillWidth: true
                     text: bubble._corriendoS < 1
                         ? I18n.tr("Running…")
                         : I18n.tr("Running… %1 s").arg(bubble._corriendoS)
                     color: Theme.fgDim
-                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.typeLabelSmall
                 }
             }
@@ -1333,17 +1312,15 @@ Item {
                 Layout.fillWidth: true
                 visible: bubble.toolStatus !== "pending" && bubble.toolStatus !== ""
                 spacing: Theme.space6
-                Text {
+                ThemedText {
                     text: bubble.toolStatus === "rejected" ? "󰜺" : "󰄬"
                     color: bubble.toolStatus === "rejected" ? Theme.red : Theme.green
-                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.sp(12)
                 }
-                Text {
+                ThemedText {
                     text: bubble.toolStatus === "rejected"
                         ? I18n.tr("Rejected") : I18n.tr("Executed")
                     color: Theme.fgMuted
-                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.typeLabelSmall
                 }
                 FootAction {
@@ -1389,17 +1366,15 @@ Item {
             anchors.rightMargin: Theme.space12
             spacing: Theme.space10
 
-            Text {
+            ThemedText {
                 text: "󰀪"
                 color: Theme.red
-                font.family: Theme.fontFamily
                 font.pixelSize: Theme.iconSize
             }
-            Text {
+            ThemedText {
                 Layout.fillWidth: true
                 text: bubble.isError ? bubble.content : ""
                 color: Theme.fg
-                font.family: Theme.fontFamily
                 font.pixelSize: Theme.typeBodySmall
                 wrapMode: Text.WordWrap
             }

@@ -93,10 +93,9 @@ SettingsPage {
                     // espaciadas, que es justo el gesto que se quitó de los
                     // rótulos de sección: dejarlo aquí hacía que dentro de una
                     // misma página convivieran las dos tipografías de rótulo.
-                    Text {
+                    ThemedText {
                         text: page.categoryLabel(catGroup.modelData.category)
                         color: Theme.fgDim
-                        font.family: Theme.fontFamily
                         font.pixelSize: Theme.typeLabelMedium
                         font.weight: Font.Medium
                     }

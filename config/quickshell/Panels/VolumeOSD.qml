@@ -4,6 +4,7 @@ import Quickshell
 import Quickshell.Wayland
 import Quickshell.Services.Pipewire
 import qs.Config
+import qs.Components
 
 PanelWindow {
     id: osd
@@ -88,10 +89,9 @@ PanelWindow {
             anchors.rightMargin: Theme.space16
             spacing: Theme.space12
 
-            Text {
+            ThemedText {
                 text: Utils.volumeGlyph(osd.volume / 100, osd.muted)
                 color: osd.muted ? Theme.fgMuted : Theme.accent
-                font.family: Theme.fontFamily
                 font.pixelSize: Theme.iconSize + 6
                 Layout.preferredWidth: Theme.controlS
                 horizontalAlignment: Text.AlignHCenter
@@ -111,11 +111,9 @@ PanelWindow {
                 }
             }
 
-            Text {
+            ThemedText {
                 text: osd.muted ? "" : osd.volume + "%"
                 color: Theme.fg
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontSize
                 font.bold: true
                 Layout.preferredWidth: 38
                 horizontalAlignment: Text.AlignRight

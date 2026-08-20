@@ -151,7 +151,7 @@ Rectangle {
                         id: connCol
                         Layout.fillWidth: true
                         spacing: 0
-                        Text {
+                        ThemedText {
                             Layout.fillWidth: true
                             text: AiService.connState === "ok"
                                     ? I18n.tr("Connected · %1 ms · %2 models")
@@ -167,17 +167,15 @@ Rectangle {
                                     : I18n.tr("Not checked yet")
                             color: AiService.connState === "fail" ? Theme.red
                                  : AiService.connState === "ok" ? Theme.fg : Theme.fgDim
-                            font.family: Theme.fontFamily
                             font.pixelSize: Theme.typeLabelLarge
                             font.weight: Font.Medium
                             elide: Text.ElideRight
                         }
-                        Text {
+                        ThemedText {
                             Layout.fillWidth: true
                             visible: AiService.connDetail !== ""
                             text: AiService.connDetail
                             color: Theme.fgMuted
-                            font.family: Theme.fontFamily
                             font.pixelSize: Theme.typeLabelSmall
                             wrapMode: Text.WordWrap
                         }
@@ -641,7 +639,7 @@ Rectangle {
                                 ColumnLayout {
                                     Layout.fillWidth: true
                                     spacing: 0
-                                    Text {
+                                    ThemedText {
                                         Layout.fillWidth: true
                                         text: mcpRow.modelData.name
                                               + (mcpRow.st === "ok"
@@ -650,16 +648,14 @@ Rectangle {
                                                        + " " + I18n.tr("tools")
                                                  : "")
                                         color: Theme.fgDim
-                                        font.family: Theme.fontFamily
                                         font.pixelSize: Theme.typeLabelMedium
                                         elide: Text.ElideRight
                                     }
-                                    Text {
+                                    ThemedText {
                                         Layout.fillWidth: true
                                         visible: mcpRow.st.startsWith("error")
                                         text: mcpRow.st
                                         color: Theme.red
-                                        font.family: Theme.fontFamily
                                         font.pixelSize: Theme.typeLabelSmall
                                         elide: Text.ElideRight
                                     }
@@ -838,20 +834,18 @@ Rectangle {
                                 required property int index
                                 Layout.fillWidth: true
                                 spacing: Theme.space8
-                                Text {
+                                ThemedText {
                                     text: (AiService.sshPass[sshRow.modelData.name] ? "󰌾" : "󰷖")
                                     color: Theme.fgMuted
-                                    font.family: Theme.fontFamily
                                     font.pixelSize: Theme.sp(13)
                                 }
                                 ColumnLayout {
                                     Layout.fillWidth: true
                                     spacing: 0
-                                    Text {
+                                    ThemedText {
                                         Layout.fillWidth: true
                                         text: sshRow.modelData.name
                                         color: Theme.fgDim
-                                        font.family: Theme.fontFamily
                                         font.pixelSize: Theme.typeLabelMedium
                                         elide: Text.ElideRight
                                     }
@@ -1005,17 +999,15 @@ Rectangle {
                                 required property int index
                                 Layout.fillWidth: true
                                 spacing: Theme.space8
-                                Text {
+                                ThemedText {
                                     text: "󰍩"
                                     color: Theme.fgMuted
-                                    font.family: Theme.fontFamily
                                     font.pixelSize: Theme.sp(12)
                                 }
-                                Text {
+                                ThemedText {
                                     Layout.fillWidth: true
                                     text: memRow.modelData
                                     color: Theme.fgDim
-                                    font.family: Theme.fontFamily
                                     font.pixelSize: Theme.typeBodySmall
                                     elide: Text.ElideRight
                                 }
@@ -1026,12 +1018,11 @@ Rectangle {
                         // Instintos: lo aprendido de este equipo. El número es
                         // cuántas veces se lo ha vuelto a encontrar — cuanto
                         // más alto, antes entra en el contexto.
-                        Text {
+                        ThemedText {
                             Layout.topMargin: Theme.space4
                             visible: AiService.instinctList.length > 0
                             text: I18n.tr("Learned about this machine")
                             color: Theme.fgDim
-                            font.family: Theme.fontFamily
                             font.pixelSize: Theme.typeLabelMedium
                             font.weight: Font.Medium
                         }
@@ -1043,24 +1034,21 @@ Rectangle {
                                 required property int index
                                 Layout.fillWidth: true
                                 spacing: Theme.space8
-                                Text {
+                                ThemedText {
                                     text: "󱐋"
                                     color: Theme.accentText
-                                    font.family: Theme.fontFamily
                                     font.pixelSize: Theme.sp(12)
                                 }
-                                Text {
+                                ThemedText {
                                     Layout.fillWidth: true
                                     text: instRow.modelData.text
                                     color: Theme.fgDim
-                                    font.family: Theme.fontFamily
                                     font.pixelSize: Theme.typeBodySmall
                                     elide: Text.ElideRight
                                 }
-                                Text {
+                                ThemedText {
                                     text: "×" + (instRow.modelData.confidence || 1)
                                     color: Theme.fgMuted
-                                    font.family: Theme.fontFamily
                                     font.pixelSize: Theme.typeLabelSmall
                                 }
                                 RowDelete { onClicked: AiService.removeInstinct(instRow.index) }

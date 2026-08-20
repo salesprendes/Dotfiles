@@ -97,7 +97,7 @@ SettingsRow {
                 ColorAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic }
             }
 
-            Text {
+            ThemedText {
                 anchors.centerIn: parent
                 // Dos letras si el nombre las da; una si no. En mayúsculas
                 // porque un monograma en minúsculas se lee como una palabra
@@ -112,7 +112,6 @@ SettingsRow {
                         : n.slice(0, 2)).toUpperCase()
                 }
                 color: skill.checked ? Theme.accentText : Theme.fgDim
-                font.family: Theme.fontFamily
                 font.pixelSize: Theme.typeLabelMedium
                 font.weight: Font.DemiBold
                 Behavior on color {
@@ -125,24 +124,21 @@ SettingsRow {
             Layout.fillWidth: true
             spacing: Theme.space2
 
-            Text {
+            ThemedText {
                 Layout.fillWidth: true
                 text: skill.name
                 color: Theme.fg
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontSize
                 // Encendida pesa un punto más: la lista dice qué está en uso
                 // también con la forma de la letra, no solo con el color (que
                 // es lo único que ve alguien que no distingue bien el acento).
                 font.weight: skill.checked ? Font.DemiBold : Font.Normal
                 elide: Text.ElideRight
             }
-            Text {
+            ThemedText {
                 Layout.fillWidth: true
                 visible: skill.desc !== ""
                 text: skill.desc
                 color: Theme.fgMuted
-                font.family: Theme.fontFamily
                 font.pixelSize: Theme.typeBodySmall
                 wrapMode: Text.WordWrap
                 maximumLineCount: 2

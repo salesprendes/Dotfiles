@@ -2,11 +2,9 @@ import QtQuick
 import qs.Config
 
 // Glifo giratorio de "cargando/escaneando". Gira solo mientras es visible.
-Text {
+ThemedText {
     text: "󰑮"
     color: Theme.accent
-    font.family: Theme.fontFamily
-    font.pixelSize: Theme.fontSize
 
     RotationAnimation on rotation {
         from: 0

@@ -158,11 +158,10 @@ Popout {
         Layout.fillWidth: true
         spacing: Theme.space10
 
-        Text {
+        ThemedText {
             Layout.fillWidth: true
             text: I18n.tr("Notifications")
             color: Theme.fg
-            font.family: Theme.fontFamily
             font.pixelSize: Theme.fontSize + 2
             font.bold: true
         }
@@ -182,16 +181,14 @@ Popout {
                 id: clearRow
                 anchors.centerIn: parent
                 spacing: Theme.space6
-                Text {
+                ThemedText {
                     text: "󰆴"
                     color: Theme.red
-                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.iconSize - 1
                 }
-                Text {
+                ThemedText {
                     text: I18n.tr("Clear")
                     color: clearMa.containsMouse ? Theme.red : Theme.fgDim
-                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSize - 2
                     font.bold: true
                     // Funde junto al fondo.
@@ -231,23 +228,20 @@ Popout {
                     id: mutedRow
                     anchors.centerIn: parent
                     spacing: Theme.space4
-                    Text {
+                    ThemedText {
                         text: "󰂛"
                         color: Theme.accent
-                        font.family: Theme.fontFamily
                         font.pixelSize: Theme.iconSize - 4
                     }
-                    Text {
+                    ThemedText {
                         text: modelData
                         color: Theme.fgDim
-                        font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontSize - 3
                         font.bold: true
                     }
-                    Text {
+                    ThemedText {
                         text: "󰅖"
                         color: unmuteMa.containsMouse ? Theme.red : Theme.fgMuted
-                        font.family: Theme.fontFamily
                         font.pixelSize: Theme.iconSize - 5
                         // Funde junto al fondo del chip.
                         Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
@@ -273,15 +267,13 @@ Popout {
         clip: true
 
         // Vacío normal: "Sin notificaciones" (solo si NO está "No molestar").
-        Text {
+        ThemedText {
             anchors.centerIn: parent
             visible: (NotifService.count === 0 || clearState.showingClearedState) && clearState.emptyMessageReady && !Globals.dnd
             opacity: visible ? 1 : 0
             horizontalAlignment: Text.AlignHCenter
             text: "󰂜\n" + I18n.tr("No notifications")
             color: Theme.fgMuted
-            font.family: Theme.fontFamily
-            font.pixelSize: Theme.fontSize
             lineHeight: 1.35
 
             Behavior on opacity { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
@@ -297,18 +289,16 @@ Popout {
 
             Behavior on opacity { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
 
-            Text {
+            ThemedText {
                 Layout.alignment: Qt.AlignHCenter
                 text: "󰂛"
                 color: Theme.fgMuted
-                font.family: Theme.fontFamily
                 font.pixelSize: Theme.dp(56)
             }
-            Text {
+            ThemedText {
                 Layout.alignment: Qt.AlignHCenter
                 text: I18n.tr("Do not disturb")
                 color: Theme.fgMuted
-                font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontSize - 1
                 font.bold: true
             }
@@ -416,32 +406,28 @@ Popout {
                                         asynchronous: true
                                     }
 
-                                    Text {
+                                    ThemedText {
                                         anchors.centerIn: parent
                                         visible: groupDelegate.appIcon === ""
                                         text: "󰂚"
                                         color: Theme.accent
-                                        font.family: Theme.fontFamily
                                         font.pixelSize: Theme.iconSize
                                     }
                                 }
 
-                                Text {
+                                ThemedText {
                                     Layout.fillWidth: true
                                     text: groupDelegate.group.title
                                     color: Theme.fg
-                                    font.family: Theme.fontFamily
-                                    font.pixelSize: Theme.fontSize
                                     font.bold: true
                                     elide: Text.ElideRight
                                 }
 
                                 // Hora de la notificación más reciente del grupo;
                                 // se refresca con nowTick con el centro abierto.
-                                Text {
+                                ThemedText {
                                     text: NotifService.timeText(groupDelegate.latest)
                                     color: Theme.fgMuted
-                                    font.family: Theme.fontFamily
                                     font.pixelSize: Theme.fontSize - 3
                                 }
 
@@ -471,25 +457,22 @@ Popout {
                                         id: ceRow
                                         anchors.centerIn: parent
                                         spacing: Theme.space4
-                                        Text {
+                                        ThemedText {
                                             text: "󰂚"
                                             color: Theme.accent
-                                            font.family: Theme.fontFamily
                                             font.pixelSize: Theme.iconSize - 4
                                         }
-                                        Text {
+                                        ThemedText {
                                             text: groupDelegate.items.length
                                             color: Theme.fg
-                                            font.family: Theme.fontFamily
                                             font.pixelSize: Theme.fontSize - 2
                                             font.bold: true
                                         }
-                                        Text {
+                                        ThemedText {
                                             visible: countExpandButton.canExpand
                                             text: "󰅂"
                                             rotation: groupDelegate.expanded ? 90 : 0
                                             color: groupDelegate.expanded || ceMa.containsMouse ? Theme.accent : Theme.fgMuted
-                                            font.family: Theme.fontFamily
                                             font.pixelSize: Theme.iconSize - 4
                                             Behavior on rotation { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
                                             Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
@@ -562,11 +545,10 @@ Popout {
                                             opacity: 0.8
                                         }
 
-                                        Text {
+                                        ThemedText {
                                             Layout.fillWidth: true
                                             text: nc.notificationText(modelData)
                                             color: Theme.fgDim
-                                            font.family: Theme.fontFamily
                                             font.pixelSize: Theme.fontSize - 2
                                             maximumLineCount: groupDelegate.expanded ? 3 : 1
                                             elide: Text.ElideRight
@@ -577,23 +559,21 @@ Popout {
                                         // Hora individual, solo con el grupo
                                         // desplegado (colapsado ya la enseña
                                         // la cabecera con la más reciente).
-                                        Text {
+                                        ThemedText {
                                             visible: groupDelegate.expanded
                                             Layout.alignment: Qt.AlignTop
                                             text: NotifService.timeText(modelData)
                                             color: Theme.fgMuted
-                                            font.family: Theme.fontFamily
                                             font.pixelSize: Theme.fontSize - 3
                                         }
                                     }
                                 }
 
-                                Text {
+                                ThemedText {
                                     Layout.fillWidth: true
                                     visible: !groupDelegate.expanded && groupDelegate.items.length > 3
                                     text: "+" + (groupDelegate.items.length - 3)
                                     color: Theme.accent
-                                    font.family: Theme.fontFamily
                                     font.pixelSize: Theme.fontSize - 2
                                     font.bold: true
                                     horizontalAlignment: Text.AlignRight

@@ -170,9 +170,6 @@ Singleton {
     function setWifiPriority(name, val) {
         wifiOp(["connection", "modify", name, "connection.autoconnect-priority", String(val)])
     }
-    function setWifiAutoconnect(name, on) {
-        wifiOp(["connection", "modify", name, "connection.autoconnect", on ? "yes" : "no"])
-    }
     function wifiOp(args) {
         wifiOpProc.command = ["nmcli"].concat(args)
         wifiOpProc.running = true

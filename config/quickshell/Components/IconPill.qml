@@ -18,11 +18,10 @@ Pill {
         implicitWidth: Theme.barIconSize + 2
         implicitHeight: Theme.barIconSize + 2
 
-        Text {
+        ThemedText {
             anchors.centerIn: parent
             text: root.icon
             color: root.iconColor
-            font.family: Theme.fontFamily
             font.pixelSize: Theme.barIconSize
             Behavior on color {
                 enabled: root.animateColor

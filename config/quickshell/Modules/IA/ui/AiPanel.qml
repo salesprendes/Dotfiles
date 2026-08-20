@@ -73,11 +73,10 @@ Popout {
                 NumberAnimation { to: 1.0; duration: Math.round(Theme.animLoop / 2); easing.type: Easing.InOutSine }
             }
             onScaleChanged: if (!AiService.busy && scale !== 1) scale = 1
-            Text {
+            ThemedText {
                 anchors.centerIn: parent
                 text: "󱙺"
                 color: Theme.accentText
-                font.family: Theme.fontFamily
                 font.pixelSize: Theme.sp(18)
             }
         }
@@ -85,11 +84,10 @@ Popout {
         ColumnLayout {
             Layout.fillWidth: true
             spacing: Theme.space2
-            Text {
+            ThemedText {
                 Layout.fillWidth: true
                 text: I18n.tr("AI assistant")
                 color: Theme.fg
-                font.family: Theme.fontFamily
                 font.pixelSize: Theme.typeTitleMedium
                 font.bold: true
                 elide: Text.ElideRight
@@ -138,16 +136,14 @@ Popout {
                 id: modeRow
                 anchors.centerIn: parent
                 spacing: Theme.space4
-                Text {
+                ThemedText {
                     text: AiService.agentMode ? "󰚩" : "󰭹"
                     color: AiService.agentMode ? Theme.accentText : Theme.fgMuted
-                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.sp(13)
                 }
-                Text {
+                ThemedText {
                     text: AiService.agentMode ? I18n.tr("Agent") : I18n.tr("Chat")
                     color: AiService.agentMode ? Theme.accentText : Theme.fgDim
-                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.typeLabelSmall
                     font.bold: true
                 }
@@ -312,12 +308,11 @@ Popout {
                     }
                     Item { Layout.fillWidth: true }
                     // Lo que lleva gastado esta conversación (estilo aider).
-                    Text {
+                    ThemedText {
                         visible: AiService.convTokens > 0 || AiService.convMs > 0
                         text: (AiService.convTokens > 0 ? AiService.convTokens + " tok · " : "")
                               + (AiService.convMs / 1000).toFixed(0) + " s"
                         color: Theme.fgMuted
-                        font.family: Theme.fontFamily
                         font.pixelSize: Theme.typeLabelSmall
                     }
                 }
@@ -364,34 +359,31 @@ Popout {
                             anchors.rightMargin: Theme.space6
                             spacing: Theme.space8
 
-                            Text {
+                            ThemedText {
                                 text: "󰭹"
                                 color: convRow.current ? Theme.accentText : Theme.fgMuted
-                                font.family: Theme.fontFamily
                                 font.pixelSize: Theme.sp(13)
                             }
                             ColumnLayout {
                                 Layout.fillWidth: true
                                 spacing: 0
-                                Text {
+                                ThemedText {
                                     Layout.fillWidth: true
                                     text: convRow.modelData.title
                                     color: convRow.current ? Theme.fg : Theme.fgDim
-                                    font.family: Theme.fontFamily
                                     font.pixelSize: Theme.typeLabelLarge
                                     font.bold: convRow.current
                                     elide: Text.ElideRight
                                 }
                                 // Cuándo y cuánto: fecha del último mensaje y
                                 // tamaño del hilo, para reconocerlo sin abrirlo.
-                                Text {
+                                ThemedText {
                                     Layout.fillWidth: true
                                     text: new Date(convRow.modelData.updated)
                                               .toLocaleDateString(Qt.locale(), "d MMM")
                                           + " · " + convRow.modelData.entries.length
                                           + " msg"
                                     color: Theme.fgMuted
-                                    font.family: Theme.fontFamily
                                     font.pixelSize: Theme.typeLabelSmall
                                     elide: Text.ElideRight
                                 }
@@ -852,7 +844,7 @@ Popout {
                 spacing: Theme.space12
 
                 // Saludo según la hora: un panel que sabe si es de día.
-                Text {
+                ThemedText {
                     Layout.alignment: Qt.AlignHCenter
                     text: {
                         const h = new Date().getHours()
@@ -860,18 +852,16 @@ Popout {
                              : h < 21 ? I18n.tr("Good afternoon") : I18n.tr("Good night")
                     }
                     color: Theme.fg
-                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.typeTitleMedium
                     font.weight: Font.Medium
                 }
-                Text {
+                ThemedText {
                     Layout.alignment: Qt.AlignHCenter
                     text: "󱙺"
                     color: Theme.withAlpha(Theme.accent, 0.55)
-                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.sp(52)
                 }
-                Text {
+                ThemedText {
                     Layout.fillWidth: true
                     horizontalAlignment: Text.AlignHCenter
                     text: AiService.urlMissing
@@ -880,7 +870,6 @@ Popout {
                         ? I18n.tr("Pick a provider and add its key to start.")
                         : I18n.tr("Ask anything. Attach your clipboard or screen for context.")
                     color: Theme.fgMuted
-                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.typeBodyMedium
                     wrapMode: Text.WordWrap
                 }
@@ -1001,11 +990,10 @@ Popout {
                         radius: width / 2
                         color: Theme.withAlpha(Theme.accent, 0.5)
                     }
-                    Text {
+                    ThemedText {
                         Layout.fillWidth: true
                         text: AiService.liveThink.slice(-280)
                         color: Theme.fgMuted
-                        font.family: Theme.fontFamily
                         font.pixelSize: Theme.typeBodySmall
                         font.italic: true
                         wrapMode: Text.WordWrap
@@ -1021,19 +1009,17 @@ Popout {
                     spacing: Theme.space10
                     visible: (AiService.agentMode && AiService.toolRounds > 0)
                              || AiService.sendQueue.length > 0
-                    Text {
+                    ThemedText {
                         visible: AiService.agentMode && AiService.toolRounds > 0
                         text: I18n.tr("Step %1 of %2")
                             .arg(AiService.toolRounds).arg(AiService.maxToolRounds)
                         color: Theme.fgMuted
-                        font.family: Theme.fontFamily
                         font.pixelSize: Theme.typeLabelSmall
                     }
-                    Text {
+                    ThemedText {
                         visible: AiService.sendQueue.length > 0
                         text: I18n.tr("Queued: %1").arg(AiService.sendQueue.length)
                         color: Theme.accentText
-                        font.family: Theme.fontFamily
                         font.pixelSize: Theme.typeLabelSmall
                         font.bold: true
                     }
@@ -1159,13 +1145,12 @@ Popout {
                         id: attRow
                         anchors.centerIn: parent
                         spacing: Theme.space4
-                        Text {
+                        ThemedText {
                             text: attChip.modelData.kind === "image" ? "󰋩" : "󰈙"
                             color: Theme.accentText
-                            font.family: Theme.fontFamily
                             font.pixelSize: Theme.sp(12)
                         }
-                        Text {
+                        ThemedText {
                             // La etiqueta es lo único que puede crecer aquí (un
                             // nombre de archivo largo), así que es lo único que
                             // se recorta. Nunca por debajo de cero: con un ancho
@@ -1176,14 +1161,12 @@ Popout {
                             elide: Text.ElideMiddle
                             text: attChip.modelData.label
                             color: Theme.accentText
-                            font.family: Theme.fontFamily
                             font.pixelSize: Theme.typeLabelSmall
                             font.bold: true
                         }
-                        Text {
+                        ThemedText {
                             text: "󰅖"
                             color: Theme.fgMuted
-                            font.family: Theme.fontFamily
                             font.pixelSize: Theme.sp(11)
                             MouseArea {
                                 anchors.fill: parent
@@ -1217,11 +1200,10 @@ Popout {
             anchors.rightMargin: Theme.space6
             spacing: Theme.space8
 
-            Text {
+            ThemedText {
                 id: subSpin
                 text: "󰳆"
                 color: Theme.accentText
-                font.family: Theme.fontFamily
                 font.pixelSize: Theme.sp(14)
                 RotationAnimation on rotation {
                     running: AiService.activeSub !== null
@@ -1231,7 +1213,7 @@ Popout {
                 }
                 onRotationChanged: if (!AiService.activeSub && rotation !== 0) rotation = 0
             }
-            Text {
+            ThemedText {
                 Layout.fillWidth: true
                 // Uno: su etiqueta y su ronda. Varios (fan-out en paralelo):
                 // cuántos y qué hacen, que no caben tres líneas de detalle.
@@ -1250,7 +1232,6 @@ Popout {
                              ? "  ·  " + AiService.activeSub.lastTool : "")
                         : ""
                 color: Theme.accentText
-                font.family: Theme.fontFamily
                 font.pixelSize: Theme.typeLabelMedium
                 font.weight: Font.Medium
                 elide: Text.ElideRight
@@ -1290,10 +1271,9 @@ Popout {
             anchors.rightMargin: Theme.space6
             spacing: Theme.space8
 
-            Text {
+            ThemedText {
                 text: "󱜯"
                 color: Theme.accentText
-                font.family: Theme.fontFamily
                 font.pixelSize: Theme.sp(14)
                 RotationAnimation on rotation {
                     running: AiService.runningJobs.length > 0
@@ -1306,14 +1286,13 @@ Popout {
                 // se quedaba torcido en un ángulo arbitrario.
                 onRotationChanged: if (AiService.runningJobs.length === 0 && rotation !== 0) rotation = 0
             }
-            Text {
+            ThemedText {
                 Layout.fillWidth: true
                 text: AiService.runningJobs.length === 0 ? ""
                     : I18n.tr("%1 running in the background")
                           .arg(AiService.runningJobs.length)
                       + "  " + AiService.runningJobs.map(j => j.label).join(" · ")
                 color: Theme.accentText
-                font.family: Theme.fontFamily
                 font.pixelSize: Theme.typeLabelMedium
                 font.weight: Font.Medium
                 elide: Text.ElideRight
@@ -1353,18 +1332,16 @@ Popout {
             anchors.rightMargin: Theme.space10
             spacing: Theme.space8
 
-            Text {
+            ThemedText {
                 text: "󰠮"
                 color: Theme.accentText
-                font.family: Theme.fontFamily
                 font.pixelSize: Theme.sp(12)
             }
-            Text {
+            ThemedText {
                 Layout.fillWidth: true
                 text: I18n.tr("Skill in use: %1")
                     .arg(AiService.autoSkill ? AiService.autoSkill.name : "")
                 color: Theme.fgDim
-                font.family: Theme.fontFamily
                 font.pixelSize: Theme.typeLabelSmall
                 elide: Text.ElideRight
             }
@@ -1394,25 +1371,22 @@ Popout {
             RowLayout {
                 Layout.fillWidth: true
                 spacing: Theme.space8
-                Text {
+                ThemedText {
                     text: "󰝖"
                     color: Theme.accentText
-                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.sp(13)
                 }
-                Text {
+                ThemedText {
                     Layout.fillWidth: true
                     text: I18n.tr("Plan")
                     color: Theme.fgDim
-                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.typeLabelMedium
                     font.weight: Font.Medium
                 }
-                Text {
+                ThemedText {
                     text: AiService.todos.filter(t => t.status === "completed").length
                           + "/" + AiService.todos.length
                     color: Theme.fgMuted
-                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.typeLabelSmall
                 }
             }
@@ -1424,22 +1398,20 @@ Popout {
                     required property var modelData
                     Layout.fillWidth: true
                     spacing: Theme.space8
-                    Text {
+                    ThemedText {
                         text: todoRow.modelData.status === "completed" ? "󰄲"
                             : todoRow.modelData.status === "in_progress" ? "󰥔" : "󰄱"
                         color: todoRow.modelData.status === "completed" ? Theme.green
                              : todoRow.modelData.status === "in_progress" ? Theme.accentText
                              : Theme.fgMuted
-                        font.family: Theme.fontFamily
                         font.pixelSize: Theme.sp(12)
                     }
-                    Text {
+                    ThemedText {
                         Layout.fillWidth: true
                         text: todoRow.modelData.content
                         color: todoRow.modelData.status === "in_progress" ? Theme.fg
                              : todoRow.modelData.status === "completed" ? Theme.fgMuted
                              : Theme.fgDim
-                        font.family: Theme.fontFamily
                         font.pixelSize: Theme.typeLabelMedium
                         font.strikeout: todoRow.modelData.status === "completed"
                         elide: Text.ElideRight
@@ -1544,10 +1516,9 @@ Popout {
                         anchors.leftMargin: Theme.space8
                         anchors.rightMargin: Theme.space8
                         spacing: Theme.space8
-                        Text {
+                        ThemedText {
                             text: cmdRow.modelData.glyph
                             color: Theme.accentText
-                            font.family: Theme.fontFamily
                             font.pixelSize: Theme.sp(13)
                         }
                         Text {
@@ -1557,19 +1528,17 @@ Popout {
                             font.pixelSize: Theme.typeLabelMedium
                             font.bold: true
                         }
-                        Text {
+                        ThemedText {
                             Layout.fillWidth: true
                             text: cmdRow.modelData.desc
                             color: Theme.fgMuted
-                            font.family: Theme.fontFamily
                             font.pixelSize: Theme.typeLabelSmall
                             elide: Text.ElideRight
                         }
-                        Text {
+                        ThemedText {
                             visible: cmdRow.index === 0
                             text: "Tab"
                             color: Theme.fgMuted
-                            font.family: Theme.fontFamily
                             font.pixelSize: Theme.typeLabelSmall
                         }
                     }

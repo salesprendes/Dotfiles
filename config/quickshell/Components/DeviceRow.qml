@@ -35,30 +35,27 @@ Rectangle {
         anchors.rightMargin: Theme.space10
         spacing: Theme.space8
 
-        Text {
+        ThemedText {
             text: row.icon
             color: row.active ? row.accent : Theme.fgDim
-            font.family: Theme.fontFamily
             font.pixelSize: Theme.iconSize
         }
         ColumnLayout {
             Layout.fillWidth: true
             spacing: 0
-            Text {
+            ThemedText {
                 Layout.fillWidth: true
                 text: row.title
                 color: row.active ? Theme.fg : Theme.fgDim
-                font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontSize - 1
                 font.bold: row.active
                 elide: Text.ElideRight
             }
-            Text {
+            ThemedText {
                 Layout.fillWidth: true
                 visible: row.subtitle !== ""
                 text: row.subtitle
                 color: row.subtitleColor
-                font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontSize - 4
                 elide: Text.ElideRight
             }

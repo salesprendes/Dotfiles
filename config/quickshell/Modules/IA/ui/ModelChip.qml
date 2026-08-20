@@ -76,30 +76,27 @@ Rectangle {
                 opacity = 1
         }
 
-        Text {
+        ThemedText {
             Layout.maximumWidth: Theme.dp(170)
             text: chip.ready ? AiService.modelShort(AiService.model)
                              : I18n.tr("Choose a model")
             color: chip.ready ? Theme.fgDim : Theme.accentText
-            font.family: Theme.fontFamily
             font.pixelSize: Theme.typeLabelMedium
             font.weight: Font.Medium
             elide: Text.ElideRight
         }
-        Text {
+        ThemedText {
             visible: chip.ready
             // providerLabel y no provider.label: el servidor propio se rotula
             // con I18n, que una biblioteca pura no puede ver.
             text: AiService.providerLabel
             color: Theme.fgMuted
-            font.family: Theme.fontFamily
             font.pixelSize: Theme.typeLabelSmall
         }
-        Text {
+        ThemedText {
             text: "󰅀"
             rotation: chip.open ? 180 : 0
             color: Theme.fgMuted
-            font.family: Theme.fontFamily
             font.pixelSize: Theme.sp(11)
             Behavior on rotation {
                 NumberAnimation {

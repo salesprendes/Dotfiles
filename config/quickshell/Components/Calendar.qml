@@ -113,18 +113,16 @@ ColumnLayout {
             Row {
                 id: hdrRow
                 spacing: Theme.space4
-                Text {
+                ThemedText {
                     text: I18n.monthName(cal.viewMonth, true)
                     color: hdrMa.containsMouse && !cal.onCurrentMonth ? Theme.accent : Theme.fg
-                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSize + 2
                     font.bold: true
                     Behavior on color { ColorAnimation { duration: Theme.animFast } }
                 }
-                Text {
+                ThemedText {
                     text: cal.viewYear
                     color: Theme.fgMuted
-                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSize + 2
                 }
             }
@@ -169,12 +167,11 @@ ColumnLayout {
                     required property int index
                     width: cal.cellW
                     height: Theme.dp(20)
-                    Text {
+                    ThemedText {
                         anchors.centerIn: parent
                         text: wdCell.modelData
                         color: cal.onCurrentMonth && wdCell.index === cal.todayColumn
                                ? Theme.accent : Theme.fgMuted
-                        font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontSize - 3
                         font.bold: true
                         // El acento de la columna de hoy entra/sale fundido
@@ -224,12 +221,11 @@ ColumnLayout {
                     required property int index
                     implicitWidth: cal.wkColW
                     implicitHeight: cal.cellH
-                    Text {
+                    ThemedText {
                         anchors.centerIn: parent
                         text: wkCell.modelData
                         color: wkCell.index === cal.todayRow
                                ? Theme.accent : Theme.withAlpha(Theme.fgMuted, 0.6)
-                        font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontSize - 4
                         font.bold: wkCell.index === cal.todayRow
                         Behavior on color { ColorAnimation { duration: Theme.animNormal } }
@@ -287,14 +283,13 @@ ColumnLayout {
                              : Theme.withAlpha(Theme.surfaceHi, 0)
                         Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
 
-                        Text {
+                        ThemedText {
                             anchors.centerIn: parent
                             text: dayCell.modelData.d
                             color: dayCell.today ? Theme.bg
                                  : !dayCell.modelData.cur ? Theme.withAlpha(Theme.fgMuted, 0.45)
                                  : dayMa.containsMouse ? Theme.fg
                                  : dayCell.weekend ? Theme.fgMuted : Theme.fgDim
-                            font.family: Theme.fontFamily
                             font.pixelSize: Theme.fontSize - 1
                             font.bold: dayCell.today
                             // El número funde a la vez que el círculo.

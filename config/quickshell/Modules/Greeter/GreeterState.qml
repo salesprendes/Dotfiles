@@ -129,10 +129,6 @@ Singleton {
         for (let i = 0; i < root.sessions.length; i++)
             if (root.sessions[i].id === root._wantSession) { root.sessionIndex = i; return }
     }
-    function cycleSession(delta) {
-        if (sessions.length < 2) return
-        sessionIndex = (sessionIndex + delta + sessions.length) % sessions.length
-    }
 
     // Memoria: leer al arrancar / escribir al entrar
     FileView {

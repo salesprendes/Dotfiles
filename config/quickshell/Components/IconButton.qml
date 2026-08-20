@@ -55,11 +55,10 @@ Rectangle {
     Keys.onSpacePressed: btn.clicked()
     Keys.onEscapePressed: Globals.closeAll()
 
-    Text {
+    ThemedText {
         anchors.centerIn: parent
         text: btn.icon
         color: btn.hovered ? btn.hoverIconColor : btn.iconColor
-        font.family: Theme.fontFamily
         font.pixelSize: btn.iconPixelSize
         // El glifo funde a la vez que el fondo.
         Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }

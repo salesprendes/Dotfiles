@@ -57,13 +57,11 @@ Rectangle {
         Behavior on opacity { NumberAnimation { duration: Theme.animFast } }
     }
 
-    Text {
+    ThemedText {
         id: label
         anchors.centerIn: parent
         text: btn.text
         color: btn.primary ? Theme.bg : (btn.outlined ? Theme.accent : Theme.fgDim)
-        font.family: Theme.fontFamily
-        font.pixelSize: Theme.fontSize
         font.bold: btn.primary
     }
 

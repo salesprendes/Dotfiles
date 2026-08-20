@@ -247,11 +247,10 @@ Item {
                         ? Theme.withAlpha(Theme.fg, Theme.stateHover) : "transparent"
                     opacity: upMa.enabled ? 1 : 0.38
                     Behavior on color { ColorAnimation { duration: Theme.animFast } }
-                    Text {
+                    ThemedText {
                         anchors.centerIn: parent
                         text: "󰁝"
                         color: Theme.fgDim
-                        font.family: Theme.fontFamily
                         font.pixelSize: Theme.iconSize
                     }
                     MouseArea {
@@ -268,11 +267,10 @@ Item {
                     Layout.fillWidth: true
                     spacing: Theme.dp(2)
 
-                    Text {
+                    ThemedText {
                         Layout.fillWidth: true
                         text: I18n.tr("Choose an image")
                         color: Theme.fg
-                        font.family: Theme.fontFamily
                         font.pixelSize: Theme.typeTitleMedium
                         font.bold: true
                         elide: Text.ElideRight
@@ -292,18 +290,16 @@ Item {
                                 readonly property bool last: crumb.index === sheet.crumbs.length - 1
                                 spacing: Theme.space4
 
-                                Text {
+                                ThemedText {
                                     visible: crumb.index > 0
                                     text: "›"
                                     color: Theme.withAlpha(Theme.fgMuted, 0.7)
-                                    font.family: Theme.fontFamily
                                     font.pixelSize: Theme.typeBodySmall
                                 }
-                                Text {
+                                ThemedText {
                                     text: crumb.modelData.name
                                     color: crumb.last ? Theme.fgDim
                                          : crumbMa.containsMouse ? Theme.accent : Theme.fgMuted
-                                    font.family: Theme.fontFamily
                                     font.pixelSize: Theme.typeBodySmall
                                     font.underline: crumbMa.containsMouse && !crumb.last
                                     Behavior on color { ColorAnimation { duration: Theme.animFast } }
@@ -322,13 +318,12 @@ Item {
 
                         Item { Layout.fillWidth: true }
 
-                        Text {
+                        ThemedText {
                             text: sheet.imageCount === 1
                                 ? I18n.tr("1 image")
                                 : I18n.tr("%1 images").arg(sheet.imageCount)
                             visible: sheet.imageCount > 0
                             color: Theme.fgMuted
-                            font.family: Theme.fontFamily
                             font.pixelSize: Theme.typeLabelSmall
                         }
                     }
@@ -342,11 +337,10 @@ Item {
                     color: closeMa.containsMouse
                         ? Theme.withAlpha(Theme.fg, Theme.stateHover) : "transparent"
                     Behavior on color { ColorAnimation { duration: Theme.animFast } }
-                    Text {
+                    ThemedText {
                         anchors.centerIn: parent
                         text: "󰅖"
                         color: Theme.fgDim
-                        font.family: Theme.fontFamily
                         font.pixelSize: Theme.iconSize
                     }
                     MouseArea {
@@ -379,12 +373,11 @@ Item {
 
                     // Rótulo en versalitas espaciadas, igual que las cabeceras de
                     // las tarjetas de ajustes: ata el selector al resto del panel.
-                    Text {
+                    ThemedText {
                         Layout.leftMargin: Theme.space12
                         Layout.bottomMargin: Theme.space4
                         text: I18n.tr("Places")
                         color: Theme.fgDim
-                        font.family: Theme.fontFamily
                         font.pixelSize: Theme.typeLabelSmall
                         font.bold: true
                         font.capitalization: Font.AllUppercase
@@ -411,17 +404,15 @@ Item {
                                 anchors.leftMargin: Theme.space12
                                 anchors.rightMargin: Theme.space10
                                 spacing: Theme.space10
-                                Text {
+                                ThemedText {
                                     text: place.modelData.glyph
                                     color: place.here ? Theme.accent : Theme.fgDim
-                                    font.family: Theme.fontFamily
                                     font.pixelSize: Theme.iconSize
                                 }
-                                Text {
+                                ThemedText {
                                     Layout.fillWidth: true
                                     text: place.modelData.name
                                     color: place.here ? Theme.fg : Theme.fgDim
-                                    font.family: Theme.fontFamily
                                     font.pixelSize: Theme.typeBodyMedium
                                     font.bold: place.here
                                     elide: Text.ElideRight
@@ -554,11 +545,10 @@ Item {
                                             visible: cell.fileIsDir
                                             radius: Theme.shapeSm
                                             color: Theme.withAlpha(Theme.accent, Theme.isDark ? 0.12 : 0.16)
-                                            Text {
+                                            ThemedText {
                                                 anchors.centerIn: parent
                                                 text: "󰉋"
                                                 color: Theme.accent
-                                                font.family: Theme.fontFamily
                                                 font.pixelSize: Math.round(thumbBox.height * 0.40)
                                             }
                                         }
@@ -595,12 +585,11 @@ Item {
                                             // Fichero que no carga (roto, o formato
                                             // que Qt no lee). Se dice, en vez de
                                             // dejar un cuadro vacío.
-                                            Text {
+                                            ThemedText {
                                                 anchors.centerIn: parent
                                                 visible: thumb.status === Image.Error
                                                 text: "󰋔"
                                                 color: Theme.fgMuted
-                                                font.family: Theme.fontFamily
                                                 font.pixelSize: Theme.iconSize * 2
                                             }
                                         }
@@ -632,7 +621,7 @@ Item {
                                         }
                                     }
 
-                                    Text {
+                                    ThemedText {
                                         Layout.fillWidth: true
                                         // Sin extensión: a tres columnas
                                         // 'apple_gruvbox.jpg' se cortaba en
@@ -642,7 +631,6 @@ Item {
                                         text: cell.fileBaseName
                                         horizontalAlignment: Text.AlignHCenter
                                         color: cell.sel ? Theme.fg : Theme.fgDim
-                                        font.family: Theme.fontFamily
                                         font.pixelSize: Theme.typeLabelSmall
                                         font.bold: cell.sel
                                         elide: Text.ElideMiddle
@@ -683,19 +671,17 @@ Item {
                         spacing: Theme.space6
                         visible: folderModel.status === FolderListModel.Ready && folderModel.count === 0
 
-                        Text {
+                        ThemedText {
                             Layout.alignment: Qt.AlignHCenter
                             text: "󰋩"
                             color: Theme.withAlpha(Theme.fgMuted, 0.55)
-                            font.family: Theme.fontFamily
                             font.pixelSize: Theme.dp(40)
                         }
-                        Text {
+                        ThemedText {
                             Layout.fillWidth: true
                             horizontalAlignment: Text.AlignHCenter
                             text: I18n.tr("No images here. Try another folder.")
                             color: Theme.fgMuted
-                            font.family: Theme.fontFamily
                             font.pixelSize: Theme.typeBodyMedium
                             wrapMode: Text.WordWrap
                         }
@@ -717,13 +703,15 @@ Item {
                     diameter: Theme.dp(40)
                     source: sheet.selected
                     initial: "?"
+                    tint: Theme.accent
+                    fontFamily: Theme.fontFamily
+                    isDark: Theme.isDark
                 }
 
-                Text {
+                ThemedText {
                     Layout.fillWidth: true
                     text: sheet.selected === "" ? "" : sheet.selected.split("/").pop()
                     color: Theme.fgDim
-                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.typeBodySmall
                     elide: Text.ElideMiddle
                 }

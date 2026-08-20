@@ -58,14 +58,12 @@ Scope {
             // arriba y completo, no recortado a una línea.
             subheading: ""
 
-            Text {
+            ThemedText {
                 Layout.fillWidth: true
                 visible: text !== ""
                 text: dialog.flow?.message ?? ""
                 color: Theme.fgDim
                 wrapMode: Text.WordWrap
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontSize
             }
 
             // Campo de respuesta. 'responseVisible' lo decide polkit: casi
@@ -96,13 +94,12 @@ Scope {
             }
 
             // Mensaje de PAM: error ("Authentication failure") o informativo.
-            Text {
+            ThemedText {
                 Layout.fillWidth: true
                 visible: text !== ""
                 text: dialog.flow?.supplementaryMessage ?? ""
                 color: (dialog.flow?.supplementaryIsError ?? false) ? Theme.red : Theme.fgMuted
                 wrapMode: Text.WordWrap
-                font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontSize - 2
             }
 

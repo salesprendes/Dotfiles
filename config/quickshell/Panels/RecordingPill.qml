@@ -140,12 +140,11 @@ PanelWindow {
                 horizontalAlignment: Text.AlignHCenter
             }
 
-            Text {
+            ThemedText {
                 Layout.fillWidth: true
                 visible: ScreenCapture.recordPillExpanded
                 text: ScreenCapture.isPaused ? "Pausada" : "Grabando"
                 color: Theme.fgMuted
-                font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontSize - 2
                 elide: Text.ElideRight
             }
@@ -193,11 +192,10 @@ PanelWindow {
         border.color: Theme.withAlpha(btn.accent, 0.55)
         Behavior on color { ColorAnimation { duration: Theme.animFast } }
 
-        Text {
+        ThemedText {
             anchors.centerIn: parent
             text: btn.icon
             color: btn.hovered ? Theme.bg : btn.accent
-            font.family: Theme.fontFamily
             font.pixelSize: Theme.iconSize
         }
 

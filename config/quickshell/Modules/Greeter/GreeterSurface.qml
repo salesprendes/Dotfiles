@@ -33,6 +33,35 @@ FloatingWindow {
             from: 1.06; to: 1.0; duration: 1200; easing.type: Easing.OutCubic
         }
     }
+    // ── Extractor de paleta dinámica ─────────────────────────────────────────
+    // Mismo mecanismo que la barra de la sesión (Bar.qml): un Canvas fuera del
+    // viewport —su búfer pinta igual— reduce el fondo a 64×36 px y Theme deriva
+    // de ahí la paleta completa. Solo en el monitor principal: el fondo es el
+    // mismo en todos y Theme es un singleton, así que basta calcularlo una vez.
+    // Vive aquí y no en Theme porque un Canvas necesita una escena para pintar.
+    Loader {
+        active: win.primary
+        sourceComponent: Canvas {
+            id: paletteCanvas
+            x: -width; y: -height
+            width: 64; height: 36
+            renderTarget: Canvas.Image
+            renderStrategy: Canvas.Immediate
+
+            readonly property url src: "file://" + Config.wallpaper
+            Component.onCompleted: loadImage(src)
+            onImageLoaded: requestPaint()
+            onPaint: {
+                if (!isImageLoaded(src))
+                    return
+                const ctx = getContext("2d")
+                ctx.drawImage(src, 0, 0, width, height)
+                Theme.applyFromPixels(ctx.getImageData(0, 0, width, height).data)
+                unloadImage(src)
+            }
+        }
+    }
+
     Rectangle {
         id: scrim
         anchors.fill: parent
@@ -71,7 +100,7 @@ FloatingWindow {
             anchors.horizontalCenter: parent.horizontalCenter
             text: Qt.formatDateTime(clock.date, "HH:mm")
             color: Theme.fg
-            font.family: Theme.font
+            font.family: Theme.fontFamily
             // Escala con la altura de la pantalla (tope: tamaño de diseño).
             font.pixelSize: Math.max(Theme.sp(30), Math.min(Theme.sp(64), Math.round(win.height * 0.075)))
             font.bold: true
@@ -80,7 +109,7 @@ FloatingWindow {
             anchors.horizontalCenter: parent.horizontalCenter
             text: I18n.longDate(clock.date)
             color: Theme.fgDim
-            font.family: Theme.font
+            font.family: Theme.fontFamily
             font.pixelSize: Math.max(Theme.sp(11), Math.min(Theme.sp(15), Math.round(win.height * 0.022)))
         }
     }
@@ -135,9 +164,9 @@ FloatingWindow {
         Rectangle {
             anchors.fill: parent
             radius: Theme.dp(18)
-            color: Theme.alpha(Theme.surface, 0.72)
+            color: Theme.withAlpha(Theme.surface, 0.72)
             border.width: 1
-            border.color: Theme.alpha(Theme.overlay, 0.45)
+            border.color: Theme.withAlpha(Theme.overlay, 0.45)
             antialiasing: true
         }
 
@@ -150,14 +179,14 @@ FloatingWindow {
             opacity: canBack ? 1 : 0
             visible: opacity > 0.02
             enabled: canBack
-            color: backMa.containsMouse ? Theme.alpha(Theme.surfaceHi, 0.9) : "transparent"
+            color: backMa.containsMouse ? Theme.withAlpha(Theme.surfaceHi, 0.9) : "transparent"
             Behavior on opacity { NumberAnimation { duration: 220 } }
             Behavior on color { ColorAnimation { duration: 120 } }
             Text {
                 anchors.centerIn: parent
                 text: "󰁍"
                 color: backMa.containsMouse ? Theme.accent : Theme.fgDim
-                font.family: Theme.font
+                font.family: Theme.fontFamily
                 font.pixelSize: Theme.sp(16)
             }
             MouseArea {

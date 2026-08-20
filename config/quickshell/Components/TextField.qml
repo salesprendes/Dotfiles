@@ -36,7 +36,7 @@ ColumnLayout {
 
     spacing: Theme.space2
 
-    Text {
+    ThemedText {
         visible: field.label !== ""
         text: field.label
         // Etiqueta del campo: en M3 es un 'label', no un texto de lectura, y
@@ -44,7 +44,6 @@ ColumnLayout {
         // qué está editando sin buscar el cursor.
         color: field.invalid ? Theme.red
              : input.activeFocus ? Theme.accent : Theme.fgMuted
-        font.family: Theme.fontFamily
         font.pixelSize: Theme.typeLabelMedium
         Behavior on color { ColorAnimation { duration: Theme.animFast } }
     }
@@ -89,11 +88,10 @@ ColumnLayout {
             anchors.rightMargin: Theme.space10
             spacing: Theme.space8
 
-            Text {
+            ThemedText {
                 visible: field.leftIcon !== ""
                 text: field.leftIcon
                 color: Theme.fgMuted
-                font.family: Theme.fontFamily
                 font.pixelSize: Theme.iconSize
             }
 
@@ -124,13 +122,12 @@ ColumnLayout {
             }
 
             // Mostrar/ocultar (solo en modo contraseña).
-            Text {
+            ThemedText {
                 id: eye
                 property bool shown: false
                 visible: field.password
                 text: shown ? "󰈉" : "󰈈"
                 color: Theme.fgMuted
-                font.family: Theme.fontFamily
                 font.pixelSize: Theme.iconSize
                 MouseArea {
                     anchors.fill: parent

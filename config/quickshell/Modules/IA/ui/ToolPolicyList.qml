@@ -116,12 +116,11 @@ ColumnLayout {
                         Layout.fillWidth: true
                         spacing: Theme.space2
 
-                        Text {
+                        ThemedText {
                             Layout.fillWidth: true
                             Layout.topMargin: grupo.index === 0 ? 0 : Theme.space6
                             text: grupo.modelData.label.toUpperCase()
                             color: Theme.fgMuted
-                            font.family: Theme.fontFamily
                             font.pixelSize: Theme.typeLabelSmall
                             font.bold: true
                             font.letterSpacing: Theme.typeLabelTracking
@@ -236,13 +235,12 @@ ColumnLayout {
             NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic }
         }
 
-        Text {
+        ThemedText {
             anchors.centerIn: parent
             text: pill.policy === "auto" ? I18n.tr("Auto")
                 : pill.policy === "off" ? I18n.tr("Off")
                                         : I18n.tr("Ask")
             color: pill.tinte
-            font.family: Theme.fontFamily
             font.pixelSize: Theme.typeLabelSmall
             font.bold: true
         }
