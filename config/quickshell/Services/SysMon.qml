@@ -139,7 +139,7 @@ Singleton {
     // (uptime). triggeredOnStart: al abrir cualquiera refresca al momento.
     Timer {
         interval: 5000
-        running: Settings.showSysmon || Globals.sysMonOpen
+        running: BarCatalog.has(Settings.barLayout, "sysmon") || Globals.sysMonOpen
                  || Globals.dashboardOpen || Globals.controlCenterOpen
         repeat: true
         triggeredOnStart: true

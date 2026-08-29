@@ -34,6 +34,14 @@ PanelWindow {
     // devuelve true si ha consumido la tecla; sin declararla, ESC cierra como
     // siempre.
     property var escapeAction: null
+    // ←/→ saltan al panel del widget vecino de la barra, sin cerrar y volver a
+    // abrir. Es el gesto de una barra de pestañas. Un panel que use las flechas
+    // para lo suyo lo apaga.
+    //
+    // No hace falta excluir los buscadores a mano: 'Keys' en la tarjeta solo ve
+    // lo que sus hijos NO han consumido, y un campo de texto con el foco se
+    // queda las flechas para mover el cursor.
+    property bool switchWithArrows: true
     readonly property int openAnimDuration: Settings.popoutAnimationMs
     // El cierre va un punto más ágil que la apertura: lo que entra se
     // disfruta, lo que se despide no debe hacerse esperar.
@@ -48,7 +56,12 @@ PanelWindow {
     readonly property bool showsHere: Globals.openedOnMonitor === "" || !screen
                                       || screen.name === Globals.openedOnMonitor
 
-    visible: (shown && showsHere) || openProgress > 0
+    visible: ((shown && showsHere) || openProgress > 0) && !remapGuard.remapping
+    // La mayoría de popouts nacen y mueren con su apertura, así que verían la
+    // posición nueva por sí solos; pero los que se mantienen vivos (el panel de
+    // IA usa keepAlive) y cualquiera que estuviera abierto durante un cambio de
+    // dock sí necesitan el remapeo. Ver Components/ScreenMoveRemap.qml.
+    ScreenMoveRemap { id: remapGuard; window: win }
     color: "transparent"
     // Ignore (no 'exclusiveZone: 0', que forzaría Normal y empujaría la ventana bajo
     // la barra). Así cubre desde y=0 y la tarjeta queda anclada justo bajo la barra.
@@ -151,6 +164,16 @@ PanelWindow {
             if (win.escapeAction && win.escapeAction())
                 return
             Globals.closeAll()
+        }
+
+        // Si no hay a dónde saltar (un solo panel en la barra, o este no tiene
+        // widget) el evento se deja pasar en vez de tragárselo: quien esté
+        // debajo puede querer la flecha.
+        Keys.onLeftPressed: (event) => {
+            event.accepted = win.switchWithArrows && Globals.switchPanel(-1)
+        }
+        Keys.onRightPressed: (event) => {
+            event.accepted = win.switchWithArrows && Globals.switchPanel(1)
         }
 
         // Absorbe clicks para que no cierre.

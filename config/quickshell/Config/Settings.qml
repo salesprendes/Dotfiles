@@ -43,7 +43,6 @@ Singleton {
     // Proveedor activo ("gemini" | "openrouter" | "ollama") y, por proveedor,
     // el modelo y su credencial. Las claves se guardan en settings.json en
     // claro, como el resto de ajustes: es un archivo local del usuario.
-    property bool   showAi: true        // icono del asistente en la barra
     property string aiProvider: "gemini"
     property string aiModelGemini: "gemini-2.5-flash"
     property string aiModelOpenrouter: "qwen/qwen3-30b-a3b:free"
@@ -422,14 +421,51 @@ Singleton {
     // este estado.
     property bool   caffeine: false
 
-    // Barra (visibilidad de widgets)
-    property bool   showTray: true
-    property bool   showSysmon: true
-    property bool   showBattery: true
-    property bool   showClipboard: true
-    property bool   showNotifications: true
-    property bool   showPowerProfile: true
-    property bool   showCaffeine: false
+    // Emojis usados últimamente, los más recientes primero. Se guardan porque
+    // la gracia de un selector de emojis es no tener que buscar dos veces el
+    // mismo: casi todo el uso real son las mismas veinte caras.
+    property var emojiRecent: []
+
+    // ── Bloqueo de pantalla ──────────────────────────────────────────────────
+    // "shell"    → la pantalla de bloqueo propia (Services/Lock.qml), con el
+    //              mismo tema, paleta e idioma que el resto.
+    // "hyprlock" → delegar en hyprlock, como se hacía antes.
+    // Si el servicio PAM elegido no existe, el shell cae a hyprlock por su
+    // cuenta aunque aquí ponga "shell": ver Services/Lock.qml.
+    property string lockBackend: "shell"
+    // Servicio de /etc/pam.d/ con el que autenticar. Vacío = automático
+    // (hyprlock si está, si no login).
+    property string lockPamService: ""
+
+    // Qué enseña la pantalla de bloqueo además del campo de contraseña. Cada
+    // bloque se puede apagar por separado: una pantalla de bloqueo es lo que
+    // ve quien pase por delante de tu mesa, y no todo el mundo quiere que ahí
+    // salga qué está escuchando o dónde vive.
+    property bool   lockShowMedia: true          // reproductor y sus controles
+    property bool   lockShowWeather: true        // ciudad y temperatura
+    property bool   lockShowStatus: true         // red y batería
+    property bool   lockShowSessionButtons: true // suspender, reiniciar, apagar
+    // Desenfoque del fondo, 0 = nítido. Es un multiplicador sobre el radio
+    // máximo, no píxeles: así se ve igual en 1080p que en 4K.
+    property real   lockBlur: 0.75
+    // Oscurecido del fondo por encima del desenfoque.
+    property real   lockDim: 0.45
+
+    // ── Disposición de la barra ──────────────────────────────────────────────
+    // Qué widgets se ven, en qué sección y en qué orden. Forma:
+    //   { "left": [{"id":"launcher"}, …], "center": [...], "right": [...] }
+    // El catálogo de ids vive en Config/BarCatalog.qml.
+    //
+    // Sustituye a siete booleanos sueltos (showTray, showSysmon, showBattery,
+    // showClipboard, showNotifications, showPowerProfile, showCaffeine) más
+    // showAi y weatherShowInBar. Aquellos solo podían encender y apagar: el
+    // ORDEN estaba cableado en el QML de la barra, así que "quiero la batería
+    // antes que el reloj" no tenía respuesta posible. Y al ser ajustes
+    // independientes del componente que gobernaban, era fácil que uno se
+    // quedara sin su interruptor (el clima acabó con el suyo en otra página).
+    // La migración v2 convierte los valores viejos, así que nadie pierde su
+    // configuración al actualizar.
+    property var    barLayout: BarCatalog.defaultLayout()
 
     // Reloj
     property bool   clock24h: true
@@ -447,7 +483,6 @@ Singleton {
     property bool   weatherShowWind: false
     property bool   weatherShowRain: false     // % de lluvia en el pronóstico
     property bool   weatherShowSun: false      // amanecer y atardecer
-    property bool   weatherShowInBar: false    // píldora de clima en la barra
 
     // Notificaciones
     property bool   notifPopupsEnabled: true
@@ -539,7 +574,6 @@ Singleton {
     // resolvedAccent y reset() lo recalcula al final.
     readonly property var _defaults: ({
         "themeName": "dynamic", "accentName": "theme", "darkMode": true,
-        "showAi": true,
         "aiProvider": "gemini", "aiModelGemini": "gemini-2.5-flash",
         "aiModelOpenrouter": "qwen/qwen3-30b-a3b:free", "aiModelOllama": "qwen3",
         "aiKeyGemini": "", "aiKeyOpenrouter": "", "aiOllamaUrl": "http://127.0.0.1:11434",
@@ -561,15 +595,18 @@ Singleton {
         "fontAntialias": true, "fontHinting": true, "fontHintstyle": "hintslight",
         "fontRgba": "rgb", "fontLcdfilter": "lcddefault", "fontEmbeddedbitmap": false,
         "language": "es",
-        "showTray": true, "showSysmon": true, "showBattery": true, "showClipboard": true,
+        "barLayout": BarCatalog.defaultLayout(),
+        "lockBackend": "shell", "lockPamService": "",
+        "lockShowMedia": true, "lockShowWeather": true, "lockShowStatus": true,
+        "lockShowSessionButtons": true, "lockBlur": 0.75, "lockDim": 0.45,
+        "emojiRecent": [],
         "caffeine": false,
         "templatesOn": true, "gtkThemingEnabled": true, "hyprlandThemingEnabled": true, "templatesEnabled": ({}),
         "numlockOn": false,
-        "showNotifications": true, "showPowerProfile": true, "showCaffeine": false,
         "clock24h": true, "clockShowSeconds": false, "clockShowDate": true,
         "weatherEnabled": true, "weatherLocation": "", "weatherMetric": true, "weatherRefreshMin": 30,
         "weatherShowForecast": true, "weatherForecastDays": 5, "weatherShowDetails": true, "weatherShowWind": false,
-        "weatherShowRain": false, "weatherShowSun": false, "weatherShowInBar": false,
+        "weatherShowRain": false, "weatherShowSun": false,
         "notifPopupsEnabled": true, "notifTimeout": 5, "notifTimeoutLow": 4, "notifTimeoutCritical": 0,
         "notifMaxVisible": 4, "notifPosition": "tr",
         "notifShowProgress": true, "notifCompact": false,
@@ -600,10 +637,12 @@ Singleton {
         "batteryLowThreshold": [5, 50], "batteryCriticalThreshold": [1, 30],
         "osdTimeout": [0.5, 6.0],
         "wallpaperTransitionDuration": [0.1, 5.0],
-        "panelBackdropDim": [0.0, 0.7], "wallpaperAutoMin": [0, 1440]
+        "panelBackdropDim": [0.0, 0.7], "wallpaperAutoMin": [0, 1440],
+        "lockBlur": [0.0, 1.0], "lockDim": [0.0, 0.9]
     })
     readonly property var _enums: ({
         "language": ["en", "es", "ca"],
+        "lockBackend": ["shell", "hyprlock"],
         "notifPosition": ["tl", "tr", "bl", "br"],
         "osdPosition": ["top", "bottom"],
         "barPosition": ["top", "bottom"],
@@ -627,9 +666,21 @@ Singleton {
         // accentColor: cadena hex de color.
         if (k === "accentColor")
             return (typeof val === "string" && /^#?[0-9a-fA-F]{3,8}$/.test(val)) ? val : undefined
+        if (k === "emojiRecent") {
+            if (!Array.isArray(val)) return undefined
+            return val.filter(x => typeof x === "string" && x !== "").slice(0, 40)
+        }
         if (k === "mutedNotificationApps") {
             if (!Array.isArray(val)) return undefined
             return val.every(x => typeof x === "string") ? val : undefined
+        }
+        // La disposición de la barra la sanea su catálogo: descarta ids que
+        // ya no existen y duplicados de widgets que solo admiten una instancia,
+        // y garantiza las tres secciones. Es lo que protege de un settings.json
+        // editado a mano o traído de una versión con otros widgets.
+        if (k === "barLayout") {
+            if (!val || typeof val !== "object" || Array.isArray(val)) return undefined
+            return BarCatalog.sanitize(val)
         }
         // Objetos JSON anidados (el saneo fino lo hace su consumidor).
         if (k === "screenCapture" || k === "dynamicPalette" || k === "weatherCache")
@@ -649,11 +700,101 @@ Singleton {
         return val
     }
 
+    // ── Versionado del archivo ───────────────────────────────────────────────
+    //
+    // settings.json lleva "_version". Sin él, cambiar la FORMA de un ajuste
+    // rompe en silencio las configuraciones ya guardadas: load() lee clave a
+    // clave y lo que no reconoce simplemente lo ignora, así que el ajuste
+    // vuelve a su valor de fábrica sin avisar y el save() del final borra el
+    // rastro del valor viejo. El usuario ve "se me han reseteado cosas" y no
+    // hay forma de saber cuáles.
+    //
+    // Con versión y migraciones, un cambio de forma se declara UNA vez y las
+    // configuraciones antiguas se convierten al cargar.
+    readonly property int schemaVersion: 2
+
+    // Cada entrada transforma el objeto JSON CRUDO —antes del saneado por
+    // clave— desde la versión anterior hasta 'to'. Se aplican en orden, así que
+    // un archivo de v0 pasa por todas. Mutan el objeto que reciben.
+    readonly property var _migrations: [
+        {
+            to: 2,
+            // Los siete booleanos de visibilidad de la barra, más showAi y
+            // weatherShowInBar, pasan a ser presencia en barLayout. Se respeta
+            // lo que el usuario tenía apagado; el ORDEN es el de fábrica,
+            // porque en v1 no había orden que preservar.
+            apply: function (o) {
+                if (o.barLayout !== undefined)
+                    return                       // ya migrado a mano
+                const on = function (key, byDefault) {
+                    return typeof o[key] === "boolean" ? o[key] : byDefault
+                }
+                const layout = BarCatalog.defaultLayout()
+                const drop = []
+                if (!on("showTray", true))          drop.push("tray")
+                if (!on("showSysmon", true))        drop.push("sysmon")
+                if (!on("showBattery", true))       drop.push("battery")
+                if (!on("showClipboard", true))     drop.push("clipboard")
+                if (!on("showNotifications", true)) drop.push("notifications")
+                if (!on("showPowerProfile", true))  drop.push("power")
+                if (!on("showAi", true))            drop.push("ai")
+                for (const sec of BarCatalog.sections)
+                    layout[sec] = layout[sec].filter(e => drop.indexOf(e.id) === -1)
+                // Estos dos venían apagados de fábrica y NO están en el layout
+                // por defecto: se añaden solo si el usuario los había encendido.
+                // El clima iba entre el reproductor y el reloj, que es donde lo
+                // ponía el QML de la barra.
+                if (on("showCaffeine", false))
+                    layout.right.splice(Math.max(0, layout.right.length - 3), 0,
+                                        { id: "caffeine" })
+                if (on("weatherShowInBar", false))
+                    layout.center.splice(Math.min(1, layout.center.length), 0,
+                                         { id: "weather" })
+                o.barLayout = layout
+            }
+        }
+    ]
+
+    // Lleva el objeto crudo a la versión actual. Devuelve la versión de la que
+    // venía, para poder avisar de lo que se ha hecho.
+    function migrate(o) {
+        // Sin marca de versión es un archivo anterior al versionado (v0/v1:
+        // misma forma, el versionado llegó después).
+        let from = (typeof o._version === "number" && isFinite(o._version))
+                 ? Math.floor(o._version) : 1
+        if (from >= schemaVersion)
+            return from
+        for (const m of _migrations) {
+            if (m.to <= from)
+                continue
+            try {
+                m.apply(o)
+            } catch (e) {
+                console.warn("Settings: falló la migración a v" + m.to + ":", e)
+            }
+            from = m.to
+        }
+        console.log("Settings: configuración migrada a v" + schemaVersion)
+        return from
+    }
+
     function load() {
         const t = file.text()
         if (t && t.trim() !== "") {
             try {
                 const o = JSON.parse(t)
+                // Un archivo MÁS NUEVO que este shell (se volvió a una versión
+                // anterior) se carga igual —el saneado por clave protege de
+                // valores raros— pero el save() del final lo reescribiría con
+                // la forma vieja, perdiendo lo que aquí no se entiende. Se
+                // guarda una copia antes de tocarlo.
+                if (typeof o._version === "number" && o._version > schemaVersion) {
+                    console.warn("Settings: el archivo es de v" + o._version
+                                 + " y este shell entiende hasta v" + schemaVersion
+                                 + ". Se guarda copia en settings.json.bak")
+                    Quickshell.execDetached(["cp", "--", file.path, file.path + ".bak"])
+                }
+                migrate(o)
                 for (const k of _keys) {
                     if (o[k] === undefined || o[k] === null) continue
                     const v = sanitize(k, o[k])
@@ -690,6 +831,9 @@ Singleton {
     function save() {
         if (!_loaded) return
         const o = {}
+        // Primera clave del archivo a propósito: quien lo abra a mano ve de
+        // qué versión es sin bucear.
+        o._version = schemaVersion
         for (const k of _keys) o[k] = s[k]
         // accentColor es un QColor: serializado tal cual sería un objeto que
         // sanitize() rechaza al cargar. Se persiste como "#rrggbb".
@@ -709,6 +853,12 @@ Singleton {
                  : v
         }
         accentColor = resolvedAccent
+        // Aparte del bucle: la copia de arriba es superficial y compartiría
+        // los ARRAYS de secciones con el mapa de defaults. Hoy nadie los muta
+        // in situ (BarCatalog siempre devuelve objetos nuevos), pero un
+        // descuido futuro corrompería los valores de fábrica de forma
+        // silenciosa y para toda la sesión.
+        barLayout = BarCatalog.defaultLayout()
     }
 
     // Claves que casi siempre difieren de su "valor por defecto" recién

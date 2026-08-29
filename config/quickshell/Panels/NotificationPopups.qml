@@ -38,6 +38,10 @@ PanelWindow {
     // notificaciones, lanzador, etc.); las notificaciones siguen llegando
     // al centro de notificaciones.
     visible: popupModel.count > 0 && Settings.notifPopupsEnabled && Globals.openPanel === ""
+             && !remapGuard.remapping
+    // Superficie de vida larga: se remapea si el monitor cambia de sitio en el
+    // layout. Ver Components/ScreenMoveRemap.qml.
+    ScreenMoveRemap { id: remapGuard; window: popups }
     color: "transparent"
     exclusionMode: ExclusionMode.Ignore
     // 360 px de ancho de tarjeta.

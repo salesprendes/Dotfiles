@@ -1,7 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
 import Quickshell
-import Quickshell.Services.Mpris
 import Quickshell.Widgets
 import qs.Components
 import qs.Config
@@ -26,15 +25,16 @@ Popout {
 
     // Con el panel oculto basta precisión de minuto (sin tick por segundo).
     SystemClock { id: clock; precision: dash.shown ? SystemClock.Seconds : SystemClock.Minutes }
-    // Selección del reproductor activo
-    readonly property var players: Mpris.players?.values ?? []
-    readonly property var player: {
-        if (players.length === 0) return null
-        for (let i = 0; i < players.length; i++)
-            if (players[i].isPlaying) return players[i]
-        return players[0]
-    }
-    readonly property bool hasMedia: player !== null
+    // Selección del reproductor activo. La decide Services/Media.qml, no este
+    // archivo: la misma regla estaba escrita aquí y en Bar/MediaWidget.qml, y
+    // las dos copias ya habían divergido — la barra exigía metadatos y esto se
+    // conformaba con que existiera un reproductor, así que el fantasma que deja
+    // el navegador abierto pintaba aquí una tarjeta «Sin título» permanente.
+    // 'players' es la lista YA filtrada: el selector de más abajo no debe
+    // ofrecer cambiar a un reproductor que no tiene nada detrás.
+    readonly property var players: Media.players
+    readonly property var player: Media.active
+    readonly property bool hasMedia: Media.hasMedia
 
     property real displayPos: 0
     Timer {

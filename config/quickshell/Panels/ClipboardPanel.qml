@@ -14,6 +14,16 @@ Popout {
     shown: Globals.clipboardOpen
     property int selectedIndex: 0
 
+    // Filtro del hover fantasma. Al escribir en el buscador, la lista se
+    // refiltra y las filas cruzan por debajo del cursor PARADO: cada una
+    // emitía 'entered' y la selección saltaba a la que quedase encima,
+    // pisando la que se estaba eligiendo con las flechas. Ver
+    // Components/PointerMoveGate.qml.
+    PointerMoveGate {
+        id: hoverGate
+        referenceItem: historyList
+    }
+
     // Estado y animación del vaciado (alto del cuerpo incluido), compartidos
     // con el centro de notificaciones.
     ClearableListState {
@@ -34,6 +44,10 @@ Popout {
         const count = Clipboard.filteredEntries.length
         if (count <= 0)
             return
+        // Mover con el teclado desplaza la lista bajo el ratón: se rearma el
+        // filtro para que el 'positionChanged' que eso provoca no se
+        // interprete como que el usuario ha movido el puntero.
+        hoverGate.reset()
         selectedIndex = Math.max(0, Math.min(count - 1, selectedIndex + delta))
         historyList.currentIndex = selectedIndex
         historyList.positionViewAtIndex(selectedIndex, ListView.Contain)
@@ -48,6 +62,7 @@ Popout {
             Clipboard.search = ""
             searchInput.text = ""
             selectedIndex = 0
+            hoverGate.reset()
             Clipboard.refresh()
             clearState.refreshBodyHeight()
             focusTimer.restart()
@@ -61,6 +76,7 @@ Popout {
                 ? Math.min(panel.selectedIndex, Clipboard.filteredEntries.length - 1)
                 : -1
             historyList.currentIndex = panel.selectedIndex
+            hoverGate.reset()
             clearState.refreshBodyHeight()
             // Remedida cuando la transición de recolocación ha asentado: con
             // ella en marcha, contentHeight puede no ser aún el definitivo.
@@ -304,7 +320,12 @@ Popout {
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
                     acceptedButtons: Qt.LeftButton
-                    onEntered: panel.selectedIndex = index
+                    // 'positionChanged' filtrado, no 'entered': ver
+                    // hoverGate arriba.
+                    onPositionChanged: (m) => {
+                        if (hoverGate.moved(rowMa, m))
+                            panel.selectedIndex = row.index
+                    }
                     onClicked: Clipboard.copy(modelData)
                 }
 

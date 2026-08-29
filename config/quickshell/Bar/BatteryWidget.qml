@@ -8,7 +8,7 @@ Pill {
     id: root
 
     // Solo en portátiles (con batería) y si está activado en ajustes.
-    visible: Battery.present && Settings.showBattery
+    shown: Battery.present
 
     readonly property color levelColor:
         Battery.percent <= 15 ? Theme.red

@@ -38,10 +38,11 @@ SettingsPage {
         SwitchRow { glyph: "󰖙"; skey: "weatherShowSun"; label: I18n.tr("Sunrise and sunset")
             checked: Settings.weatherShowSun
             onToggled: Settings.weatherShowSun = !Settings.weatherShowSun }
-        SwitchRow { glyph: "󰕰"; skey: "weatherShowInBar"; label: I18n.tr("Show in the bar")
-            desc: I18n.tr("Keeps the weather updated with the panel closed")
-            checked: Settings.weatherShowInBar
-            onToggled: Settings.weatherShowInBar = !Settings.weatherShowInBar }
+        // "Mostrar en la barra" ya no vive aquí: el clima es un widget más y
+        // se pone o se quita desde el editor de la barra, como todos.
+        Hint {
+            text: I18n.tr("To show the weather in the bar, add its widget from Settings ▸ Bar.")
+        }
         TextField {
             skey: "weatherLocation"
             Layout.fillWidth: true

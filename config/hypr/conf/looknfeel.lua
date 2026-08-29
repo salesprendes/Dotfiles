@@ -142,6 +142,18 @@ hl.config({
         -- monitor con Hyprland y quita micro-tirones en juegos/vídeo. Modo 2 y no 1
         -- para evitar el parpadeo que da la iGPU al aplicar VRR en el escritorio.
         vrr = 2,
+
+        -- RED DE SEGURIDAD DEL BLOQUEO, y no es teórica. La pantalla de bloqueo
+        -- la sirve ahora Quickshell (ext-session-lock). Si el shell se muere con
+        -- la sesión bloqueada —un fallo al recargar la configuración, un cuelgue
+        -- del driver al despertar—, Hyprland se queda bloqueado con la pantalla
+        -- en negro y SIN nadie que pueda pedir el desbloqueo: la única salida
+        -- sería un TTY.
+        --
+        -- Con esto, un bloqueador nuevo puede reengancharse a la sesión ya
+        -- bloqueada, así que basta con que el shell vuelva a arrancar. No
+        -- debilita el bloqueo: para desbloquear sigue haciendo falta PAM.
+        allow_session_lock_restore = true,
     },
 })
 

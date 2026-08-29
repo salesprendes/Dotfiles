@@ -17,6 +17,7 @@ Singleton {
         "notify-send", "jq", "hyprctl", "pactl",
         "kitty", "alacritty", "foot",
         "powerprofilesctl", "brightnessctl", "ddcutil", "xdg-user-dir",
+        "hyprsunset", "pacman", "checkupdates", "paru", "yay",
         // Apps de las plantillas (Config/AppTemplates.qml): detectarlas aquí
         // evita el Instantiator que lanzaba un 'which' por app al arrancar.
         "qt6ct", "plasmashell", "ghostty", "wezterm", "starship", "hx",

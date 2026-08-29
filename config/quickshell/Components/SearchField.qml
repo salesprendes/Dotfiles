@@ -22,6 +22,12 @@ Rectangle {
     signal accepted()
     signal upPressed()
     signal downPressed()
+    // Horizontales: se pasan SIN consumir (como ESC). Dentro de un campo de
+    // texto las flechas laterales son del cursor de edición, así que quien las
+    // quiera para navegar tiene que decidirlo mirando su propio estado — el
+    // selector de emojis solo las toma con el campo vacío — y aceptarlas él.
+    signal leftPressed(var event)
+    signal rightPressed(var event)
     signal escapePressed(var event)
 
     function clear() { input.text = "" }
@@ -88,6 +94,8 @@ Rectangle {
             Keys.onEnterPressed: root.accepted()
             Keys.onDownPressed: root.downPressed()
             Keys.onUpPressed: root.upPressed()
+            Keys.onLeftPressed: (event) => { event.accepted = false; root.leftPressed(event) }
+            Keys.onRightPressed: (event) => { event.accepted = false; root.rightPressed(event) }
 
             Text {
                 anchors.verticalCenter: parent.verticalCenter

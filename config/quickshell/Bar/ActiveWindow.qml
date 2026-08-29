@@ -32,7 +32,7 @@ Pill {
         return active?.title ?? ""
     }
 
-    visible: active !== null && appName !== ""
+    shown: active !== null && appName !== ""
 
     Image {
         readonly property int displaySize: Math.min(Theme.barIconSize, root.implicitHeight - Theme.space8)

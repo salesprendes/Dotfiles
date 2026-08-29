@@ -26,7 +26,9 @@ Singleton {
     property bool wantWind: Settings.weatherShowWind
     property bool wantRain: Settings.weatherShowRain
     property bool wantSun: Settings.weatherShowSun
-    property bool showInBar: Settings.weatherShowInBar
+    // "El clima se ve en la barra": ya no es un ajuste propio sino una
+    // consecuencia de que el widget esté puesto en el layout.
+    property bool showInBar: BarCatalog.has(Settings.barLayout, "weather")
     onForecastDaysChanged: if (enabled) refreshLater.restart()
     onWantWindChanged: if (enabled) refreshLater.restart()
     onWantRainChanged: if (enabled) refreshLater.restart()

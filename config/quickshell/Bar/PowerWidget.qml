@@ -9,7 +9,7 @@ Pill {
     interactive: true
 
     // Oculto si falta power-profiles-daemon o se desactiva en Ajustes.
-    visible: Power.available && Settings.showPowerProfile
+    shown: Power.available
 
     onClicked: Power.cycle()
     onRightClicked: Globals.toggleControlCenter()

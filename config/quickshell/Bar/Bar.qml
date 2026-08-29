@@ -10,18 +10,13 @@ import qs.Services
 PanelWindow {
     id: bar
 
-    // Píldora de clima opcional (Ajustes → Clima → Mostrar en la barra):
-    // icono según el estado del cielo + temperatura actual. Click abre el
-    // Dashboard, donde vive la tarjeta completa. Componente en línea porque
-    // comparte pantalla con el reloj y no se usa fuera de la barra.
-    component WeatherWidget: Pill {
-        visible: Settings.weatherShowInBar && Weather.enabled && Weather.ready
-        interactive: true
-        active: Globals.dashboardOpen
-        onClicked: Globals.toggleDashboard()
-
-        BarGlyph { text: Weather.icon; color: Theme.yellow }
-        BarLabel { text: Weather.temp; font.bold: true }
+    // Una ranura de widget: el id del layout se resuelve a un componente en
+    // Bar/BarWidgetLoader.qml. Se declara aquí como componente en línea para
+    // no repetir el mismo cableado tres veces (izquierda, centro, derecha).
+    component Slot: BarWidgetLoader {
+        required property var modelData
+        widgetId: modelData && modelData.id ? String(modelData.id) : ""
+        barScreen: bar.screen
     }
 
     // modelData lo inyecta Variants: es el QsScreen de este monitor.
@@ -51,6 +46,13 @@ PanelWindow {
 
     // Reserva el espacio justo de la barra + su margen.
     exclusiveZone: Theme.barHeight + Theme.barTopMargin
+
+    // La barra vive toda la sesión, así que es de las que se quedan pintando
+    // en el offset viejo cuando el monitor cambia de sitio en el layout
+    // (dock/undock). El vigilante la desmapea un instante para que Hyprland la
+    // recoloque. Ver Components/ScreenMoveRemap.qml.
+    visible: !remapGuard.remapping
+    ScreenMoveRemap { id: remapGuard; window: bar }
 
     // ── Extractor de paleta dinámica ─────────────────────────────────────────
     // Solo con el tema base "dynamic" y solo en la barra del monitor
@@ -120,7 +122,14 @@ PanelWindow {
         }
         Behavior on opacity { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
 
-        // Izquierda: workspaces + ventana activa
+        // ── Las tres secciones ───────────────────────────────────────────────
+        // Qué widget va en cuál y en qué orden lo dice Settings.barLayout, no
+        // este archivo. Antes estaban cableados aquí y cada uno llevaba colgado
+        // un `visible: Settings.showLoQueSea`: siete booleanos sueltos que solo
+        // servían para simular un orden que en realidad no se podía cambiar.
+        // Ahora la presencia en el layout ES la visibilidad, y reordenar,
+        // mover de sección o duplicar un separador se hace desde Ajustes.
+
         RowLayout {
             anchors {
                 left: parent.left
@@ -129,22 +138,22 @@ PanelWindow {
             }
             spacing: Theme.gap
 
-            LauncherWidget {}
-            Workspaces { screen: bar.screen }
-            ActiveWindow {}
+            Repeater {
+                model: BarCatalog.entriesOf(Settings.barLayout, "left")
+                delegate: Slot {}
+            }
         }
 
-        // Centro: reproductor (si hay música) + reloj
         RowLayout {
             anchors.centerIn: parent
             spacing: Theme.gap
 
-            MediaWidget {}
-            WeatherWidget {}
-            ClockWidget {}
+            Repeater {
+                model: BarCatalog.entriesOf(Settings.barLayout, "center")
+                delegate: Slot {}
+            }
         }
 
-        // Derecha: bandeja + estado + batería, píldoras independientes.
         RowLayout {
             anchors {
                 right: parent.right
@@ -153,15 +162,10 @@ PanelWindow {
             }
             spacing: Theme.gap
 
-            Tray {}
-            SysMonWidget { visible: Settings.showSysmon }
-            ConnectivityAudioWidget {}
-            PowerWidget {}
-            CaffeineWidget { visible: Settings.showCaffeine }
-            AiWidget { visible: Settings.showAi }
-            BatteryWidget {}
-            ClipboardWidget { visible: Settings.showClipboard }
-            NotificationsWidget { visible: Settings.showNotifications }
+            Repeater {
+                model: BarCatalog.entriesOf(Settings.barLayout, "right")
+                delegate: Slot {}
+            }
         }
     }
 }

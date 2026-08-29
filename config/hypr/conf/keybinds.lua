@@ -32,6 +32,15 @@ hl.bind(mainMod .. " + N",         hl.dsp.exec_cmd("qs ipc call panel notificati
 hl.bind(mainMod .. " + SHIFT + N", hl.dsp.exec_cmd("qs ipc call panel dnd"))
 hl.bind(mainMod .. " + T",         hl.dsp.exec_cmd("qs ipc call panel sysmon"))
 
+-- Bloqueo de pantalla. Lo sirve Quickshell, no hyprlock (ver hypridle.conf).
+hl.bind(mainMod .. " + L",         hl.dsp.exec_cmd("qs ipc call panel lock"))
+
+-- Selector de emojis: al elegir uno lo copia al portapapeles.
+hl.bind(mainMod .. " + PERIOD",    hl.dsp.exec_cmd("qs ipc call panel emoji"))
+
+-- Luz nocturna (hyprsunset). Necesita el paquete 'hyprsunset' instalado.
+hl.bind(mainMod .. " + SHIFT + L", hl.dsp.exec_cmd("qs ipc call panel nightlight"))
+
 -- Carrusel de fondos de pantalla (plugin WallpaperCarousel).
 hl.bind(mainMod .. " + W",         hl.dsp.exec_cmd("qs ipc call carousel toggle"))
 

@@ -41,16 +41,16 @@ está probando es lo que pasa *después*, con el texto ya dentro.
 
 ## El QML
 
-    python3 tests/qmllint.py
+Las comprobaciones de QML ya no viven aquí: son de TODO el shell, no del módulo
+de IA, y estaban en esta carpeta solo por dónde nacieron. Ahora están en
+[`tests/`](../../../tests/LEEME.md), en la raíz de la configuración.
 
-Comprueba que cada tipo y cada importación resuelvan de verdad. qmllint por sí
-solo no puede: el módulo `qs` lo sintetiza Quickshell desde la carpeta de
-configuración, y qmllint no sabe de eso. El guion le monta un espejo de enlaces
-con un `qmldir` generado en cada carpeta y se lo da masticado.
+    python3 tests/qmllint.py     # ¿resuelve cada tipo y cada importación?
+    python3 tests/qmlcarga.py    # ¿compila cada archivo?
 
-Es lo que permitió reorganizar el módulo entero sin romperlo: se guarda el
-perfil de avisos antes, se mueve todo, y si sale idéntico es que no ha quedado
-ninguna referencia rota.
+Lo demás sigue igual, incluido el truco que permitió reorganizar este módulo
+entero sin romperlo: se guarda el perfil de avisos antes, se mueve todo, y si
+sale idéntico es que no ha quedado ninguna referencia rota.
 
     python3 tests/qmllint.py > /tmp/antes.txt
     …mover cosas…

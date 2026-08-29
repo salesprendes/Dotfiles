@@ -9,7 +9,7 @@ import qs.Config
 Pill {
     id: root
 
-    visible: Settings.showTray && SystemTray.items.values.length > 0
+    shown: SystemTray.items.values.length > 0
 
     // Script de respaldo para LANZAR la app del icono con gtk-launch cuando
     // no tiene ninguna ventana abierta (la búsqueda de ventana existente se

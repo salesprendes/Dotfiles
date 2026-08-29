@@ -16,6 +16,15 @@ Popout {
     property string search: ""
     property var apps: []
     property int selectedIndex: 0
+
+    // Filtro del hover fantasma: al teclear, la lista se refiltra y las filas
+    // cruzan bajo el cursor parado; sin esto, cada cruce emite 'entered' y la
+    // selección salta a lo que quedara encima, pisando la del teclado. Ver
+    // Components/PointerMoveGate.qml.
+    PointerMoveGate {
+        id: hoverGate
+        referenceItem: appList
+    }
     // Filtro por categoría freedesktop ("" = todas). Cada chip agrupa las
     // categorías afines de la spec bajo un solo icono.
     property string selectedCat: ""
@@ -57,6 +66,7 @@ Popout {
         apps = q === "" ? base : base.filter(a => a.searchText.includes(q))
         selectedIndex = apps.length > 0 ? Math.min(selectedIndex, apps.length - 1) : -1
         appList.currentIndex = selectedIndex
+        hoverGate.reset()
     }
 
     onShownChanged: {
@@ -99,6 +109,9 @@ Popout {
     function moveSelection(delta) {
         if (apps.length <= 0)
             return
+        // Mover con el teclado desplaza la lista bajo el ratón: se rearma el
+        // filtro para que ese movimiento no cuente como movimiento del puntero.
+        hoverGate.reset()
         selectedIndex = Math.max(0, Math.min(apps.length - 1, selectedIndex + delta))
         appList.currentIndex = selectedIndex
         appList.positionViewAtIndex(selectedIndex, ListView.Contain)
@@ -290,7 +303,11 @@ Popout {
                 anchors.fill: parent
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
-                onEntered: launcher.selectedIndex = index
+                // 'positionChanged' filtrado, no 'entered': ver hoverGate.
+                onPositionChanged: (m) => {
+                    if (hoverGate.moved(rowMa, m))
+                        launcher.selectedIndex = appRow.index
+                }
                 onClicked: launcher.launch(modelData.entry)
             }
         }

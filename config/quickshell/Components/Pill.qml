@@ -16,6 +16,15 @@ Rectangle {
     property bool interactive: false
     // El panel que abre esta píldora está abierto: enciende el punto inferior.
     property bool active: false
+    // Condición PROPIA del widget para dejarse ver (hay batería, suena algo,
+    // la bandeja tiene iconos…). Se declara aparte de 'visible' porque la
+    // barra carga cada widget dentro de un Loader y necesita saber si ocupa
+    // sitio: 'visible' en QML es la visibilidad EFECTIVA —incluye la del
+    // padre—, así que si el Loader se ocultara leyendo item.visible, el hijo
+    // pasaría a reportar false y el Loader ya nunca podría volver a mostrarlo.
+    // 'shown' es del widget y solo del widget, así que no se realimenta.
+    property bool shown: true
+    visible: shown
     readonly property bool hovered: ma.containsMouse || activeFocus
     property int spacing: Theme.spacing
     default property alias content: row.data
@@ -29,7 +38,14 @@ Rectangle {
 
     activeFocusOnTab: interactive
     radius: Theme.pillRadius
-    color: interactive && hovered ? Theme.surfaceHi : Theme.pillBg
+    // Capa de estado de M3 sobre el fondo de la píldora, en vez del salto a
+    // 'surfaceHi' que había: así la barra responde al puntero con la MISMA
+    // intensidad que un botón, una fila de ajustes o una pestaña. Ver
+    // Theme.stateLayer.
+    color: pill.interactive
+         ? Theme.stateLayer(Theme.pillBg, Theme.fg,
+                            Theme.stateAlpha(ma.containsMouse, ma.pressed, pill.activeFocus))
+         : Theme.pillBg
     border.width: activeFocus ? Theme.focusWidth : 0
     border.color: Theme.focusRing
 

@@ -6,22 +6,22 @@ return {
     -- Hyprland se queda con sus animaciones por defecto.
     animations = true,
 
-    accent   = "rgba(ffa382ee)",
-    accent2  = "rgba(e2a500ee)",
-    inactive = "rgba(2c1f1bcc)",
-    shadow   = "rgba(0d0604ee)",
-    locked   = "rgba(f9644fee)",
+    accent   = "rgba(70c8ffee)",
+    accent2  = "rgba(a1a8ffee)",
+    inactive = "rgba(1e2427cc)",
+    shadow   = "rgba(05080aee)",
+    locked   = "rgba(df758eee)",
 
-    active_border = { colors = { "rgba(ffa382ee)", "rgba(e2a500ee)" }, angle = 45 },
-    inactive_border = "rgba(2c1f1bcc)",
+    active_border = { colors = { "rgba(70c8ffee)", "rgba(a1a8ffee)" }, angle = 45 },
+    inactive_border = "rgba(1e2427cc)",
 
-    group_active_border = "rgba(e2a500ee)",
-    group_inactive_border = "rgba(2c1f1bcc)",
-    group_locked_active_border = "rgba(f9644fee)",
-    group_locked_inactive_border = "rgba(2c1f1bcc)",
+    group_active_border = "rgba(a1a8ffee)",
+    group_inactive_border = "rgba(1e2427cc)",
+    group_locked_active_border = "rgba(df758eee)",
+    group_locked_inactive_border = "rgba(1e2427cc)",
 
-    groupbar_active = "rgba(e2a500ee)",
-    groupbar_inactive = "rgba(2c1f1bcc)",
-    groupbar_locked_active = "rgba(f9644fee)",
-    groupbar_locked_inactive = "rgba(2c1f1bcc)",
+    groupbar_active = "rgba(a1a8ffee)",
+    groupbar_inactive = "rgba(1e2427cc)",
+    groupbar_locked_active = "rgba(df758eee)",
+    groupbar_locked_inactive = "rgba(1e2427cc)",
 }

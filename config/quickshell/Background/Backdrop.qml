@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Wayland
+import qs.Components
 import qs.Config
 import qs.Services
 
@@ -21,6 +22,11 @@ PanelWindow {
 
     anchors { top: true; bottom: true; left: true; right: true }
     color: Theme.bg   // respaldo mientras no hay imagen cargada
+
+    // Igual que la barra: superficie de vida larga, se remapea si el monitor
+    // se mueve en el layout. Ver Components/ScreenMoveRemap.qml.
+    visible: !remapGuard.remapping
+    ScreenMoveRemap { id: remapGuard; window: win }
 
     readonly property int    fadeMs:     Math.max(0, Math.round(Settings.wallpaperTransitionDuration * 1000))
     readonly property string transition: Settings.wallpaperTransition

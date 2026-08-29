@@ -4,6 +4,7 @@ import Quickshell
 import Quickshell.Io
 import qs.Components
 import qs.Config
+import qs.Services
 
 // Página "Shell": preferencias del propio shell — reloj/fecha y el avatar del
 // usuario. Cada bloque en su propia tarjeta.
@@ -108,6 +109,89 @@ SettingsPage {
             desc: I18n.tr("Turns it on now and on every shell start")
             checked: Settings.numlockOn
             onToggled: Settings.numlockOn = !Settings.numlockOn
+        }
+    }
+
+    // ── Bloqueo de pantalla ──────────────────────────────────────────────────
+    SettingsCard {
+        title: I18n.tr("Screen lock")
+        glyph: "󰌾"
+
+        SegRow {
+            glyph: "󰍁"
+            skey: "lockBackend"
+            label: I18n.tr("Lock screen")
+            options: [ { text: I18n.tr("This shell"), value: "shell" },
+                       { text: "hyprlock", value: "hyprlock" } ]
+            current: Settings.lockBackend
+            onPicked: (v) => Settings.lockBackend = v
+        }
+        Hint {
+            skey: "lockBackend"
+            text: I18n.tr("The shell's own lock screen uses your theme, palette and language, and authenticates with PAM.")
+        }
+        // Aviso, no adorno: si el archivo de PAM no está, el bloqueo propio no
+        // podría autenticar, así que el shell delega en hyprlock aunque aquí
+        // ponga "este shell". Más vale decirlo aquí que descubrirlo bloqueando.
+        Hint {
+            skey: "lockBackend"
+            shown: Settings.lockBackend === "shell" && !Lock.pamReady
+            color: Theme.red
+            text: I18n.tr("No PAM service found (%1): hyprlock will be used instead.")
+                    .arg(Lock.pamService)
+        }
+        TextField {
+            skey: "lockPamService"
+            Layout.fillWidth: true
+            label: I18n.tr("PAM service")
+            placeholder: I18n.tr("Automatic (%1)").arg(Lock.pamService)
+            value: Settings.lockPamService
+            onEdited: (t) => Settings.lockPamService = t
+        }
+        Hint {
+            skey: "lockPamService"
+            text: I18n.tr("Name of a file in /etc/pam.d. Empty picks hyprlock if present, otherwise login.")
+        }
+    }
+
+    // ── Qué enseña la pantalla de bloqueo ────────────────────────────────────
+    // Solo tiene sentido con el bloqueo propio: lo que enseñe hyprlock lo
+    // decide su archivo de configuración, no este panel.
+    SettingsCard {
+        title: I18n.tr("On the lock screen")
+        glyph: "󰍁"
+        shown: Settings.lockBackend === "shell"
+        description: I18n.tr("A lock screen is what anyone walking past your desk gets to read.")
+
+        SwitchRow { glyph: "󰝚"; skey: "lockShowMedia"; label: I18n.tr("Media player")
+            desc: I18n.tr("With controls, so you can skip a track without unlocking")
+            checked: Settings.lockShowMedia
+            onToggled: Settings.lockShowMedia = !Settings.lockShowMedia }
+        SwitchRow { glyph: "󰖐"; skey: "lockShowWeather"; label: I18n.tr("Weather")
+            checked: Settings.lockShowWeather
+            onToggled: Settings.lockShowWeather = !Settings.lockShowWeather }
+        SwitchRow { glyph: "󰖩"; skey: "lockShowStatus"; label: I18n.tr("Network and battery")
+            checked: Settings.lockShowStatus
+            onToggled: Settings.lockShowStatus = !Settings.lockShowStatus }
+        SwitchRow { glyph: "󰐥"; skey: "lockShowSessionButtons"; label: I18n.tr("Session buttons")
+            desc: I18n.tr("Suspend, restart and shut down; each asks for a second click")
+            checked: Settings.lockShowSessionButtons
+            onToggled: Settings.lockShowSessionButtons = !Settings.lockShowSessionButtons }
+
+        SliderRow {
+            skey: "lockBlur"
+            label: I18n.tr("Background blur"); glyph: "󰂵"
+            from: 0.0; to: 1.0; value: Settings.lockBlur
+            valueText: Settings.lockBlur < 0.005 ? I18n.tr("Off")
+                                                 : Math.round(Settings.lockBlur * 100) + "%"
+            onMoved: (v) => Settings.lockBlur = Math.round(v * 20) / 20
+        }
+        SliderRow {
+            skey: "lockDim"
+            label: I18n.tr("Background dim"); glyph: "󰃞"
+            from: 0.0; to: 0.9; value: Settings.lockDim
+            valueText: Math.round(Settings.lockDim * 100) + "%"
+            onMoved: (v) => Settings.lockDim = Math.round(v * 20) / 20
         }
     }
 

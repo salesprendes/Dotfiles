@@ -123,6 +123,41 @@ Singleton {
     readonly property real stateFocus: 0.10
     readonly property real statePressed: 0.12
 
+    // Y las dos funciones que las APLICAN, para que nadie tenga que volver a
+    // escribirlo. Tener los tokens sin una forma canónica de usarlos es la
+    // mitad del trabajo: cada componente componía la capa a su manera —o se la
+    // saltaba y cambiaba de color a pelo, como hacía la píldora de la barra,
+    // que pasaba de 'pillBg' a 'surfaceHi' de un salto— y el shell reaccionaba
+    // al puntero con tres intensidades distintas según dónde pusieras el ratón.
+    //
+    // stateLayer mezcla, no superpone un hijo translúcido: así funciona igual
+    // sobre un fondo con alfa (la barra es translúcida) sin que la capa deje
+    // ver el escritorio a través de ella, y sin añadir un Rectangle más por
+    // control.
+    function stateLayer(base, layer, alpha) {
+        if (!(alpha > 0))
+            return base
+        // Si el fondo llega como cadena ("transparent", "#rrggbb") no tiene
+        // componentes que mezclar y la cuenta daría NaN — que en QML se pinta
+        // como negro, no como "no ha pasado nada". Para un fondo transparente
+        // lo correcto es la capa sola: withAlpha(layer, alpha).
+        if (typeof base !== "object" || base.r === undefined)
+            return withAlpha(layer, alpha)
+        return Qt.rgba(base.r + (layer.r - base.r) * alpha,
+                       base.g + (layer.g - base.g) * alpha,
+                       base.b + (layer.b - base.b) * alpha,
+                       base.a)
+    }
+
+    // Prioridad pulsado > encima > foco: si estás pulsando, eso es lo que
+    // manda, aunque también estés encima y con el foco puesto.
+    function stateAlpha(hovered, pressed, focused) {
+        return pressed ? statePressed
+             : hovered ? stateHover
+             : focused ? stateFocus
+                       : 0
+    }
+
     // Escala de formas de M3. No sustituye a pillRadius/barRadius (que siguen
     // el ajuste de redondeo del usuario): son los radios FIJOS de los
     // controles, que en M3 no dependen del tema sino de su tamaño.

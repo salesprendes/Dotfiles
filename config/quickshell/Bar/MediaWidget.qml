@@ -1,27 +1,22 @@
 import QtQuick
 import QtQuick.Layouts
-import Quickshell.Services.Mpris
 import qs.Components
 import qs.Config
+import qs.Services
 
+// Píldora del reproductor. Quién es "el reproductor activo" —y sobre todo si
+// hay alguno de verdad— lo decide Services/Media.qml: aquí se elegía con un
+// `si nadie reproduce, coge el primero`, y el primero siempre acababa siendo el
+// reproductor fantasma que el navegador deja registrado mientras esté abierto.
+// La píldora no se iba nunca.
 Pill {
     id: root
     spacing: Theme.space4
 
-    readonly property var players: Mpris.players?.values ?? []
-    readonly property var player: {
-        if (players.length === 0)
-            return null
-        for (let i = 0; i < players.length; i++)
-            if (players[i].isPlaying)
-                return players[i]
-        return players[0]
-    }
-    readonly property bool hasMedia: player !== null
-                                     && ((player.trackTitle || "") !== "" || (player.trackArtist || "") !== "")
-    readonly property bool playing: player?.isPlaying ?? false
+    readonly property var player: Media.active
+    readonly property bool playing: Media.playing
 
-    visible: hasMedia
+    shown: Media.hasMedia
 
     // Ecualizador: 4 barras que rebotan al sonar, planas al pausar.
     // Uso un Timer a ~7 pasos/s en vez de animaciones a 60 fps para no
@@ -35,9 +30,10 @@ Pill {
         property int tick: 0
         Timer {
             interval: 140
-            // visible además de playing: un reproductor sin metadatos deja la
-            // píldora oculta (hasMedia false) con playing true, y el tick
-            // seguía reevaluando las barras de un widget que no se ve.
+            // 'visible' además de 'playing': la píldora puede estar escondida
+            // con algo sonando —el clima y el reloj comparten centro y el
+            // widget puede no estar puesto en la barra—, y sin este guardia el
+            // tick seguiría reevaluando las cuatro barras de algo que no se ve.
             running: root.playing && root.visible
             repeat: true
             onTriggered: eq.tick++

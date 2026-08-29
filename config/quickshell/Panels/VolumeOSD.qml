@@ -40,7 +40,10 @@ PanelWindow {
     }
 
     // La ventana se mapea mientras se revela o mientras se desvanece.
-    visible: revealed || offTimer.running
+    visible: (revealed || offTimer.running) && !remapGuard.remapping
+    // Superficie de vida larga: se remapea si el monitor cambia de sitio en el
+    // layout. Ver Components/ScreenMoveRemap.qml.
+    ScreenMoveRemap { id: remapGuard; window: osd }
 
     function reveal() {
         if (!armed) return

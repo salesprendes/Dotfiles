@@ -104,10 +104,55 @@ ShellRoot {
     // colores viejos hasta pasar por esa página.
     readonly property int _templatesAlive: AppTemplates.registry.length
 
-    // Control por IPC / atajos de teclado:
-    //   qs ipc call panel controlcenter | notifications | clipboard | dnd | close
+    // Control por IPC / atajos de teclado.
+    //
+    // Hay DOS familias a propósito:
+    //
+    //   · Genéricas — `toggle <panel>`, `open <panel>`, `close <panel>`,
+    //     `list`. Añadir un panel nuevo ya no obliga a tocar este archivo ni a
+    //     reescribir los atajos: basta con darlo de alta en Globals.panels.
+    //         qs ipc call panel toggle clipboard
+    //         qs ipc call panel list          → JSON con los paneles y cuál está abierto
+    //
+    //   · Con nombre — `controlcenter`, `notifications`, … Se mantienen porque
+    //     los atajos de Hyprland que ya existen las llaman, y romperlos por
+    //     estrenar las genéricas sería cambiarle la configuración al usuario
+    //     sin avisar. Son una línea cada una y delegan en las mismas funciones.
     IpcHandler {
         target: "panel"
+
+        // ── Genéricas ────────────────────────────────────────────────────────
+        function toggle(name: string): void {
+            if (Globals.isPanel(name)) Globals.toggle(name)
+            else console.warn("IPC: no existe el panel '" + name + "'")
+        }
+        function open(name: string): void {
+            if (Globals.isPanel(name)) Globals.open(name)
+            else console.warn("IPC: no existe el panel '" + name + "'")
+        }
+        // Cierra solo si es ESE el panel abierto, para que un atajo de "cierra
+        // el portapapeles" no se lleve por delante otro panel que hubiera
+        // encima. Para cerrar lo que haya, `close` a secas.
+        //
+        // Va con nombre propio y no como `close(name)` porque un IpcHandler
+        // exige que la llamada traiga tantos argumentos como declara la
+        // función: convertir `close` en `close(name)` rompería todos los
+        // atajos que ya llaman a `qs ipc call panel close`.
+        function closePanel(name: string): void {
+            if (!name || name === "" || Globals.openPanel === name)
+                Globals.closeAll()
+        }
+        function close(): void { Globals.closeAll() }
+        function list(): string {
+            const out = []
+            for (const p of Globals.panels)
+                out.push({ name: p.name, widget: p.widget,
+                           open: Globals.openPanel === p.name })
+            return JSON.stringify({ panels: out, openPanel: Globals.openPanel,
+                                    settingsOpen: Globals.settingsOpen })
+        }
+
+        // ── Con nombre (compatibilidad con los atajos ya escritos) ───────────
         function controlcenter(): void { Globals.toggleControlCenter() }
         function notifications(): void { Globals.toggleNotifCenter() }
         function sysmon(): void { Globals.toggleSysMon() }
@@ -118,9 +163,11 @@ ShellRoot {
         function record(): void { ScreenCapture.openToolbar(true) }
         function settings(): void { Globals.toggleSettings() }
         function ai(): void { Globals.toggleAi() }
+        function emoji(): void { Globals.toggleEmoji() }
         function dnd(): void { Globals.dnd = !Globals.dnd }
         function caffeine(): void { Settings.caffeine = !Settings.caffeine }
-        function close(): void { Globals.closeAll() }
+        function lock(): void { Globals.runPowerAction("lock") }
+        function nightlight(): void { NightLight.toggle() }
     }
 
     // Cierre automático al bloquear la sesión. Escucha la señal 'Lock' de
@@ -135,8 +182,21 @@ ShellRoot {
         command: ["gdbus", "monitor", "--system", "--dest", "org.freedesktop.login1"]
         stdout: SplitParser {
             onRead: (line) => {
-                if (line.indexOf("Session.Lock") !== -1)
+                // Session.Lock también llega como Session.Unlock por esta
+                // ruta, así que se descarta explícitamente: desbloquear tiene
+                // que pasar por PAM, no por una señal del bus.
+                if (line.indexOf("Session.Lock") !== -1
+                    && line.indexOf("Session.Unlock") === -1) {
                     Globals.closeAll()
+                    // Y AHORA SÍ SE BLOQUEA. Antes esta señal solo servía para
+                    // cerrar los paneles y el bloqueo real lo ponía hyprlock por
+                    // su cuenta. Con la pantalla de bloqueo dentro del shell,
+                    // `loginctl lock-session` —que es lo que ejecutan hypridle
+                    // al inactivarse, el menú de energía del escritorio y
+                    // systemd antes de suspender— tiene que acabar aquí, o
+                    // suspender el portátil dejaría la sesión abierta.
+                    Globals.runPowerAction("lock")
+                }
                 // Suspensión/reanudación: por este mismo bus logind emite
                 // Manager.PrepareForSleep(true) antes de dormir y (false) al
                 // despertar. Lo reenviamos al coordinador central Resume, al que
@@ -293,6 +353,10 @@ ShellRoot {
                 ClipboardPanel { modelData: scr.modelData }
             }
             PanelSlot {
+                open: Globals.emojiOpen && scr.showsPanels
+                EmojiPicker { modelData: scr.modelData }
+            }
+            PanelSlot {
                 open: Globals.dashboardOpen && scr.showsPanels
                 Dashboard { modelData: scr.modelData }
             }
@@ -324,6 +388,18 @@ ShellRoot {
     // Agente de polkit: el diálogo de "se requiere autenticación". Único para
     // toda la sesión (no por pantalla) y sin coste mientras nadie lo pide.
     PolkitDialog {}
+
+    // Pantalla de bloqueo (ext-session-lock + PAM). Una sola instancia: es el
+    // propio WlSessionLock quien crea una superficie por monitor, incluidos los
+    // que se conecten con la sesión ya bloqueada.
+    LockScreen {}
+
+    // El servicio de bloqueo tiene que estar VIVO antes de que alguien pida
+    // bloquear: se suscribe a Globals.lockRequested y sondea el servicio PAM al
+    // arrancar, y QML no crea un singleton hasta que alguien lo toca. Sin esta
+    // línea, la primera petición de bloqueo caería en el vacío. Mismo motivo
+    // que _battery y _templatesAlive de arriba.
+    readonly property bool _lockAlive: Lock.pamReady
 
     // Ventana de ajustes: una sola ventana real (toplevel de Hyprland). Carga
     // perezosa: no se construye hasta el primer uso y se libera al cerrarla.
