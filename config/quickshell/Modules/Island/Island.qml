@@ -79,9 +79,6 @@ Item {
     // de fiarse de ella — si algún día la ventana pide teclado por otro motivo,
     // ESC no debe empezar a cerrar cosas por su cuenta.
     focus: true
-    onActiveFocusChanged: console.warn("SONDA isla activeFocus=" + activeFocus
-                                       + " modal=" + island.modal)
-    Keys.onPressed: (ev) => console.warn("SONDA tecla key=" + ev.key)
     Keys.onEscapePressed: (ev) => {
         if (!island.modal) {
             ev.accepted = false

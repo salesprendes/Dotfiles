@@ -139,6 +139,15 @@ Singleton {
             IslandState.openDestination("notifs")
             return
         }
+        // Abrir un panel CIERRA la hoja de la isla. No es cosmético: la isla se
+        // esconde entera mientras haya un panel abierto, así que sin esto quedan
+        // dos cosas abiertas a la vez y una de ellas no se ve. Al cerrar el
+        // panel reaparecía la hoja que abriste hace diez minutos, sola, como si
+        // el shell tuviera memoria de algo que ya habías dejado atrás.
+        //
+        // Y desde que la hoja pide teclado (ver IslandWindow) es algo más que
+        // raro: la isla invisible volvería a quedarse con las teclas.
+        IslandState.closeDestination()
         openedOnMonitor = g.focusedMonitorName()
         openPanel = p
     }
@@ -186,7 +195,17 @@ Singleton {
             g.settingsOpen = true
     }
     // Cierra solo los popups (la ventana de Ajustes es independiente).
-    function closeAll()            { openPanel = "" }
+    // "Cierra lo que haya" incluye la hoja de la isla: es lo que espera quien
+    // llama a `qs ipc call panel close`, y sobre todo lo que hace falta antes de
+    // bloquear la pantalla (ver runPowerAction) — una hoja abierta debajo del
+    // bloqueo no la ve nadie, pero sigue ahí al volver.
+    //
+    // closeDestination y no collapse: un aviso que está a la vista se va cuando
+    // le toca, no porque hayas cerrado un panel que no tenía nada que ver.
+    function closeAll() {
+        openPanel = ""
+        IslandState.closeDestination()
+    }
 
     // ── Salto entre paneles con las flechas ──────────────────────────────────
     // Con un panel abierto, ←/→ pasan al panel del widget vecino de la barra.

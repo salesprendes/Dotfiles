@@ -167,8 +167,6 @@ ShellRoot {
                 Globals.closeAll()
         }
         function close(): void { Globals.closeAll() }
-        // TEMPORAL — solo para probar. Se quita.
-        function isla(name: string): void { IslandState.toggleDestination(name) }
         function list(): string {
             const out = []
             for (const p of Globals.panels)
