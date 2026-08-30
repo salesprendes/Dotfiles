@@ -40,7 +40,7 @@ Rectangle {
     border.width: activeFocus ? Theme.focusWidth
                 : checked ? 0 : Math.max(1, Theme.dp(2))
     border.color: activeFocus ? Theme.focusRing : offBorderColor
-    Behavior on color { ColorAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
+    Behavior on color { ColorAnimation { duration: Theme.animNormal; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
     Behavior on border.color { ColorAnimation { duration: Theme.animFast } }
 
     Keys.onReturnPressed: sw.toggled()
@@ -62,12 +62,12 @@ Rectangle {
                                        : _offInset + (Theme.dp(16) * _k) / 2
 
     Behavior on thumbSize {
-        NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutBack; easing.overshoot: 1.6 }
+        NumberAnimation { duration: Theme.animNormal; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveSpatial; easing.overshoot: 1.6 }
     }
     // OutBack suave: la bolita llega y asienta con un pelín de rebote, en vez
     // de frenar en seco. El sobreimpulso es corto para que no parezca elástica.
     Behavior on thumbCenter {
-        NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutBack; easing.overshoot: 1.2 }
+        NumberAnimation { duration: Theme.animNormal; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveSpatial; easing.overshoot: 1.2 }
     }
 
     // Capa de estado: el halo que aparece alrededor de la bolita al señalar o
@@ -108,7 +108,7 @@ Rectangle {
             scale: sw.checked ? 1 : 0.5
             Behavior on opacity { NumberAnimation { duration: Theme.animFast } }
             Behavior on scale {
-                NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutBack; easing.overshoot: 2.0 }
+                NumberAnimation { duration: Theme.animNormal; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveSpatial; easing.overshoot: 2.0 }
             }
         }
     }

@@ -165,7 +165,7 @@ Item {
     z: 900
     visible: opacity > 0.01
     opacity: sheet.shown ? 1 : 0
-    Behavior on opacity { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutQuad } }
+    Behavior on opacity { NumberAnimation { duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
     // Sin esto la capa oculta seguiría comiéndose los clics del panel.
     enabled: sheet.shown
 
@@ -221,7 +221,7 @@ Item {
         // Entra creciendo un pelín, no de golpe: es la transición estándar de M3
         // para un diálogo, y da el sentido de "esto sale de la nada".
         scale: sheet.shown ? 1 : 0.94
-        Behavior on scale { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutBack } }
+        Behavior on scale { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveSpatial } }
 
         // Se traga los clics para que no lleguen al velo y lo cierren.
         MouseArea { anchors.fill: parent }

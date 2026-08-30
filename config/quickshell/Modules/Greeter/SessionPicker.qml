@@ -124,7 +124,7 @@ Item {
                 font.family: Theme.fontFamily
                 font.pixelSize: Theme.sp(11)
                 rotation: sp.open ? 180 : 0
-                Behavior on rotation { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
+                Behavior on rotation { NumberAnimation { duration: 220; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
                 Behavior on color { ColorAnimation { duration: 140 } }
             }
         }
@@ -143,7 +143,7 @@ Item {
         z: 6
         // 0→1 impulsa toda la animación de apertura/cierre.
         property real shown: sp.open ? 1 : 0
-        Behavior on shown { NumberAnimation { duration: 210; easing.type: Easing.OutCubic } }
+        Behavior on shown { NumberAnimation { duration: 210; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
 
         width: Math.max(trigger.width, Theme.dp(190))
         height: menuBg.height

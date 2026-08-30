@@ -3,12 +3,15 @@ import qs.Components
 import qs.Config
 import qs.Services
 
-// Campana con contador. Click abre el centro de notificaciones,
+// Campana con contador. Click abre las notificaciones —el centro clásico, o la
+// hoja de la isla si está encendida, lo decide Globals.toggleNotifCenter— y
 // click derecho alterna "No molestar".
 IconPill {
     id: root
     interactive: true
-    active: Globals.notifCenterOpen
+    // Encendida según DÓNDE se hayan abierto los avisos, que depende de la isla.
+    active: Settings.islandEnabled ? IslandState.destination === "notifs"
+                                   : Globals.notifCenterOpen
     icon: Globals.dnd ? "󰂛" : "󰂚"
     iconColor: Globals.dnd ? Theme.fgMuted : Theme.yellow
     badgeCount: NotifService.count

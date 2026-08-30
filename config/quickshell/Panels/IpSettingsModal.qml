@@ -69,8 +69,8 @@ ModalWindow {
         enabled: modal.manual
         implicitHeight: modal.manual ? manualCol.implicitHeight : 0
         opacity: modal.manual ? 1 : 0
-        Behavior on implicitHeight { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
-        Behavior on opacity { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
+        Behavior on implicitHeight { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
+        Behavior on opacity { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
 
         ColumnLayout {
             id: manualCol

@@ -39,11 +39,25 @@ Item {
     // La pantalla que hospeda esto. En la sesión de verdad la pone la
     // superficie; en las pruebas, un stub.
     property var screen: null
-    // ¿Es el monitor principal? Solo ahí van la tarjeta y los botones: dos
-    // campos de contraseña compitiendo por el teclado es el problema que ya se
-    // resolvió con los modales de red.
-    readonly property bool primary: Quickshell.screens.length > 0
-                                    && content.screen === Quickshell.screens[0]
+    // ¿Va la tarjeta en ESTA pantalla? Solo en una: dos campos de contraseña
+    // compitiendo por el teclado es el problema que ya se resolvió con los
+    // modales de red.
+    //
+    // Y esa una es donde ESTABAS al bloquear, no Quickshell.screens[0]. El
+    // índice cero es solo la primera pantalla que enumeró el compositor, sin
+    // ninguna relación con cuál es tu principal ni con dónde tenías el ratón:
+    // con dos monitores acertaba la mitad de las veces.
+    readonly property bool primary: {
+        const lista = Quickshell.screens
+        if (lista.length === 0)
+            return false
+        const donde = Lock.lockedOnMonitor
+        if (donde !== "" && content.screen)
+            return content.screen.name === donde
+        // Sin Hyprland no hay forma de saber cuál es cuál: cae en la primera,
+        // que al menos es determinista.
+        return content.screen === lista[0]
+    }
     // Si el bloqueo está activo. Se pasa desde fuera para que las pruebas
     // puedan montar el árbol sin bloquear nada.
     property bool active: Lock.locked
@@ -189,7 +203,7 @@ Item {
             NumberAnimation { target: card; property: "shake"; to: -Theme.dp(10); duration: 50 }
             NumberAnimation { target: card; property: "shake"; to: Theme.dp(9);   duration: 60 }
             NumberAnimation { target: card; property: "shake"; to: -Theme.dp(6);  duration: 60 }
-            NumberAnimation { target: card; property: "shake"; to: 0;             duration: 60; easing.type: Easing.OutCubic }
+            NumberAnimation { target: card; property: "shake"; to: 0;             duration: 60; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel }
         }
 
         // Entrada: sube un poco y aparece. Al bloquear, la tarjeta llega
@@ -199,8 +213,8 @@ Item {
         Component.onCompleted: enterAnim.start()
         ParallelAnimation {
             id: enterAnim
-            NumberAnimation { target: card; property: "opacity"; from: 0; to: 1; duration: 420; easing.type: Easing.OutCubic }
-            NumberAnimation { target: card; property: "enterY"; from: Theme.dp(18); to: 0; duration: 480; easing.type: Easing.OutCubic }
+            NumberAnimation { target: card; property: "opacity"; from: 0; to: 1; duration: 420; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel }
+            NumberAnimation { target: card; property: "enterY"; from: Theme.dp(18); to: 0; duration: 480; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel }
         }
 
         Rectangle {
@@ -589,26 +603,15 @@ Item {
     }
 
     // ── El foco del campo ────────────────────────────────────────────────
-    // Un forceActiveFocus() en Component.onCompleted NO basta, y esa era la
-    // razón de que hubiera que hacer clic antes de escribir: la superficie
-    // se construye antes de que el compositor le entregue el foco de
-    // teclado, así que la petición se hace sobre una ventana que todavía no
-    // puede tenerlo y se pierde sin avisar.
-    //
-    // Aquí se insiste hasta que agarra, con tope para no dejar un temporizador
-    // corriendo para siempre si algo va mal. En cuanto pwInput.activeFocus es
-    // true, el temporizador se apaga solo (su 'running' lo mira).
-    Timer {
+    // Un forceActiveFocus() al construirse NO basta, y esa era la razón de que
+    // hubiera que hacer clic antes de escribir: la superficie se crea antes de
+    // que el compositor le entregue el foco de teclado, así que la petición se
+    // hace sobre una ventana que todavía no puede tenerlo y se pierde sin
+    // avisar. Components/FocusPulse.qml insiste hasta que agarra.
+    FocusPulse {
         id: focusKeeper
-        interval: 60
-        repeat: true
-        running: content.primary && content.active && !pwInput.activeFocus
-                 && focusKeeper.attempts < 100
-        property int attempts: 0
-        onTriggered: {
-            focusKeeper.attempts++
-            pwInput.forceActiveFocus()
-        }
+        target: pwInput
+        active: content.primary && content.active
     }
 
     // Cada intento de autenticación deja el campo deshabilitado un momento
@@ -617,10 +620,8 @@ Item {
     Connections {
         target: Lock
         function onBusyChanged() {
-            if (!Lock.busy && content.primary) {
-                focusKeeper.attempts = 0
-                Qt.callLater(() => pwInput.forceActiveFocus())
-            }
+            if (!Lock.busy && content.primary)
+                focusKeeper.start()
         }
     }
 

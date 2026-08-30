@@ -44,7 +44,7 @@ Item {
                 sweepAngle: 360 * Math.max(0.02, Math.min(1, sr.value))
                 // Solo anima cuando procede: las animaciones Qt corren aunque el item
                 // esté oculto (SysMon actualiza cada 5 s).
-                Behavior on sweepAngle { enabled: sr.animated; NumberAnimation { duration: 600; easing.type: Easing.OutCubic } }
+                Behavior on sweepAngle { enabled: sr.animated; NumberAnimation { duration: 600; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
             }
         }
     }

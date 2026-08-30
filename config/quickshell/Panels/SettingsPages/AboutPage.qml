@@ -172,7 +172,7 @@ SettingsPage {
                 Layout.topMargin: Theme.space2
                 Layout.bottomMargin: Theme.space2
                 implicitWidth: Theme.hairline
-                color: Theme.withAlpha(Theme.overlay, 0.22)
+                color: Theme.outlineVariant
             }
 
             // Sobre qué.

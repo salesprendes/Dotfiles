@@ -30,7 +30,7 @@ PanelWindow {
     QtObject { id: settingsDropdowns; property var openItem: null }
 
     Behavior on openProgress {
-        NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic }
+        NumberAnimation { duration: Theme.animNormal; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel }
     }
 
     Connections {
@@ -159,8 +159,8 @@ PanelWindow {
                 clip: true
                 // Alto y opacidad comparten curva y duración (Theme.animNormal),
                 // así apertura y cierre van sincronizados.
-                Behavior on implicitHeight { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
-                Behavior on opacity { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
+                Behavior on implicitHeight { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
+                Behavior on opacity { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
 
                 Rectangle {
                     anchors.fill: parent
@@ -506,9 +506,9 @@ PanelWindow {
         border.color: activeFocus ? Theme.focusRing : Theme.withAlpha(tint, 0.55)
         // Resalte fluido: fundido de color/borde y leve escalado al pasar el ratón.
         scale: hovered && !active ? 1.08 : 1.0
-        Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
-        Behavior on border.color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
-        Behavior on scale { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+        Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
+        Behavior on border.color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
+        Behavior on scale { NumberAnimation { duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
 
         Keys.onReturnPressed: btn.clicked()
         Keys.onEnterPressed: btn.clicked()
@@ -520,7 +520,7 @@ PanelWindow {
             color: btn.active ? btn.tint : (btn.hovered ? Theme.fg : Theme.fgDim)
             font.pixelSize: Theme.iconSize + 7
             // El glifo funde a la vez que el fondo, en lugar de saltar.
-            Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+            Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
         }
 
         MouseArea {
@@ -552,8 +552,8 @@ PanelWindow {
         border.color: Theme.focusRing
         // Resalte fluido: fundido con curva suave y leve escalado al hover.
         scale: hovered ? 1.05 : 1.0
-        Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
-        Behavior on scale { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+        Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
+        Behavior on scale { NumberAnimation { duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
 
         Keys.onReturnPressed: btn.clicked()
         Keys.onEnterPressed: btn.clicked()

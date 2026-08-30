@@ -56,7 +56,7 @@ Item {
         // La SELECCIÓN no persigue al puntero: cambia cuando eliges, y ahí un
         // tiempo normal se lee como "ha pasado algo", que es lo que quieres.
         Behavior on opacity {
-            NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutQuad }
+            NumberAnimation { duration: Theme.animNormal; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel }
         }
     }
     Rectangle {

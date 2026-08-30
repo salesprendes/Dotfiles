@@ -55,6 +55,9 @@ Singleton {
     // un tipo de Panels cerraría el círculo. Así que el servicio guarda el
     // estado y la autenticación, y la capa de arriba pone la superficie.
     property bool locked: false
+    // Pantalla donde se pidió el bloqueo. Vacío = sin Hyprland, y entonces la
+    // tarjeta cae en la primera pantalla, que es lo único que se puede hacer.
+    property string lockedOnMonitor: ""
     // Autenticando: la interfaz bloquea el campo y enseña el indicador.
     property bool busy: false
     property string message: ""
@@ -76,6 +79,11 @@ Singleton {
         root.messageIsError = false
         root.failures = 0
         root.busy = false
+        // En qué pantalla estabas al bloquear. La tarjeta de contraseña va ahí
+        // y no en Quickshell.screens[0], que es simplemente la primera que
+        // enumeró el compositor: con dos monitores, eso ponía la contraseña en
+        // el otro la mitad de las veces, y con tres, dos de cada tres.
+        root.lockedOnMonitor = Globals.focusedMonitorName()
         root.locked = true
     }
 

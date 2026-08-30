@@ -81,7 +81,7 @@ Popout {
             clip: true
             border.width: fs.activeFocus ? Theme.focusWidth : 0
             border.color: Theme.focusRing
-            Behavior on height { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+            Behavior on height { NumberAnimation { duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
 
             Rectangle {
                 // Ancho mínimo = alto: la píldora del relleno nunca se deforma
@@ -91,7 +91,7 @@ Popout {
                 radius: track.radius
                 color: fs.dimmed ? Theme.withAlpha(Theme.fg, 0.55) : Theme.fg
                 Behavior on color { ColorAnimation { duration: Theme.animFast } }
-                Behavior on width { enabled: !fsDrag.dragging; NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+                Behavior on width { enabled: !fsDrag.dragging; NumberAnimation { duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
             }
 
             ThemedText {
@@ -265,7 +265,7 @@ Popout {
                             Behavior on scale {
                                 NumberAnimation {
                                     duration: Theme.animNormal
-                                    easing.type: Easing.OutBack
+                                    easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveSpatial
                                     easing.overshoot: 2.2
                                 }
                             }
@@ -282,7 +282,7 @@ Popout {
                                 radius: height / 2
                                 color: btn.modelData.col
                                 opacity: pwMa.containsMouse ? 0.22 : 0
-                                Behavior on opacity { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
+                                Behavior on opacity { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
                             }
 
                             Rectangle {
@@ -294,7 +294,7 @@ Popout {
                                 color: pwMa.containsMouse
                                      ? (pwMa.pressed ? Qt.darker(btn.modelData.col, 1.15) : btn.modelData.col)
                                      : Theme.withAlpha(btn.modelData.col, 0)
-                                Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+                                Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
                                 ThemedText {
                                     anchors.centerIn: parent
                                     text: btn.modelData.ic
@@ -302,7 +302,7 @@ Popout {
                                     font.pixelSize: Theme.iconSize - 1
                                     // El glifo funde a la vez que el fondo, en vez
                                     // de saltar de color.
-                                    Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+                                    Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
                                 }
                             }
 

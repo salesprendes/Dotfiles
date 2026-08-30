@@ -82,9 +82,9 @@ PanelWindow {
         opacity: osd.revealed ? 1 : 0
         transform: Translate {
             y: osd.revealed ? 0 : 12
-            Behavior on y { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
+            Behavior on y { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
         }
-        Behavior on opacity { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
+        Behavior on opacity { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
 
         RowLayout {
             anchors.fill: parent
@@ -110,7 +110,7 @@ PanelWindow {
                     radius: parent.radius
                     width: parent.width * Math.min(1, (osd.muted ? 0 : osd.volume) / 100)
                     color: osd.muted ? Theme.fgMuted : Theme.accent
-                    Behavior on width { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+                    Behavior on width { NumberAnimation { duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
                 }
             }
 

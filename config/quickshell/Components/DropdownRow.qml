@@ -44,15 +44,19 @@ SettingsRow {
     }
 
     // Colores derivados de Theme (sobreescribibles).
-    property color controlColor: Theme.withAlpha(Theme.surface, 0.86)
-    property color borderColor:  Theme.withAlpha(Theme.overlay, 0.28)
+    // Escalera de M3: el control va un peldaño por encima de la tarjeta que lo
+    // contiene, y la lista desplegada otro más — porque flota SOBRE el control.
+    // Con alfa, el mismo desplegable se veía de un gris dentro de una tarjeta y
+    // de otro sobre el fondo de la ventana.
+    property color controlColor: Theme.surfaceContainerHigh
+    property color borderColor:  Theme.outlineVariant
     // OPACO, no translúcido. Cuando el panel se desplegaba empujando el
     // contenido no había nada detrás y un 72 % de alfa pasaba desapercibido;
     // flotando por encima, los interruptores y botones de debajo se
     // transparentaban a través de la lista y el panel parecía roto. Un menú
     // tiene que tapar lo que cubre.
-    property color cardColor:    Theme.surfaceHi
-    property color hoverColor:   Theme.withAlpha(Theme.surfaceHi, 0.74)
+    property color cardColor:    Theme.surfaceContainerHighest
+    property color hoverColor:   Theme.stateLayer(Theme.surfaceContainerHighest, Theme.fg, 0.08)
 
     // Panel flotante (por defecto) o acordeón que empuja. Lo segundo hace
     // falta en contenedores pequeños y recortados —la barra de captura de
@@ -412,7 +416,7 @@ SettingsRow {
                     : root.open ? Theme.accent
                     : selMa.containsMouse ? Theme.withAlpha(Theme.accent, 0.55)
                     : root.borderColor
-        Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+        Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
         Behavior on border.color { ColorAnimation { duration: Theme.animFast } }
 
         Keys.onReturnPressed: root.pickKeyboard()
@@ -467,7 +471,7 @@ SettingsRow {
             ThemedText {
                 text: "󰅀"
                 rotation: root.open ? 180 : 0
-                Behavior on rotation { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
+                Behavior on rotation { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
                 color: Theme.fgMuted
                 font.pixelSize: Theme.iconSize - 1
             }
@@ -681,7 +685,7 @@ SettingsRow {
                     // hacia el negro de "transparent").
                     color: sel ? Theme.withAlpha(Theme.accent, 0.18)
                                : focused ? Theme.focusBg : "transparent"
-                    Behavior on color { ColorAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
+                    Behavior on color { ColorAnimation { duration: Theme.animNormal; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
 
                     border.width: focused ? Theme.focusWidth : 0
                     border.color: Theme.focusRing
@@ -691,7 +695,7 @@ SettingsRow {
                         radius: parent.radius
                         color: root.hoverColor
                         opacity: rowMa.containsMouse && !optionRow.sel && !optionRow.focused ? 1 : 0
-                        Behavior on opacity { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutQuad } }
+                        Behavior on opacity { NumberAnimation { duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
                     }
 
                     RowLayout {

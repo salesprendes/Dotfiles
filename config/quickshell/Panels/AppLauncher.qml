@@ -77,7 +77,7 @@ Popout {
             hoverAction = ""
             selectedCat = ""
             apps = AppCatalog.entries
-            focusTimer.restart()
+            focusTimer.start()
         }
     }
 
@@ -94,10 +94,12 @@ Popout {
         onTriggered: launcher.applySearch()
     }
 
-    Timer {
+    FocusPulse {
         id: focusTimer
-        interval: 60
-        onTriggered: searchInput.input.forceActiveFocus()
+        target: searchInput.input
+        // Atado a la visibilidad: al cerrar el panel deja de
+        // insistir solo, sin tener que acordarse de pararlo.
+        active: launcher.shown
     }
 
     function launch(entry) {
@@ -223,7 +225,7 @@ Popout {
                 border.width: Math.max(1, Theme.hairline)
                 border.color: Theme.withAlpha(Theme.accent, 0.5)
                 opacity: appRow.selected ? 1 : 0
-                Behavior on opacity { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutQuad } }
+                Behavior on opacity { NumberAnimation { duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
             }
 
             readonly property string iconSrc:
@@ -361,7 +363,7 @@ Popout {
         Item {
             id: powerTray
             property real prog: launcher.powerOpen ? 1 : 0
-            Behavior on prog { NumberAnimation { duration: 280; easing.type: Easing.OutCubic } }
+            Behavior on prog { NumberAnimation { duration: 280; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
             implicitHeight: Theme.controlM
             implicitWidth: actionsRow.implicitWidth * prog
             visible: prog > 0.01
@@ -429,7 +431,7 @@ Popout {
                 color: launcher.powerOpen || ptMa.containsMouse ? Theme.red : Theme.fgDim
                 font.pixelSize: Theme.iconSize
                 rotation: launcher.powerOpen ? 90 : 0
-                Behavior on rotation { NumberAnimation { duration: 240; easing.type: Easing.OutCubic } }
+                Behavior on rotation { NumberAnimation { duration: 240; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
                 Behavior on color { ColorAnimation { duration: Theme.animFast } }
             }
             MouseArea {

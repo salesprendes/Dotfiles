@@ -67,16 +67,18 @@ Popout {
         searchField.text = ""
         panel.selectedIndex = 0
         hoverGate.reset()
-        focusTimer.restart()
+        focusTimer.start()
     }
 
     // El foco se pide con un pulso y no directamente: al abrir, la ventana aún
     // no tiene el foco del compositor y un forceActiveFocus() inmediato se
     // pierde. Mismo patrón que el resto de paneles con buscador.
-    Timer {
+    FocusPulse {
         id: focusTimer
-        interval: 80
-        onTriggered: searchField.input.forceActiveFocus()
+        target: searchField.input
+        // Atado a la visibilidad: al cerrar el panel deja de
+        // insistir solo, sin tener que acordarse de pararlo.
+        active: panel.shown
     }
 
     SearchField {

@@ -40,13 +40,13 @@ Rectangle {
                   : Theme.withAlpha(Theme.fg, Theme.isDark ? 0.07 : 0.06)
     border.width: 0
 
-    Behavior on color { ColorAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
+    Behavior on color { ColorAnimation { duration: Theme.animNormal; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
 
     ThemedText {
         anchors.centerIn: parent
         text: badge.glyph
         color: badge.active ? Theme.accentText : Theme.fgDim
         font.pixelSize: Theme.iconSize - Theme.dp(1)
-        Behavior on color { ColorAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
+        Behavior on color { ColorAnimation { duration: Theme.animNormal; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
     }
 }

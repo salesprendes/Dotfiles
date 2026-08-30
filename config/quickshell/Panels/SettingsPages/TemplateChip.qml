@@ -27,7 +27,7 @@ Rectangle {
     Behavior on border.color { ColorAnimation { duration: Theme.animFast } }
     // Se hunde al pulsar, como el resto de controles de la ventana.
     scale: chipMa.pressed ? 0.96 : 1
-    Behavior on scale { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+    Behavior on scale { NumberAnimation { duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
 
     // Marca de activada. El estado lo decía SOLO el tono, y con todas las
     // plantillas encendidas —que es lo normal— no había con qué comparar: la
@@ -48,7 +48,7 @@ Rectangle {
         Behavior on scale {
             NumberAnimation {
                 duration: Theme.animNormal
-                easing.type: Easing.OutBack; easing.overshoot: 2.2
+                easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveSpatial; easing.overshoot: 2.2
             }
         }
     }

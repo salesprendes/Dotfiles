@@ -131,7 +131,7 @@ PanelWindow {
                                               : Theme.withAlpha(Theme.bg, 0.96)
         opacity: splash.shown ? 1 : 0
         Behavior on opacity {
-            NumberAnimation { duration: 500; easing.type: Easing.InOutCubic }
+            NumberAnimation { duration: 500; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasized }
         }
     }
 
@@ -148,13 +148,13 @@ PanelWindow {
                                      : (splash.entered ? 0 : Theme.dp(14))
 
         Behavior on opacity {
-            NumberAnimation { duration: 420; easing.type: Easing.OutCubic }
+            NumberAnimation { duration: 420; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel }
         }
         Behavior on scale {
-            NumberAnimation { duration: 560; easing.type: Easing.OutCubic }
+            NumberAnimation { duration: 560; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel }
         }
         Behavior on anchors.verticalCenterOffset {
-            NumberAnimation { duration: 560; easing.type: Easing.OutCubic }
+            NumberAnimation { duration: 560; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel }
         }
 
         // Halo del acento respirando tras el logo: gradiente radial muy
@@ -167,7 +167,7 @@ PanelWindow {
             height: width
             z: -1
             opacity: splash.shown && splash.entered ? 1 : 0
-            Behavior on opacity { NumberAnimation { duration: 600; easing.type: Easing.OutCubic } }
+            Behavior on opacity { NumberAnimation { duration: 600; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
             onPaint: {
                 const ctx = getContext("2d")
                 ctx.reset()
@@ -219,7 +219,7 @@ PanelWindow {
             // aspecto en reposo no cambia.
             font.letterSpacing: splash.entered ? 0 : Theme.dp(12)
             Behavior on font.letterSpacing {
-                NumberAnimation { duration: 700; easing.type: Easing.OutCubic }
+                NumberAnimation { duration: 700; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel }
             }
             horizontalAlignment: Text.AlignHCenter
             verticalAlignment: Text.AlignVCenter
@@ -236,7 +236,7 @@ PanelWindow {
             height: Math.max(3, Theme.dp(5))
             // Entra un instante después del logo (trailIn) y funde suave.
             opacity: !splash.shown ? 0 : (splash.trailIn ? 0.94 : 0)
-            Behavior on opacity { NumberAnimation { duration: 420; easing.type: Easing.OutCubic } }
+            Behavior on opacity { NumberAnimation { duration: 420; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
             clip: true
 
             Rectangle {
@@ -257,7 +257,7 @@ PanelWindow {
                 color: Theme.accent
 
                 Behavior on width {
-                    NumberAnimation { duration: 260; easing.type: Easing.OutCubic }
+                    NumberAnimation { duration: 260; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel }
                 }
             }
 
@@ -271,10 +271,10 @@ PanelWindow {
                 visible: progressFill.width > height && splash.shown
 
                 Behavior on x {
-                    NumberAnimation { duration: 260; easing.type: Easing.OutCubic }
+                    NumberAnimation { duration: 260; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel }
                 }
                 Behavior on opacity {
-                    NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic }
+                    NumberAnimation { duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel }
                 }
             }
         }
@@ -294,6 +294,6 @@ PanelWindow {
         font.pixelSize: Theme.fontSize - 1
         font.letterSpacing: Theme.dp(2)
         opacity: !splash.shown ? 0 : (splash.trailIn ? 0.75 : 0)
-        Behavior on opacity { NumberAnimation { duration: 500; easing.type: Easing.OutCubic } }
+        Behavior on opacity { NumberAnimation { duration: 500; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
     }
 }

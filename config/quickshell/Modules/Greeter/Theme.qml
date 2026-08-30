@@ -13,6 +13,22 @@ import qs.Config as Shared
 Singleton {
     id: root
 
+    // ── Curvas de movimiento de Material 3 ───────────────────────────────────
+    // LAS MISMAS que Config/Theme.qml, y repetidas a propósito: el greeter
+    // corre ANTES de la sesión y tiene su propio Theme justamente para no
+    // arrastrar Settings ni el resto del shell. Importar el otro por seis
+    // constantes traería toda esa dependencia a la pantalla de inicio.
+    //
+    // Si se tocan allí, hay que tocarlas aquí. Son seis números que no van a
+    // cambiar —son el estándar de Material 3— así que el coste de la copia es
+    // menor que el de acoplar el greeter al shell.
+    readonly property var curveEmphasized:      [0.05, 0, 2 / 15, 0.06, 1 / 6, 0.4, 5 / 24, 0.82, 0.25, 1, 1, 1]
+    readonly property var curveEmphasizedDecel: [0.05, 0.7, 0.1, 1, 1, 1]
+    readonly property var curveEmphasizedAccel: [0.3, 0, 0.8, 0.15, 1, 1]
+    readonly property var curveStandard:        [0.2, 0, 0, 1, 1, 1]
+    readonly property var curveSpatial:         [0.38, 1.21, 0.22, 1.00, 1, 1]
+    readonly property var curveEffects:         [0.34, 0.80, 0.34, 1.00, 1, 1]
+
     // La paleta la calcula GreeterSurface, no este singleton: un Canvas
     // necesita una escena para pintar y aquí dentro nunca lo haría. Llega por
     // applyFromPixels con los píxeles de una miniatura del fondo.

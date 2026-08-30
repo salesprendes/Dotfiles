@@ -70,7 +70,7 @@ Rectangle {
                 color: Theme.accent
                 Behavior on width {
                     enabled: card.animate
-                    NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic }
+                    NumberAnimation { duration: Theme.animNormal; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel }
                 }
             }
         }

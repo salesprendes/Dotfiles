@@ -175,7 +175,7 @@ Popout {
                                          : Theme.withAlpha(Theme.surface, 0.85)
             border.width: Theme.hairline
             border.color: Theme.withAlpha(Theme.overlay, 0.34)
-            Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+            Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
 
             RowLayout {
                 id: clearRow
@@ -192,7 +192,7 @@ Popout {
                     font.pixelSize: Theme.fontSize - 2
                     font.bold: true
                     // Funde junto al fondo.
-                    Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+                    Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
                 }
             }
 
@@ -222,7 +222,7 @@ Popout {
                                                : Theme.withAlpha(Theme.surface, 0.72)
                 border.width: Theme.hairline
                 border.color: Theme.withAlpha(Theme.overlay, 0.34)
-                Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+                Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
 
                 RowLayout {
                     id: mutedRow
@@ -244,7 +244,7 @@ Popout {
                         color: unmuteMa.containsMouse ? Theme.red : Theme.fgMuted
                         font.pixelSize: Theme.iconSize - 5
                         // Funde junto al fondo del chip.
-                        Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+                        Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
                     }
                 }
 
@@ -276,7 +276,7 @@ Popout {
             color: Theme.fgMuted
             lineHeight: 1.35
 
-            Behavior on opacity { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
+            Behavior on opacity { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
         }
 
         // Vacío con "No molestar": símbolo DND en grande en vez del texto.
@@ -287,7 +287,7 @@ Popout {
             opacity: visible ? 1 : 0
             spacing: Theme.space6
 
-            Behavior on opacity { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
+            Behavior on opacity { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
 
             ThemedText {
                 Layout.alignment: Qt.AlignHCenter
@@ -342,12 +342,12 @@ Popout {
                     opacity: groupDelegate.closing ? 0 : 1
                     scale: groupDelegate.closing ? 0.985 : 1
 
-                    Behavior on opacity { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
-                    Behavior on scale { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+                    Behavior on opacity { NumberAnimation { duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
+                    Behavior on scale { NumberAnimation { duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
 
                     Behavior on x {
                         enabled: !drag.active
-                        NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic }
+                        NumberAnimation { duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel }
                     }
 
                     Timer {
@@ -449,9 +449,9 @@ Popout {
                                     border.color: groupDelegate.expanded
                                         ? Theme.withAlpha(Theme.accent, 0.55)
                                         : Theme.withAlpha(Theme.accent, 0.45)
-                                    Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
-                                    Behavior on border.color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
-                                    Behavior on scale { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutBack } }
+                                    Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
+                                    Behavior on border.color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
+                                    Behavior on scale { NumberAnimation { duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveSpatial } }
 
                                     RowLayout {
                                         id: ceRow
@@ -474,8 +474,8 @@ Popout {
                                             rotation: groupDelegate.expanded ? 90 : 0
                                             color: groupDelegate.expanded || ceMa.containsMouse ? Theme.accent : Theme.fgMuted
                                             font.pixelSize: Theme.iconSize - 4
-                                            Behavior on rotation { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
-                                            Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+                                            Behavior on rotation { NumberAnimation { duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
+                                            Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
                                         }
                                     }
 

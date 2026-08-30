@@ -246,8 +246,8 @@ Scope {
             focus: true
             opacity: plugin.open ? 1 : 0
             scale: plugin.open ? 1 : 0.985
-            Behavior on opacity { NumberAnimation { duration: Math.max(1, Theme.animNormal); easing.type: Easing.OutCubic } }
-            Behavior on scale   { NumberAnimation { duration: Math.max(1, Theme.animNormal); easing.type: Easing.OutCubic } }
+            Behavior on opacity { NumberAnimation { duration: Math.max(1, Theme.animNormal); easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
+            Behavior on scale   { NumberAnimation { duration: Math.max(1, Theme.animNormal); easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
 
             Keys.onPressed: (e) => {
                 if (e.key === Qt.Key_Escape) { plugin.setOpen(false); e.accepted = true }
@@ -383,7 +383,7 @@ Scope {
                     // Al moverse rápido, easing sin rebote (OutQuad) para que sea
                     // fluido; en reposo, un OutBack con un puntito de vida.
                     Behavior on scale   { NumberAnimation { duration: plugin.cardAnimMs; easing.type: plugin._fastNavigation ? Easing.OutQuad : Easing.OutBack } }
-                    Behavior on opacity { NumberAnimation { duration: plugin.cardAnimMs; easing.type: Easing.OutQuad } }
+                    Behavior on opacity { NumberAnimation { duration: plugin.cardAnimMs; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
 
                     Item {
                         id: skewedCard
@@ -486,7 +486,7 @@ Scope {
                 spacing: Theme.space10
                 visible: plugin.loading
                 opacity: visible ? 1 : 0
-                Behavior on opacity { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+                Behavior on opacity { NumberAnimation { duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
 
                 Item {
                     anchors.horizontalCenter: parent.horizontalCenter

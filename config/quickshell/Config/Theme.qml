@@ -78,6 +78,11 @@ Singleton {
     // El zoom automático se puede apagar (Ajustes → Tema): entonces la
     // densidad es neutra y manda solo la escala del usuario.
     readonly property Scale _densitySource: Scale {}
+    // ¿Hay monitores de resoluciones lógicas muy distintas? La escala del shell
+    // es una sola para todos, así que en ese caso el ajuste automático acierta
+    // en uno y falla en el otro. Ajustes lo dice en vez de callárselo (ver
+    // Config/Scale.qml).
+    readonly property bool mixedDensity: _densitySource.mixed
     readonly property real densityScale: Settings.autoDensity ? _densitySource.density : 1
     readonly property real scale: clamp(uiScale * densityScale, 0.7, 1.9)
 
@@ -262,6 +267,78 @@ Singleton {
     // los hace notoriamente más grandes mientras siguen escalando con
     // 'scale' (resolución/densidad), en vez de quedar en un tamaño fijo.
     readonly property int    barIconSize: Math.round(iconSize * 1.4)
+
+    // ── Escalera de contenedores de Material 3 ───────────────────────────────
+    // M3 no tiene "una superficie": tiene CINCO niveles, y la altura de un
+    // elemento se dice subiendo un peldaño, no metiéndole una sombra. Una
+    // tarjeta va en 'surfaceContainer' y lo que se anida dentro sube a 'High'.
+    //
+    // POR QUÉ DERIVADOS Y NO CINCO COLORES EN LA PALETA: los temas del shell
+    // (y la paleta dinámica que sale del fondo de pantalla) traen bg/surface/
+    // surfaceHi. Pedirles cinco tonos más obligaría a reescribir todos los
+    // temas y a que el extractor de color inventase valores. Derivándolos del
+    // fondo hacia el texto se obtiene la misma escalera tonal que hace M3, y
+    // cualquier tema existente la hereda sin tocar nada.
+    //
+    // La dirección se invierte sola: en oscuro subir de nivel ACLARA y en claro
+    // OSCURECE, porque en los dos casos es acercarse al color del texto. Es
+    // exactamente lo que hace M3 (tono 4→22 en oscuro, 100→90 en claro).
+    //
+    // Y son OPACOS a propósito. Lo que había eran mezclas con alfa
+    // (withAlpha(surfaceHi, 0.42)); con alfa, dos superficies superpuestas
+    // suman y el resultado depende de lo que haya debajo, así que el mismo
+    // token se ve distinto según dónde caiga.
+    function _container(t) {
+        return Qt.tint(bg, Qt.rgba(fg.r, fg.g, fg.b, t))
+    }
+    readonly property color surfaceContainerLowest:  _container(0.015)
+    readonly property color surfaceContainerLow:     _container(0.040)
+    readonly property color surfaceContainer:        _container(0.065)
+    readonly property color surfaceContainerHigh:    _container(0.095)
+    readonly property color surfaceContainerHighest: _container(0.130)
+
+    // Los dos roles de BORDE de M3, que nos faltaban. Los filetes y cantos se
+    // venían escribiendo como withAlpha(overlay, 0.2x) repetido por todas
+    // partes: funciona, pero no dice cuál de los dos contornos es, y M3
+    // distingue dos cosas distintas.
+    //
+    //   outline         contorno con contraste: un campo enfocado, un botón
+    //                   perfilado, algo que tiene que verse de lejos.
+    //   outlineVariant  separador de bajo contraste: el filete entre filas, el
+    //                   canto de una tarjeta. Tiene que estar, no que mirarse.
+    //
+    // Salen de la misma escalera tonal que los contenedores, así que en modo
+    // claro se invierten solos igual que ellos.
+    readonly property color outline:        _container(0.38)
+    readonly property color outlineVariant: _container(0.20)
+
+    // ── Curvas de movimiento de Material 3 ───────────────────────────────────
+    // Teníamos tokenizada la DURACIÓN de las animaciones y no su FORMA, y en M3
+    // la forma es la otra mitad: había 159 `Easing.OutCubic` repartidos por el
+    // shell, que es la curva genérica de QML, no la de Material.
+    //
+    // La diferencia se nota: 'emphasized' arranca deprisa y dedica la cola a
+    // asentarse, así que lo que se mueve parece tener peso. OutCubic reparte el
+    // recorrido de forma mucho más plana y todo se lee como "se ha deslizado",
+    // no como "ha llegado".
+    //
+    // Se usan como `easing.type: Easing.BezierSpline` + `easing.bezierCurve`.
+    // Van como tokens sueltos y no dentro de un Component que haya que
+    // instanciar (que es como los guarda la referencia): así una animación
+    // cualquiera los usa en una línea y sin fábrica de por medio.
+    //
+    //   emphasized       lo de siempre: algo que entra, sale o cambia de sitio
+    //   emphasizedDecel  lo que ENTRA en pantalla (frena al llegar)
+    //   emphasizedAccel  lo que SALE (acelera al irse, y ya no importa)
+    //   standard         cambios pequeños dentro de un elemento que no se mueve
+    //   spatial          M3 Expressive: sobrepasa un poco (1,21) y vuelve.
+    //                    Es lo que veníamos imitando a ojo con Easing.OutBack.
+    readonly property var curveEmphasized:      [0.05, 0, 2 / 15, 0.06, 1 / 6, 0.4, 5 / 24, 0.82, 0.25, 1, 1, 1]
+    readonly property var curveEmphasizedDecel: [0.05, 0.7, 0.1, 1, 1, 1]
+    readonly property var curveEmphasizedAccel: [0.3, 0, 0.8, 0.15, 1, 1]
+    readonly property var curveStandard:        [0.2, 0, 0, 1, 1, 1]
+    readonly property var curveSpatial:         [0.38, 1.21, 0.22, 1.00, 1, 1]
+    readonly property var curveEffects:         [0.34, 0.80, 0.34, 1.00, 1, 1]
 
     readonly property int   animFast:   Settings.animFastMs
     readonly property int   animNormal: Settings.animNormalMs

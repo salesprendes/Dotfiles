@@ -59,8 +59,8 @@ PanelWindow {
 
         opacity: modal.visible ? 1 : 0
         scale: modal.visible ? 1 : 0.96
-        Behavior on opacity { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
-        Behavior on scale { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
+        Behavior on opacity { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
+        Behavior on scale { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
 
         MouseArea { anchors.fill: parent }   // absorbe clicks
 

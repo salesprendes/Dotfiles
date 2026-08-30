@@ -176,8 +176,8 @@ SettingsRow {
             // dice igual en toda la ventana. En gris, la píldora contradecía
             // al texto seleccionado, que ya iba de acento.
             color: SettingsPalette.selectedTint
-            Behavior on x { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
-            Behavior on width { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+            Behavior on x { NumberAnimation { duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
+            Behavior on width { NumberAnimation { duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
         }
 
         RowLayout {

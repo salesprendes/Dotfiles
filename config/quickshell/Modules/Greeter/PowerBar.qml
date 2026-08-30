@@ -13,8 +13,8 @@ Row {
     Component.onCompleted: powerIn.start()
     ParallelAnimation {
         id: powerIn
-        NumberAnimation { target: powerRow; property: "opacity"; from: 0; to: 0.9; duration: 500; easing.type: Easing.OutCubic }
-        NumberAnimation { target: powerRow; property: "enterY"; from: Theme.dp(16); to: 0; duration: 560; easing.type: Easing.OutCubic }
+        NumberAnimation { target: powerRow; property: "opacity"; from: 0; to: 0.9; duration: 500; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel }
+        NumberAnimation { target: powerRow; property: "enterY"; from: Theme.dp(16); to: 0; duration: 560; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel }
     }
 
     PowerButton { glyph: "󰜉"; label: I18n.tr("Reiniciar", "Restart"); cmd: ["systemctl", "reboot"];   spin: true }

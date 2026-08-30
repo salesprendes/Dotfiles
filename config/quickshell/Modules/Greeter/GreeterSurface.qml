@@ -30,7 +30,7 @@ FloatingWindow {
         NumberAnimation {
             id: zoomIn
             target: wall; property: "scale"
-            from: 1.06; to: 1.0; duration: 1200; easing.type: Easing.OutCubic
+            from: 1.06; to: 1.0; duration: 1200; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel
         }
     }
     // ── Extractor de paleta dinámica ─────────────────────────────────────────
@@ -71,7 +71,7 @@ FloatingWindow {
         NumberAnimation {
             id: scrimIn
             target: scrim; property: "opacity"
-            from: 0; to: 0.55; duration: 700; easing.type: Easing.OutCubic
+            from: 0; to: 0.55; duration: 700; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel
         }
     }
 
@@ -94,7 +94,7 @@ FloatingWindow {
         NumberAnimation {
             id: clockIn
             target: clockCol; property: "opacity"
-            from: 0; to: 1; duration: 600; easing.type: Easing.OutCubic
+            from: 0; to: 1; duration: 600; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel
         }
         Text {
             anchors.horizontalCenter: parent.horizontalCenter
@@ -133,7 +133,7 @@ FloatingWindow {
             const maxY = win.height - height - Theme.dp(26)
             return Math.min(Math.max(centered, belowClock), Math.max(Theme.dp(10), maxY))
         }
-        Behavior on height { NumberAnimation { duration: 320; easing.type: Easing.OutCubic } }
+        Behavior on height { NumberAnimation { duration: 320; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
 
         // Entrada de la tarjeta.
         opacity: 0
@@ -143,9 +143,9 @@ FloatingWindow {
         Component.onCompleted: cardIn.start()
         ParallelAnimation {
             id: cardIn
-            NumberAnimation { target: card; property: "opacity"; from: 0; to: 1; duration: 520; easing.type: Easing.OutCubic }
-            NumberAnimation { target: card; property: "enterY"; from: Theme.dp(26); to: 0; duration: 560; easing.type: Easing.OutCubic }
-            NumberAnimation { target: card; property: "scale"; from: 0.98; to: 1; duration: 560; easing.type: Easing.OutCubic }
+            NumberAnimation { target: card; property: "opacity"; from: 0; to: 1; duration: 520; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel }
+            NumberAnimation { target: card; property: "enterY"; from: Theme.dp(26); to: 0; duration: 560; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel }
+            NumberAnimation { target: card; property: "scale"; from: 0.98; to: 1; duration: 560; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel }
         }
         // Sacudida al fallar.
         Connections {
@@ -157,7 +157,7 @@ FloatingWindow {
             NumberAnimation { target: card; property: "shake"; to: -Theme.dp(10); duration: 50 }
             NumberAnimation { target: card; property: "shake"; to: Theme.dp(9);   duration: 60 }
             NumberAnimation { target: card; property: "shake"; to: -Theme.dp(6);  duration: 60 }
-            NumberAnimation { target: card; property: "shake"; to: 0;             duration: 60; easing.type: Easing.OutCubic }
+            NumberAnimation { target: card; property: "shake"; to: 0;             duration: 60; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel }
         }
 
         // Fondo de la tarjeta.
@@ -209,8 +209,8 @@ FloatingWindow {
             visible: opacity > 0.02
             property real off: card.pwStage ? -Theme.dp(26) : 0
             transform: Translate { x: up.off }
-            Behavior on opacity { NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
-            Behavior on off { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
+            Behavior on opacity { NumberAnimation { duration: 260; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
+            Behavior on off { NumberAnimation { duration: 300; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
         }
 
         // PASO 2 · Contraseña.
@@ -224,8 +224,8 @@ FloatingWindow {
             visible: opacity > 0.02
             property real off: card.pwStage ? 0 : Theme.dp(26)
             transform: Translate { x: pwv.off }
-            Behavior on opacity { NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
-            Behavior on off { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
+            Behavior on opacity { NumberAnimation { duration: 260; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
+            Behavior on off { NumberAnimation { duration: 300; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
         }
     }
 

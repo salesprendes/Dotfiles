@@ -271,7 +271,7 @@ SettingsRow {
 
         implicitWidth: gap.isTarget ? Theme.dp(22) : Theme.dp(8)
         implicitHeight: Theme.dp(32)
-        Behavior on implicitWidth { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+        Behavior on implicitWidth { NumberAnimation { duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
 
         Rectangle {
             anchors.centerIn: parent

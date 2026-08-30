@@ -1,4 +1,5 @@
 import QtQuick
+import qs.Config
 
 // Estado compartido de "vaciar la lista con animación": congela el alto del
 // cuerpo, desliza y desvanece la lista, ejecuta el borrado real y devuelve el
@@ -39,7 +40,7 @@ QtObject {
     property real frozenListHeight: 0
     property real bodyHeight: emptyBodyHeight
 
-    Behavior on bodyHeight { NumberAnimation { duration: 240; easing.type: Easing.OutCubic } }
+    Behavior on bodyHeight { NumberAnimation { duration: 240; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
 
     function refreshBodyHeight() {
         if (freezeListHeight || showingClearedState)
@@ -90,7 +91,7 @@ QtObject {
                 property: "listClearOpacity"
                 to: 0
                 duration: 260
-                easing.type: Easing.OutCubic
+                easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel
             }
 
             NumberAnimation {
@@ -98,7 +99,7 @@ QtObject {
                 property: "listClearOffset"
                 to: 18
                 duration: 260
-                easing.type: Easing.OutCubic
+                easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel
             }
         }
         ScriptAction {

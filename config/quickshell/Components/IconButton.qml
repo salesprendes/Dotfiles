@@ -27,7 +27,7 @@ Rectangle {
          : (baseColor.a === 0 ? Qt.rgba(hoverColor.r, hoverColor.g, hoverColor.b, 0) : baseColor)
     border.width: activeFocus ? Theme.focusWidth : 0
     border.color: Theme.focusRing
-    Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+    Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
 
     // Crece un punto al pasar el ratón y se hunde al pulsar.
     //
@@ -61,7 +61,7 @@ Rectangle {
         color: btn.hovered ? btn.hoverIconColor : btn.iconColor
         font.pixelSize: btn.iconPixelSize
         // El glifo funde a la vez que el fondo.
-        Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+        Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
     }
 
     // Repetición al mantener pulsado (opcional): dispara al instante al

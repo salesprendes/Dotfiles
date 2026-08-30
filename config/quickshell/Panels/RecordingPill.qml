@@ -30,7 +30,12 @@ PanelWindow {
     // clics a las apps de debajo. Sin la máscara, la capa Overlay se traga toda
     // la pantalla y no puedes seleccionar nada mientras grabas. La región sigue
     // a la píldora al moverse o cambiar de tamaño (usa su geometría, x/y incl.).
-    mask: Region { item: pill }
+    // Con el radio de la píldora, no el rectángulo que la contiene. Es una
+    // píldora entera (radio = medio alto), así que sin esto las cuatro esquinas
+    // capturaban el ratón sobre un sitio donde se ve lo de debajo — y esto vive
+    // en capa Overlay MIENTRAS GRABAS, encima de aquello que estés grabando.
+    // Region con radio por esquina es de Quickshell 0.3.
+    mask: Region { item: pill; radius: Math.round(pill.radius) }
 
     function pillX() {
         const def = Math.max(Theme.space4, win.width - pill.width - Theme.space12)
@@ -54,9 +59,9 @@ PanelWindow {
         border.color: Theme.withAlpha(Theme.red, 0.58)
         antialiasing: true
 
-        Behavior on width { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
-        Behavior on x { NumberAnimation { duration: dragArea.pressed ? 0 : Theme.animFast; easing.type: Easing.OutCubic } }
-        Behavior on y { NumberAnimation { duration: dragArea.pressed ? 0 : Theme.animFast; easing.type: Easing.OutCubic } }
+        Behavior on width { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
+        Behavior on x { NumberAnimation { duration: dragArea.pressed ? 0 : Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
+        Behavior on y { NumberAnimation { duration: dragArea.pressed ? 0 : Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
 
         MouseArea {
             id: dragArea

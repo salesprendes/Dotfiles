@@ -110,7 +110,7 @@ Popout {
                         Behavior on y {
                             NumberAnimation {
                                 duration: dash.tabAnim
-                                easing.type: Easing.OutBack
+                                easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveSpatial
                                 easing.overshoot: 1.1
                             }
                         }
@@ -168,7 +168,7 @@ Popout {
         // resumen puede cambiar el tamaño del panel, por construcción.
         Layout.preferredHeight: overviewPage.implicitHeight
         Behavior on Layout.preferredHeight {
-            NumberAnimation { duration: dash.tabAnim; easing.type: Easing.InOutCubic }
+            NumberAnimation { duration: dash.tabAnim; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasized }
         }
         clip: true
 
@@ -184,9 +184,9 @@ Popout {
             visible: opacity > 0.01
             transform: Translate {
                 x: (0 - dash.activeIndex) * pages.slide
-                Behavior on x { NumberAnimation { duration: dash.tabAnim; easing.type: Easing.OutCubic } }
+                Behavior on x { NumberAnimation { duration: dash.tabAnim; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
             }
-            Behavior on opacity { NumberAnimation { duration: dash.tabAnim; easing.type: Easing.OutCubic } }
+            Behavior on opacity { NumberAnimation { duration: dash.tabAnim; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
 
             // Dos columnas para ganar anchura sin crecer hacia abajo: a la
             // izquierda hora/clima, el tiempo y sistema; a la derecha el
@@ -557,9 +557,9 @@ Popout {
             visible: opacity > 0.01
             transform: Translate {
                 x: (1 - dash.activeIndex) * pages.slide
-                Behavior on x { NumberAnimation { duration: dash.tabAnim; easing.type: Easing.OutCubic } }
+                Behavior on x { NumberAnimation { duration: dash.tabAnim; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
             }
-            Behavior on opacity { NumberAnimation { duration: dash.tabAnim; easing.type: Easing.OutCubic } }
+            Behavior on opacity { NumberAnimation { duration: dash.tabAnim; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
 
             // Históricos para las gráficas (40 muestras ≈ 2 min), rellenados
             // en cada tick solo mientras la pestaña está a la vista.
@@ -736,9 +736,9 @@ Popout {
             onVisibleChanged: if (visible) artArmed = true
             transform: Translate {
                 x: (2 - dash.activeIndex) * pages.slide
-                Behavior on x { NumberAnimation { duration: dash.tabAnim; easing.type: Easing.OutCubic } }
+                Behavior on x { NumberAnimation { duration: dash.tabAnim; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
             }
-            Behavior on opacity { NumberAnimation { duration: dash.tabAnim; easing.type: Easing.OutCubic } }
+            Behavior on opacity { NumberAnimation { duration: dash.tabAnim; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
 
             // Sin reproducción: solo el glifo, enorme y centrado en la página.
             // Sin texto: el icono se explica solo.
@@ -911,9 +911,9 @@ Popout {
             onVisibleChanged: if (visible) thumbsArmed = true
             transform: Translate {
                 x: (3 - dash.activeIndex) * pages.slide
-                Behavior on x { NumberAnimation { duration: dash.tabAnim; easing.type: Easing.OutCubic } }
+                Behavior on x { NumberAnimation { duration: dash.tabAnim; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
             }
-            Behavior on opacity { NumberAnimation { duration: dash.tabAnim; easing.type: Easing.OutCubic } }
+            Behavior on opacity { NumberAnimation { duration: dash.tabAnim; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
 
             // Nombre legible: archivo sin extensión, guiones/guiones bajos
             // como espacios y primera letra en mayúscula.
@@ -954,12 +954,12 @@ Popout {
                     implicitWidth: Theme.controlM; implicitHeight: Theme.controlM
                     radius: width / 2
                     color: refMa.containsMouse ? Theme.surfaceHi : Theme.withAlpha(Theme.surface, 0.6)
-                    Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+                    Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
                     scale: refMa.pressed ? 0.9 : (refMa.containsMouse ? 1.08 : 1.0)
                     Behavior on scale {
                         NumberAnimation {
                             duration: Theme.animNormal
-                            easing.type: Easing.OutBack
+                            easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveSpatial
                             easing.overshoot: 2.2
                         }
                     }
@@ -1134,7 +1134,7 @@ Popout {
                             // Zoom sutil al pasar el ratón; el recorte lo da
                             // el ClippingRectangle.
                             scale: wpMa.containsMouse ? 1.07 : 1.0
-                            Behavior on scale { NumberAnimation { duration: 240; easing.type: Easing.OutCubic } }
+                            Behavior on scale { NumberAnimation { duration: 240; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
                         }
 
                         Text {
@@ -1183,7 +1183,7 @@ Popout {
                         width: Theme.dp(18); height: Theme.dp(18); radius: width / 2
                         color: Theme.accent
                         scale: wpCell.active ? 1 : 0
-                        Behavior on scale { NumberAnimation { duration: 200; easing.type: Easing.OutBack } }
+                        Behavior on scale { NumberAnimation { duration: 200; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveSpatial } }
                         Text {
                             anchors.centerIn: parent; text: "󰄬"; color: Theme.bg
                             font.family: Theme.fontFamily; font.pixelSize: Theme.fontSize - 3
@@ -1299,7 +1299,7 @@ Popout {
             Behavior on scale {
                 NumberAnimation {
                     duration: Theme.animNormal
-                    easing.type: Easing.OutBack
+                    easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveSpatial
                     easing.overshoot: 2.2
                 }
             }

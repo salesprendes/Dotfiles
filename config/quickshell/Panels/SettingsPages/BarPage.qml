@@ -18,6 +18,26 @@ SettingsPage {
         BarLayoutEditor {}
     }
 
+    // ── La isla ─────────────────────────────────────────────────────────────
+    SettingsCard {
+        title: I18n.tr("Dynamic island")
+        glyph: "󰋙"
+        description: I18n.tr("Replaces the centre of the bar with a pill that reacts to what happens: notifications, volume, music.")
+
+        SwitchRow { glyph: "󰋙"; skey: "islandEnabled"; aliases: ["notch", "dynamic island", "isla"]; label: I18n.tr("Dynamic island")
+            checked: Settings.islandEnabled
+            onToggled: Settings.islandEnabled = !Settings.islandEnabled }
+        SwitchRow { glyph: "󰖐"; skey: "islandShowWeather"; label: I18n.tr("Weather in the island")
+            shown: Settings.islandEnabled
+            checked: Settings.islandShowWeather
+            onToggled: Settings.islandShowWeather = !Settings.islandShowWeather }
+        Hint {
+            skey: "islandEnabled"
+            shown: Settings.islandEnabled
+            text: I18n.tr("With the island on it also takes over the volume OSD, the notification popups and the notification centre: the bell in the bar opens the island instead of the classic panel. Turning it off puts back the bar centre, the classic OSD, the classic popups and the classic centre, exactly as they were.")
+        }
+    }
+
     // El clima es un widget más: sus ajustes viven aquí, junto al resto de lo
     // que se enseña en la barra, en vez de en "Sistema" — donde estaba por su
     // servicio de red, que es un detalle de implementación, no algo que el

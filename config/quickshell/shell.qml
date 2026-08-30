@@ -1,17 +1,40 @@
-//@ pragma Env QV4_FORCE_INTERPRETER = 1
 // Punto de entrada del shell: una barra por monitor.
-// Se fuerza el intérprete de QV4 para evitar una caída reproducida del JIT de
-// Qt 6.11.1 (QV4::Value::sameValueZero) al reevaluar bindings de larga vida.
+//
+// EL JIT DE QV4 ESTÁ ENCENDIDO. Aquí vivía un
+// `//@ pragma Env QV4_FORCE_INTERPRETER = 1` que lo apagaba para esquivar una
+// caída del JIT de Qt **6.11.1** (QV4::Value::sameValueZero) al reevaluar
+// bindings de larga vida. Ese pragma tenía dos problemas: era global —le
+// quitaba el compilador a las 57.000 líneas del shell por un fallo de una
+// versión concreta de Qt— y no llevaba fecha de caducidad, así que iba a
+// sobrevivir al fallo que lo justificaba.
+//
+// Se ha retirado al pasar a Qt 6.11.2, que es la corrección de errores sobre
+// esa misma serie. Lo que se comprobó antes de quitarlo:
+//
+//   · Ningún `.includes()` del shell es sobre un ARRAY. Importa porque
+//     `sameValueZero` es justo lo que implementa Array.prototype.includes:
+//     los doce que hay son sobre cadenas, que van por otro camino.
+//   · Una prueba de esfuerzo con el JIT activo (tests/jit.py) que machaca los
+//     bindings de larga vida —los `property var` con objetos dentro, que es
+//     donde se caía— sin que el motor se inmute.
+//
+// Si volviera a caerse: `QV4_FORCE_INTERPRETER=1 qs` lo reproduce apagado sin
+// tocar este archivo, y el pragma se puede devolver aquí en una línea.
+//
 // La bandeja usa su propio menú QML, así que no necesita QApplication/Widgets.
 
 import QtQuick
 import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Io
+import Quickshell.Wayland
 import qs.Background
 import qs.Bar
 import qs.Config
 import qs.Modules.Carousel
+import qs.Modules.Island
+import qs.Modules.Island.sources
+import qs.Modules.Spotlight
 import qs.Modules.IA.ui
 import qs.Panels
 import qs.Services
@@ -156,6 +179,7 @@ ShellRoot {
         function controlcenter(): void { Globals.toggleControlCenter() }
         function notifications(): void { Globals.toggleNotifCenter() }
         function sysmon(): void { Globals.toggleSysMon() }
+        function sysmonapp(): void { Globals.toggleSysMonApp() }
         function launcher(): void { Globals.toggleLauncher() }
         function clipboard(): void { Globals.toggleClipboard() }
         function dashboard(): void { Globals.toggleDashboard() }
@@ -164,6 +188,7 @@ ShellRoot {
         function settings(): void { Globals.toggleSettings() }
         function ai(): void { Globals.toggleAi() }
         function emoji(): void { Globals.toggleEmoji() }
+        function spotlight(): void { Globals.toggleSpotlight() }
         function dnd(): void { Globals.dnd = !Globals.dnd }
         function caffeine(): void { Settings.caffeine = !Settings.caffeine }
         function lock(): void { Globals.runPowerAction("lock") }
@@ -215,14 +240,24 @@ ShellRoot {
         onTriggered: lockMonitor.running = true
     }
 
-    // Los popups de notificación animan su entrada/salida DESDE QML; sin esta
-    // regla Hyprland superpone además su animación de layers (fade al mapear/
-    // desmapear y el redimensionado de la capa), lo que producía una entrada
+    // Las capas que animan su entrada y su salida DESDE QML tienen que decirle
+    // a Hyprland que no las anime él también. Sin esto, el compositor superpone
+    // su propio fundido al mapear y desmapear, y lo que se ve es una entrada
     // doble "forzada" y una franja gris residual al desvanecer la instantánea
-    // del último búfer tras cerrar.
-    Component.onCompleted: Quickshell.execDetached(["hyprctl", "eval",
-        'hl.layer_rule({ name = "qs-noanim-popups", match = '
-        + '{ namespace = "qs-popups" }, no_anim = true })'])
+    // del último búfer.
+    //
+    // Para la ISLA importa todavía más que para los popups: su ventana está
+    // mapeada toda la sesión y lo que se mueve es la forma de dentro, así que
+    // cualquier animación de capa por encima es ruido puro sobre un muelle que
+    // ya está haciendo el trabajo.
+    Component.onCompleted: {
+        Quickshell.execDetached(["hyprctl", "eval",
+            'hl.layer_rule({ name = "qs-noanim-popups", match = '
+            + '{ namespace = "qs-popups" }, no_anim = true })'])
+        Quickshell.execDetached(["hyprctl", "eval",
+            'hl.layer_rule({ name = "qs-noanim-island", match = '
+            + '{ namespace = "qs-island" }, no_anim = true })'])
+    }
 
     // Bloq Núm sobrevive a las recargas de Hyprland. Un `hyprctl reload`
     // relee la config Lua —que no sabe del ajuste— y resetea la opción; y el
@@ -326,8 +361,51 @@ ShellRoot {
             }
 
             Bar {
+                id: bar
                 modelData: scr.modelData
                 Component.onCompleted: shell.startupBarReadyCount++
+            }
+
+            // ── No apagar la pantalla mientras suena algo ─────────────────────
+            // Inhibidor de reposo de Wayland (Quickshell 0.3). Se le dice al
+            // COMPOSITOR en vez de pelearse con el gestor de reposo: hypridle,
+            // swayidle o el que sea lo respetan por protocolo, así que funciona
+            // igual en cualquier sitio sin detectar cuál corre ni tocar su
+            // configuración.
+            //
+            // 'window' NO ES OPCIONAL, y esa es la trampa: sin ella el objeto se
+            // construye, 'enabled' se queda en true y no inhibe nada — sin un
+            // aviso ni un error. El compositor la usa para decidir si te hace
+            // caso, y una ventana de panel es de las que respeta.
+            //
+            // Por eso va aquí dentro y no suelto en la raíz: es donde hay una
+            // ventana a la que atarse. Con varios monitores salen varios
+            // inhibidores, lo cual da igual — inhibir es un o-lógico, y basta
+            // con que uno esté activo.
+            //
+            // Quién cuenta como "sonando" lo decide Services/Media, el mismo
+            // criterio que enseña la barra: un navegador abierto sin reproducir
+            // deja un reproductor MPRIS registrado, y darlo por bueno tendría la
+            // pantalla encendida toda la noche por una pestaña abierta.
+            IdleInhibitor {
+                window: bar
+                enabled: Settings.keepAwakeOnMedia && Media.playing
+            }
+
+            // La isla: su propia superficie por encima de la barra. No puede
+            // vivir DENTRO de la barra porque la barra mide 36 dp y una hoja
+            // expandida necesita quince veces eso.
+            //
+            // En LazyLoader por la MISMA razón que los popups clásicos de más
+            // abajo, que es la regla inversa: con la isla apagada esto se
+            // construía igual y solo se escondía con 'visible'. Una superficie
+            // de layer-shell escondida sigue existiendo —y esta es del ancho de
+            // la pantalla por 560 dp de alto, por monitor—, con su muelle, sus
+            // ranuras de contenido y sus bindings dentro. Quien no use la isla
+            // no debe pagar nada por ella.
+            LazyLoader {
+                active: Settings.islandEnabled
+                IslandWindow { modelData: scr.modelData }
             }
 
             // Paneles emergentes (Globals controla su visibilidad desde los
@@ -336,8 +414,13 @@ ShellRoot {
                 open: Globals.controlCenterOpen && scr.showsPanels
                 ControlCenter { modelData: scr.modelData }
             }
+            // El centro clásico solo con la isla APAGADA. Ya no se llega a él
+            // (ver Globals.toggleNotifCenter), pero dejarlo condicionado
+            // también aquí es lo que garantiza que no se construya nunca —y
+            // son 607 líneas con su lista, sus grupos y sus animaciones, por
+            // monitor.
             PanelSlot {
-                open: Globals.notifCenterOpen && scr.showsPanels
+                open: !Settings.islandEnabled && Globals.notifCenterOpen && scr.showsPanels
                 NotificationCenter { modelData: scr.modelData }
             }
             PanelSlot {
@@ -356,6 +439,12 @@ ShellRoot {
                 open: Globals.emojiOpen && scr.showsPanels
                 EmojiPicker { modelData: scr.modelData }
             }
+            // Spotlight no es un Popout (no cuelga de la barra, va centrado),
+            // así que lleva su propia ranura en vez de PanelSlot.
+            LazyLoader {
+                active: Globals.spotlightOpen && scr.showsPanels
+                Spotlight { modelData: scr.modelData }
+            }
             PanelSlot {
                 open: Globals.dashboardOpen && scr.showsPanels
                 Dashboard { modelData: scr.modelData }
@@ -366,14 +455,35 @@ ShellRoot {
                 AiPanel { modelData: scr.modelData }
             }
 
-            // La píldora de grabación solo existe mientras se graba.
+            // La píldora de grabación solo existe mientras se graba, Y con la
+            // isla apagada: encendida, el aviso lo da ella (punto rojo
+            // latiendo, y sus mismos mandos al pulsarlo). Dos avisos a la vez
+            // de lo mismo, uno de ellos arrastrable y encima de todo, sobra.
+            //
+            // Condicionado en el LazyLoader y no dentro de la píldora para que
+            // ni siquiera se construya: es una superficie Overlay del tamaño de
+            // la pantalla POR MONITOR, con su máscara y su arrastre.
             LazyLoader {
-                active: ScreenCapture.isRecording
+                active: ScreenCapture.isRecording && !Settings.islandEnabled
                 RecordingPill { modelData: scr.modelData }
             }
 
-            VolumeOSD { modelData: scr.modelData }
-            NotificationPopups { modelData: scr.modelData }
+            // El OSD de volumen y los popups de notificación CLÁSICOS. Con la
+            // isla encendida no se construyen: ella hace ese trabajo como
+            // actividades suyas (ver Modules/Island/sources/). Con la isla
+            // apagada, vuelven tal cual estaban.
+            //
+            // LazyLoader y no un 'visible: false': una ventana escondida sigue
+            // siendo una superficie de Wayland con sus temporizadores y sus
+            // conexiones, por monitor. Lo que no se usa, no se construye.
+            LazyLoader {
+                active: !Settings.islandEnabled
+                VolumeOSD { modelData: scr.modelData }
+            }
+            LazyLoader {
+                active: !Settings.islandEnabled
+                NotificationPopups { modelData: scr.modelData }
+            }
         }
     }
 
@@ -384,6 +494,31 @@ ShellRoot {
         open: Globals.screenCaptureOpen
         ScreenCaptureToolbar {}
     }
+
+    // ── Fuentes de la isla ───────────────────────────────────────────────────
+    // UNA sola instancia, fuera del recorrido de pantallas. Es la trampa
+    // evidente de este diseño: la ventana de la isla sí existe por monitor, y
+    // si las fuentes vivieran dentro, cada notificación entraría en la cola
+    // tantas veces como monitores tengas y cada cambio de volumen se anunciaría
+    // por duplicado.
+    // Se apagan solas con la isla (miran Settings.islandEnabled por dentro):
+    // con ella apagada no hay a quién contárselo, y los popups clásicos
+    // escuchan a NotifService por su cuenta.
+    //
+    // No van en un LazyLoader: eso construye COMPONENTES, y estas son QtObject
+    // sin nada visual. Condicionarlas por dentro es una línea y no depende de
+    // cómo trate LazyLoader a un objeto que no es un Item.
+    // El monitor de sistema como aplicación. Ventana XDG, una sola (no por
+    // monitor): es un programa, y un programa no se duplica por pantalla.
+    SysMonApp {}
+
+    LevelSource {}
+    NotifSource {}
+    // El reproductor (qué suena, y cuándo cambia la canción para asomarse) y la
+    // grabación de pantalla. Van en Modules/Island/sources y no dentro de
+    // IslandState porque Config no importa qs.Services (ver Config/Globals.qml).
+    MediaSource {}
+    RecordSource {}
 
     // Agente de polkit: el diálogo de "se requiere autenticación". Único para
     // toda la sesión (no por pantalla) y sin coste mientras nadie lo pide.

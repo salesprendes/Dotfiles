@@ -30,8 +30,22 @@ Item {
     // textos (etiqueta + descripción, etc.).
     property string filterText: ""
 
+    // Palabras por las que esta fila debe encontrarse AUNQUE no aparezcan en su
+    // etiqueta ni en su descripción.
+    //
+    // La gente busca por el nombre que conoce, no por el que pusimos nosotros:
+    // quien quiere el color de acento escribe "material you" o "matugen", y
+    // quien quiere la isla escribe "notch". Sin esto, un ajuste que existe se
+    // comporta como si no existiera — que es el peor fallo de un buscador.
+    //
+    // Va como lista y no como cadena para que sea evidente que son términos
+    // sueltos y no una frase, y lo recoge también SettingsSearchIndex, así que
+    // los mismos alias sirven en Spotlight (prefijo "?").
+    property var aliases: []
+
     readonly property bool matches: SettingsFilter.accepts(
-        srow.filterText + " " + srow.cardTitle, srow.skey)
+        srow.filterText + " " + srow.cardTitle + " "
+        + (srow.aliases.length > 0 ? srow.aliases.join(" ") : ""), srow.skey)
     visible: srow.shown && srow.matches
 
     Layout.fillWidth: true

@@ -17,13 +17,33 @@ FloatingWindow {
 
     title: I18n.tr("Settings") + " · Quickshell"
     color: settingsBackdrop
-    // Geometría de referencia: 1280×600. El mínimo es pequeño a propósito:
-    // Hyprland puede acorralar la ventana en un mosaico, y antes que
-    // recortarse la interfaz se compacta por tramos (ver headerCompact /
-    // navCompact).
-    implicitWidth: Theme.dp(1280)
-    implicitHeight: Theme.dp(600)
-    minimumSize: Qt.size(Theme.dp(600), Theme.dp(400))
+    // ── Geometría de referencia ──────────────────────────────────────────────
+    // 1100×800 y NUNCA más que la pantalla.
+    //
+    // Antes eran 1280×600 a pelo, sin tope, y las dos cosas estaban mal:
+    //
+    //   · Demasiado ancha para lo que cabe. La columna de contenido está
+    //     acotada a 760 dp (ver contentCol.inset), así que pedir 1280 de ancho
+    //     es reservar sitio que nada puede ocupar: quedaban ~227 px de canalón
+    //     vacío a los lados. Y demasiado baja: con las tarjetas apiladas, 600
+    //     de alto obliga a desplazarse en casi todas las páginas.
+    //   · Sin tope de pantalla. En un portátil de 1024×768, dp(1280) pide 1114
+    //     px de ancho sobre 1024 disponibles: la ventana nacía más grande que
+    //     el monitor. Con Hyprland en mosaico no se nota porque él la recorta,
+    //     pero flotando sí, y en pantallas pequeñas es donde más duele.
+    //
+    // Los factores (0,85 y 0,80) dejan ver que hay escritorio detrás, que es lo
+    // que distingue una ventana de una pantalla completa.
+    readonly property int _screenW: cfg.screen ? cfg.screen.width : 1920
+    readonly property int _screenH: cfg.screen ? cfg.screen.height : 1080
+    implicitWidth: Math.min(Theme.dp(1100), Math.round(cfg._screenW * 0.85))
+    implicitHeight: Math.min(Theme.dp(800), Math.round(cfg._screenH * 0.80))
+    // El mínimo es pequeño a propósito: Hyprland puede acorralar la ventana en
+    // un mosaico, y antes que recortarse la interfaz se compacta por tramos
+    // (ver headerCompact / navCompact). Y se acota también contra la pantalla,
+    // porque un mínimo mayor que el monitor es un mínimo imposible de cumplir.
+    minimumSize: Qt.size(Math.min(Theme.dp(600), cfg._screenW),
+                         Math.min(Theme.dp(400), cfg._screenH))
 
     // Clases de tamaño de ventana de Material 3. Son los mismos cortes que usa
     // M3 para decidir la forma de la navegación, y le dan nombre a lo que
@@ -81,6 +101,25 @@ FloatingWindow {
     readonly property color settingsBorder: SettingsPalette.settingsBorder
 
     property string cat: "theme"
+
+    // Salto directo desde Spotlight: Globals deja anotados la categoría y el
+    // texto a filtrar, y esto los aplica — al construirse (primera apertura) y
+    // cada vez que se vuelve a invocar la ventana ya existente.
+    function applyPendingJump() {
+        if (Globals.settingsPendingCat !== "") {
+            cfg.cat = Globals.settingsPendingCat
+            Globals.settingsPendingCat = ""
+        }
+        if (Globals.settingsPendingQuery !== "") {
+            SettingsFilter.query = Globals.settingsPendingQuery
+            Globals.settingsPendingQuery = ""
+        }
+    }
+    Component.onCompleted: cfg.applyPendingJump()
+    Connections {
+        target: Globals
+        function onSettingsResummon() { cfg.applyPendingJump() }
+    }
     // La que pulsas (cat) y la que está montada (shownCat) no son la misma
     // durante la transición: la nav se ilumina al instante, pero el contenido
     // espera a que la página vieja se haya ido.
@@ -209,7 +248,7 @@ FloatingWindow {
         // es lo que ha pedido quien apaga las animaciones.
         NumberAnimation {
             target: cfg; property: "pageOpacity"
-            to: 1; duration: Math.round(Theme.animSlow * 0.75); easing.type: Easing.OutCubic
+            to: 1; duration: Math.round(Theme.animSlow * 0.75); easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel
         }
         // La página sube y se asienta. Sin rebote: el rebote lo ponían antes
         // estas dos líneas, y ahora lo pone el escalonamiento de las tarjetas
@@ -217,7 +256,7 @@ FloatingWindow {
         // leen como un temblor.
         NumberAnimation {
             target: cfg; property: "pageOffset"
-            to: 0; duration: Theme.animSlow; easing.type: Easing.OutCubic
+            to: 0; duration: Theme.animSlow; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel
         }
         // Reloj del escalonamiento de las tarjetas (ver SettingsMotion). Va
         // LINEAL a propósito: la curva la pone cada tarjeta en su smoothstep,
@@ -235,11 +274,11 @@ FloatingWindow {
         ParallelAnimation {
             NumberAnimation {
                 target: cfg; property: "pageOpacity"
-                to: 0; duration: Theme.animFast; easing.type: Easing.InCubic
+                to: 0; duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedAccel
             }
             NumberAnimation {
                 target: cfg; property: "pageOffset"
-                to: -Theme.dp(5); duration: Theme.animFast; easing.type: Easing.InCubic
+                to: -Theme.dp(5); duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedAccel
             }
         }
         ScriptAction {
@@ -369,6 +408,48 @@ FloatingWindow {
     readonly property var activeItem: itemIndex[shownCat] || ({ label: "", glyph: "󰒓", group: "" })
     readonly property string catLabel:      activeItem.label
     readonly property string catGroupLabel: activeItem.group
+
+    // ── Secciones de la página actual ────────────────────────────────────────
+    // Se leen del árbol REAL de la página montada, no de un índice aparte. Es
+    // la diferencia que importa: al filtrar, una tarjeta cuyas filas no casan
+    // se esconde, y esta lista se encoge con ella sin que haya que avisarle de
+    // nada — porque lee 'visible' de cada tarjeta y QML apunta la dependencia.
+    //
+    // Un índice paralelo habría que mantenerlo sincronizado a mano, que es
+    // justo el problema que ya tiene la referencia de la que viene esta idea:
+    // su registro exige apuntar cada archivo nuevo y lo avisa en su cabecera.
+    readonly property var pageSections: {
+        const it = pageLoader.item
+        if (!it)
+            return []
+        const out = []
+        const kids = it.children || []
+        for (let i = 0; i < kids.length; i++) {
+            const k = kids[i]
+            if (k && k.isSettingsCard === true && k.visible && k.title !== "")
+                out.push({ title: k.title, card: k })
+        }
+        return out
+    }
+
+    function jumpToSection(i) {
+        const s = cfg.pageSections[i]
+        if (!s || !s.card)
+            return
+        const tope = Math.max(0, flick.contentHeight - flick.height)
+        jumpAnim.to = Math.max(0, Math.min(tope, s.card.y))
+        jumpAnim.restart()
+    }
+
+    // Se DESPLAZA, no salta. Un salto instantáneo en una página larga deja sin
+    // saber si te has movido dos secciones o siete.
+    NumberAnimation {
+        id: jumpAnim
+        target: flick
+        property: "contentY"
+        duration: Math.max(1, Theme.animNormal)
+        easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel
+    }
     readonly property string catGlyph:      activeItem.glyph
 
     // Resultados del buscador en OTRAS categorías, agrupados — la que se ve
@@ -474,10 +555,10 @@ FloatingWindow {
                 visible: opacity > 0.01 || Layout.preferredWidth > 0.5
                 clip: true
                 Behavior on Layout.preferredWidth {
-                    NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic }
+                    NumberAnimation { duration: Theme.animNormal; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel }
                 }
                 Behavior on opacity {
-                    NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutQuad }
+                    NumberAnimation { duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel }
                 }
                 RowLayout {
                     id: modOnlyRow
@@ -525,10 +606,10 @@ FloatingWindow {
                 clip: true
                 opacity: shownBtn ? 1 : 0
                 Behavior on implicitWidth {
-                    NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic }
+                    NumberAnimation { duration: Theme.animNormal; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel }
                 }
                 Behavior on opacity {
-                    NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutQuad }
+                    NumberAnimation { duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel }
                 }
                 readonly property bool hot: resetMa.containsMouse || activeFocus
                 activeFocusOnTab: shownBtn
@@ -544,8 +625,8 @@ FloatingWindow {
                 border.color: activeFocus ? Theme.focusRing
                             : hot ? Theme.withAlpha(Theme.red, 0.85) : cfg.settingsBorder
                 scale: resetMa.pressed ? 0.95 : 1.0
-                Behavior on border.color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
-                Behavior on scale { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+                Behavior on border.color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
+                Behavior on scale { NumberAnimation { duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
 
                 Rectangle {
                     anchors.fill: parent
@@ -564,7 +645,7 @@ FloatingWindow {
                         id: resetGlyph
                         text: "󰜉"; color: Theme.red
                         font.family: Theme.fontFamily; font.pixelSize: Theme.sp(16)
-                        Behavior on rotation { NumberAnimation { duration: Theme.animSlow; easing.type: Easing.OutCubic } }
+                        Behavior on rotation { NumberAnimation { duration: Theme.animSlow; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
                     }
                     Text {
                         visible: !cfg.headerCompact
@@ -572,7 +653,7 @@ FloatingWindow {
                         color: resetBtn.hot ? Theme.red : Theme.fgDim
                         font.family: Theme.fontFamily; font.pixelSize: Theme.typeLabelLarge
                         font.bold: true
-                        Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+                        Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
                     }
                 }
                 MouseArea {
@@ -607,8 +688,8 @@ FloatingWindow {
                 border.color: activeFocus ? Theme.focusRing
                             : hot ? Theme.withAlpha(Theme.fg, 0.45) : cfg.settingsBorder
                 scale: closeMa.pressed ? 0.92 : 1.0
-                Behavior on border.color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
-                Behavior on scale { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+                Behavior on border.color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
+                Behavior on scale { NumberAnimation { duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
 
                 // Capa de estado neutra (ver Theme.stateHover).
                 Rectangle {
@@ -626,8 +707,8 @@ FloatingWindow {
                     color: closeBtn.hot ? Theme.fg : Theme.fgDim
                     font.pixelSize: Theme.sp(18)
                     rotation: closeBtn.hot ? 90 : 0
-                    Behavior on rotation { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutBack; easing.overshoot: 1.6 } }
-                    Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+                    Behavior on rotation { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveSpatial; easing.overshoot: 1.6 } }
+                    Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
                 }
                 MouseArea {
                     id: closeMa
@@ -682,7 +763,7 @@ FloatingWindow {
                                    : Theme.withAlpha(Theme.surfaceHi, Theme.isDark ? 0.45 : 0.55)
                         border.width: Theme.hairline
                         border.color: sel ? Theme.withAlpha(Theme.accent, 0.45)
-                                          : Theme.withAlpha(Theme.overlay, 0.22)
+                                          : Theme.outlineVariant
                         Behavior on color { ColorAnimation { duration: Theme.animFast } }
                         Behavior on border.color { ColorAnimation { duration: Theme.animFast } }
 
@@ -696,7 +777,7 @@ FloatingWindow {
                             color: Theme.withAlpha(Theme.fg, Theme.isDark ? 0.07 : 0.05)
                             opacity: profileMa.containsMouse ? 1 : 0
                             Behavior on opacity {
-                                NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutQuad }
+                                NumberAnimation { duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel }
                             }
                         }
 
@@ -867,7 +948,7 @@ FloatingWindow {
                             leadFactor: 0.5
                             trailFactor: 1.5
                             opacity: cfg.navHovCount > 0 ? 1 : 0
-                            Behavior on opacity { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutQuad } }
+                            Behavior on opacity { NumberAnimation { duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
                         }
 
                         ColumnLayout {
@@ -1187,6 +1268,79 @@ FloatingWindow {
                     }
                 }
 
+                // ── Saltar a una sección ─────────────────────────────────
+                // Las páginas largas —Tema son ocho tarjetas— solo se recorrían
+                // a rueda, y desde arriba no había forma de saber qué hay
+                // abajo. Esta tira hace las dos cosas: dice de qué va la página
+                // de un vistazo y lleva a cada sitio.
+                //
+                // Va bajo la cabecera y no en una columna propia a la izquierda
+                // (que es donde la pone la referencia) por una razón de sitio:
+                // con la barra lateral y la columna de lectura acotada a 760 dp
+                // no queda ancho para un tercer carril sin robárselo al texto,
+                // que es lo que menos conviene estrechar. En horizontal no
+                // cuesta ancho a nadie.
+                //
+                // Desde tres secciones: con dos, la lista es más trabajo de
+                // leer que bajar la rueda.
+                Item {
+                    id: jumpBar
+                    Layout.fillWidth: true
+                    Layout.leftMargin: contentCol.inset
+                    Layout.rightMargin: contentCol.inset
+                    Layout.bottomMargin: visible ? cfg.spaceXs : 0
+                    visible: cfg.pageSections.length >= 3
+                    implicitHeight: visible ? jumpRow.implicitHeight : 0
+                    opacity: cfg.pageOpacity
+
+                    Flickable {
+                        anchors.fill: parent
+                        contentWidth: jumpRow.implicitWidth
+                        contentHeight: height
+                        clip: true
+                        boundsBehavior: Flickable.StopAtBounds
+                        flickableDirection: Flickable.HorizontalFlick
+
+                        Row {
+                            id: jumpRow
+                            spacing: cfg.spaceXs
+
+                            Repeater {
+                                model: cfg.pageSections
+                                delegate: Rectangle {
+                                    required property var modelData
+                                    required property int index
+
+                                    implicitWidth: chipText.implicitWidth + cfg.spaceMd * 2
+                                    implicitHeight: Theme.dp(26)
+                                    radius: height / 2
+                                    color: chipMa.containsMouse ? SettingsPalette.settingsHover
+                                                                : SettingsPalette.settingsControl
+                                    border.width: Theme.hairline
+                                    border.color: SettingsPalette.settingsBorder
+                                    Behavior on color { ColorAnimation { duration: Theme.animFast } }
+
+                                    ThemedText {
+                                        id: chipText
+                                        anchors.centerIn: parent
+                                        text: modelData.title
+                                        color: Theme.fgDim
+                                        font.pixelSize: Theme.typeLabelMedium
+                                    }
+
+                                    MouseArea {
+                                        id: chipMa
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: cfg.jumpToSection(index)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
                 Flickable {
                     id: flick
                     Layout.fillWidth: true
@@ -1298,7 +1452,7 @@ FloatingWindow {
                     opacity: flick.contentY > Theme.dp(2) ? 1 : 0
                     visible: opacity > 0.01
                     Behavior on opacity {
-                        NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutQuad }
+                        NumberAnimation { duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel }
                     }
 
                     Rectangle {
@@ -1385,7 +1539,7 @@ FloatingWindow {
             enabled: pill.animate
             NumberAnimation {
                 duration: Math.max(1, Math.round(Theme.animNormal * pill.trailFactor))
-                easing.type: Easing.OutCubic
+                easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel
             }
         }
     }
@@ -1482,7 +1636,7 @@ FloatingWindow {
             anchors.fill: parent
             visible: tab.selfHighlight
             opacity: tab.selfHighlight && tab.hovered && !tab.sel ? 1 : 0
-            Behavior on opacity { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutQuad } }
+            Behavior on opacity { NumberAnimation { duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
         }
 
         RowLayout {
@@ -1510,7 +1664,7 @@ FloatingWindow {
                 Behavior on scale {
                     NumberAnimation {
                         duration: Theme.animNormal
-                        easing.type: Easing.OutBack; easing.overshoot: 2.4
+                        easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveSpatial; easing.overshoot: 2.4
                     }
                 }
             }

@@ -14,16 +14,25 @@ SettingsPage {
         SwitchRow { glyph: "󰂚"; skey: "notifPopupsEnabled"; label: I18n.tr("Show popups"); desc: I18n.tr("Popup alerts when notifications arrive")
             checked: Settings.notifPopupsEnabled
             onToggled: Settings.notifPopupsEnabled = !Settings.notifPopupsEnabled }
-        SwitchRow { glyph: "󰂛"; skey: "@do-not-disturb"; label: I18n.tr("Do not disturb"); desc: I18n.tr("Silences popups (keeps them in the center)")
+        SwitchRow { glyph: "󰂛"; skey: "@do-not-disturb"; aliases: ["dnd", "silencio", "no molestar", "mute"]; label: I18n.tr("Do not disturb"); desc: I18n.tr("Silences popups (keeps them in the center)")
             checked: Globals.dnd; onToggled: Globals.dnd = !Globals.dnd }
+        // La esquina solo significa algo con la isla APAGADA: con ella
+        // encendida, las notificaciones salen en la isla, que vive donde vive
+        // la barra y no tiene esquina que elegir.
         SegRow {
             glyph: "󰆾"
             skey: "notifPosition"
             label: I18n.tr("Popup position")
+            shown: !Settings.islandEnabled
             options: [ { text: "↖", value: "tl" }, { text: "↗", value: "tr" },
                        { text: "↙", value: "bl" }, { text: "↘", value: "br" } ]
             current: Settings.notifPosition
             onPicked: (v) => Settings.notifPosition = v
+        }
+        Hint {
+            skey: "notifPosition"
+            shown: Settings.islandEnabled
+            text: I18n.tr("The island shows the notifications, so there is no corner to choose. Turn it off in Settings ▸ Bar to get the classic popups back.")
         }
         SegRow {
             glyph: "󰕮"
@@ -149,7 +158,9 @@ SettingsPage {
             glyph: "󰆾"
             skey: "osdPosition"
             label: I18n.tr("Position on screen")
-            shown: Settings.osdEnabled
+            // Igual que la esquina de los popups: con la isla encendida el
+            // volumen sale en ella y esto no gobierna nada.
+            shown: Settings.osdEnabled && !Settings.islandEnabled
             options: [ { text: I18n.tr("Top"), value: "top" },
                        { text: I18n.tr("Bottom"), value: "bottom" } ]
             current: Settings.osdPosition

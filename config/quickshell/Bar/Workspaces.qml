@@ -70,7 +70,7 @@ Pill {
             radius: height / 2
             // Crece un pelo bajo el ratón y nace con un pop al crearse.
             scale: wsMa.containsMouse && !active ? 1.25 : 1
-            Behavior on scale { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+            Behavior on scale { NumberAnimation { duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
             Component.onCompleted: { scale = 0.4; scale = Qt.binding(() =>
                 wsMa.containsMouse && !ws.active ? 1.25 : 1) }
 
@@ -80,7 +80,7 @@ Pill {
                  : Theme.surface
 
             Behavior on implicitWidth {
-                NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic }
+                NumberAnimation { duration: Theme.animNormal; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel }
             }
             Behavior on color { ColorAnimation { duration: Theme.animFast } }
 

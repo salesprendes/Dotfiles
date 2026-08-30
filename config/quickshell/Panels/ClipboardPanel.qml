@@ -65,7 +65,7 @@ Popout {
             hoverGate.reset()
             Clipboard.refresh()
             clearState.refreshBodyHeight()
-            focusTimer.restart()
+            focusTimer.start()
         }
     }
 
@@ -90,10 +90,12 @@ Popout {
         onTriggered: clearState.refreshBodyHeight()
     }
 
-    Timer {
+    FocusPulse {
         id: focusTimer
-        interval: 60
-        onTriggered: searchInput.input.forceActiveFocus()
+        target: searchInput.input
+        // Atado a la visibilidad: al cerrar el panel deja de
+        // insistir solo, sin tener que acordarse de pararlo.
+        active: panel.shown
     }
 
     // Debounce del filtrado: agrupa la ráfaga de teclas antes de filtrar.
@@ -205,7 +207,7 @@ Popout {
             text: Clipboard.search === "" ? I18n.tr("No history yet") : I18n.tr("No results")
             color: Theme.fgMuted
 
-            Behavior on opacity { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
+            Behavior on opacity { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
         }
 
         ListView {
@@ -265,10 +267,10 @@ Popout {
             // Al borrar (o filtrar) una entrada, las filas recolocadas se
             // deslizan a su nuevo sitio en vez de dar un salto seco.
             displaced: Transition {
-                NumberAnimation { properties: "y"; duration: Theme.animNormal; easing.type: Easing.OutCubic }
+                NumberAnimation { properties: "y"; duration: Theme.animNormal; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel }
             }
             removeDisplaced: Transition {
-                NumberAnimation { properties: "y"; duration: Theme.animNormal; easing.type: Easing.OutCubic }
+                NumberAnimation { properties: "y"; duration: Theme.animNormal; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel }
             }
 
             delegate: Rectangle {
@@ -288,9 +290,9 @@ Popout {
                 border.color: selected ? Theme.focusRing : Theme.withAlpha(Theme.overlay, 0.28)
                 Behavior on color { ColorAnimation { duration: Theme.animFast } }
                 Behavior on border.color { ColorAnimation { duration: Theme.animFast } }
-                Behavior on x { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
-                Behavior on opacity { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
-                Behavior on scale { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
+                Behavior on x { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
+                Behavior on opacity { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
+                Behavior on scale { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
 
                 property bool deleting: false
 

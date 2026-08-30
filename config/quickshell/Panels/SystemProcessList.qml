@@ -16,8 +16,16 @@ Rectangle {
 
     signal sortRequested(string key)
 
-    implicitHeight: processesHeader.implicitHeight + processColumns.implicitHeight
-                  + processListHeight + processesBox.spacing * 2 + Theme.space12 * 2
+    // Lo que mide la tarjeta SIN la lista: cabecera, fila de columnas y aire.
+    // Se expone para que quien la mete en un layout elástico pueda calcular
+    // cuánto sitio le queda a la lista SIN mirar la altura de esta tarjeta —
+    // que es lo que provoca un bucle de binding, porque esa altura sale de
+    // 'processListHeight' y volveríamos al principio.
+    readonly property int chromeHeight: processesHeader.implicitHeight
+                  + processColumns.implicitHeight
+                  + processesBox.spacing * 2 + Theme.space12 * 2
+
+    implicitHeight: chromeHeight + processListHeight
     radius: Theme.barRadius
     color: Theme.withAlpha(Theme.surface, 0.72)
     border.width: Theme.hairline
@@ -208,14 +216,14 @@ Rectangle {
                             color: Theme.withAlpha(Theme.red, killMa.containsMouse ? 0.18 : 0)
                             border.width: killMa.containsMouse ? 1 : 0
                             border.color: Theme.withAlpha(Theme.red, 0.45)
-                            Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+                            Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
                         }
 
                         ThemedText {
                             anchors.centerIn: parent
                             text: "󰅖"
                             color: killMa.containsMouse ? Theme.red : Theme.fgMuted
-                            Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+                            Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
                         }
 
                         MouseArea {

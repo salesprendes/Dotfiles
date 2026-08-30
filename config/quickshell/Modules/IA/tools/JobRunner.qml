@@ -164,6 +164,33 @@ Scope {
         j.grace.restart()
     }
 
+    // Cuántos trabajos YA TERMINADOS se conservan. No es un número cosmético:
+    // cada trabajo retiene su Process, su Timer y hasta 'outputCap' (60 kB) de
+    // salida capturada, así que cien trabajos viejos son ~6 MB que no se
+    // sueltan nunca.
+    //
+    // Conservarlos es deliberado —el modelo tiene que poder leer con job_view
+    // lo que salió de un comando que lanzó hace tres turnos— pero antes no
+    // había tope: solo se soltaban con un `job_ctl clear` a mano o al
+    // reiniciar la conversación. En una sesión larga eso crece sin límite.
+    //
+    // Veinte cubre de sobra "lo que el modelo puede querer releer" y acota la
+    // memoria. Los vivos NUNCA se tocan.
+    readonly property int finishedCap: 20
+
+    // Suelta los terminados más antiguos que pasen del tope.
+    function _pruneFinished() {
+        const idos = jobs.filter(j => j.state !== "running")
+        if (idos.length <= runner.finishedCap)
+            return
+        // 'jobs' está en orden de creación, así que los primeros son los más
+        // viejos: se tiran esos y se conservan los últimos.
+        const tirar = idos.slice(0, idos.length - runner.finishedCap)
+        jobs = jobs.filter(j => tirar.indexOf(j) === -1)
+        for (const j of tirar)
+            j.destroy()
+    }
+
     // El trabajo terminó: si alguien esperaba el primer parte, se le da ya.
     function _settle(j) {
         jobs = jobs.slice()          // el estado cambió: que la interfaz mire
@@ -181,6 +208,9 @@ Scope {
             j.reply.stop()
             f(report(j, 2500))
         }
+        // Al final, y no antes: los parte de arriba leen 'j', así que soltarlo
+        // primero dejaría un objeto destruido en medio de la respuesta.
+        runner._pruneFinished()
     }
 
     // ── El parte de un trabajo ───────────────────────────────────────────────

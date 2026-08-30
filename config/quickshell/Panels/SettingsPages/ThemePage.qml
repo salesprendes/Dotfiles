@@ -41,7 +41,7 @@ SettingsPage {
         // del campo 'color' de cada opción.
         DropdownRow {
             glyph: "󰈊"
-            skey: "accentName"
+            skey: "accentName"; aliases: ["material you", "matugen", "color", "colour", "acento"]
             label: I18n.tr("Basic accent")
             options: Settings.accentSwatches.map(s => ({
                 text: I18n.tr(s.label), value: s.name, color: s.color
@@ -52,7 +52,7 @@ SettingsPage {
         }
         SwitchRow {
             glyph: "󰖔"
-            skey: "darkMode"
+            skey: "darkMode"; aliases: ["modo oscuro", "dark mode", "claro", "light", "tema"]
             label: I18n.tr("Dark mode")
             checked: Settings.darkMode
             onToggled: Settings.darkMode = !Settings.darkMode
@@ -63,7 +63,7 @@ SettingsPage {
             radius: Theme.pillRadius
             color: Theme.withAlpha(Theme.bgAlt, 0.72)
             border.width: Theme.hairline
-            border.color: Theme.withAlpha(Theme.overlay, 0.36)
+            border.color: Theme.outlineVariant
 
             RowLayout {
                 anchors.fill: parent
@@ -134,8 +134,17 @@ SettingsPage {
             checked: Settings.autoDensity
             onToggled: Settings.autoDensity = !Settings.autoDensity
         }
+        // Aviso honesto, y solo cuando toca: la escala del shell es UNA para
+        // todas las pantallas. Con monitores de resoluciones lógicas muy
+        // distintas, el ajuste automático acierta en uno y sobredimensiona el
+        // otro. Callárselo sería dejar al usuario buscando qué ha hecho mal.
+        Hint {
+            skey: "autoDensity"
+            shown: Theme.mixedDensity
+            text: I18n.tr("Your monitors have quite different resolutions and the shell uses a single scale for all of them. The proper fix is to let the compositor scale (in Hyprland, the last number of the 'monitor =' line); failing that, turn this off and set the scale by hand.")
+        }
         SliderRow {
-            skey: "uiScale"
+            skey: "uiScale"; aliases: ["zoom", "tamano", "dpi", "hidpi", "escalado"]
             // Solo con el zoom automático apagado: encendido, la escala la
             // decide la resolución y este slider era un segundo mando sobre lo
             // mismo — dos controles gobernando un valor es una invitación a no
@@ -182,7 +191,7 @@ SettingsPage {
             color: SettingsPalette.settingsControl
             border.width: Theme.hairline
             border.color: Theme.withAlpha(Theme.accent, 0.55)
-            Behavior on radius { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+            Behavior on radius { NumberAnimation { duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
 
             Row {
                 anchors.verticalCenter: parent.verticalCenter
@@ -205,7 +214,7 @@ SettingsPage {
                         radius: Theme.pillRadius
                         color: index === 2 ? Theme.withAlpha(Theme.accent, 0.42)
                                            : Theme.withAlpha(Theme.fg, 0.13)
-                        Behavior on radius { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+                        Behavior on radius { NumberAnimation { duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
                     }
                 }
             }

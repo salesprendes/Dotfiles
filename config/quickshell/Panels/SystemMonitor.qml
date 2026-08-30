@@ -259,7 +259,7 @@ Popout {
             sourceComponent: processSection
             opacity: sm.processViewReady ? 1 : 0
             visible: opacity > 0
-            Behavior on opacity { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
+            Behavior on opacity { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
         }
 
         // Tarjeta "cargando servicios": engranaje girando + texto pulsante.
@@ -274,7 +274,7 @@ Popout {
             border.color: Theme.withAlpha(Theme.accent, 0.25)
             opacity: sm.processViewReady ? 0 : 1
             visible: opacity > 0
-            Behavior on opacity { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutCubic } }
+            Behavior on opacity { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
 
             ColumnLayout {
                 anchors.fill: parent
@@ -331,8 +331,8 @@ Popout {
                             SequentialAnimation on opacity {
                                 running: processSkeleton.visible && sm.shown
                                 loops: Animation.Infinite
-                                NumberAnimation { to: 0.45; duration: 700; easing.type: Easing.InOutQuad }
-                                NumberAnimation { to: 1;    duration: 700; easing.type: Easing.InOutQuad }
+                                NumberAnimation { to: 0.45; duration: 700; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasized }
+                                NumberAnimation { to: 1;    duration: 700; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasized }
                             }
                         }
                     }

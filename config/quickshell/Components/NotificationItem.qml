@@ -24,6 +24,16 @@ Rectangle {
     // una tanda de avisos ocupe una franja fina en vez de media pantalla.
     // No afecta al centro de notificaciones, donde sí quieres leerlo entero.
     property bool compact: false
+    // Modo DENSO: la misma tarjeta, apretada. Esta está medida para el popup,
+    // que es ancho; la hoja de la isla mide 360 dp y ahí dentro un título a 16
+    // en negrita junto a un icono de 38 se comen la fila entera — cada aviso
+    // quedaba como una caja enorme que solo dice el nombre de la app.
+    //
+    // Se hace con una propiedad y no con un archivo aparte a propósito: el
+    // aviso tiene que verse IGUAL en los dos sitios (misma anatomía, mismo
+    // orden, mismos gestos), solo que más apretado. Dos archivos habrían sido
+    // dos diseños que se separan al primer cambio.
+    property bool dense: false
 
     // Primer plano (todo menos el fondo de la tarjeta). El barrido de entrada
     // descubre el fondo YA OPACO y sólo el contenido funde con retardo y se
@@ -90,10 +100,10 @@ Rectangle {
     readonly property bool hasDefaultAction: defaultAction() !== null
 
     // --- geometria (px logicos) ---
-    readonly property int pad: Theme.dp(12)          // kCardInnerPad
-    readonly property int iconSize: Theme.dp(hasActions ? 45 : 38)
-    readonly property int iconGap: Theme.dp(8)       // kIconTextGap
-    readonly property int closeSize: Theme.dp(20)
+    readonly property int pad: Theme.dp(dense ? 10 : 12)          // kCardInnerPad
+    readonly property int iconSize: Theme.dp(dense ? 30 : (hasActions ? 45 : 38))
+    readonly property int iconGap: Theme.dp(dense ? 10 : 8)       // kIconTextGap
+    readonly property int closeSize: Theme.dp(dense ? 18 : 20)
     readonly property int progressH: Theme.dp(3)
 
     // Anchos de texto CALCULADOS a partir del ancho de tarjeta, en vez de
@@ -109,12 +119,19 @@ Rectangle {
 
     implicitHeight: layout.implicitHeight
 
-    radius: Theme.dp(12)                              // radiusXl
+    radius: Theme.dp(dense ? 10 : 12)                 // radiusXl
     // La tarjeta se pinta con bg a 0.97 (no con surface): es el mismo tono
-    // del fondo del shell, apenas translucido.
-    color: Theme.withAlpha(Theme.bg, 0.97)
+    // del fondo del shell, apenas translucido. Flotando sobre el escritorio
+    // eso basta para que se lea como una tarjeta.
+    //
+    // Apretada NO, y es la misma razón al revés: ahí va DENTRO de la hoja de
+    // la isla, que ya es una superficie oscura. Una tarjeta del tono del fondo
+    // sobre un fondo oscuro no se ve como una tarjeta, se ve como un recuadro
+    // dibujado a lápiz. Sube un peldaño de la escalera de contenedores de M3,
+    // que es exactamente para lo que existe.
+    color: item.dense ? Theme.surfaceContainer : Theme.withAlpha(Theme.bg, 0.97)
     border.width: Theme.hairline
-    border.color: Theme.overlay
+    border.color: item.dense ? Theme.outlineVariant : Theme.overlay
     clip: true
     antialiasing: true
 
@@ -203,7 +220,7 @@ Rectangle {
                     visible: item.img === ""
                     text: "󰂚"
                     color: Theme.fgDim
-                    font.pixelSize: Theme.sp(item.hasActions ? 24 : 20)
+                    font.pixelSize: Theme.sp(item.dense ? 16 : (item.hasActions ? 24 : 20))
                 }
             }
 
@@ -212,15 +229,40 @@ Rectangle {
                 Layout.alignment: Qt.AlignTop
                 spacing: Theme.dp(2)
 
+                // Antetítulo (solo denso): quién avisa y cuándo, en pequeño y
+                // ARRIBA. En la tarjeta ancha esto va en el pie, a la derecha;
+                // apretada, ese pie quedaba como una palabra suelta colgando
+                // en la esquina de una caja casi vacía. Puesto delante del
+                // título hace de encabezado y la fila se lee de un vistazo:
+                // quién, qué, y qué dice.
+                ThemedText {
+                    Layout.preferredWidth: item.titleWidth
+                    visible: item.dense && text !== ""
+                    text: {
+                        const cuando = NotifService.timeText(item.notif)
+                        if (item.appName === "")
+                            return cuando
+                        return cuando === "" ? item.appName
+                                             : item.appName + " · " + cuando
+                    }
+                    color: Theme.fgMuted
+                    font.pixelSize: Theme.sp(11)          // fontSizeMini
+                    elide: Text.ElideRight
+                    maximumLineCount: 1
+                    textFormat: Text.PlainText
+                }
+
                 // Título. Reserva a su derecha el hueco del botón de cerrar.
                 ThemedText {
                     Layout.preferredWidth: item.titleWidth
                     text: item.summary
                     color: Theme.fg
-                    font.pixelSize: Theme.sp(16)          // fontSizeTitle
-                    font.bold: true
+                    font.pixelSize: Theme.sp(item.dense ? 13 : 16)   // fontSizeTitle
+                    // Apretada baja a Medium: en negrita, a 13 y sobre un
+                    // antetítulo gris, el título gritaba dos veces.
+                    font.weight: item.dense ? Font.Medium : Font.Bold
                     wrapMode: Text.WordWrap
-                    maximumLineCount: 2                    // kMaxSummaryLines
+                    maximumLineCount: item.dense ? 1 : 2   // kMaxSummaryLines
                     elide: Text.ElideRight
                     textFormat: Text.PlainText
                 }
@@ -230,9 +272,9 @@ Rectangle {
                     visible: item.hasBody
                     text: item.body
                     color: Theme.fgDim
-                    font.pixelSize: Theme.sp(14)          // fontSizeBody
+                    font.pixelSize: Theme.sp(item.dense ? 12 : 14)   // fontSizeBody
                     wrapMode: Text.WordWrap
-                    maximumLineCount: 3                    // kToastMaxBodyLines
+                    maximumLineCount: item.dense ? 2 : 3   // kToastMaxBodyLines
                     elide: Text.ElideRight
                     textFormat: Text.PlainText
                 }
@@ -289,6 +331,7 @@ Rectangle {
                 ThemedText {
                     Layout.preferredWidth: item.textColWidth
                     Layout.topMargin: Theme.dp(4)
+                    visible: !item.dense
                     horizontalAlignment: Text.AlignRight
                     text: item.appName
                     color: Theme.fgDim

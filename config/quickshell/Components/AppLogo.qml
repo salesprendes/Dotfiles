@@ -88,8 +88,8 @@ Item {
                 running: root.animate
                 loops: Animation.Infinite
                 PauseAnimation { duration: modelData.d }
-                NumberAnimation { from: 0.38; to: 1; duration: 420; easing.type: Easing.OutCubic }
-                NumberAnimation { from: 1; to: 0.38; duration: 620; easing.type: Easing.InOutCubic }
+                NumberAnimation { from: 0.38; to: 1; duration: 420; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel }
+                NumberAnimation { from: 1; to: 0.38; duration: 620; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasized }
             }
         }
     }

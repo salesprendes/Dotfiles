@@ -8,12 +8,28 @@ import qs.Services
 // Paleta compartida de Ajustes: colores derivados del tema. Singleton para
 // no repetir las fórmulas en cada fichero.
 Singleton {
-    readonly property color settingsCard: Theme.withAlpha(Theme.surface, 0.72)
-    readonly property color settingsControl: Theme.withAlpha(Theme.surface, 0.86)
+    // ── La escalera de contenedores de M3, aplicada a Ajustes ────────────────
+    // M3 dice la altura subiendo de contenedor, no metiendo sombras. En esta
+    // ventana el orden es:
+    //
+    //   ventana            el fondo translúcido (settingsBackdrop)
+    //   surfaceContainer   las tarjetas de grupo y las cajas de la ventana
+    //   ...High            los CONTROLES dentro de ellas: desplegables,
+    //                      campos, segmentos. Un peldaño por encima de la
+    //                      tarjeta que los contiene, que es lo que los hace
+    //                      leerse como algo que se puede tocar.
+    //
+    // Eran mezclas con alfa sobre 'surface' (0,72 y 0,86). El problema del alfa
+    // aquí no es el tono sino que DEPENDE DE LO QUE HAYA DEBAJO: el mismo
+    // desplegable se veía de un gris dentro de una tarjeta y de otro sobre el
+    // fondo de la ventana, y no había forma de decir cuál era el correcto.
+    readonly property color settingsCard: Theme.surfaceContainer
+    readonly property color settingsControl: Theme.surfaceContainerHigh
     // El tono de fila lo define el TEMA (Theme.rowHover): aquí solo se le da
     // el nombre con el que lo conocen las páginas de ajustes.
     readonly property color settingsHover: Theme.rowHover
-    readonly property color settingsBorder: Theme.withAlpha(Theme.overlay, 0.28)
+    // Separador de bajo contraste: el rol 'outlineVariant' de M3.
+    readonly property color settingsBorder: Theme.outlineVariant
 
     // Material de tarjeta con luz cenital: el degradado aclara el borde
     // superior y oscurece el inferior, de modo que la tarjeta se lee como una
@@ -35,8 +51,17 @@ Singleton {
     // Ahora el grupo dice lo suyo con dos cosas: un tono y un borde. Todo lo
     // demás (el acento, el movimiento) se gasta en las FILAS, que es donde
     // está el trabajo del usuario.
-    readonly property color groupFill: Theme.withAlpha(Theme.surfaceHi, Theme.isDark ? 0.42 : 0.62)
-    readonly property color groupBorder: Theme.withAlpha(Theme.overlay, Theme.isDark ? 0.22 : 0.26)
+    // Contenedor de M3, opaco. Era withAlpha(surfaceHi, 0.42), y el alfa tenía
+    // un problema que no se ve hasta que muerde: dos superficies con alfa una
+    // encima de otra SUMAN, así que el mismo token salía de un tono distinto
+    // según lo que hubiera detrás. Con los tramos de esquina agrupada eso pasó
+    // de ser teórico a ser el caso normal — una tarjeta es ahora una pila de
+    // piezas, no una sola superficie.
+    //
+    // El tono resultante es casi el mismo (#1d2125 contra el #1b1f23 que salía
+    // compuesto), así que no cambia el aspecto: cambia que ahora es predecible.
+    readonly property color groupFill: Theme.surfaceContainer
+    readonly property color groupBorder: Theme.outlineVariant
     // Fondo tintado de los distintivos (badges) de icono. En modo claro sube
     // el alfa para que el acento se lea sobre superficies claras.
     readonly property color accentSoft: Theme.withAlpha(Theme.accent, Theme.isDark ? 0.16 : 0.24)

@@ -54,7 +54,7 @@ Rectangle {
     scale: ma.pressed ? 0.95
          : interactive && hovered ? 1.04
          : 1.0
-    Behavior on scale { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+    Behavior on scale { NumberAnimation { duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
 
     Behavior on color { ColorAnimation { duration: Theme.animFast } }
 
@@ -68,7 +68,7 @@ Rectangle {
         color: Theme.accent
         scale: pill.active ? 1 : 0
         opacity: pill.active ? 1 : 0
-        Behavior on scale { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.OutBack; easing.overshoot: 2.2 } }
+        Behavior on scale { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveSpatial; easing.overshoot: 2.2 } }
         Behavior on opacity { NumberAnimation { duration: Theme.animFast } }
     }
 

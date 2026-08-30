@@ -39,7 +39,7 @@ Rectangle {
 
     // Encogida al pulsar: acuse físico del clic, corto para que no distraiga.
     scale: ma.pressed ? 0.96 : 1
-    Behavior on scale { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+    Behavior on scale { NumberAnimation { duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
 
     Keys.onReturnPressed: btn.clicked()
     Keys.onEnterPressed: btn.clicked()

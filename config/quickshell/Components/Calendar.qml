@@ -272,7 +272,7 @@ ColumnLayout {
                         Behavior on scale {
                             NumberAnimation {
                                 duration: Theme.animNormal
-                                easing.type: Easing.OutBack
+                                easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveSpatial
                                 easing.overshoot: 2.2
                             }
                         }
@@ -281,7 +281,7 @@ ColumnLayout {
                         color: dayCell.today ? Theme.accent
                              : dayMa.containsMouse ? Theme.surfaceHi
                              : Theme.withAlpha(Theme.surfaceHi, 0)
-                        Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+                        Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
 
                         ThemedText {
                             anchors.centerIn: parent
@@ -293,7 +293,7 @@ ColumnLayout {
                             font.pixelSize: Theme.fontSize - 1
                             font.bold: dayCell.today
                             // El número funde a la vez que el círculo.
-                            Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+                            Behavior on color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
                         }
                     }
 
@@ -326,11 +326,11 @@ ColumnLayout {
             // Atado a la velocidad de animación del tema (antes 240 ms fijos)
             // y con un leve rebote al asentarse.
             duration: Theme.animNormal + 40
-            easing.type: Easing.OutBack; easing.overshoot: 1.1
+            easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveSpatial; easing.overshoot: 1.1
         }
         SequentialAnimation {
             NumberAnimation { target: daysArea; property: "opacity"; to: 0.35; duration: Theme.animFast * 0.6 }
-            NumberAnimation { target: daysArea; property: "opacity"; to: 1; duration: Theme.animNormal - 20; easing.type: Easing.OutCubic }
+            NumberAnimation { target: daysArea; property: "opacity"; to: 1; duration: Theme.animNormal - 20; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel }
         }
     }
 

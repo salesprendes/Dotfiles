@@ -91,9 +91,9 @@ Item {
     }
     Keys.onEscapePressed: Globals.closeAll()
 
-    Behavior on trackH { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
-    Behavior on handleW { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
-    Behavior on handleH { NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+    Behavior on trackH { NumberAnimation { duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
+    Behavior on handleW { NumberAnimation { duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
+    Behavior on handleH { NumberAnimation { duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
 
     // ── Tramo recorrido ──────────────────────────────────────────────────────
     // Degradado dentro del MISMO tono: del acento aclarado al acento. Iba de
@@ -117,8 +117,64 @@ Item {
         }
         // Al arrastrar sigue al dedo 1:1; fuera del arrastre (teclado, cambio
         // externo) el salto se suaviza.
-        Behavior on width { enabled: !drag.dragging; NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+        Behavior on width { enabled: !drag.dragging; NumberAnimation { duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
+
+        // ── La onda de Material 3 Expressive ─────────────────────────────────
+        // Va ENCIMA del degradado, no en su lugar: el degradado sigue dando la
+        // profundidad y la onda pone el movimiento. Sustituirlo dejaba una
+        // línea suelta flotando sobre el hueco de la pista.
+        //
+        // Se apaga con las animaciones desactivadas (Ajustes ▸ Tema): una onda
+        // quieta es una raya con bultos, y quien pide "sin animaciones" no está
+        // pidiendo eso.
+        // La onda APARECE al tocar y se retira al soltar, en vez de estar
+        // siempre puesta. Es lo que hace M3 Expressive y es mejor por dos
+        // motivos, uno de aspecto y otro de coste:
+        //
+        //   · En reposo la pista vuelve a ser lo que era: una barra limpia con
+        //     su degradado. Una onda permanente ocupaba trece de los dieciséis
+        //     píxeles del carril y competía con el degradado en vez de posarse
+        //     encima — se leía como una oruga, no como una pista.
+        //   · Solo hay lienzo repintando mientras algo pasa. En reposo la onda
+        //     no existe y el control no cuesta un fotograma.
+        //
+        // "Algo pasa" es: la estás arrastrando, tienes el puntero encima, o el
+        // valor ha cambiado SOLO hace poco (el volumen desde una tecla, el
+        // brillo, la posición de la canción).
+        WavyTrack {
+            id: onda
+            anchors.fill: parent
+            readonly property bool activa: drag.dragging || root.hot || externo.running
+
+            // Con "sin animaciones" no aparece nunca: una onda quieta es una
+            // raya con bultos, y quien apaga las animaciones no pide eso.
+            visible: Theme.animNormal > 0 && opacity > 0.01
+                     && parent.width > root.trackH * 2
+            opacity: onda.activa ? 1 : 0
+            // Crece al entrar en vez de aparecer ya ondulada: la onda se
+            // "levanta" de la barra, que es el gesto de M3E.
+            amplitude: onda.activa ? 0.6 : 0.05
+            // Sigue moviéndose mientras se ve, también durante el desvanecido:
+            // si se parara antes, la onda se congelaría a media retirada.
+            animated: onda.opacity > 0.01
+
+            color: Theme.withAlpha(Qt.lighter(root.accent, 1.35), 0.9)
+            lineWidth: Math.max(2, root.trackH * 0.30)
+
+            Behavior on opacity { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
+            Behavior on amplitude { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveSpatial } }
+        }
     }
+
+    // ¿Ha cambiado el valor por su cuenta hace poco? Es lo que distingue "el
+    // usuario está mirando esto" de "esto está pasando ahora mismo": el volumen
+    // que sube desde una tecla del teclado, o la canción que avanza. Mientras
+    // dure, la onda se mueve aunque nadie tenga el ratón encima.
+    Timer {
+        id: externo
+        interval: 900
+    }
+    onValueChanged: if (!drag.dragging) externo.restart()
 
     // ── Tramo pendiente ──────────────────────────────────────────────────────
     Rectangle {
@@ -130,7 +186,7 @@ Item {
         radius: height / 2
         color: root.trackColor
         visible: width > 0.5
-        Behavior on x { enabled: !drag.dragging; NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+        Behavior on x { enabled: !drag.dragging; NumberAnimation { duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
 
         // Fin del recorrido. Se apaga cuando el agarre está a punto de
         // pisarlo, para que no parezca que quedan dos piezas sueltas.
@@ -160,7 +216,7 @@ Item {
         color: Theme.withAlpha(root.accent, root.activeFocus ? 0.26 : 0.18)
         opacity: root.grabbed ? 1 : 0
         Behavior on opacity { NumberAnimation { duration: Theme.animFast } }
-        Behavior on x { enabled: !drag.dragging; NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+        Behavior on x { enabled: !drag.dragging; NumberAnimation { duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
     }
 
     // ── Agarre ───────────────────────────────────────────────────────────────
@@ -173,7 +229,7 @@ Item {
         height: root.handleH
         radius: width / 2
         color: root.accent
-        Behavior on x { enabled: !drag.dragging; NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic } }
+        Behavior on x { enabled: !drag.dragging; NumberAnimation { duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
     }
 
     MouseArea {

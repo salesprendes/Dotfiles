@@ -18,8 +18,21 @@ ColumnLayout {
     property string skey: ""
     property string cardTitle: ""
     property bool shown: true
+
+    // Este campo ES una fila de ajuste, y hasta ahora no lo decía. El contrato
+    // del filtro está copiado aquí a mano en vez de heredarse de SettingsRow
+    // —es el único que se libró cuando aquello se centralizó—, así que le
+    // faltaba la marca. Se notaba al agrupar las tarjetas por tramos: la
+    // tarjeta de IPv4 salía como UN bloque con el método y sus cuatro campos
+    // dentro, mientras la de al lado salía en cuatro piezas. La forma decía una
+    // cosa distinta en cada tarjeta según de qué componente estuviera hecha.
+    readonly property bool isSettingsRow: true
+    // Mismo campo de alias que el resto de filas (ver Components/SettingsRow).
+    property var aliases: []
+
     readonly property bool matches: SettingsFilter.accepts(
-        field.label + " " + field.placeholder + " " + field.cardTitle, field.skey)
+        field.label + " " + field.placeholder + " " + field.cardTitle + " "
+        + (field.aliases.length > 0 ? field.aliases.join(" ") : ""), field.skey)
     visible: field.shown && field.matches
     property string leftIcon: ""
     property string value: ""

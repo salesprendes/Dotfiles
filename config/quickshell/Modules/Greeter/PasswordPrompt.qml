@@ -32,8 +32,8 @@ Item {
         SequentialAnimation on opacity {
             running: visible
             loops: Animation.Infinite
-            NumberAnimation { to: 0.15; duration: 480; easing.type: Easing.InOutQuad }
-            NumberAnimation { to: 1;    duration: 480; easing.type: Easing.InOutQuad }
+            NumberAnimation { to: 0.15; duration: 480; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasized }
+            NumberAnimation { to: 1;    duration: 480; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasized }
         }
     }
 
@@ -113,11 +113,11 @@ Item {
                     color: revealMa.pressed ? Theme.withAlpha(Theme.accent, 0.22)
                          : revealMa.containsMouse ? Theme.withAlpha(Theme.surfaceHi, 0.9)
                          : "transparent"
-                    Behavior on color { ColorAnimation { duration: 170; easing.type: Easing.OutCubic } }
+                    Behavior on color { ColorAnimation { duration: 170; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
                     // Pequeño "pop" elástico: crece al pasar el ratón, se hunde al
                     // pulsar.
                     scale: revealMa.pressed ? 0.86 : revealMa.containsMouse ? 1.10 : 1
-                    Behavior on scale { NumberAnimation { duration: 200; easing.type: Easing.OutBack } }
+                    Behavior on scale { NumberAnimation { duration: 200; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveSpatial } }
 
                     Text {
                         id: eyeIcon
@@ -128,7 +128,7 @@ Item {
                         font.family: Theme.fontFamily
                         font.pixelSize: Theme.sp(15)
                         // El color del icono transiciona suave, sin saltos.
-                        Behavior on color { ColorAnimation { duration: 170; easing.type: Easing.OutCubic } }
+                        Behavior on color { ColorAnimation { duration: 170; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
                         transform: Scale {
                             id: eyeScale
                             origin.x: eyeIcon.width / 2
@@ -144,9 +144,9 @@ Item {
                     SequentialAnimation {
                         id: eyeBlink
                         NumberAnimation { target: eyeScale; property: "yScale"
-                                          to: 0.15; duration: 100; easing.type: Easing.InQuad }
+                                          to: 0.15; duration: 100; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedAccel }
                         NumberAnimation { target: eyeScale; property: "yScale"
-                                          to: 1;    duration: 190; easing.type: Easing.OutBack }
+                                          to: 1;    duration: 190; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveSpatial }
                     }
 
                     MouseArea {
@@ -190,7 +190,7 @@ Item {
                         // mantener el caret visible en el borde derecho; cada punto
                         // nuevo empuja la fila con un deslizamiento suave.
                         x: Math.min(0, inputCell.width - width)
-                        Behavior on x { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
+                        Behavior on x { NumberAnimation { duration: 140; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
                         Repeater {
                             model: pwInput.text.length
                             delegate: Rectangle {
@@ -276,7 +276,7 @@ Item {
                 border.width: active ? 0 : 1
                 border.color: Theme.withAlpha(Theme.overlay, 0.7)
                 scale: enterMa.pressed && active ? 0.94 : 1
-                Behavior on scale { NumberAnimation { duration: 90; easing.type: Easing.OutQuad } }
+                Behavior on scale { NumberAnimation { duration: 90; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
 
                 // Anillo de foco al llegar con Tab.
                 Rectangle {

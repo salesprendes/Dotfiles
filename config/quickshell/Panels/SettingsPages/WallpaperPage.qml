@@ -13,7 +13,7 @@ SettingsPage {
 
         SegRow {
             glyph: "󰹁"
-            skey: "wallpaperFillMode"
+            skey: "wallpaperFillMode"; aliases: ["fondo", "escritorio", "background", "ajuste"]
             label: I18n.tr("Fit to screen")
             options: [ { text: I18n.tr("Crop"), value: "crop" },
                        { text: I18n.tr("Fit"), value: "fit" },

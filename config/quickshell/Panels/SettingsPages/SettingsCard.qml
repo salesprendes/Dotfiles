@@ -125,6 +125,40 @@ Item {
     }
     z: anyOpen ? 5 : 0
 
+    // ── Tramos ───────────────────────────────────────────────────────────────
+    // La tarjeta deja de ser UNA superficie con filetes dentro y pasa a ser una
+    // pila de superficies pegadas: la primera redondea arriba, la última abajo,
+    // y las de en medio van casi rectas. Es el patrón de lista agrupada de
+    // Android 16 / M3 expresivo, y hace dos cosas que el filete no hacía:
+    //
+    //   · Cada ajuste es una PIEZA. El filete separaba con una raya de un
+    //     píxel; aquí lo que separa es aire, y el ojo agrupa por contorno antes
+    //     que por línea. Una tarjeta de ocho filas deja de leerse como un muro.
+    //   · La forma dice dónde estás. Arriba del todo y abajo del todo se ven
+    //     distintas del resto, así que el borde del grupo se reconoce sin
+    //     contar filas.
+    //
+    // Un TRAMO es una fila de ajuste más lo que cuelgue de ella (los Hint, que
+    // llevan isSettingsRow=false a propósito): el consejo tiene que ir DENTRO
+    // de la pieza de su ajuste, no flotando entre dos.
+    //
+    // Se recalcula solo cuando una fila aparece o desaparece —y eso pasa
+    // constantemente, con el filtro y con los 'shown' de cada página—, así que
+    // los índices se derivan de los hijos VISIBLES y nunca se cablean.
+    readonly property int segRadius: Theme.shapeXs
+    readonly property int segGap: Theme.dp(2)
+
+    readonly property var segments: {
+        const kids = cardCol.children
+        const out = []
+        for (let i = 0; i < kids.length; i++) {
+            const k = kids[i]
+            if (k && k.isSettingsRow === true && k.visible)
+                out.push(i)
+        }
+        return out
+    }
+
     // Primera fila VISIBLE de la tarjeta: la única que no lleva filete encima.
     // El filete se dibuja sobre la fila, no debajo, para que un consejo (Hint)
     // colgado de una fila quede de su lado de la raya y no del siguiente.
@@ -157,7 +191,17 @@ Item {
         anchors.leftMargin: Theme.space4
         visible: cardRoot.title !== ""
         text: cardRoot.title
-        color: Theme.fgDim
+        // En el ACENTO, no en gris. Es el patrón de encabezado de lista de M3
+        // —los subtítulos de sección van en 'primary'— y resuelve algo que se
+        // veía en la página: entre tarjetas grises, filas grises y texto de
+        // apoyo gris, el rótulo era lo único que marcaba dónde empieza cada
+        // bloque y estaba dicho en el mismo tono que todo lo demás. Con color,
+        // la página se recorre saltando de rótulo en rótulo sin leerla.
+        //
+        // 'accentText' y no 'accent' a secas: en modo claro el acento puro no
+        // tiene contraste suficiente sobre el fondo, y esta variante ya lo
+        // resuelve para el resto del shell.
+        color: Theme.accentText
         font.pixelSize: Theme.typeLabelLarge
         font.weight: Font.Medium
         elide: Text.ElideRight
@@ -187,11 +231,10 @@ Item {
         anchors.topMargin: cardRoot.headHeight + cardRoot.headGap
         implicitHeight: cardCol.implicitHeight + Theme.space8 * 2
         height: implicitHeight
-        radius: Theme.shapeLg
-        // Sin borde: la tarjeta se separa del fondo por TONO, como en ChromeOS.
-        // Un filete alrededor de cada bloque, seis veces por página, convertía
-        // la página en una rejilla de cajas.
-        color: SettingsPalette.groupFill
+        // La tarjeta ya no se pinta: el color lo ponen los tramos, y el hueco
+        // entre ellos tiene que dejar ver el fondo de la página. Si esto
+        // siguiera relleno, los huecos se rellenarían solos y no habría grupo.
+        color: "transparent"
 
         ColumnLayout {
             id: cardCol
@@ -204,26 +247,61 @@ Item {
             spacing: Theme.space10
         }
 
-        // Filetes entre filas. Se dibujan en una capa aparte, a partir de la
-        // posición de cada hija: así las páginas no tienen que saber nada de
-        // esto y no hay que tocar cada componente de fila.
-        //
-        // Van sangrados hasta el eje de texto (tras la insignia), que es como
-        // los pinta ChromeOS: la raya empieza donde empieza el contenido, no
-        // en el canto de la tarjeta.
+        // Tarjetas SIN filas de ajuste: Monitores, Acerca de, las redes
+        // guardadas… su contenido son Repeater, listas o bloques propios, así
+        // que no hay tramos que derivar de ellos. Sin esto se quedaban sin
+        // fondo ninguno —el contenido flotando sobre la página— porque el
+        // relleno pasó a depender de unas filas que ahí no existen.
+        Rectangle {
+            visible: cardRoot.segments.length === 0
+            anchors.fill: parent
+            z: -1
+            radius: Theme.shapeLg
+            color: SettingsPalette.groupFill
+        }
+
+        // Fondo de cada tramo. Se dibuja en una capa aparte, detrás de las
+        // filas, a partir de la posición de cada hija: así las páginas no
+        // tienen que saber nada de esto y no hay que tocar ni un componente de
+        // fila. Sustituye a los filetes que había aquí antes.
         Repeater {
-            model: cardCol.children
+            model: cardRoot.segments
             delegate: Rectangle {
-                required property var modelData
+                // El índice del hijo que ABRE el tramo, y el orden del tramo.
+                required property int modelData
                 required property int index
-                readonly property bool isRow: modelData
-                    && modelData.isSettingsRow === true && modelData.visible
-                visible: isRow && index !== cardRoot.firstRowIndex
-                x: cardCol.x + Theme.dp(28) + Theme.space10
-                width: Math.max(0, cardCol.width - Theme.dp(28) - Theme.space10)
-                y: cardCol.y + (modelData ? modelData.y : 0) - Math.round(cardCol.spacing / 2)
-                height: Theme.hairline
-                color: Theme.withAlpha(Theme.overlay, Theme.isDark ? 0.55 : 0.42)
+
+                readonly property var row: cardCol.children[modelData]
+                readonly property bool isFirst: index === 0
+                readonly property bool isLast: index === cardRoot.segments.length - 1
+                readonly property var nextRow: isLast
+                    ? null : cardCol.children[cardRoot.segments[index + 1]]
+
+                // Detrás de las filas.
+                z: -1
+                x: 0
+                width: card.width
+
+                // El primero arranca en el canto de la tarjeta y el último
+                // llega hasta el otro canto: así el relleno de arriba y de
+                // abajo queda DENTRO del grupo. Los de en medio se cortan a
+                // mitad del hueco entre filas, menos medio 'segGap' a cada
+                // lado — que es lo que deja el aire que separa las piezas.
+                y: isFirst ? 0
+                           : cardCol.y + (row ? row.y : 0)
+                             - Math.round(cardCol.spacing / 2)
+                             + Math.round(cardRoot.segGap / 2)
+                height: Math.max(0,
+                    (isLast ? card.height
+                            : cardCol.y + (nextRow ? nextRow.y : 0)
+                              - Math.round(cardCol.spacing / 2)
+                              - Math.round(cardRoot.segGap / 2)) - y)
+
+                color: SettingsPalette.groupFill
+                topLeftRadius:     isFirst ? Theme.shapeLg : cardRoot.segRadius
+                topRightRadius:    isFirst ? Theme.shapeLg : cardRoot.segRadius
+                bottomLeftRadius:  isLast ? Theme.shapeLg : cardRoot.segRadius
+                bottomRightRadius: isLast ? Theme.shapeLg : cardRoot.segRadius
             }
         }
     }

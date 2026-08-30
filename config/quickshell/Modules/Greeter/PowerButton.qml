@@ -38,8 +38,8 @@ Rectangle {
         visible: opacity > 0.01
         property real slide: pb.hl ? 0 : Theme.dp(6)
         transform: Translate { y: pbLabel.slide }
-        Behavior on opacity { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
-        Behavior on slide { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
+        Behavior on opacity { NumberAnimation { duration: 160; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
+        Behavior on slide { NumberAnimation { duration: 200; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
     }
 
     color: pb.hl ? Theme.withAlpha(Theme.surfaceHi, 0.9)
@@ -49,7 +49,7 @@ Rectangle {
                         : Theme.withAlpha(Theme.overlay, 0.45)
     // Escala: crece al hover/foco, se hunde al pulsar (sin coste en reposo).
     scale: pbMa.pressed ? 0.9 : pb.hl ? 1.12 : 1.0
-    Behavior on scale { NumberAnimation { duration: 160; easing.type: Easing.OutBack } }
+    Behavior on scale { NumberAnimation { duration: 160; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveSpatial } }
     Behavior on color { ColorAnimation { duration: 130 } }
     Behavior on border.color { ColorAnimation { duration: 130 } }
 
@@ -66,7 +66,7 @@ Rectangle {
             target: pbIcon
             from: 0; to: 360
             duration: 520
-            easing.type: Easing.InOutCubic
+            easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasized
         }
     }
     MouseArea {

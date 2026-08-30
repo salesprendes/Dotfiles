@@ -421,6 +421,21 @@ Singleton {
     // este estado.
     property bool   caffeine: false
 
+    // ── La isla ──────────────────────────────────────────────────────────────
+    // La píldora del centro de la barra que se transforma según lo que pasa
+    // (notificación, volumen, música) y se abre en hoja al pulsarla.
+    //
+    // Con la isla encendida, la sección CENTRAL de la barra no se dibuja: la
+    // isla ocupa ese sitio y enseña lo mismo (reloj, fecha, tiempo). No se
+    // borra del layout ni se migra nada — apagando la isla vuelve tu barra
+    // exactamente como estaba.
+    // Impide que la pantalla se apague mientras suena algo. Usa el inhibidor
+    // de reposo de Wayland (Quickshell 0.3), así que lo respeta quien gestione
+    // el reposo —hypridle, swayidle— sin que el shell tenga que saber cuál es.
+    property bool   keepAwakeOnMedia: true
+    property bool   islandEnabled: true
+    property bool   islandShowWeather: true
+
     // Emojis usados últimamente, los más recientes primero. Se guardan porque
     // la gracia de un selector de emojis es no tener que buscar dos veces el
     // mismo: casi todo el uso real son las mismas veinte caras.
@@ -496,6 +511,8 @@ Singleton {
     // que espera la especificación de freedesktop para lo crítico.
     property int    notifTimeoutCritical: 0     // segundos (0 = nunca)
     property int    notifMaxVisible: 4
+    // Esquina donde salen los popups CLÁSICOS. Solo se usa con la isla apagada:
+    // la isla vive donde vive la barra y no tiene esquina que elegir.
     property string notifPosition: "tr"        // tr | tl | br | bl
     // Barra de cuenta atrás en el popup: enseña cuánto le queda antes de
     // irse solo. Con timeouts largos ayuda; a algunos les parece ruido.
@@ -514,6 +531,7 @@ Singleton {
 
     // OSD: el aviso flotante de volumen.
     property bool   osdEnabled: true
+    // Igual que notifPosition: solo manda con la isla apagada.
     property string osdPosition: "bottom"      // top | bottom
     property real   osdTimeout: 1.6            // segundos en pantalla
 
@@ -599,6 +617,9 @@ Singleton {
         "lockBackend": "shell", "lockPamService": "",
         "lockShowMedia": true, "lockShowWeather": true, "lockShowStatus": true,
         "lockShowSessionButtons": true, "lockBlur": 0.75, "lockDim": 0.45,
+        "keepAwakeOnMedia": true,
+        "islandEnabled": true, "islandShowWeather": true,
+        "notifPosition": "tr", "osdPosition": "bottom",
         "emojiRecent": [],
         "caffeine": false,
         "templatesOn": true, "gtkThemingEnabled": true, "hyprlandThemingEnabled": true, "templatesEnabled": ({}),
@@ -608,12 +629,12 @@ Singleton {
         "weatherShowForecast": true, "weatherForecastDays": 5, "weatherShowDetails": true, "weatherShowWind": false,
         "weatherShowRain": false, "weatherShowSun": false,
         "notifPopupsEnabled": true, "notifTimeout": 5, "notifTimeoutLow": 4, "notifTimeoutCritical": 0,
-        "notifMaxVisible": 4, "notifPosition": "tr",
+        "notifMaxVisible": 4,
         "notifShowProgress": true, "notifCompact": false,
         "mutedNotificationApps": [],
         "batteryNotifyLow": true, "batteryLowThreshold": 15,
         "batteryNotifyCritical": true, "batteryCriticalThreshold": 5,
-        "osdEnabled": true, "osdPosition": "bottom", "osdTimeout": 1.6,
+        "osdEnabled": true, "osdTimeout": 1.6,
         "wallpaperTransition": "fade", "wallpaperTransitionDuration": 1.0, "wallpaperCurrent": "", "avatarPath": "",
         "wallpaperAutoMin": 0, "wallpaperRandom": true, "wallpaperFillMode": "crop",
         "dynamicPalette": ({}), "weatherCache": ({}),
@@ -642,9 +663,9 @@ Singleton {
     })
     readonly property var _enums: ({
         "language": ["en", "es", "ca"],
-        "lockBackend": ["shell", "hyprlock"],
         "notifPosition": ["tl", "tr", "bl", "br"],
         "osdPosition": ["top", "bottom"],
+        "lockBackend": ["shell", "hyprlock"],
         "barPosition": ["top", "bottom"],
         "wallpaperTransition": ["fade", "zoom", "slide", "push", "wipe"],
         "wallpaperFillMode": ["crop", "fit", "stretch"],
@@ -711,7 +732,7 @@ Singleton {
     //
     // Con versión y migraciones, un cambio de forma se declara UNA vez y las
     // configuraciones antiguas se convierten al cargar.
-    readonly property int schemaVersion: 2
+    readonly property int schemaVersion: 3
 
     // Cada entrada transforma el objeto JSON CRUDO —antes del saneado por
     // clave— desde la versión anterior hasta 'to'. Se aplican en orden, así que
@@ -752,6 +773,20 @@ Singleton {
                                          { id: "weather" })
                 o.barLayout = layout
             }
+        },
+        {
+            to: 3,
+            // v3 llegó a borrar 'osdPosition' y 'notifPosition' dando por hecho
+            // que la isla se quedaba con el OSD y los popups para siempre. Fue
+            // un error: la isla es un INTERRUPTOR, no un reemplazo. Con ella
+            // apagada vuelven los popups clásicos, y entonces esos dos ajustes
+            // sí significan algo — la esquina donde salen.
+            //
+            // La entrada se queda (quitarla dejaría un hueco en la numeración y
+            // a quien ya migró con el shell viejo en una versión que no existe)
+            // pero no toca nada. Quien perdiera los dos valores se los encuentra
+            // en su valor de fábrica, que es donde estaban.
+            apply: function (o) {}
         }
     ]
 

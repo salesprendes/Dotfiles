@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import Quickshell
+import Quickshell.Wayland
 import qs.Bar
 import qs.Components
 import qs.Config
@@ -43,6 +44,14 @@ PanelWindow {
 
     implicitHeight: Theme.barHeight
     color: "transparent"
+
+    // Namespace propio. La barra no tenía ninguno y salía en `hyprctl layers`
+    // como el genérico "quickshell", lo que significa que nadie podía
+    // escribirle una layerrule de Hyprland —blur, animaciones, ignorealpha— sin
+    // acertarle también a cualquier otra cosa de Quickshell que estuviera
+    // corriendo. Con un shell pensado para que lo use más gente, eso deja de
+    // ser un detalle: es la única manija que tiene el usuario desde fuera.
+    WlrLayershell.namespace: "qs-bar"
 
     // Reserva el espacio justo de la barra + su margen.
     exclusiveZone: Theme.barHeight + Theme.barTopMargin
@@ -118,9 +127,9 @@ PanelWindow {
                : (bar.atBottom ? 1 : -1) * (Theme.barHeight + Theme.barTopMargin + Theme.dp(6))
             // OutQuint: recorre casi todo enseguida y dedica la cola a
             // asentarse — la barra "aterriza" en vez de frenar.
-            Behavior on y { NumberAnimation { duration: 460; easing.type: Easing.OutQuint } }
+            Behavior on y { NumberAnimation { duration: 460; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
         }
-        Behavior on opacity { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
+        Behavior on opacity { NumberAnimation { duration: 300; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
 
         // ── Las tres secciones ───────────────────────────────────────────────
         // Qué widget va en cuál y en qué orden lo dice Settings.barLayout, no
@@ -148,8 +157,14 @@ PanelWindow {
             anchors.centerIn: parent
             spacing: Theme.gap
 
+            // Con la isla encendida el centro se queda VACÍO, y no oculto: un
+            // modelo vacío no instancia nada, así que el reloj y el clima que
+            // la isla ya enseña no existen dos veces. Y como no se toca el
+            // layout guardado, apagar la isla devuelve la barra tal cual estaba
+            // — sin migración de ida y sin sorpresas.
             Repeater {
-                model: BarCatalog.entriesOf(Settings.barLayout, "center")
+                model: Settings.islandEnabled
+                       ? [] : BarCatalog.entriesOf(Settings.barLayout, "center")
                 delegate: Slot {}
             }
         }

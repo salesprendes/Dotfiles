@@ -77,7 +77,11 @@ Singleton {
                 cat: cat,
                 skey: item.skey,
                 label: item.label,
-                desc: (item.desc !== undefined ? item.desc : "")
+                desc: (item.desc !== undefined ? item.desc : ""),
+                // Los alias de la fila (ver Components/SettingsRow.qml) viajan
+                // con la entrada, así que el mismo "material you" que encuentra
+                // el ajuste dentro de la ventana lo encuentra desde Spotlight.
+                alias: (Array.isArray(item.aliases) ? item.aliases.join(" ") : "")
             })
         const kids = item.children || []
         for (let i = 0; i < kids.length; i++)
@@ -106,7 +110,8 @@ Singleton {
     // filtro de la página activa (SettingsFilter.fold): ambos buscadores
     // encuentran "Posición" escribiendo "posicion".
     function matches(entry, q) {
-        return SettingsFilter.fold(entry.label + " " + entry.desc).indexOf(q) !== -1
+        return SettingsFilter.fold(entry.label + " " + entry.desc + " "
+                                   + (entry.alias || "")).indexOf(q) !== -1
     }
 
     // Resultados para una consulta, ya filtrados; excludeCat (opcional) deja

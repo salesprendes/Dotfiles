@@ -119,7 +119,7 @@ SettingsPage {
 
         SegRow {
             glyph: "󰍁"
-            skey: "lockBackend"
+            skey: "lockBackend"; aliases: ["hyprlock", "bloqueo", "lock", "pantalla de bloqueo"]
             label: I18n.tr("Lock screen")
             options: [ { text: I18n.tr("This shell"), value: "shell" },
                        { text: "hyprlock", value: "hyprlock" } ]
@@ -151,6 +151,15 @@ SettingsPage {
         Hint {
             skey: "lockPamService"
             text: I18n.tr("Name of a file in /etc/pam.d. Empty picks hyprlock if present, otherwise login.")
+        }
+
+        SwitchRow { glyph: "󰅶"; skey: "keepAwakeOnMedia"; aliases: ["cafeina", "caffeine", "insomnio", "no dormir", "idle"]
+            label: I18n.tr("Keep the screen on while playing")
+            checked: Settings.keepAwakeOnMedia
+            onToggled: Settings.keepAwakeOnMedia = !Settings.keepAwakeOnMedia }
+        Hint {
+            skey: "keepAwakeOnMedia"
+            text: I18n.tr("While something is playing, the screen will not blank or lock on its own. Counts the same player the bar shows, so a browser tab that is merely open does not keep the screen awake.")
         }
     }
 

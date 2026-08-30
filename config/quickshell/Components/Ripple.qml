@@ -48,7 +48,7 @@ Item {
         NumberAnimation {
             target: wave; property: "progress"
             from: 0; to: 1
-            duration: Theme.animSlow; easing.type: Easing.OutCubic
+            duration: Theme.animSlow; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel
         }
         // Entra deprisa y se va despacio: al revés se percibe como un
         // parpadeo, no como un material que responde.
