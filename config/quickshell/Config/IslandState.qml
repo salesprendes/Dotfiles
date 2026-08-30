@@ -5,30 +5,21 @@ import Quickshell
 import Quickshell.Hyprland
 import qs.Config
 
-// La máquina de estados de la isla. SOLO estado: aquí no hay ni una ventana ni
-// un pixel, y por eso se puede probar entera (ver tests/logica.qml). La forma
-// la calcula Modules/Island/IslandGeometry.qml y la pinta Island.qml.
+// Máquina de estados de la isla. Solo estado: sin ventanas ni geometría, que
+// las calcula Modules/Island/IslandGeometry.qml y las pinta Island.qml.
 //
-// ── LAS TRES CAPAS ──────────────────────────────────────────────────────────
-// En cualquier momento la isla enseña UNA actividad, que sale de tres capas
-// apiladas por prioridad:
+// La isla enseña UNA actividad, que sale de tres capas apiladas por prioridad:
 //
 //   transitorio  lo que acaba de pasar y se va solo (volumen, una notificación)
-//   destino      donde has entrado tú a propósito (calendario, control…)
-//   base         lo que hay cuando no pasa nada: el reproductor si suena algo,
-//                y si no, el reloj
+//   destino      donde ha entrado el usuario a propósito (calendario, medios…)
+//   base         lo que hay cuando no pasa nada: reproductor si suena algo, y
+//                si no, el reloj
 //
-// Gana el de más arriba que esté ocupado. Un transitorio TAPA un destino sin
-// cerrarlo: subes el volumen con el calendario abierto, ves el volumen, y al
-// caducar vuelve el calendario donde estaba. Esa vuelta es la mitad de la
-// gracia de una isla, y es lo que se pierde si esto se implementa con un
-// simple "activity = X".
+// Gana la capa ocupada más alta, y un transitorio TAPA un destino sin cerrarlo:
+// al caducar reaparece el destino donde estaba.
 //
-// ── QUIÉN TOCA QUÉ ─────────────────────────────────────────────────────────
-// Las capas se leen arriba; esto es lo otro que hace falta saber, y es lo que
-// no se deduce de ningún nombre: qué capas MUEVE cada función. La pregunta que
-// contesta —la que aparece cada vez que alguien cierra algo— es "¿aquí
-// closeDestination o collapse?".
+// Qué capas mueve cada función —la tabla contesta el "¿aquí closeDestination o
+// collapse?" que aparece cada vez que algo tiene que cerrarse:
 //
 //   función                 transitorio      destino          cola
 //   ─────────────────────────────────────────────────────────────────────────
@@ -44,44 +35,31 @@ import qs.Config
 //   closeDestination        ·                QUITA            ·
 //   collapse                QUITA            QUITA            ·
 //
-// Las dos columnas de la izquierda explican la regla entera:
+// De ahí salen las tres reglas del diseño:
 //
-//   · collapse() es el ÚNICO que se lleva un transitorio que no había pedido
-//     nadie. Por eso lo llaman los gestos que significan "quita lo que hay"
-//     —ESC, el clic fuera, el botón derecho— y NO Globals al abrir un panel:
-//     un aviso que estás leyendo no es daño colateral de haber abierto otra
-//     cosa. Ahí se llama a closeDestination(), que deja el transitorio en paz.
-//   · openDestination() sí limpia lo transitorio, y eso no se contradice con
-//     lo anterior: has entrado TÚ a un sitio, y dejar el volumen tapando el
-//     calendario que acabas de abrir sería absurdo.
-//   · peekMedia() no limpia nada: se niega a asomarse si hay algo puesto. Un
-//     vistazo que se abre solo no puede pisar lo que estabas mirando.
+//   · collapse() es el único que se lleva un transitorio no pedido, así que lo
+//     llaman los gestos que significan "quita lo que hay" —ESC, clic fuera,
+//     botón derecho— y no Globals al abrir un panel, que usa closeDestination.
+//   · openDestination() sí limpia el transitorio: la entrada es deliberada y
+//     dejar el volumen tapando el destino recién abierto no tendría sentido.
+//   · peekMedia() no limpia nada; se niega a asomarse si hay algo puesto.
 //
-// ── POR QUÉ UNA COLA DE NOTIFICACIONES ──────────────────────────────────────
-// Los popups de antes eran una pila: cabían cuatro a la vez. La isla es UNA,
-// así que las que llegan mientras hay otra puesta tienen que esperar turno o
-// se pierden. La cola las guarda y el contador dice cuántas quedan.
+// La cola de notificaciones existe porque la isla es una sola superficie: las
+// que llegan mientras hay otra puesta esperan turno en vez de perderse.
 Singleton {
     id: root
 
-    // ── Capas ────────────────────────────────────────────────────────────────
-    // "" = capa libre.
+    // "" en cualquiera de las dos = capa libre.
     property string transientId: ""      // "level" | "notification"
     property string destination: ""    // "calendar" | "control" | "notifs" | "media"
-    // En qué monitor se abrió la hoja. Vacío = en todos (sin Hyprland).
-    //
-    // Los estados COMPACTOS sí van en todas las pantallas, como la barra: una
-    // notificación tiene que verse mires donde mires. Pero una hoja expandida
-    // es algo que has abierto TÚ, con un clic, en un sitio concreto — abrirla
-    // por triplicado sería como si pulsar un botón abriera tres ventanas.
+    // Monitor donde se abrió la hoja; vacío = en todos (sin Hyprland). Los
+    // estados compactos van en todas las pantallas, pero una hoja expandida es
+    // una acción deliberada sobre una pantalla concreta y no se replica.
     property string destinationMonitor: ""
-    // La base no se asigna: se deduce. Así no hay forma de que se quede
-    // "pegada" en un estado viejo.
-    //
-    // El orden importa y es este: GRABANDO por encima de todo lo demás. Una
-    // grabación en marcha es lo único de esta capa que sigue costando algo
-    // mientras no la mires —espacio en disco, y una pantalla que se está yendo
-    // a un archivo— así que no puede quedar tapada porque además suene música.
+
+    // La base se deduce, nunca se asigna, así que no puede quedarse pegada en
+    // un estado viejo. Grabando va por encima de todo: es lo único de esta capa
+    // que sigue costando disco mientras no se mire.
     readonly property string base: root.recordingActive ? "recording"
                                  : root.mediaActive ? "media"
                                                     : "home"
@@ -90,33 +68,28 @@ Singleton {
                                      : root.destination !== "" ? root.destination
                                                                : root.base
 
-    // Lo que enseña una isla que no puede expandirse (las de los otros
-    // monitores): lo mismo, pero saltándose la capa de destinos. Así, mientras
-    // tú tienes el calendario abierto en la pantalla de la derecha, la de la
-    // izquierda sigue enseñando la hora — y si llega una notificación, la
-    // enseñan las dos.
+    // Lo que enseñan las islas que no pueden expandirse: igual pero saltándose
+    // la capa de destinos, de modo que una hoja abierta en un monitor no cambia
+    // lo que muestran los demás.
     readonly property string compactActivity: root.transientId !== "" ? root.transientId
                                                                       : root.base
 
-    // Expandida = ocupa una hoja en vez de una píldora. Los destinos siempre
-    // van expandidos (para eso has entrado); los transitorios, nunca.
+    // Ocupa una hoja en vez de una píldora: los destinos siempre, los
+    // transitorios nunca.
     readonly property bool expanded: root.destination !== "" && root.transientId === ""
 
-    // ¿Está la isla enseñando algo que no sea su estado de reposo? Lo usa la
-    // barra para saber si tiene que apartarse.
+    // La isla enseña algo distinto del reposo; la barra lo usa para apartarse.
     readonly property bool busy: root.activity !== "home"
 
-    // ── Entradas del mundo ───────────────────────────────────────────────────
+    // Entradas del mundo, escritas por Modules/Island/sources/*. Aquí no se
+    // consulta ningún servicio, para que esta máquina de estados pueda correr
+    // sin PipeWire, MPRIS ni grabadora.
     property bool mediaActive: false
-    // Las pone Modules/Island/sources/*. Aquí no se mira ni un servicio: este
-    // archivo tiene que poder ejecutarse en tests/logica.qml sin PipeWire, sin
-    // MPRIS y sin grabadora.
     property bool recordingActive: false
-    // El puntero encima CONGELA las cuentas atrás: leer una notificación no
-    // debería ser una carrera contra el reloj.
+
+    // El puntero encima congela las cuentas atrás de esta máquina.
     property bool pointerInside: false
 
-    // ── Nivel (volumen y brillo) ─────────────────────────────────────────────
     property string levelKind: ""      // "volume" | "mic" | "brightness"
     property real levelValue: 0
     property bool levelMuted: false
@@ -129,18 +102,16 @@ Singleton {
         root._restartTransientTimer()
     }
 
-    // ── Notificaciones ───────────────────────────────────────────────────────
     property var notifQueue: []
     readonly property var notifCurrent: root.notifQueue.length > 0 ? root.notifQueue[0] : null
     readonly property int notifPending: Math.max(0, root.notifQueue.length - 1)
 
+    // Encola un aviso y lo pone a la vista. La cola se recorta a
+    // notifMaxVisible quedándose con los más recientes: ante una avalancha, ir
+    // enseñando de uno en uno los cincuenta primeros no le sirve a nadie.
     function pushNotification(n) {
         if (!n || Settings.dnd || !Settings.notifPopupsEnabled)
             return
-        // Tope de cola: si llega una tormenta de avisos (una actualización
-        // hablando, un script en bucle) no tiene sentido guardar cincuenta
-        // para enseñarlos de uno en uno durante dos minutos. Se queda con los
-        // más recientes, que es lo que la gente quiere ver.
         const max = Math.max(1, Settings.notifMaxVisible)
         const next = root.notifQueue.concat([n])
         root.notifQueue = next.length > max ? next.slice(next.length - max) : next
@@ -167,10 +138,9 @@ Singleton {
             root.clearTransient()
     }
 
-    // Segundos que dura la notificación a la vista, según la urgencia que
-    // declaró la app (0 baja · 1 normal · 2 crítica). CERO SIGNIFICA NUNCA: lo
-    // manda la especificación de freedesktop para lo crítico, y perderlo aquí
-    // convertiría "se ha caído el servidor" en un parpadeo de dos segundos.
+    // Segundos a la vista según la urgencia declarada por la app (0 baja ·
+    // 1 normal · 2 crítica). Cero significa NUNCA, como manda freedesktop para
+    // lo crítico.
     function notifLifetime(n) {
         const u = n && n.urgency !== undefined ? n.urgency : 1
         return u === 2 ? Settings.notifTimeoutCritical
@@ -178,7 +148,6 @@ Singleton {
                        : Settings.notifTimeout
     }
 
-    // ── Transitorios ─────────────────────────────────────────────────────────
     function clearTransient() {
         root.transientId = ""
         root.levelKind = ""
@@ -200,12 +169,11 @@ Singleton {
             transientTimer.restart()
     }
 
+    // Con el puntero dentro el disparo se reprograma entero en vez de
+    // continuar: quien se para a leer recibe el tiempo completo al apartarse.
     readonly property Timer _transientTimer: Timer {
         id: transientTimer
         interval: root.transientMs > 0 ? root.transientMs : 1
-        // El puntero encima para el reloj. Al salir se reanuda entero, no por
-        // donde iba: si te has parado a leerlo, lo justo es darte el tiempo
-        // completo desde que apartas el ratón.
         running: false
         repeat: false
         onTriggered: {
@@ -221,70 +189,41 @@ Singleton {
         }
     }
 
-    // ── Destinos ─────────────────────────────────────────────────────────────
-    // ESTA LISTA Y EL CATÁLOGO DE HOJAS DE IslandWindow TIENEN QUE CUADRAR.
-    // Un destino que se puede abrir y no tiene hoja no falla: openDestination
-    // devuelve true, la isla se da por expandida, la ranura busca su componente,
-    // no lo encuentra y se queda vacía — así que la isla se encoge a una
-    // píldora en blanco y parece que se ha roto. Ya pasó con "media", que se
-    // abría al pulsar sobre música sonando sin tener hoja que enseñar.
-    //
-    // "control" estaba aquí por lo mismo y nunca llegó a abrirse desde ningún
-    // sitio: fuera hasta que exista la hoja que lo respalde.
+    // Esta lista y el catálogo de hojas de IslandWindow tienen que cuadrar: un
+    // destino sin hoja no da error, abre la isla expandida con la ranura vacía
+    // y deja una píldora en blanco que parece rota.
     readonly property var destinations: ["calendar", "notifs", "media", "recording"]
 
     function isDestination(id) {
         return root.destinations.indexOf(id) !== -1
     }
 
-    // ── Quién abrió la hoja ──────────────────────────────────────────────────
-    // Tres formas de que haya un destino abierto, y se comportan distinto al
-    // acabar:
+    // Quién abrió la hoja, que decide cómo termina:
     //
-    //   ""       la abriste TÚ (clic, atajo, IPC) — se queda hasta que la cierres
+    //   ""       acción deliberada (clic, atajo, IPC) — se queda hasta cerrarla
     //   "hover"  la asomó el puntero — se va al apartarlo
-    //   "auto"   se asomó sola (cambió la canción) — se va sola
-    //
-    // Sin esta distinción no se puede tener las dos cosas: o la hoja se queda
-    // siempre (y entonces asomarse al pasar el ratón te deja el reproductor
-    // abierto para siempre) o se va siempre (y entonces no puedes abrirla).
+    //   "auto"   se asomó sola al cambiar la canción — caduca sola
     property string destinationSource: ""
 
-    // ── ¿Es modal? ───────────────────────────────────────────────────────────
-    // Una hoja que has abierto TÚ se cierra al pulsar fuera, como cualquier
-    // otro panel del shell. Y SOLO esa, que es la mitad de la regla:
-    //
-    //   · Un vistazo asomado por el ratón ("hover") se va al apartarlo, así que
-    //     para cerrarlo pulsando fuera tendrías que haber salido antes — cerrar
-    //     no es lo que hace falta ahí.
-    //   · Uno que se asomó SOLO ("auto", cambió la canción) no puede volverse
-    //     modal jamás: la isla se quedaría con el siguiente clic de la pantalla
-    //     porque ha cambiado de canción mientras escribías. Ese sí sería un
-    //     fallo grave, y es el motivo de que esto mire el origen y no solo si
-    //     está expandida.
-    //
-    // Pulsar sobre un vistazo lo FIJA (pinDestination pone el origen en ""), y
-    // desde ese momento sí es modal: has dicho que lo quieres.
+    // Modal = captura teclado y clic fuera. Mira el ORIGEN y no solo si está
+    // expandida: una hoja asomada sola ("auto") no puede volverse modal nunca,
+    // porque se quedaría con el siguiente clic de la pantalla solo por haber
+    // cambiado de canción. Fijarla con pinDestination la vuelve modal.
     readonly property bool modal: root.expanded && root.destinationSource === ""
 
-    // Lo que dura un vistazo que se asomó solo. Cuatro segundos y medio es lo
-    // que se tarda en leer título y artista sin prisa; menos convierte el aviso
-    // de canción nueva en un parpadeo.
+    // Duración de un vistazo asomado solo: lo justo para leer título y artista.
     readonly property int peekMs: 4500
 
-    // 'source' y 'monitor' son opcionales: quien abre a mano no pasa ninguno.
-    // El monitor explícito lo necesita el asomado por ratón — se abre en la
-    // pantalla que estás TOCANDO, que no tiene por qué ser la que tiene el foco.
+    // Abre una hoja y cancela el transitorio que hubiera. 'source' y 'monitor'
+    // son opcionales; el monitor explícito lo usa el asomado por puntero, que
+    // debe abrirse en la pantalla tocada y no en la que tiene el foco.
+    //
+    // Consulta Hyprland directamente en vez de Globals: esta máquina de estados
+    // no depende del singleton de paneles, y así no hay ciclo entre los dos.
     function openDestination(id, source, monitor) {
         if (!root.isDestination(id))
             return false
-        // Entrar a un destino cancela lo transitorio: has decidido tú, y dejar
-        // el volumen tapando el calendario que acabas de abrir sería absurdo.
         root.clearTransient()
-        // A Hyprland directamente y no a Globals.focusedMonitorName(), que dice
-        // exactamente esto mismo: esta máquina de estados no tiene por qué
-        // conocer al singleton de los paneles. Era la última referencia que
-        // quedaba, y con ella se va el ciclo Globals ⇄ IslandState.
         root.destinationMonitor = monitor ? monitor
                                           : (Hyprland.focusedMonitor?.name ?? "")
         root.destinationSource = source ? source : ""
@@ -296,9 +235,8 @@ Singleton {
         return true
     }
 
-    // Un vistazo asomado se QUEDA al pulsarlo. Es lo que quiere quien alarga la
-    // mano hacia algo que se iba a ir solo: pulsar para cerrar lo que ya estaba
-    // cerrándose no le sirve a nadie.
+    // Fija un vistazo asomado para que deje de caducar: pulsar sobre algo que
+    // ya se estaba yendo significa quererlo, no cerrarlo.
     function pinDestination() {
         if (root.destination === "" || root.destinationSource === "")
             return false
@@ -307,12 +245,10 @@ Singleton {
         return true
     }
 
-    // El reproductor asomándose solo al cambiar de canción.
-    //
-    // Las tres guardas de abajo son el motivo de que esto sea una función y no
-    // un `openDestination` suelto en el vigilante: no puede pisar una
-    // notificación que estás leyendo (openDestination limpia lo transitorio),
-    // ni una hoja que abriste tú, ni el aviso de que se está grabando.
+    // Asoma el reproductor al cambiar de canción. Es una función y no un
+    // openDestination suelto por las guardas: openDestination limpia el
+    // transitorio, así que sin ellas este vistazo automático se llevaría por
+    // delante una notificación, una hoja abierta a mano o el aviso de grabación.
     function peekMedia() {
         if (root.base !== "media")
             return false
@@ -321,8 +257,7 @@ Singleton {
         return root.openDestination("media", "auto")
     }
 
-    // Mismo trato que el reloj de los transitorios: el puntero encima congela
-    // la cuenta. Si te has parado a mirarlo, no se te va de debajo del ratón.
+    // Mismo trato que el reloj de los transitorios: el puntero congela la cuenta.
     readonly property Timer _peekTimer: Timer {
         id: peekTimer
         interval: root.peekMs
@@ -352,37 +287,24 @@ Singleton {
         peekTimer.stop()
     }
 
-    // ¿Le toca a ESTA pantalla enseñar la hoja? Sin Hyprland (o sin pantalla
-    // asignada) no hay forma de saber cuál es cuál, así que se enseña en todas
-    // — que es lo que hacía el shell antes de que hubiera islas.
+    // ¿Le toca a esta pantalla enseñar la hoja? Sin monitor asignado no hay
+    // forma de distinguirlas, y entonces se enseña en todas.
     function sheetBelongsTo(screenName) {
         return root.destinationMonitor === "" || !screenName
                || root.destinationMonitor === screenName
     }
 
-    // Cierra TODO —las dos capas— y vuelve al reposo. Lo llaman tres gestos, y
-    // los tres significan lo mismo: "quita lo que hay puesto".
-    //
-    //   · ESC                    Island.qml, mientras la hoja es modal
-    //   · un clic FUERA          Island.qml, mismo caso (ver 'modal')
-    //   · el botón derecho       sobre la propia isla
-    //
-    // Es el único que se lleva por delante un transitorio, y por eso NO es lo
-    // que usa Globals al abrir o cerrar un panel: ver la tabla de la cabecera.
-    //
-    // Aviso a quien lo lea dentro de un año: este comentario ya ha mentido dos
-    // veces. Primero decía que ESC y el clic fuera llamaban aquí cuando no
-    // existía ninguno de los dos; luego, ya escritos los dos, siguió diciendo
-    // que ESC "sigue sin existir" y que la ventana no pide teclado nunca. Si
-    // tocas quién llama a esto, corrige estas líneas en el mismo cambio.
+    // Cierra las dos capas y vuelve al reposo. Lo llaman los tres gestos que
+    // significan "quita lo que hay": ESC y el clic fuera desde Island.qml
+    // mientras la hoja es modal, y el botón derecho sobre la isla. Es el único
+    // que se lleva un transitorio, por eso no lo usa Globals al abrir un panel.
     function collapse() {
         root.clearTransient()
         root.closeDestination()
     }
 
-    // ── Coherencia ───────────────────────────────────────────────────────────
-    // Con "no molestar" encendido no se guardan avisos pendientes: al apagarlo
-    // no debe caerte encima la cola de la última hora.
+    // Con "no molestar" encendido no se guardan pendientes: al apagarlo no debe
+    // descargarse la cola acumulada.
     readonly property var _dndWatch: Connections {
         target: Settings
         function onDndChanged() {
@@ -391,17 +313,15 @@ Singleton {
         }
     }
 
-    // El destino "media" no tiene sentido sin reproductor: si la música se
-    // acaba con el panel de medios abierto, se cierra solo en vez de dejar una
-    // hoja vacía.
+    // El destino "media" no tiene sentido sin reproductor: se cierra solo en
+    // vez de dejar una hoja vacía.
     onMediaActiveChanged: {
         if (!root.mediaActive && root.destination === "media")
             root.closeDestination()
     }
 
-    // Y lo mismo con la grabación: al parar, la hoja con el botón de parar no
-    // pinta nada. Sin esto se queda una hoja con un cronómetro congelado y tres
-    // botones que ya no hacen nada.
+    // Igual con la grabación: al parar quedaría una hoja con un cronómetro
+    // congelado y botones inertes.
     onRecordingActiveChanged: {
         if (!root.recordingActive && root.destination === "recording")
             root.closeDestination()

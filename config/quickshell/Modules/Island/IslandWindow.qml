@@ -8,16 +8,12 @@ import qs.Services
 
 // La ventana que hospeda la isla. Una por monitor.
 //
-// ── POR QUÉ UNA VENTANA GRANDE Y CASI VACÍA ─────────────────────────────────
-// Una superficie de layer-shell no puede cambiar de tamaño con suavidad: cada
-// redimensionado es una negociación con el compositor, y animar eso da tirones
-// y parpadeos. Así que la ventana es un LIENZO fijo, del tamaño de la hoja más
-// grande que la isla pueda llegar a ser, y lo que se anima es un rectángulo
-// dentro. El compositor nunca ve la ventana cambiar.
+// Es un lienzo fijo del tamaño de la hoja más grande, y lo que se anima es un
+// rectángulo dentro: redimensionar una superficie de layer-shell es una
+// negociación con el compositor en cada fotograma, y animar eso da tirones.
 //
-// El precio es una superficie grande y transparente por monitor, y ese precio
-// se paga con 'mask': sin ella, todo ese vacío se comería los clics al
-// escritorio. Con ella, solo la forma de la isla recibe ratón.
+// El precio es una superficie grande y transparente por monitor, y se paga con
+// 'mask': sin ella todo ese vacío se comería los clics al escritorio.
 PanelWindow {
     id: win
 
@@ -40,24 +36,17 @@ PanelWindow {
         right: true
     }
 
-    // Alto del lienzo: lo que ocupa la hoja más grande, más el margen del borde
-    // y un respiro. No reserva espacio (exclusionMode Ignore), así que sobrarle
-    // no cuesta nada más que memoria de superficie.
+    // Alto del lienzo: la hoja más grande más el margen del borde. No reserva
+    // espacio (exclusionMode Ignore), así que pasarse solo cuesta superficie.
     readonly property int alturaLienzo: Theme.barTopMargin + Theme.dp(560)
 
-    // ── Por qué el lienzo crece al abrir una hoja a mano ─────────────────────
-    // Para que un clic FUERA de la isla la cierre, ese clic tiene que llegar a
-    // esta ventana; y a una ventana solo le llega lo que cae dentro de ella. Con
-    // el lienzo de siempre —una franja de 560 dp pegada a la barra— pulsar en la
-    // mitad de abajo de la pantalla no cerraba nada, porque el clic ni siquiera
-    // pasaba por aquí. Así que mientras hay hoja abierta, el lienzo es la
-    // pantalla entera.
+    // Con una hoja modal abierta el lienzo pasa a ser la pantalla entera: un
+    // clic fuera solo puede cerrarla si cae dentro de esta ventana, y la franja
+    // de reposo no cubre el resto del escritorio.
     //
-    // Esto NO contradice lo de arriba. Lo que da tirones es redimensionar la
-    // superficie EN CADA FOTOGRAMA de una animación; esto son dos cambios de
-    // tamaño, uno al abrir y otro al cerrar, y ninguno de los dos mueve la isla
-    // de sitio: la forma sigue anclada a su borde, así que el crecimiento pasa
-    // entero por el lado contrario y no se ve.
+    // No contradice lo de arriba: son dos cambios de tamaño, al abrir y al
+    // cerrar, no uno por fotograma, y como la forma sigue anclada a su borde el
+    // crecimiento ocurre por el lado contrario y no se ve.
     implicitHeight: (win.modal && win.screen)
                     ? Math.max(win.alturaLienzo, win.screen.height)
                     : win.alturaLienzo
@@ -66,42 +55,32 @@ PanelWindow {
 
     WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.namespace: "qs-island"
-    // Teclado SOLO mientras hay una hoja abierta a mano, y por eso mismo:
-    // pedirlo en reposo se lo quitaría a la ventana en la que estás escribiendo,
-    // que es exactamente lo que no puede hacer algo que vive siempre en
-    // pantalla. Con una hoja tuya delante ya no es "algo que vive ahí", es un
-    // panel — y entonces ESC tiene que cerrarlo como cierra cualquier otro.
+    // Teclado solo con una hoja modal delante: pedirlo en reposo se lo quitaría
+    // a la ventana en la que se está escribiendo. Con la hoja puesta la isla es
+    // un panel más y ESC debe cerrarla.
     //
-    // Exclusive y no OnDemand por el mismo motivo que Components/Popout: a una
-    // capa OnDemand Hyprland solo le da el teclado si haces CLIC en ella, así
-    // que ESC no llegaría nunca sin haber pulsado antes.
+    // Exclusive y no OnDemand porque a una capa OnDemand Hyprland solo le cede
+    // el teclado tras un clic, y entonces ESC no llegaría nunca.
     //
-    // Y atado también a 'visible': con un panel abierto la isla se esconde pero
-    // su hoja sigue puesta, así que sin esta condición una ventana invisible
-    // estaría peleándole el teclado al panel que sí se ve.
+    // Atado también a 'visible': con un panel abierto la isla se esconde con su
+    // hoja puesta, y sin esa condición una ventana invisible le disputaría el
+    // teclado al panel que sí se ve.
     WlrLayershell.keyboardFocus: (win.modal && win.visible)
                                  ? WlrKeyboardFocus.Exclusive
                                  : WlrKeyboardFocus.None
 
-    // La isla está en TODAS las pantallas, como la barra: en reposo enseña la
-    // hora y con una notificación la enseña mires donde mires. Lo que no se
-    // reparte es la HOJA expandida — esa va solo donde la abriste (ver
-    // IslandState.sheetBelongsTo).
+    // La isla existe en todas las pantallas; lo que no se reparte es la hoja
+    // expandida (ver IslandState.sheetBelongsTo).
     //
-    // Se esconde entera mientras haya un panel abierto: los popouts son de esta
-    // misma capa y cubren la pantalla con su propio captador de clics, así que
-    // dejarla encima sería pelearse por el ratón. Misma regla que ya seguían
-    // los popups de notificación.
+    // Se esconde entera con cualquier panel abierto: los popouts viven en esta
+    // misma capa y cubren la pantalla con su captador de clics, así que las dos
+    // cosas a la vez se disputarían el ratón. Y se aparta con una ventana a
+    // pantalla completa en esta pantalla (ver Globals.hiddenByFullscreen).
     //
-    // Y se aparta con una ventana a pantalla completa EN ESTA pantalla. La
-    // regla, con su porqué, está en Globals.hiddenByFullscreen.
-    //
-    // Se le pasa 'modelData' y NO 'screen', que es lo que parece natural y da
-    // un bucle: 'screen' de una ventana de layer-shell se resuelve al MAPEARLA,
-    // o sea que depende de 'visible' — y aquí estamos calculando 'visible'.
-    // Medido: "Binding loop detected for property 'visible'" nada más arrancar.
-    // 'modelData' es la pantalla que le pasa shell.qml desde fuera y no depende
-    // de si la ventana está puesta o no.
+    // Se consulta con 'modelData' y no con 'screen' para evitar un bucle de
+    // binding: el 'screen' de una superficie de layer-shell se resuelve al
+    // mapearla, o sea que depende de 'visible', que es justo lo que se está
+    // calculando aquí. 'modelData' lo inyecta shell.qml desde fuera.
     visible: Settings.islandEnabled && Globals.openPanel === "" && !remapGuard.remapping
              && !Globals.hiddenByFullscreen(win.modelData)
 
@@ -109,19 +88,12 @@ PanelWindow {
     // layout. Ver Components/ScreenMoveRemap.qml.
     ScreenMoveRemap { id: remapGuard; window: win }
 
-    // Solo la forma recibe ratón. El resto del lienzo es aire.
+    // Solo la forma recibe ratón; el resto del lienzo es aire.
     //
-    // Y con las ESQUINAS de verdad. Una Region con 'item' recorta al rectángulo
-    // que ocupa ese item, así que hasta ahora los cuatro cuadraditos de fuera de
-    // las curvas también capturaban el ratón: pinchabas al lado de la isla, en
-    // un sitio donde se ve el escritorio, y el clic se lo quedaba ella. Con la
-    // isla expandida —radio 20-28 dp— eso son cuatro zonas muertas de buen
-    // tamaño sobre lo que estés usando.
-    //
-    // Quickshell 0.3 añadió radio POR ESQUINA a Region, que es justo lo que
-    // hacía falta: la isla ya dibuja sus cuatro esquinas por separado (el lado
-    // pegado al borde de pantalla lleva menos radio que el libre), así que una
-    // sola 'radius' no habría bastado.
+    // Con radio por esquina y no una 'radius' única: una Region con 'item'
+    // recorta al rectángulo del item, así que las cuatro puntas de fuera de las
+    // curvas capturarían clics sobre el escritorio, y además la isla dibuja
+    // cada esquina con un radio distinto según el borde al que se pega.
     mask: Region {
         item: island.shapeItem
         topLeftRadius: Math.round(island.shapeItem.topLeftRadius)
@@ -129,13 +101,10 @@ PanelWindow {
         bottomLeftRadius: Math.round(island.shapeItem.bottomLeftRadius)
         bottomRightRadius: Math.round(island.shapeItem.bottomRightRadius)
 
-        // …salvo con una hoja abierta a mano, que entonces la ventana entera
-        // recibe ratón. Es la otra mitad del clic de fuera: sin abrir la
-        // máscara, el clic se lo queda la aplicación de debajo y aquí no llega
-        // nunca — y con ella abierta, el fondo de Island.qml lo recoge y cierra.
-        //
-        // Ancho y alto a cero en vez de quitar la región: una región vacía no
-        // une nada, y así el caso normal sigue siendo exactamente la forma.
+        // Con una hoja modal la ventana entera recibe ratón: es la otra mitad
+        // del clic de fuera, que si no se lo queda la aplicación de debajo.
+        // Ancho y alto a cero en vez de quitar la región, porque una región
+        // vacía no une nada y el caso normal sigue siendo exactamente la forma.
         Region {
             width: win.modal ? win.width : 0
             height: win.modal ? win.height : 0
@@ -151,9 +120,8 @@ PanelWindow {
         screenName: win.screen ? win.screen.name : ""
         canExpand: IslandState.sheetBelongsTo(island.screenName)
 
-        // El catálogo de contenidos se inyecta desde aquí para que Island.qml
-        // no tenga que importar ni conocer cada actividad: añadir una es tocar
-        // este mapa y nada más.
+        // El catálogo se inyecta desde aquí para que Island.qml no conozca
+        // ninguna actividad: añadir una es tocar solo estos dos mapas.
         compactContent: ({
             "home": cHome,
             "level": cLevel,

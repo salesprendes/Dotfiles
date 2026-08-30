@@ -78,12 +78,20 @@ PanelWindow {
             renderStrategy: Canvas.Immediate
 
             property string current: ""
+
+            // Se muestrea la MINIATURA, no el fondo: este lienzo mide 64x36 y
+            // solo extrae colores, pero loadImage() no acepta un tamaño y
+            // descomprimiría el original entero en cada cambio de fondo. La
+            // paleta resultante no cambia de forma apreciable.
+            property string fuente: ""
+
             function analyze() {
                 const p = Wallpaper.current
                 if (p === "" || p === current)
                     return
                 current = p
-                loadImage("file://" + p)
+                fuente = Wallpaper.thumb(p)
+                loadImage("file://" + fuente)
             }
             Component.onCompleted: analyze()
             Connections {
@@ -94,7 +102,7 @@ PanelWindow {
             onPaint: {
                 if (current === "")
                     return
-                const url = "file://" + current
+                const url = "file://" + fuente
                 if (!isImageLoaded(url))
                     return
                 const ctx = getContext("2d")

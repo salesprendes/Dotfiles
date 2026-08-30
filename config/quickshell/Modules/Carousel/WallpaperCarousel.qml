@@ -292,17 +292,18 @@ Scope {
                 anchors.bottomMargin: parent.height * 0.18
                 visible: plugin.count > 0
 
-                // ── El modelo SOLO mientras está abierto ─────────────────
-                // El carrusel vive instanciado toda la sesión (shell.qml), y
-                // un PathView con modelo crea sus delegates aunque la ventana
-                // no se vea. Medido con el carrusel CERRADO y sin abrirlo
-                // nunca: 13 delegates y 12 imágenes decodificadas en cada
-                // arranque, unos 20 MB, para un panel que nadie ha mirado.
+                // El modelo sigue a 'win.visible' y no a 'plugin.open'. Con
+                // 'open' el PathView destruye los delegates en el mismo
+                // fotograma del cierre, mientras el velo sigue fundiendo 200 ms:
+                // las tarjetas desaparecen de golpe y el fondo se va después.
+                // 'win.visible' es 'plugin.open || root.opacity > 0.01', así que
+                // ata el modelo a que la ventana esté realmente en pantalla y de
+                // paso evita repetir la expresión.
                 //
-                // Con el modelo cerrado son 0 y 0. Al abrirlo se puebla, y de
-                // recolocarlo en el fondo actual ya se encarga onCountChanged,
-                // que existía justo para eso ("el modelo se pobló/reordenó").
-                model: plugin.open ? plugin.items : []
+                // Con la ventana fuera de pantalla el modelo queda vacío, que es
+                // lo que evita que el carrusel mantenga delegates e imágenes
+                // decodificadas durante toda la sesión sin haberse abierto.
+                model: win.visible ? plugin.items : []
                 pathItemCount: Math.max(1, Math.min(plugin.count, Math.ceil(width / Math.max(1, cardW)) + 4))
                 cacheItemCount: plugin._fastNavigation ? 12 : 8
                 interactive: false

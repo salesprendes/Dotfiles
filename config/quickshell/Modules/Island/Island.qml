@@ -4,80 +4,60 @@ import qs.Config
 // La isla: una sola forma que se estira, se encoge y cambia de esquinas
 // siguiendo un muelle (IslandSpring), con el contenido cruzándose por dentro.
 //
-// ── EL TRUCO DE QUE PAREZCA UNA SOLA COSA ───────────────────────────────────
-// La forma y el contenido van por caminos distintos y a destiempo, y eso es
-// deliberado:
+// La forma y el contenido van a destiempo a propósito. La forma la mueve el
+// muelle, sin duración fija, así que un cambio de objetivo a mitad de camino se
+// curva conservando la velocidad. El contenido funde con retraso respecto a la
+// forma: entrando a la vez se vería el texto nuevo apretado dentro de la caja
+// vieja, y dejando que la caja abra primero aparece en un sitio que ya le cabe.
 //
-//   · La FORMA la mueve el muelle, sin duración fija. Un cambio de objetivo a
-//     mitad de camino se curva y sigue, conservando la velocidad.
-//   · El CONTENIDO se funde, y entra con RETRASO respecto a la forma. Si
-//     entrara a la vez, verías el texto nuevo apretujado dentro de una caja
-//     que todavía es del tamaño viejo. Dejando que la caja se abra primero, el
-//     contenido aparece en un sitio que ya le viene bien.
-//
-// Es la misma regla que ya sigue Components/Popout.qml con Theme.revealOpacity,
-// aquí aplicada a los dos sentidos de un cruce.
-//
-// ── POR QUÉ DOS RANURAS (A/B) Y NO UN SOLO Loader ───────────────────────────
-// Con un Loader, cambiar de actividad destruye lo viejo en el mismo fotograma
-// en que nace lo nuevo: no hay cruce posible, hay un corte. Con dos ranuras
-// que se alternan, la saliente sigue viva mientras se desvanece. Es el mismo
-// patrón que usan los fondos de pantalla en Background/Backdrop.qml.
+// Hay dos ranuras de contenido (A/B) y no un Loader porque un Loader destruye
+// lo viejo en el mismo fotograma en que nace lo nuevo: eso es un corte, no un
+// cruce. Con dos ranuras alternas la saliente sigue viva mientras se desvanece.
 Item {
     id: island
 
     // Qué borde de la pantalla ocupa. La isla cuelga del mismo que la barra.
     property bool atBottom: false
-    // Altura en reposo: la de la barra, para que en reposo la isla se lea como
-    // parte de ella y no como algo pegado encima.
+    // Altura en reposo: la de la barra, para que la isla se lea como parte de
+    // ella y no como algo pegado encima.
     property real compactHeight: Theme.barHeight
     // Separación con el borde de pantalla, la misma que la barra.
     property real edgeMargin: Theme.barTopMargin
 
-    // Techo de la hoja expandida. Se recibe de fuera en vez de deducirlo de
-    // 'height', que es lo que hacía antes y ahora sería un fallo: el lienzo
-    // CRECE a la pantalla entera mientras la hoja está abierta (IslandWindow lo
-    // necesita para poder recoger el clic de fuera), y una hoja que midiera "lo
-    // que quepa en el lienzo" pasaría de 560 dp a ocupar el monitor de arriba
-    // abajo justo al abrirse. El techo tiene que ser el del lienzo en REPOSO.
+    // Techo de la hoja expandida, recibido de fuera y no deducido de 'height':
+    // el lienzo crece a la pantalla entera mientras la hoja está abierta, así
+    // que una hoja medida sobre el lienzo pasaría a ocupar el monitor de arriba
+    // abajo al abrirse. El techo tiene que ser el del lienzo en reposo.
     property real maxSheetHeight: island.height
 
-    // Catálogo de contenidos: lo rellena quien instancia la isla, para que este
-    // archivo no tenga que conocer ni importar cada actividad.
+    // Catálogo de contenidos, rellenado por quien instancia la isla para que
+    // este archivo no conozca ni importe ninguna actividad.
     //   { home: Component, level: Component, … }
     property var compactContent: ({})
     property var expandedContent: ({})
 
-    // ¿Puede esta isla expandirse? En un montaje de varios monitores solo la
-    // pantalla donde se pulsó enseña la hoja; las demás se quedan en su estado
-    // compacto. Lo decide quien instancia (IslandWindow), que es quien sabe en
-    // qué pantalla está.
+    // Solo la pantalla donde se pulsó enseña la hoja; las demás se quedan
+    // compactas. Lo decide quien instancia, que sabe en qué pantalla está.
     property bool canExpand: true
-    // En qué pantalla vive esta isla. La necesita el asomado por ratón: la hoja
-    // tiene que abrirse donde está el dedo, no donde está el foco.
+    // Pantalla de esta isla. La necesita el asomado por puntero: la hoja se
+    // abre donde está el dedo, no donde está el foco.
     property string screenName: ""
 
     readonly property string activity: island.canExpand ? IslandState.activity
                                                         : IslandState.compactActivity
     readonly property bool expanded: IslandState.expanded && island.canExpand
-    // ¿Se comporta esta isla como un panel modal? La regla de CUÁNDO está en
-    // IslandState.modal (y se prueba allí); aquí solo se le añade el "y en esta
-    // pantalla": la hoja está en un monitor, y el clic de fuera que la cierra
-    // tiene que ser un clic de ESE monitor. En los demás la isla sigue siendo
-    // una píldora que deja pasar todo.
+    // Modal en ESTA pantalla: la regla de cuándo vive en IslandState.modal, y
+    // aquí solo se le añade que el clic de fuera que cierra la hoja tiene que
+    // ser un clic del monitor donde está la hoja.
     readonly property bool modal: IslandState.modal && island.canExpand
 
-    // ── ESC ──────────────────────────────────────────────────────────────────
-    // Cierra, como en cualquier otro panel del shell. Va en la RAÍZ de la isla
-    // y no en la forma: 'Keys' solo ve lo que sus hijos no han consumido, así
-    // que lo que haya dentro de la hoja puede quedarse la tecla primero.
+    // ESC cierra, como en cualquier panel. Va en la raíz de la isla y no en la
+    // forma porque 'Keys' solo ve lo que sus hijos no han consumido, así que el
+    // contenido de la hoja puede quedarse la tecla primero.
     //
-    // El foco de teclado lo pide la ventana (IslandWindow) y SOLO mientras es
-    // modal. Fuera de ahí no llega nada aquí, que es justo lo que hace falta:
-    // una isla en reposo no puede quitarle el teclado a la ventana en la que
-    // estás escribiendo. La guarda de abajo repite esa condición a mano en vez
-    // de fiarse de ella — si algún día la ventana pide teclado por otro motivo,
-    // ESC no debe empezar a cerrar cosas por su cuenta.
+    // El foco de teclado lo pide IslandWindow y solo mientras es modal. La
+    // guarda repite esa condición a mano en vez de fiarse: si algún día la
+    // ventana pidiera teclado por otro motivo, ESC no debe cerrar por su cuenta.
     focus: true
     Keys.onEscapePressed: (ev) => {
         if (!island.modal) {
@@ -87,14 +67,12 @@ Item {
         IslandState.collapse()
     }
 
-    // ── Motor ────────────────────────────────────────────────────────────────
     readonly property IslandSpring spring: IslandSpring {
-        // "Sin animaciones" en Ajustes ▸ Tema apaga también el muelle.
+        // "Sin animaciones" en Ajustes apaga también el muelle.
         reducedMotion: Theme.animNormal <= 0
     }
 
-    // ── Objetivo ─────────────────────────────────────────────────────────────
-    // El ancho en compacto lo pide el CONTENIDO: una notificación de una línea
+    // El ancho en compacto lo pide el contenido: una notificación de una línea
     // no debe ocupar lo mismo que el reproductor. En expandido manda la hoja.
     readonly property real minCompactWidth: Theme.dp(120)
     readonly property real maxCompactWidth: Math.min(Theme.dp(460), island.width - Theme.dp(48))
@@ -119,10 +97,9 @@ Item {
                                  inner.implicitHeight + Theme.space16 * 2))
     }
 
-    // Píldora en reposo (radio = mitad del alto) y hoja al expandirse. El radio
-    // del lado LIBRE es mayor que el del lado pegado al borde: es lo que hace
-    // que la hoja se lea como algo que cuelga de la barra y no como una caja
-    // suelta que se ha puesto ahí.
+    // Píldora en reposo y hoja al expandirse. El radio del lado libre es mayor
+    // que el del lado pegado al borde, que es lo que hace que la hoja se lea
+    // como algo que cuelga de la barra y no como una caja suelta.
     readonly property real targetRadiusNear: island.expanded ? Theme.shapeLg
                                                              : island.targetHeight / 2
     readonly property real targetRadiusFar: island.expanded ? Theme.shapeXl
@@ -139,7 +116,7 @@ Item {
     onTargetRadiusFarChanged: syncTarget()
 
     // Al nacer se coloca sin movimiento: la isla no debe entrar creciendo desde
-    // cero cada vez que se recarga la configuración.
+    // cero en cada recarga de la configuración.
     Component.onCompleted: {
         spring.targetWidth = targetWidth
         spring.targetHeight = targetHeight
@@ -148,11 +125,10 @@ Item {
         spring.snap()
     }
 
-    // La forma, para que la ventana anfitriona recorte su región de entrada a
-    // ella: el resto del lienzo tiene que dejar pasar los clics al escritorio.
+    // La forma, para que la ventana anfitriona recorte a ella su región de
+    // entrada y el resto del lienzo deje pasar los clics al escritorio.
     readonly property alias shapeItem: shape
 
-    // ── La forma ─────────────────────────────────────────────────────────────
     Rectangle {
         id: shape
 
@@ -162,8 +138,8 @@ Item {
         y: island.atBottom ? Math.round(island.height - island.edgeMargin - height)
                            : Math.round(island.edgeMargin)
 
-        // El radio "cerca" es el del lado del borde de pantalla, así que qué
-        // esquinas son cambia con la posición de la barra.
+        // El radio "cerca" es el del lado pegado al borde de pantalla, así que
+        // qué esquinas son cambia con la posición de la barra.
         topLeftRadius:     island.atBottom ? island.spring.radiusFar : island.spring.radiusNear
         topRightRadius:    island.atBottom ? island.spring.radiusFar : island.spring.radiusNear
         bottomLeftRadius:  island.atBottom ? island.spring.radiusNear : island.spring.radiusFar
@@ -173,59 +149,34 @@ Item {
         border.width: Theme.hairline
         border.color: Theme.withAlpha(Theme.overlay, 0.35)
         antialiasing: true
-        // Recorta lo que asome mientras la caja aún es más pequeña que su
-        // contenido: sin esto, durante el muelle el texto se sale por los lados.
+        // Recorta lo que asome mientras la caja es más pequeña que su
+        // contenido; sin esto el texto se sale por los lados durante el muelle.
         clip: true
 
-        // ── Ranuras de contenido ─────────────────────────────────────────────
-        // Se alternan en cada cambio de actividad. La entrante manda en el
-        // tamaño; la saliente solo se desvanece.
+        // Ranuras de contenido, alternas en cada cambio de actividad: la
+        // entrante manda en el tamaño y la saliente solo se desvanece.
         property string keyIn: ""
         property string keyOut: ""
 
-        // El ancho del contenido. Son dos reglas distintas y tienen que serlo:
+        // El ancho del contenido sigue dos reglas distintas, y la asimetría
+        // entre ellas es necesaria. En compacto manda el contenido y la píldora
+        // se ciñe a él hasta el tope, pasado el cual deja de crecer y es el
+        // contenido el que se recorta. En expandido manda la hoja, que mide
+        // siempre lo mismo, y el contenido la llena.
         //
-        //   · COMPACTO: manda el contenido. La píldora se ciñe a lo que hay
-        //     dentro — salvo que no quepa, y ahí está el 'min': pasado
-        //     maxCompactWidth la píldora deja de crecer y es el contenido el
-        //     que se recorta. Sin ese tope, una canción de título kilométrico
-        //     estiraría la isla de lado a lado de la pantalla.
-        //   · EXPANDIDO: manda la hoja, y el contenido la LLENA. Una hoja
-        //     expandida mide siempre lo mismo (maxExpandedWidth) pase lo que
-        //     pase, así que un contenido que pidiera menos se quedaba flotando
-        //     en el medio con dos franjas vacías a los lados. Medido: el
-        //     reproductor ocupaba 146 px de los 349 disponibles — el 42 % de su
-        //     propia hoja.
+        // Expandido usa el ancho FINAL, que es una constante: con 'parent.width'
+        // el contenido se recalcularía en cada fotograma de la apertura y, como
+        // el alto objetivo sale de ese contenido, el muelle perseguiría un
+        // destino que él mismo mueve.
         //
-        // ── POR QUÉ UNA RAMA USA EL ANCHO FINAL Y LA OTRA EL DEL MUELLE ──────
-        // Salta a la vista y parece un descuido. No lo es, y la asimetría se
-        // intentó cerrar: sale mal por dos motivos distintos, los dos medidos.
-        //
-        // EXPANDIDO usa el ancho FINAL ('maxExpandedWidth'), una constante. Ahí
-        // hacía falta: con 'parent.width' el contenido se recalculaba entero en
-        // cada fotograma mientras la hoja se abre, y como el alto objetivo sale
-        // de ese contenido (targetHeight ← implicitHeight), el muelle perseguía
-        // un destino que él mismo estaba moviendo. Con el ancho final se mide
-        // UNA vez y el recorte de la forma lo va descubriendo, como Popout.
-        //
-        // COMPACTO tiene que seguir con 'parent.width', que es el del muelle:
-        //
-        //   · El muelle es lo que ROMPE EL CICLO. targetWidth sale del
-        //     implicitWidth de esto mismo, así que darle aquí 'targetWidth'
-        //     cierra el lazo de forma síncrona y QML lo canta:
-        //         Island.qml: QML Loader: Binding loop detected for "width"
-        //     dos veces por transición. Con el muelle en medio no pasa, porque
-        //     el muelle avanza por reloj y no por binding.
-        //   · Y el 'min' con implicitWidth es lo que deja al contenido en su
-        //     tamaño NATURAL, que es lo que hace que 'anchors.centerIn' centre
-        //     de verdad. Quitándolo, cada contenido recibe 8 px que no pidió
-        //     (targetWidth = implicitWidth + space16*2, y aquí se restan
-        //     space12*2), y los que no llevan 'Layout.fillWidth' —el reloj, el
-        //     nivel, la grabación— se van 4 px a la izquierda.
-        //
-        // Y aquí no hay nada que arreglar de todos modos: en compacto
-        // targetHeight es la constante 'compactHeight', así que el muelle no
-        // persigue nada suyo. El problema del expandido no existe en esta rama.
+        // Compacto tiene que usar 'parent.width', que es el del muelle, por dos
+        // razones. El muelle rompe el ciclo: targetWidth sale del implicitWidth
+        // de esta misma ranura, así que usar targetWidth aquí lo cerraría de
+        // forma síncrona y QML lo detecta como binding loop, mientras que el
+        // muelle avanza por reloj y no por binding. Y el 'min' con implicitWidth
+        // deja el contenido en su tamaño natural, que es lo que hace que
+        // 'anchors.centerIn' centre de verdad: sin él, los contenidos sin
+        // 'Layout.fillWidth' se desplazan unos píxeles.
         Loader {
             id: slotIn
             anchors.centerIn: parent
@@ -241,24 +192,17 @@ Item {
             anchors.centerIn: parent
             width: slotIn.width
             sourceComponent: island._componentFor(shape.keyOut)
-            // Se va deprisa: lo que se despide no debe hacerse esperar, y si se
-            // quedara cruzándose con lo entrante se leerían los dos textos
-            // superpuestos.
+            // Se va deprisa: si se quedara cruzándose con lo entrante se
+            // leerían los dos textos superpuestos.
             opacity: 1 - island._crossfade
             visible: opacity > 0.01
         }
 
-        // ── El ratón encima ──────────────────────────────────────────────────
-        // Va DENTRO de la forma, y no colgado de 'island', que es lo que
-        // parecería natural. Colgado de la isla vigila el lienzo ENTERO, y el
-        // lienzo es casi todo aire: hasta ahora daba igual porque la máscara de
-        // la ventana solo dejaba entrar el ratón por la forma, así que "dentro
-        // del lienzo" y "dentro de la isla" eran lo mismo.
-        //
-        // Dejan de serlo en cuanto la hoja se vuelve modal: entonces la máscara
-        // se abre a toda la pantalla, y un HoverHandler a nivel de isla daría
-        // por "puntero encima" el ratón esté donde esté — congelando las cuentas
-        // atrás de las notificaciones desde el otro extremo del monitor.
+        // Va dentro de la forma y no colgado de 'island', que vigilaría el
+        // lienzo entero. Con una hoja modal la máscara de la ventana se abre a
+        // toda la pantalla, y entonces un handler a nivel de isla daría por
+        // "puntero encima" el ratón esté donde esté, congelando las cuentas
+        // atrás desde el otro extremo del monitor.
         HoverHandler {
             id: hover
             onHoveredChanged: {
@@ -269,18 +213,16 @@ Item {
                     return
                 }
                 peekIn.stop()
-                // Al apartar el ratón se va lo que trajo el ratón. Lo que
-                // abriste tú (o lo que se asomó solo, que tiene su propio
-                // reloj) se queda.
+                // Al apartar el ratón se va lo que trajo el ratón; lo abierto
+                // a mano, y lo asomado solo con su propio reloj, se queda.
                 if (IslandState.destinationSource === "hover")
                     IslandState.closeDestination()
             }
         }
     }
 
-    // ── El cruce ─────────────────────────────────────────────────────────────
-    // Un único escalar 0→1 gobierna los dos lados, como el openProgress de
-    // Popout: así no hay dos animaciones que puedan desincronizarse.
+    // Un único escalar 0→1 gobierna los dos lados del cruce, para que no haya
+    // dos animaciones que puedan desincronizarse.
     property real _crossfade: 1
 
     // Lo entrante aparece en la segunda mitad del cruce: la caja va por delante
@@ -295,12 +237,9 @@ Item {
         to: 1
         duration: Math.max(1, Theme.animNormal)
         easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel
-        // Al acabar el cruce, SOLTAR lo que se ha ido. La ranura saliente se
-        // quedaba instanciada para siempre: invisible, sí, pero con todos sus
-        // bindings vivos. El reloj de reposo se reevaluaba cada segundo, y en
-        // cada monitor, para un componente que ya nadie vería nunca — y basta
-        // con que pase una notificación para dejar ahí clavada una actividad
-        // que solo se enseñó tres segundos.
+        // Al acabar el cruce suelta la ranura saliente: si no, queda
+        // instanciada para siempre, invisible pero con todos sus bindings
+        // vivos, reevaluándose en cada monitor para algo que ya no se verá.
         onFinished: shape.keyOut = ""
     }
 
@@ -329,7 +268,7 @@ Item {
 
     Component.onDestruction: island._crossfade = 1
 
-    // La primera actividad no se cruza con nada: se pone y ya.
+    // La primera actividad no se cruza con nada.
     readonly property Timer _boot: Timer {
         interval: 1
         running: true
@@ -339,20 +278,18 @@ Item {
         }
     }
 
-    // ── Interacción ──────────────────────────────────────────────────────────
-    // ¿Se puede asomar el reproductor aquí y ahora? Solo sobre el estado de
-    // REPOSO con música: si hay algo transitorio (un volumen, una notificación)
-    // o una hoja abierta, el ratón no tiene por qué cambiar lo que estás
-    // mirando. Y solo media: la hoja de grabación lleva un botón de PARAR, y
-    // que aparezca sola debajo del cursor es pedir un accidente.
+    // ¿Se puede asomar el reproductor aquí y ahora? Solo sobre el reposo con
+    // música: con algo transitorio o una hoja abierta, el puntero no debe
+    // cambiar lo que se está mirando. Y solo media, porque la hoja de grabación
+    // lleva un botón de parar y que aparezca sola bajo el cursor es un accidente
+    // esperando a ocurrir.
     readonly property bool canPeek: island.canExpand
                                     && IslandState.base === "media"
                                     && IslandState.transientId === ""
                                     && IslandState.destination === ""
 
-    // La espera es la mitad del asunto. Sin ella, cruzar la pantalla por arriba
-    // abre una hoja de 340 dp de golpe; con ella hay que PARARSE encima, que es
-    // lo que distingue "quiero verlo" de "iba de paso".
+    // La espera distingue "quiero verlo" de "iba de paso": sin ella, cruzar la
+    // pantalla por arriba abriría la hoja de golpe.
     readonly property Timer _peekIn: Timer {
         id: peekIn
         interval: 400
@@ -364,14 +301,13 @@ Item {
         }
     }
 
-    // ── El clic de fuera ─────────────────────────────────────────────────────
-    // Debajo de TODO (z -2, por debajo incluso del captador de la forma): solo
-    // recibe lo que no ha querido nadie, y eso es exactamente el escritorio.
+    // Debajo de todo (z -2, por debajo incluso del captador de la forma): solo
+    // recibe lo que no ha querido nadie, que es exactamente el escritorio.
     //
-    // Mientras no sea modal está apagado y además es inalcanzable — la máscara
-    // de IslandWindow no deja entrar el ratón fuera de la forma. Los dos
-    // candados dicen lo mismo a propósito: si algún día se abre la máscara por
-    // otro motivo, esto no debe empezar a tragarse clics por su cuenta.
+    // Mientras no es modal está apagado y además es inalcanzable, porque la
+    // máscara de IslandWindow no deja entrar el ratón fuera de la forma. Los dos
+    // candados dicen lo mismo a propósito: si la máscara se abriera por otro
+    // motivo, esto no debe empezar a tragarse clics.
     MouseArea {
         z: -2
         anchors.fill: parent
@@ -379,19 +315,10 @@ Item {
         onClicked: IslandState.collapse()
     }
 
-    // DEBAJO del contenido, y esto es lo único que hace que la hoja expandida
-    // sirva para algo.
-    //
-    // Este captador es hermano de 'shape' y antes se declaraba después, o sea
-    // ENCIMA de todo lo que la isla enseña. Con la píldora daba igual —no hay
-    // nada que pulsar dentro—, pero al abrir el calendario se comía los clics
-    // de las flechas de mes: nunca llegaban al botón, los recogía esto y, como
-    // ya había un destino abierto, activate() lo cerraba. Cambiar de mes
-    // cerraba la isla.
-    //
-    // Con z negativo, un clic solo llega aquí si NADIE de dentro lo ha querido.
-    // Las flechas, los días y el botón de hoy se lo quedan; el hueco muerto de
-    // la hoja sigue cerrando, que es como se sale sin tener que buscar una X.
+    // Debajo del contenido (z negativo), que es lo que hace utilizable la hoja
+    // expandida: un clic solo llega aquí si nadie de dentro lo ha querido. Las
+    // flechas del calendario, los días y el botón de hoy se lo quedan; el hueco
+    // muerto de la hoja cierra, que es como se sale sin buscar una X.
     MouseArea {
         z: -1
         x: shape.x
@@ -403,8 +330,7 @@ Item {
 
         onClicked: (m) => {
             if (m.button === Qt.RightButton) {
-                // Botón derecho: descarta sin abrir nada. Es el gesto de
-                // "quítamelo de delante".
+                // Botón derecho: descarta sin abrir nada.
                 if (IslandState.transientId === "notification")
                     IslandState.dismissNotification()
                 else
@@ -415,10 +341,9 @@ Item {
         }
     }
 
-    // Qué hace un clic depende de qué esté enseñando: sobre una notificación,
-    // abre el centro de notificaciones; sobre música o sobre una grabación en
-    // marcha, su hoja; sobre el reloj, el calendario; sobre un destino ya
-    // abierto, lo cierra.
+    // Qué hace un clic depende de qué se esté enseñando: sobre una notificación
+    // abre su centro; sobre música o una grabación en marcha, su hoja; sobre el
+    // reloj, el calendario; sobre un destino ya abierto, lo cierra.
     function activate() {
         if (IslandState.transientId === "notification") {
             IslandState.clearTransient()
@@ -430,9 +355,8 @@ Item {
             return
         }
         if (IslandState.destination !== "") {
-            // Sobre un vistazo que se estaba yendo (asomado por el ratón o por
-            // un cambio de canción), el clic lo FIJA en vez de cerrarlo. Un
-            // segundo clic ya sí lo cierra, como cualquier otra hoja.
+            // Sobre un vistazo que se estaba yendo, el clic lo FIJA en vez de
+            // cerrarlo; un segundo clic ya sí cierra.
             if (IslandState.pinDestination())
                 return
             IslandState.closeDestination()

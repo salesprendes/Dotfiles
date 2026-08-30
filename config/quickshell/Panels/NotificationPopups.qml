@@ -5,21 +5,17 @@ import qs.Components
 import qs.Config
 import qs.Services
 
-// Popups transitorios: escuchan NotifService.posted, muestran la notificación
-// en una esquina y se autodescartan a los 5s (pausa al pasar el ratón).
+// Popups transitorios de notificación: una pila por monitor en una esquina, con
+// autodescarte por tiempo que se pausa con el puntero encima.
 //
-// La pila NO es un ListView: cada tarjeta es un delegate de Repeater dueño de
-// su propia animación (entrada, salida y cuenta atrás). Con las transiciones
-// nativas del ListView el estado de animación era compartido y dos avisos
-// seguidos se pisaban: la tarjeta que aún entraba pasaba a ser "desplazada" y
-// su transición se cancelaba a medio camino, y al descartar una, el ListView
-// recolocaba el resto contra posiciones que ya tenía cacheadas (de ahí los
-// saltos y los huecos de más).
+// La pila no es un ListView: cada tarjeta es un delegate de Repeater dueño de su
+// entrada, su salida y su cuenta atrás. Con las transiciones nativas del
+// ListView el estado de animación es compartido y dos avisos seguidos se pisan.
 //
-// Aquí hay un único origen del movimiento: la altura de ranura (slotHeight) de
-// cada tarjeta. La posición de una tarjeta es la suma de las ranuras de las
-// anteriores, así que desplegar una y empujar a las de abajo son literalmente
-// el MISMO valor animado — no dos animaciones que haya que mantener en sincronía.
+// Hay un único origen del movimiento, la altura de ranura de cada tarjeta: la
+// posición de una es la suma de las ranuras anteriores, así que desplegar una y
+// empujar a las de abajo son el mismo valor animado y no dos que haya que
+// mantener en sincronía.
 PanelWindow {
     id: popups
 
@@ -28,21 +24,21 @@ PanelWindow {
 
     property int nextKey: 1
     property var notificationsByKey: ({})
-    // Tarjetas vivas: las que no están saliendo. Manda en los límites (número
-    // máximo y altura de pantalla); las salientes ya no cuentan.
+    // Tarjetas que no están saliendo: son las que cuentan para los límites de
+    // número y de altura de pantalla.
     property int liveCount: 0
     // Altura ocupada por la pila en este instante (suma de ranuras animadas).
     property real contentHeight: 0
 
-    // Se ocultan mientras haya cualquier panel abierto (centro rápido,
-    // notificaciones, lanzador, etc.); las notificaciones siguen llegando
-    // al centro de notificaciones.
-    // Lo mismo que la isla, y por el mismo motivo: estos avisos solo existen
-    // con la isla APAGADA (ver shell.qml), o sea que son su sustituto exacto y
-    // están en la misma capa Overlay. Arreglar solo uno de los dos dejaría el
-    // fallo intacto para quien tiene la isla quitada.
+    // Se ocultan con cualquier panel abierto —los popouts viven en esta misma
+    // capa y se disputarían el ratón— y con una ventana a pantalla completa.
+    // Las notificaciones siguen llegando a su centro.
+    // Se pregunta por la pantalla de esta ventana y no por la enfocada, porque
+    // esto vive una vez por monitor: un vídeo en uno no calla los avisos del otro.
+    readonly property bool ocultoPorPantallaCompleta: Globals.hiddenByFullscreen(popups.modelData)
+
     visible: popupModel.count > 0 && Settings.notifPopupsEnabled && Globals.openPanel === ""
-             && !Globals.hiddenByFullscreen(popups.modelData)
+             && !popups.ocultoPorPantallaCompleta
              && !remapGuard.remapping
     // Superficie de vida larga: se remapea si el monitor cambia de sitio en el
     // layout. Ver Components/ScreenMoveRemap.qml.
@@ -52,11 +48,10 @@ PanelWindow {
     // 360 px de ancho de tarjeta.
     implicitWidth: Theme.panelWidth(screen, 360, 300, 0.94)
     // Altura con marca de agua: mientras haya popups vivos la superficie solo
-    // crece; se recompacta al vaciarse. Encogerla en caliente dejaba una
-    // banda gris en el hueco de la tarjeta saliente: Hyprland no recalcula la
-    // región de blur (ignore_alpha) de una capa redimensionada hasta que
-    // llega daño nuevo, y con la escena estática el frost obsoleto se quedaba
-    // pegado segundos. La zona sobrante es transparente y sin input (mask).
+    // crece, y se recompacta al vaciarse. Encogerla en caliente deja una banda
+    // gris en el hueco de la tarjeta saliente, porque Hyprland no recalcula la
+    // región de blur de una capa redimensionada hasta que llega daño nuevo. La
+    // zona sobrante es transparente y sin input.
     property int stackHeight: reservedStackHeight
     onContentHeightChanged: if (contentHeight > stackHeight)
         stackHeight = Math.min(maxStackHeight, Math.ceil(contentHeight))
@@ -107,22 +102,31 @@ PanelWindow {
 
     Connections {
         target: NotifService
+        // No crea la tarjeta con un panel abierto ni a pantalla completa; en
+        // ambos casos el aviso queda en el centro. Con pantalla completa no es
+        // por ahorrar el delegate: la ventana ya se esconde, pero la cuenta
+        // atrás correría igual y la tarjeta saldría al volver del vídeo.
         function onPosted(n) {
-            // No mostrar popups si hay un panel abierto; quedan en el centro.
-            if (Settings.notifPopupsEnabled && Globals.openPanel === "") popups.add(n)
+            if (Settings.notifPopupsEnabled && Globals.openPanel === ""
+                && !popups.ocultoPorPantallaCompleta)
+                popups.add(n)
         }
         function onClearedAll() {
             popups.clear()
         }
     }
 
-    // Al abrir cualquier panel, descarta todos los popups visibles.
+    // Abrir un panel descarta los popups visibles.
     Connections {
         target: Globals
         function onOpenPanelChanged() {
             if (Globals.openPanel !== "") popups.clear()
         }
     }
+
+    // Caso espejo: entrar a pantalla completa con avisos puestos, que si no se
+    // esconden con la ventana y reaparecen al salir.
+    onOcultoPorPantallaCompletaChanged: if (popups.ocultoPorPantallaCompleta) popups.clear()
 
     function notificationFor(key) {
         return notificationsByKey[key] || null
@@ -148,11 +152,10 @@ PanelWindow {
         stackHeight = reservedStackHeight
     }
 
-    // Marca la tarjeta como saliente y lanza SU animación de salida. Sigue en
-    // el modelo (y por tanto la ventana sigue visible) hasta que la animación
-    // termina y _drop() la retira de verdad: quitarla del modelo al instante
-    // hacía que la última notificación se esfumara sin animación, porque la
-    // ventana se ocultaba en el mismo frame.
+    // Marca la tarjeta como saliente y lanza su animación. Sigue en el modelo
+    // —y por tanto la ventana sigue visible— hasta que _drop() la retira al
+    // terminar: quitarla al instante haría que la última se esfumara sin
+    // animación, porque la ventana se ocultaría en el mismo fotograma.
     function dismiss(key) {
         const row = rowFor(key)
         if (!row || row.dying)
@@ -197,9 +200,8 @@ PanelWindow {
     }
 
     // Coloca cada tarjeta a la distancia acumulada del borde anclado. Se llama
-    // cada vez que una ranura cambia de altura (al desplegarse, al cerrarse o
-    // al crecer una imagen que carga tarde), así el empuje de las de abajo va
-    // exactamente al ritmo de la que lo provoca.
+    // cada vez que una ranura cambia de altura, de modo que el empuje de las de
+    // abajo va exactamente al ritmo de la que lo provoca.
     function relayout() {
         let off = 0
         for (let i = 0; i < rep.count; i++) {
@@ -216,9 +218,9 @@ PanelWindow {
     readonly property int maxStackHeight: (screen ? screen.height : 1080)
                                           - margins.top - margins.bottom
 
-    // Altura que ocuparán las vivas cuando terminen de desplegarse. Se mide con
-    // la altura natural (no con la ranura animada) para que los límites de
-    // abajo no dependan del fotograma en que se consulten.
+    // Altura que ocuparán las vivas ya desplegadas. Se mide con la altura
+    // natural y no con la ranura animada, para que los límites no dependan del
+    // fotograma en que se consulten.
     function liveHeight() {
         let h = 0
         for (let i = 0; i < rep.count; i++) {
@@ -229,10 +231,9 @@ PanelWindow {
         return h
     }
 
-    // Límite en píxeles, complementario al límite en número (notifMaxVisible):
-    // si la pila no cabe en pantalla (muchas tarjetas altas), se descartan las
-    // más antiguas —con su animación de salida— hasta que la de abajo nunca
-    // quede recortada por el borde. Siempre se conserva al menos la más nueva.
+    // Límite en píxeles, complementario al límite en número: descarta las más
+    // antiguas —con su animación— hasta que la de abajo no quede recortada por
+    // el borde. Siempre conserva al menos la más nueva.
     function enforceStackHeight() {
         while (liveCount > 1 && liveHeight() > maxStackHeight) {
             const oldest = oldestLive()
@@ -292,14 +293,11 @@ PanelWindow {
                     }
                 }
 
-                // Altura que esta tarjeta ocupa en la pila (tarjeta + hueco), y
-                // de la que sale la posición de todas las de debajo. Es un
-                // BINDING, no un valor con destino congelado: animar la altura
-                // "hasta N" fijaba N al arrancar, cuando la tarjeta aún no se
-                // había medido (implicitHeight 0), y la ranura se quedaba en
-                // unos pocos píxeles —tarjeta invisible— hasta que la animación
-                // terminaba. Como producto de apertura × altura, recoge la
-                // medida real en cuanto llega, esté la animación donde esté.
+                // Altura de esta tarjeta en la pila, de la que sale la posición
+                // de todas las de debajo. Es un binding y no un valor con
+                // destino fijo: animar hasta N congelaría N al arrancar, cuando
+                // la tarjeta aún no se ha medido. Como producto de apertura por
+                // altura recoge la medida real en cuanto llega.
                 readonly property real slotHeight: openProgress * targetHeight
                 // 0 → 1: opacidad y desplazamiento lateral del contenido.
                 property real reveal: 0
@@ -323,15 +321,13 @@ PanelWindow {
                     y: popups.fromBottom ? row.height - implicitHeight : 0
                     notif: row.notification
                     popupMode: true
-                    // Sin cuenta atrás no hay barra que enseñar: con lifetime 0
-                    // el aviso no se va solo, así que una barra congelada al
-                    // 100% mentiría sobre lo que va a pasar.
+                    // Sin cuenta atrás no hay barra: una barra congelada al
+                    // 100 % mentiría sobre lo que va a pasar.
                     showProgress: Settings.notifShowProgress && row.lifetime > 0
                     compact: Settings.notifCompact
                     progress: row.progress
-                    // Al salir se funde la tarjeta entera; al entrar se descubre
-                    // opaca con el propio despliegue (fundirla también en la
-                    // entrada la hacía "aparecer dos veces").
+                    // Al salir funde la tarjeta entera; al entrar se descubre
+                    // opaca con el propio despliegue.
                     opacity: row.dying ? Theme.revealOpacity(row.reveal) : 1
                     // El fondo se descubre opaco; sólo el contenido funde (con
                     // retardo) y entra desde el lateral anclado.
@@ -341,8 +337,8 @@ PanelWindow {
                     onCloseRequested: popups.dismiss(row.key)
                 }
 
-                // Entrada: la ranura se despliega desde el borde —empujando a
-                // las de abajo en el mismo gesto— mientras el contenido funde.
+                // La ranura se despliega desde el borde, empujando a las de
+                // abajo en el mismo gesto, mientras el contenido funde.
                 ParallelAnimation {
                     id: enterAnim
                     NumberAnimation {
@@ -357,8 +353,8 @@ PanelWindow {
                     }
                 }
 
-                // Salida: primero se va la tarjeta, y el hueco se cierra justo
-                // detrás; las de abajo suben al ritmo exacto de ese cierre.
+                // Primero se va la tarjeta y el hueco se cierra justo detrás;
+                // las de abajo suben al ritmo de ese cierre.
                 SequentialAnimation {
                     id: exitAnim
                     ParallelAnimation {
@@ -385,30 +381,22 @@ PanelWindow {
                     exitAnim.start()
                 }
 
+                // Cuenta atrás lineal y en tiempo real, excluida a propósito del
+                // multiplicador de velocidad de animaciones porque mide segundos
+                // de verdad. Con lifetime 0 no se arranca: la animación tiene un
+                // suelo de 1000 ms y descartaría el aviso al segundo.
                 Component.onCompleted: {
-                    // Altura inicial sin animar (la anima 'openProgress'); a
-                    // partir de aquí, los cambios tardíos sí se suavizan.
                     targetHeight = naturalHeight
                     ready = true
                     popups.relayout()
                     enterAnim.start()
-                    // Cuenta atrás lineal y en TIEMPO REAL: se excluye a
-                    // propósito del multiplicador de velocidad de animaciones,
-                    // porque mide segundos de verdad, no es decoración. Arranca
-                    // ya, sin esperar al despliegue.
-                    //
-                    // Con lifetime 0 (urgencia crítica configurada a "nunca")
-                    // no se arranca siquiera: la animación tiene un suelo de
-                    // 1000 ms, así que dejarla correr descartaría el aviso al
-                    // segundo — justo lo contrario de lo que se ha pedido.
                     if (row.lifetime > 0)
                         countdown.start()
                 }
 
-                // Duración según la urgencia que declaró la app (0 baja,
-                // 1 normal, 2 crítica). Con 0 segundos el aviso NO expira: se
-                // queda hasta que lo descartes, que es lo que manda la
-                // especificación de freedesktop para lo crítico.
+                // Duración según la urgencia declarada por la app. Cero segundos
+                // significa que el aviso no expira, como manda freedesktop para
+                // lo crítico.
                 readonly property int lifetime: {
                     const u = row.notification && row.notification.urgency !== undefined
                         ? row.notification.urgency : 1
@@ -425,11 +413,10 @@ PanelWindow {
                     onFinished: popups.dismiss(row.key)
                 }
 
-                // El ratón encima pausa la cuenta atrás (y con ella la barra, que se
-                // queda congelada donde iba). HoverHandler en vez de un MouseArea
-                // por debajo: los handlers no se roban el hover entre sí, así que
-                // sigue contando como "encima" aunque el puntero esté sobre la X o
-                // sobre un botón de acción, que tienen su propio MouseArea.
+                // El puntero encima pausa la cuenta atrás y con ella la barra.
+                // HoverHandler y no un MouseArea debajo: los handlers no se roban
+                // el hover entre sí, así que sigue contando como "encima" con el
+                // puntero sobre la X o sobre un botón de acción.
                 HoverHandler { id: hov }
                 readonly property bool hovered: hov.hovered
                 onHoveredChanged: {

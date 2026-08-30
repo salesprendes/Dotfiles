@@ -75,7 +75,11 @@ Item {
     Image {
         id: wall
         anchors.fill: parent
-        source: Wallpaper.current !== "" ? "file://" + Wallpaper.current : ""
+        // La copia al tamaño de la pantalla (ver Services/Wallpaper.qml): el
+        // sourceSize de abajo ya limitaba la TEXTURA, pero no el pico de
+        // descodificación, que lo manda el fichero. Si no hay copia, full()
+        // devuelve el original y esto se comporta como antes.
+        source: Wallpaper.current !== "" ? "file://" + Wallpaper.full(Wallpaper.current) : ""
         fillMode: Image.PreserveAspectCrop
         asynchronous: true
         cache: false

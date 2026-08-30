@@ -5,27 +5,17 @@ import Quickshell
 import Quickshell.Hyprland
 import qs.Config
 
-// Estado global compartido. Un único panel abierto a la vez.
+// Estado global compartido: un único panel abierto a la vez.
 Singleton {
     id: g
 
-    // ── Registro de paneles ──────────────────────────────────────────────────
-    // La lista de paneles conmutables vive AQUÍ y no repartida entre shell.qml
-    // (las ranuras), el IpcHandler (una función por panel) y cada widget de la
-    // barra. Antes había que tocar los tres sitios para añadir uno, y el IPC
-    // era una lista fija de funciones: añadir un panel obligaba a editar QML y
-    // a regenerar los atajos de Hyprland.
-    //
-    // 'widget' es el id del widget de la barra que abre este panel, si lo hay.
-    // Sirve para que el salto con flechas siga el ORDEN QUE SE VE en la barra
-    // en vez de un orden inventado aquí — y como la barra ahora es
-    // configurable, ese orden es el que el usuario haya puesto.
+    // Registro único de los paneles conmutables. 'widget' es el id del widget
+    // de la barra que abre el panel, y hace que el salto con flechas siga el
+    // orden configurado en la barra en vez de uno fijado aquí. 'island' es el
+    // destino de la isla que sustituye al panel cuando la isla está encendida.
     readonly property var panels: [
         { name: "launcher",  widget: "launcher" },
         { name: "control",   widget: "connectivity" },
-        // 'island' es el destino de la isla que SUSTITUYE a este panel cuando
-        // la isla está encendida. Estaba escrito a mano en dos funciones y
-        // olvidado en otras dos, y esa asimetría costó un fallo (ver open()).
         { name: "notif",     widget: "notifications", island: "notifs" },
         { name: "sysmon",    widget: "sysmon" },
         { name: "clipboard", widget: "clipboard" },
@@ -43,32 +33,29 @@ Singleton {
         return false
     }
 
-    // "", "control", "notif", "sysmon", "launcher", "clipboard", "dashboard",
-    // "capture", "ai"
+    // Panel abierto, o "" si no hay ninguno. Los valores válidos son los 'name'
+    // del registro.
     property string openPanel: ""
 
-    // Monitor con foco al abrir el panel. Se captura aquí (en open(), ANTES de
-    // tocar openPanel, para que las ranuras de shell.qml nunca se evalúen con
-    // el monitor viejo) y no en cada Popout: shell.qml solo construye el panel
-    // en esta pantalla, así los otros monitores no instancian copias
-    // invisibles con sus timers. Se conserva al cerrar para que la animación
-    // de cierre termine en el mismo monitor. Sin Hyprland queda "" y todas
-    // las pantallas instancian (fallback).
+    // Monitor con foco en el momento de abrir. shell.qml construye el panel
+    // solo en esta pantalla, así que los demás monitores no instancian copias
+    // invisibles con sus timers. Se captura en open() antes de tocar openPanel,
+    // y se conserva al cerrar para que la animación termine donde empezó. Sin
+    // Hyprland queda "" y entonces instancian todas las pantallas.
     property string openedOnMonitor: ""
 
-    // La ventana de Ajustes es independiente (es una ventana real de
-    // Hyprland): tiene su propio estado y NO se cierra al abrir popups.
+    // Ajustes es una ventana real de Hyprland, no un popout: tiene estado
+    // propio y no compite con 'openPanel' ni se cierra al abrir uno.
     property bool settingsOpen: false
 
-    // El monitor de sistema como APLICACIÓN. Igual que Ajustes: ventana real de
-    // Hyprland, con su estado propio, que no se cierra al abrir un popup ni
-    // compite con 'openPanel'.
-    //
-    // Convive con el popout de la barra (openPanel === "sysmon"), que sigue
-    // siendo lo de siempre: un vistazo rápido sin salir de lo que estabas
-    // haciendo. La aplicación es lo otro — sentarse a mirar.
+    // El monitor de sistema como aplicación, con las mismas reglas que Ajustes.
+    // Convive con el popout de la barra (openPanel === "sysmon"), que es el
+    // vistazo rápido; esto es la ventana en la que sentarse a mirar.
     property bool sysMonAppOpen: false
     signal sysMonAppResummon()
+
+    // Abre la aplicación, o deja que la ventana decida si ya existe: cerrarse
+    // si está en este workspace, o traerse al actual.
     function toggleSysMonApp() {
         if (sysMonAppOpen) sysMonAppResummon()
         else sysMonAppOpen = true
@@ -83,82 +70,48 @@ Singleton {
     readonly property bool screenCaptureOpen:  openPanel === "capture"
     readonly property bool aiOpen:             openPanel === "ai"
     readonly property bool emojiOpen:          openPanel === "emoji"
-    // Spotlight es panel como los demás (uno solo abierto a la vez), pero con
-    // su propio conmutador legible porque se usa desde muchos sitios.
-    //
-    // ── POR QUÉ ES readonly, COMO SUS NUEVE HERMANAS ────────────────────────
-    // Era la única declarada SIN readonly, con un onSpotlightOpenChanged que
-    // la reescribía a openPanel en los dos sentidos. La idea era dejar que
-    // quien quisiera cerrar Spotlight escribiera 'spotlightOpen = false' en
-    // vez de llamar a closeAll(), y funcionaba... exactamente una vez.
-    //
-    // En QML, ASIGNAR A UNA PROPIEDAD CON BINDING DESTRUYE EL BINDING. Para
-    // siempre, sin aviso. Así que en cuanto Spotlight se cerraba a sí mismo:
-    //
-    //   · spotlightOpen se quedaba en false fijo, sin volver a mirar openPanel
-    //   · shell.qml, que construye el panel con 'active: spotlightOpen', no lo
-    //     volvía a construir NUNCA
-    //   · y openPanel se quedaba clavado en "spotlight", porque el único que
-    //     lo limpiaba era el propio panel que ya no existía — con el dock y la
-    //     isla escondidos el resto de la sesión, que se esconden con cualquier
-    //     panel abierto
-    //
-    // No daba ningún error: simplemente dejaba de funcionar. Ahora es readonly
-    // como las demás, y Spotlight se cierra con closeAll() como todos los
-    // otros paneles del shell.
+    // readonly como sus nueve hermanas, y es obligatorio: en QML asignar a una
+    // propiedad con binding lo destruye para siempre, así que un
+    // 'spotlightOpen = false' dejaría la propiedad congelada y openPanel
+    // clavado en "spotlight". Spotlight se cierra con closeAll().
     readonly property bool spotlightOpen: openPanel === "spotlight"
 
-    // Nombre del monitor con foco, o "" sin Hyprland. Se expone porque hay más
-    // de un sitio que necesita saber "¿en cuál de las pantallas está mirando?"
-    // — los paneles, y ahora también las hojas de la isla.
+    // Nombre del monitor con foco, o "" sin Hyprland.
     function focusedMonitorName() {
         return Hyprland.focusedMonitor?.name ?? ""
     }
 
-    // ── Una ventana a pantalla completa manda ────────────────────────────────
-    // La barra y el dock desaparecen solos con un vídeo a pantalla completa
-    // porque viven en la capa Top, y Hyprland dibuja la ventana completa por
-    // encima de esa capa. La isla no: está en Overlay, que es la de arriba del
-    // todo, y ahí sigue puesta encima del vídeo. Estar en Overlay no es un
-    // descuido —lo necesita para ponerse delante de los popouts cuando abres
-    // una hoja— así que la que tiene que apartarse es ella, a mano.
+    // ¿Hay una ventana a pantalla completa en esta pantalla que obligue al
+    // shell a apartarse?
     //
-    // Por PANTALLA y no en general: con dos monitores, un vídeo en el de la
-    // derecha no tiene por qué borrarte el reloj del de la izquierda. Es la
-    // misma regla que ya sigue el dock para esconderse.
+    // La barra y el dock desaparecen solos porque viven en la capa Top y
+    // Hyprland dibuja la ventana completa por encima de ella. La isla está en
+    // Overlay —lo necesita para ponerse delante de los popouts— y ahí nada la
+    // tapa, así que tiene que apartarse a mano.
     //
-    // Sin Hyprland esto es siempre false, y esa es la respuesta correcta: si no
-    // se puede saber si hay algo a pantalla completa, el shell no se esconde. El
-    // fallo de quedarse puesto se ve y se arregla; el de desaparecer sin motivo
-    // parece que el shell se ha caído.
+    // Se pregunta por pantalla: un vídeo en un monitor no borra el reloj del
+    // otro. Sin Hyprland devuelve false, que es la respuesta segura: quedarse
+    // puesto se ve y se corrige, desaparecer sin motivo parece una caída.
     function hiddenByFullscreen(screen) {
         if (!Settings.hideOnFullscreen || !screen)
             return false
         return Hyprland.monitorFor(screen)?.activeWorkspace?.hasFullscreen === true
     }
 
-    // Con la isla encendida, las notificaciones viven EN ELLA y el centro
-    // clásico no debe salir además: son la misma lista dos veces, y como la
-    // isla se esconde mientras hay un panel abierto, abrir el centro la hacía
-    // desaparecer justo al ir a mirar los avisos.
-    //
-    // ── POR QUÉ LA BIFURCACIÓN ESTÁ EN open() Y toggle() ────────────────────
-    // Estuvo en toggleNotifCenter(), y ahí se colaba por debajo. La campana de
-    // la barra sí pasa por ahí, pero `qs ipc call panel open notif` —y todo
-    // atajo de teclado escrito así— entra por open() a secas y ponía
-    // openPanel = "notif" con la isla encendida. El resultado no da ningún
-    // error: la isla se esconde (se esconde con cualquier panel abierto), el
-    // centro clásico no se construye (está condicionado a la isla apagada) y
-    // no aparece NADA — con la isla desaparecida hasta que abras y cierres
-    // otra cosa. Es el mismo estado colgado que ya arreglamos en el
-    // interruptor de Ajustes, entrando por otra puerta.
-    // ¿Este "panel" es en realidad una hoja de la isla? Devuelve el destino, o
-    // "" si es un panel de verdad. Con la isla apagada nunca lo es: entonces
-    // "notif" es el centro clásico y se comporta como los demás.
-    //
-    // Sale del registro y no de una condición escrita a mano porque escrita a
-    // mano ya se olvidó dos veces: estaba en open() y en toggle(), y NO en
-    // switchOrder ni en switchPanel, que es de donde salió el fallo.
+    // La misma regla para quien no tiene una pantalla concreta que mirar, como
+    // la fuente de notificaciones de la isla, que se instancia una sola vez
+    // fuera del recorrido de monitores. Mira el monitor enfocado, así que con
+    // dos pantallas también calla en la que no está a pantalla completa.
+    function focusedHasFullscreen() {
+        if (!Settings.hideOnFullscreen)
+            return false
+        return Hyprland.focusedMonitor?.activeWorkspace?.hasFullscreen === true
+    }
+
+    // Destino de isla que sustituye a este panel, o "" si es un panel de
+    // verdad. Sale del registro para que todas las entradas —open, toggle,
+    // switchOrder, switchPanel— apliquen la misma condición. Con la isla
+    // apagada nunca hay sustitución.
     function islandDestinationFor(p) {
         if (!Settings.islandEnabled)
             return ""
@@ -168,22 +121,14 @@ Singleton {
         return ""
     }
 
-    // ── EL INVARIANTE ────────────────────────────────────────────────────────
-    // Nunca puede haber un panel abierto Y una hoja de isla puesta a la vez:
+    // Abre un panel, o su hoja de isla si la tiene, manteniendo el invariante:
     //
     //     openPanel !== ""   ⇒   IslandState.destination === ""
     //
-    // No es estética. La isla se esconde entera mientras haya un panel abierto
-    // (IslandWindow.visible), así que las dos cosas a la vez significan una
-    // invisible — y al cerrar el panel aparece sola una hoja que no abrió
-    // nadie, ya modal, quedándose además con el teclado.
-    //
-    // Lo rompía esta misma función. La rama de la isla hacía 'return' ANTES de
-    // tocar openPanel, así que 'open("notif")' con el portapapeles delante
-    // dejaba panel='clipboard' y hoja='notifs'. Se llegaba con dos clics: el
-    // reloj de la barra abre el panel, y ese panel tiene una campana dentro
-    // (Panels/Dashboard.qml). Hay una prueba en tests/logica.qml que ahora
-    // comprueba el invariante detrás de CADA entrada.
+    // Los dos a la vez dejan la isla invisible (se esconde con cualquier panel
+    // abierto) y, al cerrar el panel, aparece sola una hoja modal que no ha
+    // abierto nadie y que además se queda con el teclado. Por eso cada rama
+    // limpia la otra antes de asignar.
     function open(p) {
         const dest = g.islandDestinationFor(p)
         if (dest !== "") {
@@ -191,19 +136,17 @@ Singleton {
             IslandState.openDestination(dest)
             return
         }
-        // Y el sentido contrario, que sí funcionaba: abrir un panel cierra la
-        // hoja. Al cerrar el panel reaparecía si no, sola, como si el shell
-        // tuviera memoria de algo que ya habías dejado atrás.
         IslandState.closeDestination()
         openedOnMonitor = g.focusedMonitorName()
         openPanel = p
     }
+
+    // Alterna un panel. Si su destino de isla está tapado por otro panel no
+    // alterna sino que abre: cerrar una hoja que no se está viendo se sentiría
+    // como que el gesto no hace nada.
     function toggle(p) {
         const dest = g.islandDestinationFor(p)
         if (dest !== "") {
-            // Con OTRO panel delante esto no es alternar: es ir a los avisos.
-            // Alternar aquí podría cerrar una hoja que no estabas viendo —la
-            // tapaba el panel— y el gesto se sentiría como que no hace nada.
             if (g.openPanel !== "") {
                 g.open(p)
                 return
@@ -223,24 +166,23 @@ Singleton {
     function toggleAi()            { toggle("ai") }
     function toggleEmoji()         { toggle("emoji") }
     function toggleSpotlight()     { toggle("spotlight") }
-    // Si está cerrada, ábrela. Si ya está abierta, deja que la propia ventana
-    // decida: cerrarla (si está en este workspace) o traerla al actual.
     signal settingsResummon()
+
+    // Abre Ajustes, o deja que la ventana decida si ya existe: cerrarse si está
+    // en este workspace, o traerse al actual.
     function toggleSettings() {
         if (settingsOpen) settingsResummon()
         else settingsOpen = true
     }
 
-    // Abrir Ajustes DIRECTAMENTE en un sitio concreto, que es lo que hace falta
-    // cuando el resultado de una búsqueda es un ajuste: llevarte a la ventana y
-    // que te toque buscarlo otra vez a mano no es haberlo encontrado.
-    //
-    // Se deja anotado y la ventana lo recoge: puede que aún no exista (se
-    // construye perezosamente al abrirse por primera vez), así que no hay a
-    // quién llamarle en ese momento.
+    // Destino pendiente dentro de Ajustes. Se deja anotado en vez de llamar a
+    // la ventana porque puede no existir todavía: se construye perezosamente
+    // la primera vez que se abre.
     property string settingsPendingCat: ""
     property string settingsPendingQuery: ""
 
+    // Abre Ajustes directamente en una categoría y con una búsqueda puesta,
+    // para que un resultado del buscador lleve al ajuste y no solo a la ventana.
     function openSettingsAt(cat, query) {
         g.settingsPendingCat = cat ?? ""
         g.settingsPendingQuery = query ?? ""
@@ -249,28 +191,20 @@ Singleton {
         else
             g.settingsOpen = true
     }
-    // Cierra solo los popups (la ventana de Ajustes es independiente).
-    // "Cierra lo que haya" incluye la hoja de la isla: es lo que espera quien
-    // llama a `qs ipc call panel close`, y sobre todo lo que hace falta antes de
-    // bloquear la pantalla (ver Config/PowerActions.run) — una hoja abierta
-    // debajo del bloqueo no la ve nadie, pero sigue ahí al volver.
-    //
-    // closeDestination y no collapse: un aviso que está a la vista se va cuando
-    // le toca, no porque hayas cerrado un panel que no tenía nada que ver.
+
+    // Cierra los popups y la hoja de la isla; Ajustes es independiente y no se
+    // toca. Incluye la hoja porque es lo que espera `qs ipc call panel close` y
+    // lo que hace falta antes de bloquear la pantalla. Usa closeDestination y
+    // no collapse para que un aviso a la vista se vaya cuando le toque y no
+    // porque se haya cerrado un panel ajeno.
     function closeAll() {
         openPanel = ""
         IslandState.closeDestination()
     }
 
-    // ── Salto entre paneles con las flechas ──────────────────────────────────
-    // Con un panel abierto, ←/→ pasan al panel del widget vecino de la barra.
-    // Es el gesto de una barra de pestañas: una vez dentro, no hay que cerrar,
-    // apuntar con el ratón a otra píldora y volver a abrir.
-    //
-    // El recorrido lo marca el layout de la barra (izquierda → centro →
-    // derecha), así que salta exactamente entre lo que se ve y en el orden en
-    // que se ve. Los paneles sin widget (la captura de pantalla) quedan fuera:
-    // no tienen sitio en ese recorrido.
+    // Recorrido de las flechas con un panel abierto: el orden en que los
+    // widgets aparecen en la barra, de izquierda a derecha. Los paneles sin
+    // widget quedan fuera porque no tienen sitio en ese recorrido.
     readonly property var switchOrder: {
         const out = []
         for (const sec of BarCatalog.sections)
@@ -281,11 +215,9 @@ Singleton {
         return out
     }
 
-    // Dónde estás dentro del recorrido. Casi siempre es 'openPanel', pero no
-    // siempre: con la isla encendida, saltar a "notif" no abre un panel sino
-    // una hoja, y deja openPanel vacío. Sin esto el recorrido se acababa ahí
-    // —indexOf("") es -1— y las flechas dejaban de responder hasta que cerrabas
-    // y abrías otra cosa a mano. Un callejón sin salida en mitad de un anillo.
+    // Posición lógica dentro del recorrido. No basta 'openPanel': con la isla
+    // encendida, "notif" abre una hoja y deja openPanel vacío, y entonces
+    // indexOf("") daría -1 y las flechas dejarían de responder.
     readonly property string ringPosition: {
         if (g.openPanel !== "")
             return g.openPanel
@@ -296,6 +228,8 @@ Singleton {
         return ""
     }
 
+    // Salta al panel vecino del recorrido. Es circular a propósito: un extremo
+    // sin salida obliga a recordar en qué punta se está.
     function switchPanel(direction) {
         const order = g.switchOrder
         if (order.length < 2)
@@ -303,16 +237,14 @@ Singleton {
         const at = order.indexOf(g.ringPosition)
         if (at === -1)
             return false
-        // Circular a propósito: llegar al extremo y no poder seguir obliga a
-        // recordar en qué punta estás.
         const next = (at + direction + order.length) % order.length
         g.open(order[next])
         return true
     }
 
-    // Pantalla con foco, para ventanas únicas (modales) que deben aparecer una
-    // sola vez y en el monitor activo — no una copia por monitor compitiendo
-    // por el teclado exclusivo. Sin Hyprland cae a la primera pantalla.
+    // Pantalla con foco, para ventanas modales únicas que no deben duplicarse
+    // por monitor compitiendo por el teclado exclusivo. Sin Hyprland cae a la
+    // primera pantalla.
     function focusedScreen() {
         const name = Hyprland.focusedMonitor?.name ?? ""
         const list = Quickshell.screens
@@ -322,20 +254,10 @@ Singleton {
         return list.length > 0 ? list[0] : null
     }
 
-    // ── Cambiar el interruptor de la isla con algo abierto ───────────────────
-    // Sin esto el shell se queda en un estado imposible, y de los que no dan
-    // ningún error:
-    //
-    //   · ENCENDERLA con el centro clásico abierto: el centro deja de
-    //     construirse, pero 'openPanel' se queda en "notif" — y la isla se
-    //     esconde mientras haya un panel abierto. Isla invisible hasta que
-    //     abras y cierres cualquier otra cosa.
-    //   · APAGARLA con la hoja de la isla abierta: el destino se queda puesto
-    //     en una isla que ya no existe, y al volver a encenderla aparecería
-    //     expandida sin que nadie la haya tocado.
-    //
-    // Se sanean los dos lados en el mismo sitio porque es un solo cambio de
-    // interruptor el que puede dejar cualquiera de los dos colgando.
+    // Sanea los dos estados imposibles que deja cambiar el interruptor de la
+    // isla con algo abierto: openPanel === "notif" con la isla encendida la
+    // dejaría invisible sin que nada la vuelva a mostrar, y un destino puesto
+    // con la isla apagada reaparecería expandido al volver a encenderla.
     Connections {
         target: Settings
         function onIslandEnabledChanged() {
