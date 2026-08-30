@@ -26,7 +26,7 @@ FocusScope {
 
         Text {
             anchors.horizontalCenter: parent.horizontalCenter
-            text: I18n.tr("Selecciona usuario", "Select user")
+            text: I18n.tr("Select user")
             color: Theme.fgDim
             font.family: Theme.fontFamily
             font.pixelSize: Theme.sp(14)
@@ -114,7 +114,7 @@ FocusScope {
         Text {
             anchors.horizontalCenter: parent.horizontalCenter
             visible: GreeterState.users.length === 0
-            text: I18n.tr("No se han encontrado usuarios", "No users found")
+            text: I18n.tr("No users found")
             color: Theme.fgMuted
             font.family: Theme.fontFamily
             font.pixelSize: Theme.sp(13)

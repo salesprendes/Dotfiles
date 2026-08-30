@@ -20,7 +20,7 @@ Singleton {
         (sessionIndex >= 0 && sessionIndex < sessions.length) ? sessions[sessionIndex] : null
 
     // Estado de autenticación
-    property string prompt: I18n.tr("Contraseña", "Password")
+    property string prompt: I18n.tr("Password")
     property string error:  ""
     property bool   secret: true
     property bool   busy:   false
@@ -57,7 +57,7 @@ Singleton {
         } else if (!_leaving) {
             // greetd desapareció y no estábamos entrando: no dejes "Cargando".
             _resetAuth()
-            error = I18n.tr("greetd no disponible", "greetd unavailable")
+            error = I18n.tr("greetd unavailable")
         }
     }
 
@@ -309,10 +309,9 @@ Singleton {
         _resetAuth()
         revealSecret = false
         if (isError) {
-            error = I18n.tr("Error de autenticación, inténtalo de nuevo",
-                            "Authentication error, please try again")
+            error = I18n.tr("Authentication error, please try again")
         } else {
-            const wrong = I18n.tr("Contraseña incorrecta", "Incorrect password")
+            const wrong = I18n.tr("Incorrect password")
             // Primero lo concreto (bloqueada, caducada…). Va antes a posta:
             // esos mensajes suelen llevar dentro la palabra "failed" —"locked
             // due to 3 failed logins"— y el filtro de abajo los tomaría por un
@@ -336,14 +335,13 @@ Singleton {
     function _localizedReason(raw) {
         const s = (raw || "").toLowerCase()
         if (s.indexOf("locked") !== -1)
-            return I18n.tr("Cuenta bloqueada", "Account locked")
+            return I18n.tr("Account locked")
         if (/password (has )?expired|expired.*password|change your password|new password required|password.*change/.test(s))
-            return I18n.tr("Contraseña caducada, debes cambiarla",
-                           "Password expired, you must change it")
+            return I18n.tr("Password expired, you must change it")
         if (/account (has )?expired|expired.*account/.test(s))
-            return I18n.tr("Cuenta caducada", "Account expired")
+            return I18n.tr("Account expired")
         if (s.indexOf("disabled") !== -1)
-            return I18n.tr("Cuenta deshabilitada", "Account disabled")
+            return I18n.tr("Account disabled")
         return ""
     }
 
@@ -354,12 +352,12 @@ Singleton {
         const raw = (message || "").replace(/:\s*$/, "").trim()
         const s = raw.toLowerCase()
         if (raw === "")
-            return echoResponse ? I18n.tr("Usuario", "Username")
-                                : I18n.tr("Contraseña", "Password")
+            return echoResponse ? I18n.tr("Username")
+                                : I18n.tr("Password")
         if (s.indexOf("password") !== -1)
-            return I18n.tr("Contraseña", "Password")
+            return I18n.tr("Password")
         if (s === "login" || s.indexOf("username") !== -1 || s === "user name")
-            return I18n.tr("Usuario", "Username")
+            return I18n.tr("Username")
         return raw
     }
 
@@ -450,7 +448,6 @@ Singleton {
                       exec: Config.defaultSession }]
         if (Config.showSessionPicker) sessionScan.running = true
         if (!Greetd.available)
-            error = I18n.tr("greetd no disponible (ejecuta bajo greetd)",
-                            "greetd unavailable (run under greetd)")
+            error = I18n.tr("greetd unavailable (run under greetd)")
     }
 }

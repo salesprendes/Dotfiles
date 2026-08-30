@@ -36,6 +36,21 @@ Item {
     property color tint: Theme.rowHover
     property color selectedColor: Theme.rowSelected
 
+    // Cuánto tarda la SELECCIÓN en aparecer. Hay dos casos y no uno:
+    //
+    //   · Una fila que se ELIGE —una de Ajustes, una del panel de IA— cambia
+    //     de selección una vez cada mucho, y ahí un tiempo normal se lee como
+    //     "ha pasado algo". Es el valor por defecto.
+    //
+    //   · Una lista que se RECORRE con las flechas —Spotlight— cambia de
+    //     selección diez veces por segundo. Con 200 ms, dos filas están medio
+    //     encendidas a la vez todo el rato y el resaltado va permanentemente
+    //     por detrás de las teclas. Se lee como lentitud, y lo es.
+    //
+    // Quien navega con teclado pone 0 y el resaltado va bajo el dedo en vez de
+    // persiguiéndolo.
+    property int selectMs: Theme.animNormal
+
     anchors.fill: parent
 
     function press(x, y) { onda.press(x, y) }
@@ -56,7 +71,8 @@ Item {
         // La SELECCIÓN no persigue al puntero: cambia cuando eliges, y ahí un
         // tiempo normal se lee como "ha pasado algo", que es lo que quieres.
         Behavior on opacity {
-            NumberAnimation { duration: Theme.animNormal; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel }
+            enabled: rh.selectMs > 0
+            NumberAnimation { duration: rh.selectMs; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel }
         }
     }
     Rectangle {

@@ -118,12 +118,53 @@ PanelWindow {
         // modo general, teclear "45*1.21" tiene que dar 54,45 sin prefijo.
         const extra = win.mode === "" && win.query !== ""
                       ? Sources.calc(win.query) : []
-        const pool = extra.length > 0 ? extra.concat(win.candidates) : win.candidates
+        // Y los ARCHIVOS por lo mismo: dependen del texto, así que no pueden
+        // vivir en la caché por modo. Con "/" van sin tope —quien escribe la
+        // barra sabe que busca un archivo, y ahí una lista larga ayuda—; en el
+        // modo general con tope, para que su rastro no eche de la lista a los
+        // ajustes y las acciones.
+        const archivos = win.mode === "file"
+                       ? Sources.files(win.query, 0)
+                       : (win.mode === "" ? Sources.files(win.query,
+                                            Sources.topeArchivosGeneral) : [])
+        let pool = win.candidates
+        if (extra.length > 0)
+            pool = extra.concat(pool)
+        if (archivos.length > 0)
+            pool = pool.concat(archivos)
         if (pool.length === 0)
             return []
         const ranked = Search.rank(pool, win.query,
                                    id => Frecency.statsFor(id), Date.now(), 40)
         return ranked.map(r => r.item)
+    }
+
+    // ── Secciones ────────────────────────────────────────────────────────────
+    // El primer resultado va DESTACADO y aparte, y el resto agrupado por tipo.
+    // Es lo que hace Spotlight de macOS, y no es adorno: en cuanto los archivos
+    // entran sin prefijo, una lista plana mezcla tres o cuatro clases de cosa y
+    // deja de poder recorrerse con la vista.
+    //
+    // 'filas' es la lista que se dibuja: encabezados y resultados intercalados.
+    // 'results' sigue siendo la lista PLANA y es la que manda para el teclado y
+    // para activar — así la navegación no tiene que saber nada de secciones.
+    readonly property var filas: {
+        const rs = win.results
+        if (rs.length === 0)
+            return []
+        const out = []
+        // El primero, suelto y sin encabezado: es la apuesta del buscador.
+        out.push({ fila: "top", item: rs[0], idx: 0 })
+        let ultimo = ""
+        for (let i = 1; i < rs.length; i++) {
+            const t = rs[i].type || ""
+            if (t !== ultimo) {
+                out.push({ fila: "cabecera", texto: Sources.label(t) })
+                ultimo = t
+            }
+            out.push({ fila: "item", item: rs[i], idx: i })
+        }
+        return out
     }
 
     function reset() {
@@ -133,7 +174,9 @@ PanelWindow {
         // Al cerrar y volver a abrir, soltar lo del prefijo "/": un recorrido
         // del disco que sigue vivo después de cerrar es trabajo para nadie, y
         // la lista de la vez anterior no es lo que se acaba de pedir.
-        FileSearch.clear()
+        // Reconstruye el índice si está rancio. Son 12 ms: se paga en cada
+        // apertura y a cambio un archivo creado hace un minuto ya aparece.
+        FileSearch.build()
     }
 
     function move(delta) {
@@ -143,7 +186,19 @@ PanelWindow {
         // Circular: llegar al final y no poder seguir obliga a recordar dónde
         // estás en una lista que acabas de generar.
         win.selected = (win.selected + delta + n) % n
-        list.positionViewAtIndex(win.selected, ListView.Contain)
+        list.positionViewAtIndex(win.filaDe(win.selected), ListView.Contain)
+    }
+
+    // Dónde está dibujado el resultado número 'i'. Las flechas se mueven por la
+    // lista PLANA ('results'), que es la que manda; esto solo traduce a la fila
+    // de la vista para poder desplazarla. Así la navegación no sabe nada de
+    // secciones y no puede pararse en un encabezado.
+    function filaDe(i) {
+        const f = win.filas
+        for (let k = 0; k < f.length; k++)
+            if (f[k].idx === i)
+                return k
+        return 0
     }
 
     function activate(index) {
@@ -151,7 +206,7 @@ PanelWindow {
         if (!it)
             return
         Frecency.remember(it.id)
-        Globals.spotlightOpen = false
+        Globals.closeAll()
         // Después de cerrar: si la acción abre una ventana (Ajustes, un
         // terminal), hacerlo con el buscador todavía tomando el teclado en
         // exclusiva le roba el foco a lo que acaba de abrirse.
@@ -164,18 +219,11 @@ PanelWindow {
         })
     }
 
-    onTextChanged: {
-        win.selected = 0
-        // La búsqueda de archivos es la única fuente asíncrona: se le avisa
-        // aquí y ella publica cuando tiene algo (con su propio rebote, para no
-        // lanzar un recorrido por letra). El binding de 'candidates' lee
-        // FileSearch.results dentro de Sources.files(), así que la lista se
-        // rehace sola cuando llegan — sin nada que conectar a mano.
-        if (win.mode === "file")
-            FileSearch.search(win.query)
-        else if (FileSearch.query !== "")
-            FileSearch.clear()
-    }
+    // Los archivos ya no son una fuente asíncrona: el índice está en memoria y
+    // filtrarlo es una pasada de indexOf sobre tres mil cadenas. No hay nada
+    // que avisar al teclear — el binding de 'results' llama a Sources.files()
+    // y ya está.
+    onTextChanged: win.selected = 0
 
     // ── Velo ─────────────────────────────────────────────────────────────────
     Rectangle {
@@ -186,7 +234,7 @@ PanelWindow {
     MouseArea {
         anchors.fill: parent
         enabled: win.progress > 0.9
-        onClicked: Globals.spotlightOpen = false
+        onClicked: Globals.closeAll()
     }
 
     // ── La tarjeta ───────────────────────────────────────────────────────────
@@ -234,7 +282,6 @@ PanelWindow {
                     text: win.mode === "calc" ? "󰃬"
                         : win.mode === "command" ? "󰆍"
                         : win.mode === "emoji" ? "󰞅"
-                        : win.mode === "setting" ? "󰒓"
                         : win.mode === "clipboard" ? "󰅍"
                         : win.mode === "file" ? "󰉋"
                                               : "󰍉"
@@ -259,7 +306,7 @@ PanelWindow {
                     Keys.onUpPressed: win.move(-1)
                     Keys.onReturnPressed: win.activate()
                     Keys.onEnterPressed: win.activate()
-                    Keys.onEscapePressed: Globals.spotlightOpen = false
+                    Keys.onEscapePressed: Globals.closeAll()
                     // Tab también baja: es el gesto que espera quien viene de
                     // un navegador, y no colisiona con nada aquí.
                     Keys.onTabPressed: win.move(1)
@@ -269,10 +316,16 @@ PanelWindow {
                         anchors.verticalCenter: parent.verticalCenter
                         anchors.left: parent.left
                         visible: input.text === ""
+                        // Corto, como el de macOS. Aquí vivía la lista entera
+                        // de los seis prefijos: ochenta y tres caracteres que
+                        // ni siquiera cabían —salían cortados por la derecha—,
+                        // así que no enseñaban los prefijos, solo ensuciaban el
+                        // campo. Un aviso que no se lee entero no avisa.
+                        //
                         // La clave va en inglés como todas: mezclar castellano
                         // dentro de una cadena que luego se traduce deja una
                         // entrada que ningún idioma puede traducir entera.
-                        text: I18n.tr("Search anything.  = maths · > command · : emoji · ? setting · @ clipboard · / files")
+                        text: I18n.tr("Spotlight Search")
                         color: Theme.fgMuted
                         font.pixelSize: Theme.typeBodySmall
                         elide: Text.ElideRight
@@ -328,26 +381,91 @@ PanelWindow {
                 Layout.preferredHeight: Math.min(Theme.dp(420), contentHeight)
                 visible: win.results.length > 0
                 clip: true
-                model: win.results
-                currentIndex: win.selected
+                model: win.filas
+                currentIndex: win.filaDe(win.selected)
                 spacing: Theme.space2
                 boundsBehavior: Flickable.StopAtBounds
                 reuseItems: true
                 cacheBuffer: Theme.dp(400)
 
-                delegate: Rectangle {
-                    id: row
+                delegate: Item {
+                    id: celda
                     required property var modelData
-                    required property int index
+
+                    readonly property bool esCabecera: celda.modelData.fila === "cabecera"
 
                     width: ListView.view.width
-                    implicitHeight: Theme.dp(46)
+                    implicitHeight: celda.esCabecera ? Theme.dp(26) : Theme.dp(46)
+
+                    // El encabezado de sección. En versalitas pequeñas y
+                    // apagadas: tiene que poder saltarse con la vista, no
+                    // competir con los resultados que rotula.
+                    ThemedText {
+                        anchors.left: parent.left
+                        anchors.bottom: parent.bottom
+                        anchors.leftMargin: Theme.space10
+                        anchors.bottomMargin: Theme.space4
+                        visible: celda.esCabecera
+                        text: celda.modelData.texto ?? ""
+                        color: Theme.fgMuted
+                        font.pixelSize: Theme.typeLabelSmall
+                        font.weight: Font.DemiBold
+                        font.capitalization: Font.AllUppercase
+                        font.letterSpacing: Theme.typeLabelTracking
+                    }
+
+                Rectangle {
+                    id: row
+                    visible: !celda.esCabecera
+                    anchors.fill: parent
+
+                    readonly property var item: celda.modelData.item ?? ({})
+                    readonly property int idx: celda.modelData.idx ?? -1
+                    // El primer resultado va suelto y sin encabezado encima: es
+                    // la apuesta del buscador, y se marca con un filete de
+                    // acento a la izquierda para que se vea que no es una fila
+                    // más de una sección.
+                    readonly property bool esTop: celda.modelData.fila === "top"
+
                     radius: Theme.shapeSm
-                    readonly property bool current: row.index === win.selected
-                    color: row.current ? Theme.withAlpha(Theme.accent, 0.20)
-                                       : Theme.withAlpha(Theme.fg,
-                                             Theme.stateAlpha(rowMa.containsMouse, rowMa.pressed, false))
-                    Behavior on color { ColorAnimation { duration: Theme.animFast } }
+                    readonly property bool current: row.idx === win.selected
+
+                    // Filete de acento a la izquierda del destacado.
+                    Rectangle {
+                        anchors.left: parent.left
+                        anchors.verticalCenter: parent.verticalCenter
+                        anchors.leftMargin: Theme.space2
+                        width: Theme.dp(3)
+                        height: parent.height * 0.55
+                        radius: width / 2
+                        color: Theme.accent
+                        visible: row.esTop
+                        antialiasing: true
+                    }
+                    color: "transparent"
+
+                    // El resaltado de fila del shell, el mismo que las listas
+                    // de Ajustes. Aquí se fundía el color a pelo con UN solo
+                    // Behavior de 100 ms para la selección Y el hover, que son
+                    // dos señales con presupuestos de latencia distintos:
+                    //
+                    //   · el hover persigue al puntero y puede permitirse una
+                    //     entrada suave
+                    //   · la SELECCIÓN la mueven las flechas, y con cualquier
+                    //     fundido de por medio hay dos filas medio encendidas a
+                    //     la vez todo el rato mientras bajas por la lista
+                    //
+                    // De ahí selectMs: 0 — el resaltado va bajo el dedo y no
+                    // detrás. Y por opacidad y no por color, que es lo que
+                    // evita el punto turbio a mitad de camino (ver la cabecera
+                    // de Components/RowHighlight.qml).
+                    RowHighlight {
+                        id: realce
+                        selected: row.current
+                        hovered: rowMa.containsMouse
+                        radius: Theme.shapeSm
+                        selectMs: 0
+                    }
 
                     RowLayout {
                         anchors.fill: parent
@@ -368,18 +486,18 @@ PanelWindow {
                                 anchors.fill: parent
                                 visible: status === Image.Ready
                                 asynchronous: true
-                                source: row.modelData.icon
-                                        ? Quickshell.iconPath(row.modelData.icon, true) : ""
+                                source: row.item.icon
+                                        ? Quickshell.iconPath(row.item.icon, true) : ""
                             }
                             ThemedText {
                                 anchors.centerIn: parent
                                 visible: !appIcon.visible
-                                text: row.modelData.glyph ?? "󰘳"
+                                text: row.item.glyph ?? "󰘳"
                                 color: row.current ? Theme.accent : Theme.fgDim
                                 // Un emoji se pinta con la fuente del sistema,
                                 // no con la del shell: la Nerd Font los trae en
                                 // blanco y negro cuando los trae.
-                                font.family: row.modelData.type === "emoji"
+                                font.family: row.item.type === "emoji"
                                              ? undefined : Theme.fontFamily
                                 font.pixelSize: Theme.sp(16)
                             }
@@ -390,7 +508,7 @@ PanelWindow {
                             spacing: 0
                             ThemedText {
                                 Layout.fillWidth: true
-                                text: row.modelData.name ?? ""
+                                text: row.item.name ?? ""
                                 color: Theme.fg
                                 font.pixelSize: Theme.fontSize
                                 elide: Text.ElideRight
@@ -398,16 +516,19 @@ PanelWindow {
                             ThemedText {
                                 Layout.fillWidth: true
                                 visible: text !== ""
-                                text: row.modelData.subtitle ?? ""
+                                text: row.item.subtitle ?? ""
                                 color: Theme.fgMuted
                                 font.pixelSize: Theme.typeLabelSmall
                                 elide: Text.ElideRight
                             }
                         }
 
-                        // De qué fuente viene. Ayuda a entender por qué está
-                        // ahí una fila que no esperabas.
+                        // De qué fuente viene. SOLO en el destacado: el resto
+                        // de filas ya lo dicen con el encabezado de su sección,
+                        // y repetirlo en cada una es la misma palabra veinte
+                        // veces en la misma columna.
                         Rectangle {
+                            visible: row.esTop
                             Layout.alignment: Qt.AlignVCenter
                             implicitWidth: kind.implicitWidth + Theme.space8
                             implicitHeight: Theme.dp(18)
@@ -416,7 +537,7 @@ PanelWindow {
                             ThemedText {
                                 id: kind
                                 anchors.centerIn: parent
-                                text: Sources.label(row.modelData.type)
+                                text: Sources.label(row.item.type)
                                 color: Theme.fgMuted
                                 font.pixelSize: Theme.typeLabelSmall
                             }
@@ -433,10 +554,15 @@ PanelWindow {
                         // esto la selección salta a lo que quede encima.
                         onPositionChanged: (m) => {
                             if (hoverGate.moved(rowMa, m))
-                                win.selected = row.index
+                                win.selected = row.idx
                         }
-                        onClicked: win.activate(row.index)
+                        // La onda de pulsación venía dentro de RowHighlight y
+                        // no la disparaba nadie: la fila no acusaba recibo del
+                        // clic, solo se abría el resultado.
+                        onPressed: (m) => realce.press(m.x, m.y)
+                        onClicked: win.activate(row.idx)
                     }
+                }
                 }
             }
         }

@@ -381,6 +381,7 @@ FloatingWindow {
         ] },
         { label: I18n.tr("Bar and widgets"), items: [
             { key: "bar",   glyph: "󰕰", label: I18n.tr("Widgets") },
+            { key: "dock",  glyph: "󰇘", label: I18n.tr("Dock") },
             { key: "clock", glyph: "󰒓", label: I18n.tr("Shell") }
         ] },
         { label: I18n.tr("System"), items: [
@@ -1400,6 +1401,7 @@ FloatingWindow {
                             case "terminal":  return "SettingsPages/TerminalPage.qml"
                             case "wallpaper": return "SettingsPages/WallpaperPage.qml"
                             case "bar":       return "SettingsPages/BarPage.qml"
+                            case "dock":      return "SettingsPages/DockPage.qml"
                             case "clock":     return "SettingsPages/ShellPage.qml"
                             case "displays":  return "SettingsPages/DisplaysPage.qml"
                             case "network":   return "SettingsPages/NetworkPage.qml"

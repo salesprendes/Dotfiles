@@ -47,6 +47,21 @@ Singleton {
     // decide si nos atrevemos a bloquear.
     property bool pamReady: false
 
+    // ── Qué bloqueador se usa DE VERDAD ──────────────────────────────────────
+    // No es lo mismo que Settings.lockBackend, y esa diferencia importa: si el
+    // ajuste dice "hyprlock" y hyprlock no está instalado, honrarlo a ciegas
+    // manda el bloqueo a _fallback(), que acaba en 'loginctl lock-session' — o
+    // sea una sesión marcada como bloqueada SIN NINGUNA PANTALLA que pida la
+    // contraseña. Y desde Ajustes no se podía volver, porque la opción elegida
+    // seguía siendo válida a ojos del selector.
+    //
+    // Con el backend efectivo derivado aquí, desinstalar hyprlock devuelve el
+    // bloqueo propio solo, sin tocar el ajuste: si lo vuelves a instalar,
+    // vuelve a valer lo que elegiste.
+    readonly property bool hyprlockAvailable: Deps.has("hyprlock")
+    readonly property string backend: (Settings.lockBackend === "hyprlock"
+                                       && root.hyprlockAvailable) ? "hyprlock" : "shell"
+
     // "Quiero estar bloqueado". La superficie de verdad (WlSessionLock) vive en
     // Panels/LockScreen.qml y se ata a esto.
     //
@@ -71,7 +86,7 @@ Singleton {
     function lock() {
         if (root.locked)
             return
-        if (Settings.lockBackend === "hyprlock" || !root.pamReady) {
+        if (root.backend === "hyprlock" || !root.pamReady) {
             root._fallback()
             return
         }

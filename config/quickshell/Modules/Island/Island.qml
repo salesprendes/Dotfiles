@@ -34,6 +34,14 @@ Item {
     // Separación con el borde de pantalla, la misma que la barra.
     property real edgeMargin: Theme.barTopMargin
 
+    // Techo de la hoja expandida. Se recibe de fuera en vez de deducirlo de
+    // 'height', que es lo que hacía antes y ahora sería un fallo: el lienzo
+    // CRECE a la pantalla entera mientras la hoja está abierta (IslandWindow lo
+    // necesita para poder recoger el clic de fuera), y una hoja que midiera "lo
+    // que quepa en el lienzo" pasaría de 560 dp a ocupar el monitor de arriba
+    // abajo justo al abrirse. El techo tiene que ser el del lienzo en REPOSO.
+    property real maxSheetHeight: island.height
+
     // Catálogo de contenidos: lo rellena quien instancia la isla, para que este
     // archivo no tenga que conocer ni importar cada actividad.
     //   { home: Component, level: Component, … }
@@ -52,6 +60,35 @@ Item {
     readonly property string activity: island.canExpand ? IslandState.activity
                                                         : IslandState.compactActivity
     readonly property bool expanded: IslandState.expanded && island.canExpand
+    // ¿Se comporta esta isla como un panel modal? La regla de CUÁNDO está en
+    // IslandState.modal (y se prueba allí); aquí solo se le añade el "y en esta
+    // pantalla": la hoja está en un monitor, y el clic de fuera que la cierra
+    // tiene que ser un clic de ESE monitor. En los demás la isla sigue siendo
+    // una píldora que deja pasar todo.
+    readonly property bool modal: IslandState.modal && island.canExpand
+
+    // ── ESC ──────────────────────────────────────────────────────────────────
+    // Cierra, como en cualquier otro panel del shell. Va en la RAÍZ de la isla
+    // y no en la forma: 'Keys' solo ve lo que sus hijos no han consumido, así
+    // que lo que haya dentro de la hoja puede quedarse la tecla primero.
+    //
+    // El foco de teclado lo pide la ventana (IslandWindow) y SOLO mientras es
+    // modal. Fuera de ahí no llega nada aquí, que es justo lo que hace falta:
+    // una isla en reposo no puede quitarle el teclado a la ventana en la que
+    // estás escribiendo. La guarda de abajo repite esa condición a mano en vez
+    // de fiarse de ella — si algún día la ventana pide teclado por otro motivo,
+    // ESC no debe empezar a cerrar cosas por su cuenta.
+    focus: true
+    onActiveFocusChanged: console.warn("SONDA isla activeFocus=" + activeFocus
+                                       + " modal=" + island.modal)
+    Keys.onPressed: (ev) => console.warn("SONDA tecla key=" + ev.key)
+    Keys.onEscapePressed: (ev) => {
+        if (!island.modal) {
+            ev.accepted = false
+            return
+        }
+        IslandState.collapse()
+    }
 
     // ── Motor ────────────────────────────────────────────────────────────────
     readonly property IslandSpring spring: IslandSpring {
@@ -81,7 +118,7 @@ Item {
         if (!island.expanded || !inner)
             return island.compactHeight
         return Math.max(island.compactHeight,
-                        Math.min(island.height - island.edgeMargin - Theme.dp(24),
+                        Math.min(island.maxSheetHeight - island.edgeMargin - Theme.dp(24),
                                  inner.implicitHeight + Theme.space16 * 2))
     }
 
@@ -149,10 +186,30 @@ Item {
         property string keyIn: ""
         property string keyOut: ""
 
+        // El ancho del contenido. Son dos reglas distintas y tienen que serlo:
+        //
+        //   · COMPACTO: manda el contenido. La píldora se ciñe a lo que hay
+        //     dentro, así que aquí se pide lo que se necesita y ya.
+        //   · EXPANDIDO: manda la hoja, y el contenido la LLENA. Una hoja
+        //     expandida mide siempre lo mismo (maxExpandedWidth) pase lo que
+        //     pase, así que un contenido que pidiera menos se quedaba flotando
+        //     en el medio con dos franjas vacías a los lados. Medido: el
+        //     reproductor ocupaba 146 px de los 349 disponibles — el 42 % de su
+        //     propia hoja.
+        //
+        // Y en expandido se usa el ancho FINAL, no 'parent.width', que es el del
+        // muelle y está en movimiento. Con el del muelle, el contenido se
+        // recalcula entero en cada fotograma mientras la hoja se abre: el texto
+        // baila, y encima el alto objetivo que sale de ahí (targetHeight) se
+        // mueve solo, o sea que el muelle persigue un destino que él mismo está
+        // cambiando. Con el ancho final se mide UNA vez y el recorte de la forma
+        // lo va descubriendo, que es como lo hace Components/Popout.
         Loader {
             id: slotIn
             anchors.centerIn: parent
-            width: Math.min(parent.width - Theme.space12 * 2, implicitWidth)
+            width: island.expanded
+                   ? island.maxExpandedWidth - Theme.space12 * 2
+                   : Math.min(parent.width - Theme.space12 * 2, implicitWidth)
             sourceComponent: island._componentFor(shape.keyIn)
             opacity: island._reveal
         }
@@ -167,6 +224,35 @@ Item {
             // superpuestos.
             opacity: 1 - island._crossfade
             visible: opacity > 0.01
+        }
+
+        // ── El ratón encima ──────────────────────────────────────────────────
+        // Va DENTRO de la forma, y no colgado de 'island', que es lo que
+        // parecería natural. Colgado de la isla vigila el lienzo ENTERO, y el
+        // lienzo es casi todo aire: hasta ahora daba igual porque la máscara de
+        // la ventana solo dejaba entrar el ratón por la forma, así que "dentro
+        // del lienzo" y "dentro de la isla" eran lo mismo.
+        //
+        // Dejan de serlo en cuanto la hoja se vuelve modal: entonces la máscara
+        // se abre a toda la pantalla, y un HoverHandler a nivel de isla daría
+        // por "puntero encima" el ratón esté donde esté — congelando las cuentas
+        // atrás de las notificaciones desde el otro extremo del monitor.
+        HoverHandler {
+            id: hover
+            onHoveredChanged: {
+                IslandState.pointerInside = hovered
+                if (hovered) {
+                    if (island.canPeek)
+                        peekIn.restart()
+                    return
+                }
+                peekIn.stop()
+                // Al apartar el ratón se va lo que trajo el ratón. Lo que
+                // abriste tú (o lo que se asomó solo, que tiene su propio
+                // reloj) se queda.
+                if (IslandState.destinationSource === "hover")
+                    IslandState.closeDestination()
+            }
         }
     }
 
@@ -242,23 +328,6 @@ Item {
                                     && IslandState.transientId === ""
                                     && IslandState.destination === ""
 
-    HoverHandler {
-        id: hover
-        onHoveredChanged: {
-            IslandState.pointerInside = hovered
-            if (hovered) {
-                if (island.canPeek)
-                    peekIn.restart()
-                return
-            }
-            peekIn.stop()
-            // Al apartar el ratón se va lo que trajo el ratón. Lo que abriste
-            // tú (o lo que se asomó solo, que tiene su propio reloj) se queda.
-            if (IslandState.destinationSource === "hover")
-                IslandState.closeDestination()
-        }
-    }
-
     // La espera es la mitad del asunto. Sin ella, cruzar la pantalla por arriba
     // abre una hoja de 340 dp de golpe; con ella hay que PARARSE encima, que es
     // lo que distingue "quiero verlo" de "iba de paso".
@@ -271,6 +340,21 @@ Item {
                 return
             IslandState.openDestination("media", "hover", island.screenName)
         }
+    }
+
+    // ── El clic de fuera ─────────────────────────────────────────────────────
+    // Debajo de TODO (z -2, por debajo incluso del captador de la forma): solo
+    // recibe lo que no ha querido nadie, y eso es exactamente el escritorio.
+    //
+    // Mientras no sea modal está apagado y además es inalcanzable — la máscara
+    // de IslandWindow no deja entrar el ratón fuera de la forma. Los dos
+    // candados dicen lo mismo a propósito: si algún día se abre la máscara por
+    // otro motivo, esto no debe empezar a tragarse clics por su cuenta.
+    MouseArea {
+        z: -2
+        anchors.fill: parent
+        enabled: island.modal
+        onClicked: IslandState.collapse()
     }
 
     // DEBAJO del contenido, y esto es lo único que hace que la hoja expandida

@@ -138,6 +138,25 @@ Singleton {
     // ── Ajustes ──────────────────────────────────────────────────────────────
     // El índice ya existe y se construye solo recorriendo las páginas (ver
     // Config/SettingsSearchIndex.qml). Aquí solo se traduce a elementos.
+    // De qué página de Ajustes sale una fila. Las etiquetas son las mismas que
+    // la navegación de la ventana, para que lo que lees en el buscador y lo que
+    // ves al llegar coincidan.
+    function _catLabel(cat) {
+        switch (cat) {
+        case "theme":     return I18n.tr("Theme")
+        case "font":      return I18n.tr("Typography")
+        case "terminal":  return I18n.tr("Terminal")
+        case "wallpaper": return I18n.tr("Wallpaper")
+        case "bar":       return I18n.tr("Widgets")
+        case "dock":      return I18n.tr("Dock")
+        case "clock":     return I18n.tr("Shell")
+        case "displays":  return I18n.tr("Displays")
+        case "network":   return I18n.tr("Network")
+        case "notif":     return I18n.tr("Notifications")
+        }
+        return cat
+    }
+
     function settings() {
         const out = []
         const list = SettingsSearchIndex.entries ?? []
@@ -146,7 +165,11 @@ Singleton {
             out.push({
                 id: "setting:" + s.cat + ":" + s.skey,
                 name: s.label,
-                subtitle: s.desc,
+                // La descripción si la hay; si no, LA PÁGINA. Sin este respaldo
+                // aparecían tres filas que solo decían "Opacidad" —la de la
+                // barra, la de los paneles y la de los widgets no llevan desc—
+                // y no había manera de saber cuál era cuál desde el buscador.
+                subtitle: s.desc && s.desc !== "" ? s.desc : root._catLabel(s.cat),
                 // Los alias van de palabra clave y no metidos en el nombre: así
                 // "matugen" encuentra el ajuste sin ensuciar lo que se lee en
                 // la lista, y puntúa por debajo del nombre, que es lo justo.
@@ -179,18 +202,27 @@ Singleton {
     }
 
     // ── Archivos ─────────────────────────────────────────────────────────────
-    // La lista la trae Services/FileSearch, que ya ha hecho el trabajo lento
-    // fuera. Aquí solo se le da forma de elemento.
+    // Ruta corta para enseñar: "/home/salesprendes/Documentos" → "~/Documentos".
+    // No es cosmética — en un subtítulo de 300 dp, el prefijo del hogar se come
+    // el tramo que de verdad distingue un archivo de otro.
+    function _corta(ruta) {
+        const h = FileSearch.home
+        return (h !== "" && ruta.indexOf(h) === 0) ? "~" + ruta.slice(h.length)
+                                                   : ruta
+    }
+
+    // Los archivos ya cribados por FileSearch.filtrar(), convertidos en
+    // elementos puntuables.
     //
-    // OJO CON EL ORDEN: estos elementos vienen de una búsqueda que YA ha
-    // filtrado por el mismo texto, así que volver a puntuarlos contra la
-    // consulta no descarta nada — solo decide cuál va primero, y para eso el
-    // nombre del archivo es el campo que importa. Por eso la ruta va de
-    // subtítulo y no de nombre: si no, "informe" puntuaría igual de alto un
-    // archivo dentro de ~/informes que uno llamado informe.pdf.
-    function files() {
+    // OJO CON EL ORDEN: estos elementos vienen de una criba que YA ha filtrado
+    // por el mismo texto, así que volver a puntuarlos no descarta casi nada —
+    // decide cuál va primero, y para eso el NOMBRE del archivo es el campo que
+    // importa. Por eso la ruta va de subtítulo y no de nombre: si no, "informe"
+    // puntuaría igual de alto un archivo dentro de ~/informes que uno llamado
+    // informe.pdf.
+    function files(consulta, tope) {
         const out = []
-        const list = FileSearch.results
+        const list = FileSearch.filtrar(consulta, tope)
         for (let i = 0; i < list.length; i++) {
             const ruta = list[i]
             const corte = ruta.lastIndexOf("/")
@@ -199,10 +231,30 @@ Singleton {
             out.push({
                 id: "file:" + ruta,
                 name: nombre,
-                subtitle: carpeta,
+                subtitle: root._corta(carpeta),
+                // La RUTA ENTERA como palabra clave. score() puntúa contra el
+                // nombre y contra la carpeta por separado, y una consulta de
+                // ruta —"dotfiles/script"— no está en ninguno de los dos: está
+                // justo en la junta.
+                //
+                // Sin esto, escribir "/carpeta/nombre" no daba nada NUNCA, aun
+                // habiendo encontrado el archivo: Services/FileSearch pide
+                // expresamente 'fd --full-path' (o 'find -ipath') en cuanto la
+                // consulta lleva una barra dentro, y luego rank() tiraba lo que
+                // había traído. La búsqueda por ruta existía a medias.
+                //
+                // Va como palabra clave y no como nombre a propósito: el peso
+                // de las claves es menor, así que acertar el nombre del archivo
+                // sigue ganándole a acertar un trozo de su ruta.
+                keywords: [ruta],
                 type: "file",
                 glyph: "󰈔",
-                run: function () { Quickshell.execDetached(["xdg-open", ruta]) }
+                run: function () { Quickshell.execDetached(["xdg-open", ruta]) },
+                // Segunda acción: abrir la carpeta que lo contiene. Es lo que
+                // uno quiere la mitad de las veces que encuentra un archivo —
+                // no abrirlo, sino ir a donde está.
+                altLabel: I18n.tr("Open containing folder"),
+                altRun: function () { Quickshell.execDetached(["xdg-open", carpeta]) }
             })
         }
         return out
@@ -253,6 +305,13 @@ Singleton {
     // portapapeles quedan fuera de la búsqueda general a propósito: son 2.500 y
     // N entradas de texto libre que ensuciarían cualquier consulta corta. Se
     // llega a ellos con ":" y "@", que es un carácter de más y mucho menos ruido.
+    // Tope de archivos en el modo general. Es lo único que separa esto de un
+    // buscador inservible: el escalón de puntuación ya protege el primer puesto
+    // —un prefijo vale 5000 y una subcadena 500—, pero no protege del RASTRO.
+    // Sin tope, doscientas coincidencias por subcadena empujan los ajustes, los
+    // emojis y las acciones fuera de la lista de cuarenta.
+    readonly property int topeArchivosGeneral: 8
+
     function gather(mode, text) {
         if (mode === "calc")
             return root.calc(text)
@@ -262,10 +321,11 @@ Singleton {
             return root.emojis()
         if (mode === "clipboard")
             return root.clipboard()
-        if (mode === "setting")
-            return root.settings()
+        // Los ARCHIVOS no salen de aquí, ni con "/" ni sin él: dependen del
+        // texto, y esto se cachea por modo. Los resuelve Spotlight.qml aparte,
+        // exactamente igual que la calculadora y por el mismo motivo.
         if (mode === "file")
-            return root.files()
+            return []
 
         // Modo general. La calculadora NO entra aquí: depende del texto y esto
         // se cachea por modo, así que la resuelve Spotlight.qml aparte.

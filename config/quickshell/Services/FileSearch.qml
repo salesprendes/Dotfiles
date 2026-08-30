@@ -4,37 +4,71 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 
-// Búsqueda de archivos por nombre para el prefijo "/" de Spotlight.
+// El índice de archivos y carpetas de Spotlight.
 //
-// POR QUÉ ES UN SERVICIO Y NO UNA FUNCIÓN MÁS EN Sources.qml: las otras fuentes
-// son síncronas —el catálogo de apps ya está en memoria, los emojis se leen de
-// un JSON— y esta no puede serlo. Recorrer un $HOME tarda cientos de
-// milisegundos, y hacerlo dentro del binding de resultados congelaría el
-// teclado en cada letra. Aquí se lanza fuera, se acumula lo que va llegando y
-// se publica cuando termina; Spotlight solo mira 'results'.
+// ── POR QUÉ ÍNDICE Y NO UNA BÚSQUEDA POR CONSULTA ───────────────────────────
+// Esto lanzaba un 'fd' por consulta, con rebote de 180 ms, y solo con el
+// prefijo "/". Funcionaba, pero imponía dos cosas: los archivos llegaban TARDE
+// —en su propio carril, después de que la lista ya se hubiera dibujado— y por
+// eso no podían mezclarse con las apps en una sola lista ordenada.
+//
+// Medido en esta máquina: 3.438 archivos y carpetas útiles, 364 KB de rutas,
+// y un recorrido completo con fd en 12 MILISEGUNDOS. A esa escala, recorrer
+// por consulta es tirar un proceso por tecla para nada.
+//
+// Así que se recorre UNA vez, se guarda la lista cruda en memoria, y buscar
+// pasa a ser filtrar cadenas. Los archivos dejan de ser una fuente asíncrona y
+// entran en el mismo puntuador que todo lo demás.
+//
+// ── POR QUÉ NO plocate ──────────────────────────────────────────────────────
+// Es el equivalente honesto al índice del kernel que usa macOS, y se descartó
+// a propósito: es una base de datos de TODO el sistema con su temporizador de
+// systemd, y no le puede ganar a 12 ms sobre tres mil archivos. Sería una
+// dependencia nueva a cambio de nada. (DankMaterialShell sí necesita la suya,
+// pero porque apunta a máquinas con millones de archivos.)
 Singleton {
     id: root
 
-    // Tope de resultados. No es por memoria sino por sentido: nadie repasa una
-    // lista de mil archivos en un buscador que se maneja con las flechas, y
-    // parar pronto es lo que permite matar el proceso antes de que acabe de
-    // recorrer el disco.
-    readonly property int cap: 100
+    // Tope de lo que se guarda en el índice. No es por memoria —364 KB— sino
+    // por sentido: si un $HOME tiene cien mil archivos, indexarlos todos no
+    // mejora ninguna búsqueda y sí empeora cada una.
+    readonly property int cap: 40000
 
-    // Por debajo de tres letras no se busca. Con una o dos, la mitad del $HOME
-    // coincide: se paga el recorrido entero del disco para devolver ruido.
-    readonly property int minChars: 3
+    // Por debajo de dos letras no se filtra. Con una, media lista coincide.
+    //
+    // Baja de tres a dos porque ya no cuesta un recorrido del disco: filtrar
+    // cadenas en memoria con una sola letra es barato, y lo único que lo
+    // desaconseja es el ruido. Con dos, el ruido ya es manejable.
+    readonly property int minChars: 2
 
-    property var results: []
-    property bool running: false
-    property string query: ""
+    // Carpetas que NO se indexan.
+    //
+    // '.cache' es la que importa: en esta máquina son 12.316 archivos de los
+    // 15.792 que hay — el 78 % del $HOME es basura regenerable que nadie busca
+    // jamás. 'node_modules', '__pycache__' y '.venv' son lo mismo en pequeño.
+    //
+    // Y LA PAPELERA, que son otros 654. Esa no es una cuestión de ruido sino de
+    // que estaría mal: un archivo que borraste no puede aparecer en una
+    // búsqueda como si siguiera ahí. Y aparecía además DUPLICANDO al vivo, con
+    // el mismo nombre y una ruta que no dice a simple vista que está en la
+    // basura.
+    readonly property var excluidas: [".git", ".cache", "node_modules",
+                                      "__pycache__", ".venv",
+                                      "Trash", ".Trash-1000"]
+
+    // La lista cruda: rutas absolutas, tal cual las escupe la herramienta.
+    // Crudas y no objetos a propósito — ver la nota de las dos etapas en
+    // filtrar().
+    property var index: []
+    property bool building: false
+    property double builtAt: 0
+
+    readonly property string home: Quickshell.env("HOME") || "/home"
 
     // ── Herramienta ──────────────────────────────────────────────────────────
-    // 'fd' es varias veces más rápido (recorre en paralelo y respeta
-    // .gitignore), pero no está en una instalación básica. 'find' sí está
-    // SIEMPRE, así que es el suelo: sin él no habría prefijo "/" en la mitad de
-    // las máquinas, y un prefijo que funciona en unas y en otras no es peor que
-    // no tenerlo.
+    // 'fd' recorre en paralelo y entiende de exclusiones; 'find' está SIEMPRE.
+    // Sin el suelo de 'find' no habría búsqueda de archivos en media máquina, y
+    // media función es peor que una función lenta.
     property string tool: ""
     Process {
         id: probe
@@ -43,77 +77,54 @@ Singleton {
         stdout: StdioCollector {
             waitForEnd: true
             onStreamFinished: {
-                const linea = String(this.text || "").trim().split("\n")[0] || ""
-                root.tool = linea
+                root.tool = String(this.text || "").trim().split("\n")[0] || ""
             }
         }
     }
 
     // El sondeo no arranca hasta que alguien toca el singleton por primera vez
-    // (así son los Singleton de Quickshell), o sea justo cuando se teclea el
-    // primer "/". Si la detección tarda más que el rebote, _launch() se
-    // encuentra sin herramienta y se rinde EN SILENCIO: la primera búsqueda de
-    // cada arranque no devolvía nada y no había forma de saber por qué. Al
-    // llegar la herramienta se relanza lo que estuviera pendiente.
-    onToolChanged: if (root.tool !== "" && root.query.length >= root.minChars)
-        root._launch()
+    // (así son los Singleton de Quickshell). Si la detección tarda más que la
+    // primera petición de índice, aquélla se quedaría sin herramienta y se
+    // rendiría en silencio. Al llegar, se construye lo que estuviera pendiente.
+    property bool _pendiente: false
+    onToolChanged: if (root.tool !== "" && root._pendiente) root.build()
 
-    readonly property string home: Quickshell.env("HOME") || "/home"
-
-    // Argumentos por herramienta. Van como LISTA, nunca por 'sh -c': lo que se
-    // busca lo escribe el usuario, y meterlo en una cadena de shell es abrirle
-    // la puerta a que un nombre con comillas o un ';' ejecute algo. Como lista,
-    // el texto llega al programa como un argumento y nada más.
-    function _argv(q) {
+    // ── Construcción del índice ──────────────────────────────────────────────
+    function _argv() {
         const t = root.tool
         if (t === "")
             return null
-        // ¿Es un trozo de RUTA o solo un nombre? "documentos/informe" quiere
-        // decir «informe, pero dentro de documentos», y eso no lo puede
-        // resolver una comparación contra el nombre del archivo a secas.
-        const porRuta = q.indexOf("/") !== -1
         if (t.endsWith("/fd") || t.endsWith("/fdfind")) {
-            const argv = [t, "--type", "f", "--max-results", String(root.cap),
-                          "--exclude", ".git"]
-            if (porRuta)
-                argv.push("--full-path")
-            return argv.concat([q, root.home])
+            // --hidden porque lo que este usuario busca de verdad vive en
+            // ~/.config y ~/.claude; sin él, el índice se queda en 433 archivos
+            // y no encuentra su propia configuración.
+            const argv = [t, "--type", "f", "--type", "d", "--hidden",
+                          "--max-results", String(root.cap)]
+            for (const e of root.excluidas)
+                argv.push("--exclude", e)
+            return argv.concat(["", root.home])
         }
-        // find: se poda lo oculto en vez de filtrarlo después, para no bajar a
-        // ~/.cache ni a ~/.local/share, que son el grueso de los archivos de un
-        // $HOME y nunca son lo que se busca. La profundidad acotada es por lo
-        // mismo: a partir de seis niveles ya es todo árboles de dependencias.
-        return [t, root.home, "-maxdepth", "6",
-                "-name", ".*", "-prune", "-o",
-                "-type", "f", porRuta ? "-ipath" : "-iname", "*" + q + "*",
-                "-print"]
+        // find: las exclusiones se PODAN, para no bajar al árbol en vez de
+        // filtrarlo después. Podar .cache es lo que convierte 15.792 archivos
+        // en 3.438 sin gastar el recorrido.
+        const argv = [t, root.home]
+        for (let i = 0; i < root.excluidas.length; i++) {
+            argv.push(i === 0 ? "(" : "-o", "-name", root.excluidas[i])
+            if (i === root.excluidas.length - 1)
+                argv.push(")")
+        }
+        return argv.concat(["-prune", "-o", "(", "-type", "f", "-o",
+                            "-type", "d", ")", "-print"])
     }
 
-    // ── Proceso ──────────────────────────────────────────────────────────────
     property var _acc: []
 
-    // Matar el proceso también dispara onRunningChanged, y ahí no hay forma de
-    // distinguir «ha terminado» de «lo he matado yo». Sin esta marca, abortar
-    // una búsqueda para lanzar la siguiente publicaba lo que llevara acumulado
-    // de la consulta ANTERIOR: al teclear rápido, la lista enseñaba a medias
-    // los resultados de un texto que ya no estaba escrito.
-    property bool _abortando: false
-
-    function _matar() {
-        root._abortando = true
-        hunt.running = false
-        root._abortando = false
-    }
-
     Process {
-        id: hunt
+        id: crawl
         stdout: SplitParser {
             onRead: function (line) {
                 if (root._acc.length >= root.cap) {
-                    // Ya hay de sobra: parar aquí ahorra el resto del recorrido.
-                    // 'find' no tiene tope propio, así que este es el único.
-                    // Y aquí NO se aborta: lo acumulado es justo lo que se pide.
-                    hunt.running = false
+                    crawl.running = false
                     return
                 }
                 if (line !== "")
@@ -121,77 +132,88 @@ Singleton {
             }
         }
         onRunningChanged: {
-            if (running || root._abortando)
+            if (running)
                 return
-            root.results = root._acc
-            root.running = false
-        }
-    }
-
-    // Rebote. Escribir "documento" son nueve pulsaciones, y sin esto son nueve
-    // recorridos del disco de los que solo importa el último.
-    Timer {
-        id: rebote
-        interval: 180
-        onTriggered: root._launch()
-    }
-
-    function _launch() {
-        root._matar()
-        const q = root.query
-        if (q.length < root.minChars) {
+            root.index = root._acc
             root._acc = []
-            root.results = []
-            root.running = false
+            root.building = false
+            root.builtAt = Date.now()
+        }
+    }
+
+    // Reconstruye si hace más de 'frescura' que se hizo. Lo llama Spotlight al
+    // abrirse: son 12 ms, así que se paga en cada apertura y a cambio un
+    // archivo creado hace un minuto ya está. La guarda evita rehacerlo si
+    // abres y cierras dos veces seguidas.
+    readonly property int frescura: 5000
+
+    function build(forzar) {
+        if (root.building)
+            return
+        if (root.tool === "") {
+            root._pendiente = true
             return
         }
-        const argv = root._argv(q)
-        if (!argv) {
-            root.running = false
+        root._pendiente = false
+        if (!forzar && root.index.length > 0
+            && (Date.now() - root.builtAt) < root.frescura)
             return
-        }
+        const argv = root._argv()
+        if (!argv)
+            return
         root._acc = []
-        root.running = true
-        hunt.command = argv
-        hunt.running = true
+        root.building = true
+        crawl.command = argv
+        crawl.running = true
     }
 
-    // La consulta llega con la barra del prefijo puesta: Search.parseQuery la
-    // conserva a propósito, porque "/etc/hosts" es una ruta absoluta y no el
-    // archivo "etc/hosts". Para buscar por nombre sobra, así que se quita UNA
-    // —y solo una— barra del principio: "//" en medio de una ruta no es lo
-    // mismo que el prefijo.
-    function _limpia(q) {
-        const t = (q || "").trim()
-        return t.charAt(0) === "/" ? t.substring(1) : t
-    }
-
-    function search(q) {
-        const limpio = root._limpia(q)
-        if (limpio === root.query)
-            return
-        root.query = limpio
-        if (limpio.length < root.minChars) {
-            // Se limpia YA, sin esperar al rebote: al borrar hasta dejar dos
-            // letras, seguir enseñando los resultados de la consulta anterior
-            // es enseñar algo que ya no se ha pedido.
-            rebote.stop()
-            root._matar()
-            root.results = []
-            root.running = false
-            return
+    // ── Filtrado ─────────────────────────────────────────────────────────────
+    // DOS ETAPAS, y es lo que hace que esto sea instantáneo.
+    //
+    // El puntuador de Spotlight (Search.js) normaliza y parte en palabras cada
+    // candidato, y guarda el resultado en el propio objeto. Construir tres mil
+    // objetos por pulsación para que el puntuador los descarte casi todos sería
+    // el cuello de botella de verdad — el disco no lo era nunca.
+    //
+    // Así que primero se criba con indexOf sobre la cadena cruda: sin reservar
+    // memoria, sin normalizar, sin partir nada. Solo los supervivientes —
+    // decenas — llegan a construirse como objetos y a puntuarse.
+    //
+    // La criba es deliberadamente TONTA y generosa: no decide el orden, solo
+    // decide quién no tiene ninguna posibilidad. Ordenar es cosa del puntuador.
+    function filtrar(q, tope) {
+        const consulta = String(q || "").trim().toLowerCase()
+        if (consulta.length < root.minChars)
+            return []
+        // Una consulta de RUTA ("dotfiles/script") se criba contra la ruta
+        // entera; una de nombre, solo contra el último tramo. Sin esta
+        // distinción, buscar "sh" traería cualquier archivo que tuviera un
+        // "sh" en cualquier carpeta del camino.
+        const porRuta = consulta.indexOf("/") !== -1
+        const limite = tope && tope > 0 ? tope : root.cap
+        const out = []
+        const lista = root.index
+        for (let i = 0; i < lista.length; i++) {
+            const ruta = lista[i]
+            const heno = porRuta ? ruta.toLowerCase()
+                                 : ruta.slice(ruta.lastIndexOf("/") + 1).toLowerCase()
+            if (heno.indexOf(consulta) !== -1) {
+                out.push(ruta)
+                if (out.length >= limite)
+                    break
+            }
         }
-        rebote.restart()
+        return out
     }
 
-    // Al cerrar el buscador: soltar el proceso y la lista. Un 'find' sobre el
-    // $HOME que sigue corriendo después de cerrar es disco gastado para nadie.
     function clear() {
-        rebote.stop()
-        root._matar()
-        root.query = ""
-        root._acc = []
-        root.results = []
-        root.running = false
+        // El índice NO se tira al cerrar Spotlight: es lo único que hay que
+        // conservar para que la siguiente apertura sea instantánea, y son
+        // 364 KB. Lo que se suelta es el recorrido si estuviera a medias.
+        if (root.building) {
+            crawl.running = false
+            root._acc = []
+            root.building = false
+        }
     }
 }

@@ -111,7 +111,7 @@ Item {
             }
             Text {
                 anchors.verticalCenter: parent.verticalCenter
-                text: GreeterState.currentSession ? GreeterState.currentSession.name : I18n.tr("Sesión", "Session")
+                text: GreeterState.currentSession ? GreeterState.currentSession.name : I18n.tr("Session")
                 color: trigger.lit ? Theme.fg : Theme.fgDim
                 font.family: Theme.fontFamily
                 font.pixelSize: Theme.sp(12)

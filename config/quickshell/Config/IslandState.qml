@@ -216,6 +216,23 @@ Singleton {
     // abierto para siempre) o se va siempre (y entonces no puedes abrirla).
     property string destinationSource: ""
 
+    // ── ¿Es modal? ───────────────────────────────────────────────────────────
+    // Una hoja que has abierto TÚ se cierra al pulsar fuera, como cualquier
+    // otro panel del shell. Y SOLO esa, que es la mitad de la regla:
+    //
+    //   · Un vistazo asomado por el ratón ("hover") se va al apartarlo, así que
+    //     para cerrarlo pulsando fuera tendrías que haber salido antes — cerrar
+    //     no es lo que hace falta ahí.
+    //   · Uno que se asomó SOLO ("auto", cambió la canción) no puede volverse
+    //     modal jamás: la isla se quedaría con el siguiente clic de la pantalla
+    //     porque ha cambiado de canción mientras escribías. Ese sí sería un
+    //     fallo grave, y es el motivo de que esto mire el origen y no solo si
+    //     está expandida.
+    //
+    // Pulsar sobre un vistazo lo FIJA (pinDestination pone el origen en ""), y
+    // desde ese momento sí es modal: has dicho que lo quieres.
+    readonly property bool modal: root.expanded && root.destinationSource === ""
+
     // Lo que dura un vistazo que se asomó solo. Cuatro segundos y medio es lo
     // que se tarda en leer título y artista sin prisa; menos convierte el aviso
     // de canción nueva en un parpadeo.
@@ -304,7 +321,14 @@ Singleton {
                || root.destinationMonitor === screenName
     }
 
-    // Cierra todo y vuelve al reposo. Es lo que hacen ESC y el clic fuera.
+    // Cierra todo y vuelve al reposo. Es lo que hacen el clic FUERA de una hoja
+    // abierta a mano (ver 'modal') y el botón derecho sobre la propia isla.
+    //
+    // Decía "ESC y el clic fuera" y no hacía ninguna de las dos: el clic fuera
+    // no existía —la máscara de la ventana ni siquiera dejaba que llegara— y
+    // ESC sigue sin existir, porque la ventana de la isla no pide teclado en
+    // ningún momento (IslandWindow: keyboardFocus None). Si algún día se quiere
+    // ESC, hay que pedirlo mientras sea modal, como hace Components/Popout.
     function collapse() {
         root.clearTransient()
         root.closeDestination()

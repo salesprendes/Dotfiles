@@ -15,7 +15,10 @@ import qs.Services
 ColumnLayout {
     id: root
     spacing: Theme.space12
-    implicitWidth: Theme.dp(340)
+    // Sin implicitWidth: un ColumnLayout se lo reescribe él solo en cada
+    // pasada de medida, así que el que había puesto aquí a mano no valía
+    // nada. El ancho de una hoja lo pone la ranura de Island.qml, que es
+    // quien sabe cuánto mide la hoja.
 
     readonly property var player: Media.active
     readonly property bool playing: Media.playing

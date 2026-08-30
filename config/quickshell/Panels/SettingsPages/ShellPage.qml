@@ -117,10 +117,14 @@ SettingsPage {
         title: I18n.tr("Screen lock")
         glyph: "󰌾"
 
+        // El selector solo aparece si HAY algo que elegir. Sin hyprlock
+        // instalado sería un segmentado de una sola opción, que es un control
+        // que no controla nada.
         SegRow {
             glyph: "󰍁"
             skey: "lockBackend"; aliases: ["hyprlock", "bloqueo", "lock", "pantalla de bloqueo"]
             label: I18n.tr("Lock screen")
+            shown: Lock.hyprlockAvailable
             options: [ { text: I18n.tr("This shell"), value: "shell" },
                        { text: "hyprlock", value: "hyprlock" } ]
             current: Settings.lockBackend
@@ -130,27 +134,24 @@ SettingsPage {
             skey: "lockBackend"
             text: I18n.tr("The shell's own lock screen uses your theme, palette and language, and authenticates with PAM.")
         }
+        Hint {
+            skey: "lockBackend"
+            shown: !Lock.hyprlockAvailable
+            text: I18n.tr("hyprlock is not installed, so this shell locks the screen.")
+        }
         // Aviso, no adorno: si el archivo de PAM no está, el bloqueo propio no
-        // podría autenticar, así que el shell delega en hyprlock aunque aquí
-        // ponga "este shell". Más vale decirlo aquí que descubrirlo bloqueando.
+        // puede autenticar. Lo que pasa entonces depende de si hay hyprlock, y
+        // decir lo que no es sería peor que callarse: sin él no hay pantalla
+        // ninguna, solo una sesión que logind marca como bloqueada.
         Hint {
             skey: "lockBackend"
             shown: Settings.lockBackend === "shell" && !Lock.pamReady
             color: Theme.red
-            text: I18n.tr("No PAM service found (%1): hyprlock will be used instead.")
-                    .arg(Lock.pamService)
-        }
-        TextField {
-            skey: "lockPamService"
-            Layout.fillWidth: true
-            label: I18n.tr("PAM service")
-            placeholder: I18n.tr("Automatic (%1)").arg(Lock.pamService)
-            value: Settings.lockPamService
-            onEdited: (t) => Settings.lockPamService = t
-        }
-        Hint {
-            skey: "lockPamService"
-            text: I18n.tr("Name of a file in /etc/pam.d. Empty picks hyprlock if present, otherwise login.")
+            text: Lock.hyprlockAvailable
+                  ? I18n.tr("No PAM service found (%1): hyprlock will be used instead.")
+                      .arg(Lock.pamService)
+                  : I18n.tr("No PAM service found (%1) and hyprlock is not installed: the session would be locked with no screen to unlock it.")
+                      .arg(Lock.pamService)
         }
 
         SwitchRow { glyph: "󰅶"; skey: "keepAwakeOnMedia"; aliases: ["cafeina", "caffeine", "insomnio", "no dormir", "idle"]

@@ -33,6 +33,7 @@ import qs.Bar
 import qs.Config
 import qs.Modules.Carousel
 import qs.Modules.Island
+import qs.Modules.Dock
 import qs.Modules.Island.sources
 import qs.Modules.Spotlight
 import qs.Modules.IA.ui
@@ -166,6 +167,8 @@ ShellRoot {
                 Globals.closeAll()
         }
         function close(): void { Globals.closeAll() }
+        // TEMPORAL — solo para probar. Se quita.
+        function isla(name: string): void { IslandState.toggleDestination(name) }
         function list(): string {
             const out = []
             for (const p of Globals.panels)
@@ -257,6 +260,12 @@ ShellRoot {
         Quickshell.execDetached(["hyprctl", "eval",
             'hl.layer_rule({ name = "qs-noanim-island", match = '
             + '{ namespace = "qs-island" }, no_anim = true })'])
+        // Y el dock, por lo mismo: su entrada y su salida las anima QML
+        // deslizando la pastilla por debajo del borde. Sin esta regla, el
+        // compositor le superpone su propio fundido al mapear la capa.
+        Quickshell.execDetached(["hyprctl", "eval",
+            'hl.layer_rule({ name = "qs-noanim-dock", match = '
+            + '{ namespace = "qs-dock" }, no_anim = true })'])
     }
 
     // Bloq Núm sobrevive a las recargas de Hyprland. Un `hyprctl reload`
@@ -406,6 +415,21 @@ ShellRoot {
             LazyLoader {
                 active: Settings.islandEnabled
                 IslandWindow { modelData: scr.modelData }
+            }
+
+            // El dock. Misma regla que la isla y por el mismo motivo: con el
+            // dock apagado esto NO SE CONSTRUYE, en vez de construirse y
+            // esconderse. Es una superficie de layer-shell del ancho de la
+            // pantalla por 420 dp de alto, por monitor, con su máscara, su fila
+            // de iconos y sus bindings a los toplevels de Wayland dentro. Quien
+            // no use el dock no debe pagar nada por él.
+            //
+            // El filtro por monitor va AQUÍ y no dentro de la ventana: puesto
+            // dentro, un monitor excluido construiría la superficie entera para
+            // luego no enseñarla.
+            LazyLoader {
+                active: Settings.dockEnabled && Dock.enSuMonitor(scr.modelData.name)
+                DockWindow { modelData: scr.modelData }
             }
 
             // Paneles emergentes (Globals controla su visibilidad desde los

@@ -22,6 +22,7 @@ Singleton {
         "terminal":  "../Panels/SettingsPages/TerminalPage.qml",
         "wallpaper": "../Panels/SettingsPages/WallpaperPage.qml",
         "bar":       "../Panels/SettingsPages/BarPage.qml",
+        "dock":      "../Panels/SettingsPages/DockPage.qml",
         "clock":     "../Panels/SettingsPages/ShellPage.qml",
         "displays":  "../Panels/SettingsPages/DisplaysPage.qml",
         "network":   "../Panels/SettingsPages/NetworkPage.qml",
@@ -35,15 +36,47 @@ Singleton {
     property int _buildAt: 0
     property var _collected: []
 
-    // Se dispara sola la primera vez que se abre Ajustes (no al arrancar el
-    // shell: si el usuario nunca abre Ajustes, no vale la pena montar once
-    // páginas por nada).
+    // Se dispara sola la primera vez que se abre Ajustes O SPOTLIGHT. No al
+    // arrancar el shell: si no usas ninguna de las dos cosas, no vale la pena
+    // montar once páginas por nada.
+    //
+    // Lo de Spotlight no es un extra, es lo que hacía falta para que los
+    // ajustes salgan al buscar. Este índice solo se construía al abrir la
+    // VENTANA de Ajustes, así que hasta que no la abrías una vez por sesión,
+    // Spotlight no encontraba un solo ajuste — ni escribiendo el prefijo. Se
+    // veía como "los ajustes no están en el buscador", cuando lo que pasaba es
+    // que aún no existían.
+    //
+    // La construcción es asíncrona y de una página cada vez, así que abrir
+    // Spotlight no se frena por esto; y cuando termina, 'built' cambia y la
+    // lista de candidatos se rehace sola (Sources.gather lo lee).
     Connections {
         target: Globals
         function onSettingsOpenChanged() {
             if (Globals.settingsOpen)
                 root.beginBuild()
         }
+        function onSpotlightOpenChanged() {
+            if (Globals.spotlightOpen)
+                root.beginBuild()
+        }
+    }
+
+    // ── LA TRAMPA DEL SINGLETON PEREZOSO ─────────────────────────────────────
+    // El Connections de arriba NO PUEDE dispararse la primera vez, y por eso
+    // esto existe: QML no crea un singleton hasta que alguien lo toca, así que
+    // este objeto —y con él su Connections— no existe cuando Spotlight se abre.
+    // Quien lo toca es el propio Spotlight, al leer 'built' para montar sus
+    // candidatos... o sea DESPUÉS de que la señal haya pasado.
+    //
+    // El resultado era que los ajustes no salían en el buscador jamás, salvo
+    // que hubieras abierto la ventana de Ajustes antes en esa sesión.
+    //
+    // Es la misma trampa que shell.qml documenta para Battery, AppTemplates y
+    // Lock, y se resuelve igual: al nacer, mirar si el motivo ya se ha dado.
+    Component.onCompleted: {
+        if (Globals.spotlightOpen || Globals.settingsOpen)
+            root.beginBuild()
     }
 
     function beginBuild() {
@@ -101,6 +134,27 @@ Singleton {
             root._walk(item, cat, found)
             root._collected = root._collected.concat(found)
             source = ""
+            root._buildAt++
+            root._buildNext()
+        }
+
+        // Si una página NO carga hay que pasar a la siguiente igualmente.
+        //
+        // Sin esto, el recorrido se para en seco en la que falló: 'onLoaded' no
+        // se emite, '_buildAt' no avanza, '_building' se queda en true para
+        // siempre y 'built' nunca llega a ser cierto. El efecto visible es que
+        // NINGÚN ajuste aparece en el buscador — ni los de las nueve páginas que
+        // sí cargaban— y no hay ningún error que lo explique, porque el aviso
+        // del módulo que falta se pierde entre los del arranque.
+        //
+        // Se salta la página rota y se sigue: nueve páginas indexadas valen
+        // muchísimo más que ninguna.
+        onStatusChanged: {
+            if (scanLoader.status !== Loader.Error)
+                return
+            console.warn("SettingsSearchIndex: no se pudo montar la página '"
+                         + scanLoader.cat + "', se indexa sin ella")
+            scanLoader.source = ""
             root._buildAt++
             root._buildNext()
         }

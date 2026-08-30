@@ -17,7 +17,7 @@ Row {
         NumberAnimation { target: powerRow; property: "enterY"; from: Theme.dp(16); to: 0; duration: 560; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel }
     }
 
-    PowerButton { glyph: "󰜉"; label: I18n.tr("Reiniciar", "Restart"); cmd: ["systemctl", "reboot"];   spin: true }
-    PowerButton { glyph: "󰤄"; label: I18n.tr("Suspender", "Suspend"); cmd: ["systemctl", "suspend"] }
-    PowerButton { glyph: "󰐥"; label: I18n.tr("Apagar", "Shut down");   cmd: ["systemctl", "poweroff"] }
+    PowerButton { glyph: "󰜉"; label: I18n.tr("Restart"); cmd: ["systemctl", "reboot"];   spin: true }
+    PowerButton { glyph: "󰤄"; label: I18n.tr("Suspend"); cmd: ["systemctl", "suspend"] }
+    PowerButton { glyph: "󰐥"; label: I18n.tr("Shut down");   cmd: ["systemctl", "poweroff"] }
 }

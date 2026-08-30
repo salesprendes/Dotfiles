@@ -26,6 +26,11 @@ PanelWindow {
 
     readonly property bool atBottom: Settings.barPosition === "bottom"
 
+    // ¿Está esta ventana haciendo de panel modal? Lo decide la isla que
+    // hospeda; aquí solo se usa para dos cosas físicas que la isla no puede
+    // tocar: cuánto ocupa la ventana y por dónde deja entrar el ratón.
+    readonly property bool modal: island.modal
+
     // Se cuelga del mismo borde que la barra y ocupa todo el ancho: centrar la
     // isla es entonces aritmética, no anclajes.
     anchors {
@@ -38,16 +43,45 @@ PanelWindow {
     // Alto del lienzo: lo que ocupa la hoja más grande, más el margen del borde
     // y un respiro. No reserva espacio (exclusionMode Ignore), así que sobrarle
     // no cuesta nada más que memoria de superficie.
-    implicitHeight: Theme.barTopMargin + Theme.dp(560)
+    readonly property int alturaLienzo: Theme.barTopMargin + Theme.dp(560)
+
+    // ── Por qué el lienzo crece al abrir una hoja a mano ─────────────────────
+    // Para que un clic FUERA de la isla la cierre, ese clic tiene que llegar a
+    // esta ventana; y a una ventana solo le llega lo que cae dentro de ella. Con
+    // el lienzo de siempre —una franja de 560 dp pegada a la barra— pulsar en la
+    // mitad de abajo de la pantalla no cerraba nada, porque el clic ni siquiera
+    // pasaba por aquí. Así que mientras hay hoja abierta, el lienzo es la
+    // pantalla entera.
+    //
+    // Esto NO contradice lo de arriba. Lo que da tirones es redimensionar la
+    // superficie EN CADA FOTOGRAMA de una animación; esto son dos cambios de
+    // tamaño, uno al abrir y otro al cerrar, y ninguno de los dos mueve la isla
+    // de sitio: la forma sigue anclada a su borde, así que el crecimiento pasa
+    // entero por el lado contrario y no se ve.
+    implicitHeight: (win.modal && win.screen)
+                    ? Math.max(win.alturaLienzo, win.screen.height)
+                    : win.alturaLienzo
     color: "transparent"
     exclusionMode: ExclusionMode.Ignore
 
     WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.namespace: "qs-island"
-    // Sin teclado: la isla se maneja con el ratón y por IPC. Pedir foco
-    // exclusivo aquí se lo quitaría a la ventana en la que estás escribiendo,
-    // que es exactamente lo que no debe hacer algo que vive siempre en pantalla.
-    WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+    // Teclado SOLO mientras hay una hoja abierta a mano, y por eso mismo:
+    // pedirlo en reposo se lo quitaría a la ventana en la que estás escribiendo,
+    // que es exactamente lo que no puede hacer algo que vive siempre en
+    // pantalla. Con una hoja tuya delante ya no es "algo que vive ahí", es un
+    // panel — y entonces ESC tiene que cerrarlo como cierra cualquier otro.
+    //
+    // Exclusive y no OnDemand por el mismo motivo que Components/Popout: a una
+    // capa OnDemand Hyprland solo le da el teclado si haces CLIC en ella, así
+    // que ESC no llegaría nunca sin haber pulsado antes.
+    //
+    // Y atado también a 'visible': con un panel abierto la isla se esconde pero
+    // su hoja sigue puesta, así que sin esta condición una ventana invisible
+    // estaría peleándole el teclado al panel que sí se ve.
+    WlrLayershell.keyboardFocus: (win.modal && win.visible)
+                                 ? WlrKeyboardFocus.Exclusive
+                                 : WlrKeyboardFocus.None
 
     // La isla está en TODAS las pantallas, como la barra: en reposo enseña la
     // hora y con una notificación la enseña mires donde mires. Lo que no se
@@ -83,12 +117,26 @@ PanelWindow {
         topRightRadius: Math.round(island.shapeItem.topRightRadius)
         bottomLeftRadius: Math.round(island.shapeItem.bottomLeftRadius)
         bottomRightRadius: Math.round(island.shapeItem.bottomRightRadius)
+
+        // …salvo con una hoja abierta a mano, que entonces la ventana entera
+        // recibe ratón. Es la otra mitad del clic de fuera: sin abrir la
+        // máscara, el clic se lo queda la aplicación de debajo y aquí no llega
+        // nunca — y con ella abierta, el fondo de Island.qml lo recoge y cierra.
+        //
+        // Ancho y alto a cero en vez de quitar la región: una región vacía no
+        // une nada, y así el caso normal sigue siendo exactamente la forma.
+        Region {
+            width: win.modal ? win.width : 0
+            height: win.modal ? win.height : 0
+        }
     }
 
     Island {
         id: island
         anchors.fill: parent
         atBottom: win.atBottom
+        // El lienzo en REPOSO, no el de ahora: ver Island.maxSheetHeight.
+        maxSheetHeight: win.alturaLienzo
         screenName: win.screen ? win.screen.name : ""
         canExpand: IslandState.sheetBelongsTo(island.screenName)
 

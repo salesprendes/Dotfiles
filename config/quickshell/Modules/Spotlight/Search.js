@@ -372,18 +372,31 @@ function rank(items, query, statsFor, now, limit) {
 //   /  archivo       ?  ajustes       @  portapapeles
 //
 // Se devuelve también el texto SIN el prefijo, que es lo que hay que buscar.
+// El "?" de ajustes se retiró: los ajustes salen en el modo general, así que
+// el prefijo solo servía para EXCLUIR todo lo demás — y nadie abre un buscador
+// para ver únicamente ajustes. Los otros cinco sí ganan algo acotando (una
+// cuenta, un emoji, un comando, el portapapeles, un archivo).
 var PREFIXES = { "=": "calc", ">": "command", ":": "emoji",
-                 "/": "file", "?": "setting", "@": "clipboard" }
+                 "/": "file", "@": "clipboard" }
 
 function parseQuery(raw) {
     var text = String(raw === undefined || raw === null ? "" : raw)
     var head = text.charAt(0)
     var mode = PREFIXES[head]
     if (mode) {
-        // "/" es prefijo de modo Y principio de ruta absoluta: "/etc/hosts" es
-        // una ruta, no el archivo "etc/hosts". Se conserva la barra.
-        var rest = head === "/" ? text : text.substring(1)
-        return { mode: mode, text: rest.trim(), prefixed: true }
+        // TODOS los prefijos se quitan, "/" incluido.
+        //
+        // El "/" se conservaba con la idea de que "/etc/hosts" se leyera como
+        // ruta absoluta y no como el archivo "etc/hosts". Nunca llegó a
+        // funcionar —Services/FileSearch le quita la barra igualmente en
+        // _limpia(), y fd/find solo recorren $HOME, así que a /etc no se
+        // llegaba de ninguna manera— y a cambio rompía lo que sí importa:
+        //
+        // esta cadena es la que Spotlight le pasa a rank(), y rank descarta
+        // todo lo que puntúe 0. Buscar "/script.sh" comparaba "/script.sh"
+        // contra el nombre "script.sh", puntuaba 0, y el archivo que fd
+        // acababa de encontrar se tiraba a la basura sin decir nada.
+        return { mode: mode, text: text.substring(1).trim(), prefixed: true }
     }
     return { mode: "", text: text.trim(), prefixed: false }
 }

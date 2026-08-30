@@ -85,11 +85,28 @@ Singleton {
     readonly property bool emojiOpen:          openPanel === "emoji"
     // Spotlight es panel como los demás (uno solo abierto a la vez), pero con
     // su propio conmutador legible porque se usa desde muchos sitios.
-    property bool spotlightOpen: openPanel === "spotlight"
-    onSpotlightOpenChanged: {
-        if (spotlightOpen && openPanel !== "spotlight") g.open("spotlight")
-        else if (!spotlightOpen && openPanel === "spotlight") g.openPanel = ""
-    }
+    //
+    // ── POR QUÉ ES readonly, COMO SUS NUEVE HERMANAS ────────────────────────
+    // Era la única declarada SIN readonly, con un onSpotlightOpenChanged que
+    // la reescribía a openPanel en los dos sentidos. La idea era dejar que
+    // quien quisiera cerrar Spotlight escribiera 'spotlightOpen = false' en
+    // vez de llamar a closeAll(), y funcionaba... exactamente una vez.
+    //
+    // En QML, ASIGNAR A UNA PROPIEDAD CON BINDING DESTRUYE EL BINDING. Para
+    // siempre, sin aviso. Así que en cuanto Spotlight se cerraba a sí mismo:
+    //
+    //   · spotlightOpen se quedaba en false fijo, sin volver a mirar openPanel
+    //   · shell.qml, que construye el panel con 'active: spotlightOpen', no lo
+    //     volvía a construir NUNCA
+    //   · y openPanel se quedaba clavado en "spotlight", porque el único que
+    //     lo limpiaba era el propio panel que ya no existía — con el dock y la
+    //     isla escondidos el resto de la sesión, que se esconden con cualquier
+    //     panel abierto
+    //
+    // No daba ningún error: simplemente dejaba de funcionar. Ahora es readonly
+    // como las demás, y Spotlight se cierra con closeAll() como todos los
+    // otros paneles del shell.
+    readonly property bool spotlightOpen: openPanel === "spotlight"
 
     // Nombre del monitor con foco, o "" sin Hyprland. Se expone porque hay más
     // de un sitio que necesita saber "¿en cuál de las pantallas está mirando?"

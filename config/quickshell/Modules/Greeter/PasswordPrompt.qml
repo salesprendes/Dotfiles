@@ -331,7 +331,7 @@ Item {
                 // la sesión.
                 Text {
                     anchors.verticalCenter: parent.verticalCenter
-                    text: I18n.tr("Cargando", "Loading")
+                    text: I18n.tr("Loading")
                     color: Theme.fgMuted
                     font.family: Theme.fontFamily
                     font.pixelSize: Theme.sp(12)

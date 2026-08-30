@@ -436,6 +436,53 @@ Singleton {
     property bool   islandEnabled: true
     property bool   islandShowWeather: true
 
+    // ── Dock (Modules/Dock) ──────────────────────────────────────────────────
+    // Dos formas: "pill" es la barra de tareas de tableta Android —pastilla
+    // flotante, centrada, del ancho de su contenido— y "hotseat" es la del
+    // Pixel Launcher —barra ancha pegada al borde—. Cambian SOLO en geometría:
+    // la fila, el botón, la vista previa y el menú son los mismos.
+    property bool   dockEnabled: true
+    property string dockStyle: "pill"            // pill | hotseat
+    // Ids de .desktop, en el orden elegido arrastrando. Lo sanea DockCatalog.
+    property var    dockPinned: []
+    property bool   dockShowRunning: true
+    // "smart" enseña el dock solo con el escritorio vacío (el del monitor,
+    // no el de la sesión); "always" lo esconde salvo al rozar el borde;
+    // "never" lo deja fijo.
+    property string dockAutoHide: "smart"        // smart | always | never
+    // Zona exclusiva. Solo tiene efecto con dockAutoHide "never": reservar un
+    // hueco para algo que está escondido dejaría una franja vacía permanente.
+    property bool   dockReserveSpace: false
+    // Nombres de conector ("DP-1"). Vacío = todos los monitores.
+    property var    dockOnlyMonitors: []
+    // 32 y no 48: es la proporción de nandoroid, donde el dock tiene más aire
+    // que icono. Con 48 la pastilla queda apretada y parece una barra de
+    // herramientas en vez de un dock.
+    property int    dockIconSize: 32
+    property int    dockSpacing: 8
+    property int    dockPadding: 8
+    property real   dockOpacity: 0.78
+    // -1 = lo decide el estilo (pastilla entera en "pill", shapeXl arriba en
+    // "hotseat"). UNA clave para las dos formas y no dos, para que cambiar de
+    // estilo no te arrastre un radio pensado para el otro.
+    property int    dockRadius: -1
+    property real   dockMagnify: 1.12            // 1.0 = sin lupa
+    // "auto" es lo que hace nandoroid: rayita cuando hay UNA ventana y puntos
+    // cuando hay varias. Es la que más información da por píxel — el resto
+    // están para quien prefiera una sola forma siempre.
+    property string dockRunningIndicator: "auto" // auto | line | dots | count | none
+    // ── El aspecto de nandoroid ──────────────────────────────────────────────
+    // "mono" es su seña: cada icono dentro de un círculo de acento y teñido del
+    // mismo color. Queda coherente y muy Material, y el precio es real —
+    // pierdes el color de marca de cada app, así que con doce fijadas hay que
+    // distinguirlas por la silueta. "color" deja los iconos como son.
+    property string dockIconStyle: "mono"        // mono | color
+    property bool   dockShadow: true
+    property bool   dockShowLauncher: true
+    property bool   dockShowSpotlight: true
+    property bool   dockNotifBadges: true
+    property bool   dockPreviews: true
+
     // Emojis usados últimamente, los más recientes primero. Se guardan porque
     // la gracia de un selector de emojis es no tener que buscar dos veces el
     // mismo: casi todo el uso real son las mismas veinte caras.
@@ -619,6 +666,14 @@ Singleton {
         "lockShowSessionButtons": true, "lockBlur": 0.75, "lockDim": 0.45,
         "keepAwakeOnMedia": true,
         "islandEnabled": true, "islandShowWeather": true,
+        "dockEnabled": true, "dockStyle": "pill", "dockPinned": [],
+        "dockShowRunning": true, "dockAutoHide": "smart", "dockReserveSpace": false,
+        "dockOnlyMonitors": [], "dockIconSize": 32, "dockSpacing": 8,
+        "dockPadding": 8, "dockOpacity": 0.78, "dockRadius": -1,
+        "dockMagnify": 1.12, "dockRunningIndicator": "auto",
+        "dockNotifBadges": true, "dockPreviews": true,
+        "dockIconStyle": "mono", "dockShadow": true,
+        "dockShowLauncher": true, "dockShowSpotlight": true,
         "notifPosition": "tr", "osdPosition": "bottom",
         "emojiRecent": [],
         "caffeine": false,
@@ -659,7 +714,9 @@ Singleton {
         "osdTimeout": [0.5, 6.0],
         "wallpaperTransitionDuration": [0.1, 5.0],
         "panelBackdropDim": [0.0, 0.7], "wallpaperAutoMin": [0, 1440],
-        "lockBlur": [0.0, 1.0], "lockDim": [0.0, 0.9]
+        "lockBlur": [0.0, 1.0], "lockDim": [0.0, 0.9],
+        "dockIconSize": [24, 96], "dockSpacing": [0, 32], "dockPadding": [0, 32],
+        "dockOpacity": [0.0, 1.0], "dockRadius": [-1, 40], "dockMagnify": [1.0, 1.6]
     })
     readonly property var _enums: ({
         "language": ["en", "es", "ca"],
@@ -671,12 +728,17 @@ Singleton {
         "wallpaperFillMode": ["crop", "fit", "stretch"],
         "fontHintstyle": ["hintnone", "hintslight", "hintmedium", "hintfull"],
         "fontRgba": ["none", "rgb", "bgr", "vrgb", "vbgr"],
-        "fontLcdfilter": ["none", "lcddefault", "lcdlight", "lcdlegacy"]
+        "fontLcdfilter": ["none", "lcddefault", "lcdlight", "lcdlegacy"],
+        "dockStyle": ["pill", "hotseat"],
+        "dockAutoHide": ["smart", "always", "never"],
+        "dockRunningIndicator": ["auto", "line", "dots", "count", "none"],
+        "dockIconStyle": ["mono", "color"]
     })
     // Claves que deben ser enteros (se redondean tras recortar).
     readonly property var _intKeys: ["animationSpeed", "customAnimationDuration",
         "weatherRefreshMin", "weatherForecastDays", "notifTimeout", "notifMaxVisible",
-        "wallpaperAutoMin"]
+        "wallpaperAutoMin",
+        "dockIconSize", "dockSpacing", "dockPadding", "dockRadius"]
 
     // Devuelve un valor válido para 'k', o 'undefined' si hay que descartarlo
     // (se conserva el valor por defecto). Infiere el tipo esperado del default.
@@ -702,6 +764,17 @@ Singleton {
         if (k === "barLayout") {
             if (!val || typeof val !== "object" || Array.isArray(val)) return undefined
             return BarCatalog.sanitize(val)
+        }
+        // Las fijadas del dock, por el mismo motivo y con el mismo reparto:
+        // normaliza claves, quita duplicados y basura, y corta en el tope.
+        if (k === "dockPinned")
+            return Array.isArray(val) ? DockCatalog.sanitize(val) : undefined
+        // Nombres de conector de monitor. No hay forma de validar que existan
+        // —un monitor desenchufado sigue siendo una elección válida—, así que
+        // solo se comprueba que sean cadenas con algo dentro.
+        if (k === "dockOnlyMonitors") {
+            if (!Array.isArray(val)) return undefined
+            return val.filter(x => typeof x === "string" && x !== "")
         }
         // Objetos JSON anidados (el saneo fino lo hace su consumidor).
         if (k === "screenCapture" || k === "dynamicPalette" || k === "weatherCache")
@@ -813,6 +886,72 @@ Singleton {
         return from
     }
 
+    // ── Siembra del dock ─────────────────────────────────────────────────────
+    // El dock viene encendido, y con autoocultar inteligente se ve JUSTO
+    // cuando no hay ninguna ventana abierta. Con 'dockPinned' vacío, eso
+    // significa estrenarlo mirando una pastilla vacía: la primera impresión
+    // del dock sería que está roto.
+    //
+    // Así que la primera vez se siembra. Dos cosas importan:
+    //
+    //   · Se siembra con lo que DE VERDAD esté instalado, comprobado contra
+    //     DesktopEntries. Una lista fija de ids sería un puñado de iconos rotos
+    //     en cualquier máquina que no sea la de quien la escribió.
+    //
+    //   · La marca de "ya sembrado" es que la clave EXISTA en el archivo, no un
+    //     booleano aparte. Quien vacíe la lista a propósito no debe
+    //     encontrársela repoblada en el siguiente arranque.
+    property bool _dockNeedsSeed: true
+
+    readonly property var _dockSeedRoles: [
+        ["firefox", "zen", "librewolf", "chromium", "google-chrome", "brave-browser"],
+        ["org.gnome.Nautilus", "org.kde.dolphin", "thunar", "nemo", "pcmanfm"],
+        ["code", "codium", "org.gnome.TextEditor", "org.kde.kate", "nvim"]
+    ]
+
+    function _dockEntryExists(id) {
+        if (!id || id === "")
+            return false
+        return DesktopEntries.heuristicLookup(id) !== null
+    }
+
+    function _sembrarDock() {
+        if (!_dockNeedsSeed || !_loaded)
+            return
+        // DesktopEntries se puebla de forma asíncrona: sin entradas todavía,
+        // sembrar daría una lista vacía y la marca se gastaría para nada.
+        if ((DesktopEntries.applications?.values ?? []).length === 0)
+            return
+        _dockNeedsSeed = false
+
+        const semilla = []
+        if (_dockEntryExists(terminalApp))
+            semilla.push(terminalApp)
+        for (const rol of _dockSeedRoles)
+            for (const id of rol)
+                if (_dockEntryExists(id)) {
+                    semilla.push(id)
+                    break
+                }
+        dockPinned = DockCatalog.sanitize(semilla)
+        save()
+    }
+
+    // DesktopEntries se puebla en ráfagas al arrancar. Sin rebote, la siembra
+    // se dispararía con la PRIMERA entrada que llegue y se gastaría su única
+    // oportunidad sobre una lista a medio hacer: el navegador que aún no había
+    // aparecido no se fijaría nunca. Es el mismo rebote que ya usa
+    // Services/AppCatalog.qml sobre esta misma señal, y por lo mismo.
+    readonly property Timer _dockSeedDebounce: Timer {
+        interval: 400
+        onTriggered: s._sembrarDock()
+    }
+
+    readonly property Connections _dockSeedWatch: Connections {
+        target: DesktopEntries
+        function onApplicationsChanged() { s._dockSeedDebounce.restart() }
+    }
+
     function load() {
         const t = file.text()
         if (t && t.trim() !== "") {
@@ -830,6 +969,11 @@ Singleton {
                     Quickshell.execDetached(["cp", "--", file.path, file.path + ".bak"])
                 }
                 migrate(o)
+                // Si el archivo ya trae 'dockPinned', el usuario ya ha pasado
+                // por aquí y su lista manda — aunque esté vacía. Ver
+                // _sembrarDock().
+                if (o.dockPinned !== undefined)
+                    _dockNeedsSeed = false
                 for (const k of _keys) {
                     if (o[k] === undefined || o[k] === null) continue
                     const v = sanitize(k, o[k])
@@ -847,6 +991,9 @@ Singleton {
         // él en su config de Hyprland).
         if (numlockOn)
             applyNumlock()
+        // Si DesktopEntries ya está poblado, siembra en cuanto se estabilice;
+        // si aún no lo está, lo hará el Connections de arriba.
+        _dockSeedDebounce.restart()
         // Reescribe siempre tras cargar. normalizeSavedSettings() corrige en
         // memoria lo que ya no existe (un tema retirado, p.ej.), pero corre con
         // _loaded aún en false, así que su scheduleSave() se descarta y el
