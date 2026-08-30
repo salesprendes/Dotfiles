@@ -27,7 +27,7 @@ Popout {
         emptyBodyHeight: 76
         // Con "No molestar" activo mostramos el símbolo DND en grande, que
         // necesita más alto que el mensaje normal de "Sin notificaciones".
-        emptyExtent: Globals.dnd ? 132 : emptyBodyHeight
+        emptyExtent: Settings.dnd ? 132 : emptyBodyHeight
         maxContentHeight: 500
         asyncClear: true
     }
@@ -138,7 +138,7 @@ Popout {
     // Al alternar "No molestar" con el panel vacío, reajusta el alto para dar
     // sitio (o quitarlo) al símbolo DND grande; el cambio se anima solo.
     Connections {
-        target: Globals
+        target: Settings
         function onDndChanged() { clearState.refreshBodyHeight() }
     }
 
@@ -269,7 +269,7 @@ Popout {
         // Vacío normal: "Sin notificaciones" (solo si NO está "No molestar").
         ThemedText {
             anchors.centerIn: parent
-            visible: (NotifService.count === 0 || clearState.showingClearedState) && clearState.emptyMessageReady && !Globals.dnd
+            visible: (NotifService.count === 0 || clearState.showingClearedState) && clearState.emptyMessageReady && !Settings.dnd
             opacity: visible ? 1 : 0
             horizontalAlignment: Text.AlignHCenter
             text: "󰂜\n" + I18n.tr("No notifications")
@@ -283,7 +283,7 @@ Popout {
         ColumnLayout {
             anchors.centerIn: parent
             width: parent.width
-            visible: (NotifService.count === 0 || clearState.showingClearedState) && clearState.emptyMessageReady && Globals.dnd
+            visible: (NotifService.count === 0 || clearState.showingClearedState) && clearState.emptyMessageReady && Settings.dnd
             opacity: visible ? 1 : 0
             spacing: Theme.space6
 

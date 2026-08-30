@@ -12,10 +12,10 @@ IconPill {
     // Encendida según DÓNDE se hayan abierto los avisos, que depende de la isla.
     active: Settings.islandEnabled ? IslandState.destination === "notifs"
                                    : Globals.notifCenterOpen
-    icon: Globals.dnd ? "󰂛" : "󰂚"
-    iconColor: Globals.dnd ? Theme.fgMuted : Theme.yellow
+    icon: Settings.dnd ? "󰂛" : "󰂚"
+    iconColor: Settings.dnd ? Theme.fgMuted : Theme.yellow
     badgeCount: NotifService.count
     badgeColor: Theme.red
     onClicked: Globals.toggleNotifCenter()
-    onRightClicked: Globals.dnd = !Globals.dnd
+    onRightClicked: Settings.dnd = !Settings.dnd
 }

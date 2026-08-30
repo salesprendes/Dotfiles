@@ -292,7 +292,17 @@ Scope {
                 anchors.bottomMargin: parent.height * 0.18
                 visible: plugin.count > 0
 
-                model: plugin.items
+                // ── El modelo SOLO mientras está abierto ─────────────────
+                // El carrusel vive instanciado toda la sesión (shell.qml), y
+                // un PathView con modelo crea sus delegates aunque la ventana
+                // no se vea. Medido con el carrusel CERRADO y sin abrirlo
+                // nunca: 13 delegates y 12 imágenes decodificadas en cada
+                // arranque, unos 20 MB, para un panel que nadie ha mirado.
+                //
+                // Con el modelo cerrado son 0 y 0. Al abrirlo se puebla, y de
+                // recolocarlo en el fondo actual ya se encarga onCountChanged,
+                // que existía justo para eso ("el modelo se pobló/reordenó").
+                model: plugin.open ? plugin.items : []
                 pathItemCount: Math.max(1, Math.min(plugin.count, Math.ceil(width / Math.max(1, cardW)) + 4))
                 cacheItemCount: plugin._fastNavigation ? 12 : 8
                 interactive: false
@@ -454,7 +464,14 @@ Scope {
                                 anchors.horizontalCenterOffset: -Theme.dp(50)
                                 width: parent.width + (parent.height * Math.abs(view.skewFactor)) + Theme.dp(50)
                                 height: parent.height
-                                source: plugin._imageUrl(card.modelData)
+                                // La MINIATURA, no el fondo original: son los
+                                // mismos píxeles en pantalla —manda sourceSize—
+                                // con 12 veces menos disco que descomprimir
+                                // (486 KB de media contra 40 KB). Wallpaper.thumb
+                                // devuelve el original si aún no hay miniatura,
+                                // así que la primera vez tras escanear no falla
+                                // nada: se ve igual y ya se verá mejor.
+                                source: plugin._imageUrl(Wallpaper.thumb(card.modelData))
                                 sourceSize: Qt.size(Math.ceil(view.cardW * view.dpr), Math.ceil(view.cardH * view.dpr))
                                 fillMode: Image.PreserveAspectCrop
                                 asynchronous: true

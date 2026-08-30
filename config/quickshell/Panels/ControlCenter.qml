@@ -489,12 +489,12 @@ Popout {
             transform: Translate { y: (1 - cc.blockReveal(4)) * Theme.dp(14) }
             ControlTile {
                 Layout.fillWidth: true
-                icon: Globals.dnd ? "󰂛" : "󰂚"
+                icon: Settings.dnd ? "󰂛" : "󰂚"
                 title: I18n.tr("Do not disturb")
-                subtitle: Globals.dnd ? I18n.tr("Enabled") : I18n.tr("Disabled")
-                active: Globals.dnd
+                subtitle: Settings.dnd ? I18n.tr("Enabled") : I18n.tr("Disabled")
+                active: Settings.dnd
                 accent: Theme.accent
-                onToggled: Globals.dnd = !Globals.dnd
+                onToggled: Settings.dnd = !Settings.dnd
             }
             ControlTile {
                 Layout.fillWidth: true

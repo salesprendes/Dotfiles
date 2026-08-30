@@ -92,7 +92,18 @@ PanelWindow {
     // misma capa y cubren la pantalla con su propio captador de clics, así que
     // dejarla encima sería pelearse por el ratón. Misma regla que ya seguían
     // los popups de notificación.
+    //
+    // Y se aparta con una ventana a pantalla completa EN ESTA pantalla. La
+    // regla, con su porqué, está en Globals.hiddenByFullscreen.
+    //
+    // Se le pasa 'modelData' y NO 'screen', que es lo que parece natural y da
+    // un bucle: 'screen' de una ventana de layer-shell se resuelve al MAPEARLA,
+    // o sea que depende de 'visible' — y aquí estamos calculando 'visible'.
+    // Medido: "Binding loop detected for property 'visible'" nada más arrancar.
+    // 'modelData' es la pantalla que le pasa shell.qml desde fuera y no depende
+    // de si la ventana está puesta o no.
     visible: Settings.islandEnabled && Globals.openPanel === "" && !remapGuard.remapping
+             && !Globals.hiddenByFullscreen(win.modelData)
 
     // Superficie de vida larga: se remapea si el monitor cambia de sitio en el
     // layout. Ver Components/ScreenMoveRemap.qml.

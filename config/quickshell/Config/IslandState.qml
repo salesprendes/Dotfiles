@@ -2,6 +2,7 @@ pragma Singleton
 
 import QtQuick
 import Quickshell
+import Quickshell.Hyprland
 import qs.Config
 
 // La máquina de estados de la isla. SOLO estado: aquí no hay ni una ventana ni
@@ -134,7 +135,7 @@ Singleton {
     readonly property int notifPending: Math.max(0, root.notifQueue.length - 1)
 
     function pushNotification(n) {
-        if (!n || Globals.dnd || !Settings.notifPopupsEnabled)
+        if (!n || Settings.dnd || !Settings.notifPopupsEnabled)
             return
         // Tope de cola: si llega una tormenta de avisos (una actualización
         // hablando, un script en bucle) no tiene sentido guardar cincuenta
@@ -280,7 +281,12 @@ Singleton {
         // Entrar a un destino cancela lo transitorio: has decidido tú, y dejar
         // el volumen tapando el calendario que acabas de abrir sería absurdo.
         root.clearTransient()
-        root.destinationMonitor = monitor ? monitor : Globals.focusedMonitorName()
+        // A Hyprland directamente y no a Globals.focusedMonitorName(), que dice
+        // exactamente esto mismo: esta máquina de estados no tiene por qué
+        // conocer al singleton de los paneles. Era la última referencia que
+        // quedaba, y con ella se va el ciclo Globals ⇄ IslandState.
+        root.destinationMonitor = monitor ? monitor
+                                          : (Hyprland.focusedMonitor?.name ?? "")
         root.destinationSource = source ? source : ""
         root.destination = id
         if (root.destinationSource === "auto")
@@ -378,9 +384,9 @@ Singleton {
     // Con "no molestar" encendido no se guardan avisos pendientes: al apagarlo
     // no debe caerte encima la cola de la última hora.
     readonly property var _dndWatch: Connections {
-        target: Globals
+        target: Settings
         function onDndChanged() {
-            if (Globals.dnd)
+            if (Settings.dnd)
                 root.clearNotifications()
         }
     }

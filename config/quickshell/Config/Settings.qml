@@ -421,6 +421,22 @@ Singleton {
     // este estado.
     property bool   caffeine: false
 
+    // "No molestar": silencia los avisos. Vive aquí por los dos motivos de
+    // 'caffeine' y por uno más.
+    //
+    // Sobrevive a los reinicios: si lo dejaste puesto, sigue puesto. Es lo que
+    // se espera de un silencio que has pedido tú —no lo rompe reiniciar el
+    // shell— y lo que hacen los demás escritorios. El precio es que se puede
+    // olvidar encendido, y lo paga el icono de la campana de la barra, que se
+    // ve tachado mientras lo esté (Bar/NotificationsWidget).
+    //
+    // Y el motivo de más: estaba en Globals, donde obligaba a IslandState —que
+    // lo consulta antes de encolar un aviso— a importar el singleton de los
+    // paneles, que no pinta nada en esto. Eso cerraba un ciclo: Globals mandaba
+    // sobre IslandState e IslandState leía de Globals. Aquí no hay ciclo,
+    // porque Settings no conoce a nadie.
+    property bool   dnd: false
+
     // ── La isla ──────────────────────────────────────────────────────────────
     // La píldora del centro de la barra que se transforma según lo que pasa
     // (notificación, volumen, música) y se abre en hoja al pulsarla.
@@ -435,6 +451,13 @@ Singleton {
     property bool   keepAwakeOnMedia: true
     property bool   islandEnabled: true
     property bool   islandShowWeather: true
+    // Apartarse cuando una ventana se queda con la pantalla entera. Afecta a lo
+    // que vive en la capa Overlay y NO es urgente: la isla y, con la isla
+    // apagada, los avisos clásicos que la sustituyen. Se quedan a propósito el
+    // OSD de volumen (lo subes MIENTRAS ves el vídeo: esconderlo es esconder
+    // justo lo que pediste) y la píldora de grabación (que estés grabando no
+    // puede dejar de verse porque haya un vídeo delante).
+    property bool   hideOnFullscreen: true
 
     // ── Dock (Modules/Dock) ──────────────────────────────────────────────────
     // Dos formas: "pill" es la barra de tareas de tableta Android —pastilla
@@ -665,7 +688,7 @@ Singleton {
         "lockShowMedia": true, "lockShowWeather": true, "lockShowStatus": true,
         "lockShowSessionButtons": true, "lockBlur": 0.75, "lockDim": 0.45,
         "keepAwakeOnMedia": true,
-        "islandEnabled": true, "islandShowWeather": true,
+        "islandEnabled": true, "islandShowWeather": true, "hideOnFullscreen": true,
         "dockEnabled": true, "dockStyle": "pill", "dockPinned": [],
         "dockShowRunning": true, "dockAutoHide": "smart", "dockReserveSpace": false,
         "dockOnlyMonitors": [], "dockIconSize": 32, "dockSpacing": 8,
@@ -676,7 +699,7 @@ Singleton {
         "dockShowLauncher": true, "dockShowSpotlight": true,
         "notifPosition": "tr", "osdPosition": "bottom",
         "emojiRecent": [],
-        "caffeine": false,
+        "caffeine": false, "dnd": false,
         "templatesOn": true, "gtkThemingEnabled": true, "hyprlandThemingEnabled": true, "templatesEnabled": ({}),
         "numlockOn": false,
         "clock24h": true, "clockShowSeconds": false, "clockShowDate": true,

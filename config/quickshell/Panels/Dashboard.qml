@@ -130,8 +130,17 @@ Popout {
                 Item { Layout.fillHeight: true }
 
                 // Atajos a otros paneles: mismos destinos que la barra, pero a
-                // mano desde el panel. Abrir cualquiera cierra este (openPanel
-                // es de plaza única), así que no hace falta cerrar a mano.
+                // mano desde el panel. Abrir cualquiera cierra este, así que no
+                // hace falta cerrar a mano.
+                //
+                // Esto último lo daba por hecho y durante un tiempo NO fue
+                // verdad para la campana: con la isla encendida, "notif" no
+                // abre un panel sino una hoja de la isla, y esa rama de
+                // Globals.toggle() se olvidaba de soltar el panel que había.
+                // Quedaban los dos puestos —el dashboard delante y la hoja
+                // detrás, invisible— y aparecía sola al cerrar este. Dos clics:
+                // el reloj de la barra y luego esta campana. Ahora lo garantiza
+                // el invariante de Globals, con su prueba.
                 RailBtn { icon: "\u{f009a}"; onClicked: Globals.toggleNotifCenter() }
                 RailBtn { icon: "󰅌"; onClicked: Globals.toggleClipboard() }
                 RailBtn { icon: "󰍛"; onClicked: Globals.toggleSysMon() }

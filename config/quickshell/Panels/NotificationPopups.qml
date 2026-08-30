@@ -37,7 +37,12 @@ PanelWindow {
     // Se ocultan mientras haya cualquier panel abierto (centro rápido,
     // notificaciones, lanzador, etc.); las notificaciones siguen llegando
     // al centro de notificaciones.
+    // Lo mismo que la isla, y por el mismo motivo: estos avisos solo existen
+    // con la isla APAGADA (ver shell.qml), o sea que son su sustituto exacto y
+    // están en la misma capa Overlay. Arreglar solo uno de los dos dejaría el
+    // fallo intacto para quien tiene la isla quitada.
     visible: popupModel.count > 0 && Settings.notifPopupsEnabled && Globals.openPanel === ""
+             && !Globals.hiddenByFullscreen(popups.modelData)
              && !remapGuard.remapping
     // Superficie de vida larga: se remapea si el monitor cambia de sitio en el
     // layout. Ver Components/ScreenMoveRemap.qml.

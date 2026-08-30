@@ -190,7 +190,7 @@ ShellRoot {
         function ai(): void { Globals.toggleAi() }
         function emoji(): void { Globals.toggleEmoji() }
         function spotlight(): void { Globals.toggleSpotlight() }
-        function dnd(): void { Globals.dnd = !Globals.dnd }
+        function dnd(): void { Settings.dnd = !Settings.dnd }
         function caffeine(): void { Settings.caffeine = !Settings.caffeine }
         function lock(): void { PowerActions.run("lock") }
         function nightlight(): void { NightLight.toggle() }

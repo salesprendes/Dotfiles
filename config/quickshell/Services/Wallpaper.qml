@@ -24,9 +24,26 @@ Singleton {
 
     // Miniaturas persistentes en disco: decodificar 36 fondos a tamaño
     // completo en cada apertura del Dashboard era lo que hacía lenta la
-    // pestaña. Tras el escaneo se generan (una sola vez, ffmpeg, 640px de
-    // ancho) y la rejilla decodifica estos JPEG diminutos en su lugar. La
-    // clave incluye el mtime: si un fondo cambia, su miniatura se regenera.
+    // pestaña. Tras el escaneo se generan una sola vez con ffmpeg y la rejilla
+    // decodifica estos JPEG en su lugar. La clave incluye el mtime: si un fondo
+    // cambia, su miniatura se regenera.
+    //
+    // ── POR QUÉ EL LADO CORTO Y NO EL ANCHO ──────────────────────────────────
+    // Eran 'scale=640:-2', o sea 640 de ANCHO, que en un fondo apaisado deja
+    // 360 de alto. Servía para la rejilla del Dashboard y dejó de servir en
+    // cuanto el carrusel pasó a usarlas: sus tarjetas piden 483 px de ALTO, así
+    // que las 35 miniaturas se quedaban cortas —medido: entre 358 y 400— y cada
+    // tarjeta salía ampliada un 30 %. Ahorrar disco poniéndolo todo borroso no
+    // es un ahorro.
+    //
+    // Ahora es el LADO CORTO el que mide 540, sea apaisado o vertical. Un
+    // 16:9 da 960x540, que cubre la tarjeta con margen. Cuesta el doble de
+    // caché —de 780 KB a menos de 2 MB con 35 fondos— y no se nota en ningún
+    // sitio.
+    //
+    // El ':v2' de la clave está para eso: sin él, las miniaturas viejas y
+    // pequeñas seguirían valiendo (la clave solo miraba ruta y mtime, que no
+    // han cambiado) y este arreglo no se aplicaría a nada de lo que ya hay.
     property var thumbs: ({})    // ruta original → ruta de miniatura lista
 
     // Miniatura si existe; si aún no está generada, el original (la rejilla
@@ -162,10 +179,10 @@ mkdir -p "$T" || exit 1
 keep=""
 for f in "$@"; do
   [ -f "$f" ] || continue
-  key=$(printf "%s:%s" "$f" "$(stat -c %Y "$f")" | md5sum | cut -d" " -f1)
+  key=$(printf "%s:%s:v2" "$f" "$(stat -c %Y "$f")" | md5sum | cut -d" " -f1)
   out="$T/$key.jpg"
   if [ ! -s "$out" ]; then
-    ffmpeg -loglevel error -y -i "$f" -frames:v 1 -vf "scale=640:-2" -q:v 4 "$out" </dev/null || continue
+    ffmpeg -loglevel error -y -i "$f" -frames:v 1 -vf "scale=\'if(gt(a,1),-2,540)\':\'if(gt(a,1),540,-2)\'" -q:v 4 "$out" </dev/null || continue
   fi
   keep="$keep $key.jpg"
   printf "%s\\t%s\\n" "$f" "$out"

@@ -23,7 +23,10 @@ Singleton {
     readonly property var panels: [
         { name: "launcher",  widget: "launcher" },
         { name: "control",   widget: "connectivity" },
-        { name: "notif",     widget: "notifications" },
+        // 'island' es el destino de la isla que SUSTITUYE a este panel cuando
+        // la isla está encendida. Estaba escrito a mano en dos funciones y
+        // olvidado en otras dos, y esa asimetría costó un fallo (ver open()).
+        { name: "notif",     widget: "notifications", island: "notifs" },
         { name: "sysmon",    widget: "sysmon" },
         { name: "clipboard", widget: "clipboard" },
         { name: "dashboard", widget: "clock" },
@@ -71,9 +74,6 @@ Singleton {
         else sysMonAppOpen = true
     }
 
-    // No molestar (silencia popups).
-    property bool dnd: false
-
     readonly property bool controlCenterOpen: openPanel === "control"
     readonly property bool notifCenterOpen:   openPanel === "notif"
     readonly property bool sysMonOpen:         openPanel === "sysmon"
@@ -115,6 +115,28 @@ Singleton {
         return Hyprland.focusedMonitor?.name ?? ""
     }
 
+    // ── Una ventana a pantalla completa manda ────────────────────────────────
+    // La barra y el dock desaparecen solos con un vídeo a pantalla completa
+    // porque viven en la capa Top, y Hyprland dibuja la ventana completa por
+    // encima de esa capa. La isla no: está en Overlay, que es la de arriba del
+    // todo, y ahí sigue puesta encima del vídeo. Estar en Overlay no es un
+    // descuido —lo necesita para ponerse delante de los popouts cuando abres
+    // una hoja— así que la que tiene que apartarse es ella, a mano.
+    //
+    // Por PANTALLA y no en general: con dos monitores, un vídeo en el de la
+    // derecha no tiene por qué borrarte el reloj del de la izquierda. Es la
+    // misma regla que ya sigue el dock para esconderse.
+    //
+    // Sin Hyprland esto es siempre false, y esa es la respuesta correcta: si no
+    // se puede saber si hay algo a pantalla completa, el shell no se esconde. El
+    // fallo de quedarse puesto se ve y se arregla; el de desaparecer sin motivo
+    // parece que el shell se ha caído.
+    function hiddenByFullscreen(screen) {
+        if (!Settings.hideOnFullscreen || !screen)
+            return false
+        return Hyprland.monitorFor(screen)?.activeWorkspace?.hasFullscreen === true
+    }
+
     // Con la isla encendida, las notificaciones viven EN ELLA y el centro
     // clásico no debe salir además: son la misma lista dos veces, y como la
     // isla se esconde mientras hay un panel abierto, abrir el centro la hacía
@@ -130,30 +152,63 @@ Singleton {
     // no aparece NADA — con la isla desaparecida hasta que abras y cierres
     // otra cosa. Es el mismo estado colgado que ya arreglamos en el
     // interruptor de Ajustes, entrando por otra puerta.
-    function _esNotifDeIsla(p) {
-        return p === "notif" && Settings.islandEnabled
+    // ¿Este "panel" es en realidad una hoja de la isla? Devuelve el destino, o
+    // "" si es un panel de verdad. Con la isla apagada nunca lo es: entonces
+    // "notif" es el centro clásico y se comporta como los demás.
+    //
+    // Sale del registro y no de una condición escrita a mano porque escrita a
+    // mano ya se olvidó dos veces: estaba en open() y en toggle(), y NO en
+    // switchOrder ni en switchPanel, que es de donde salió el fallo.
+    function islandDestinationFor(p) {
+        if (!Settings.islandEnabled)
+            return ""
+        for (const e of g.panels)
+            if (e.name === p)
+                return e.island ?? ""
+        return ""
     }
 
+    // ── EL INVARIANTE ────────────────────────────────────────────────────────
+    // Nunca puede haber un panel abierto Y una hoja de isla puesta a la vez:
+    //
+    //     openPanel !== ""   ⇒   IslandState.destination === ""
+    //
+    // No es estética. La isla se esconde entera mientras haya un panel abierto
+    // (IslandWindow.visible), así que las dos cosas a la vez significan una
+    // invisible — y al cerrar el panel aparece sola una hoja que no abrió
+    // nadie, ya modal, quedándose además con el teclado.
+    //
+    // Lo rompía esta misma función. La rama de la isla hacía 'return' ANTES de
+    // tocar openPanel, así que 'open("notif")' con el portapapeles delante
+    // dejaba panel='clipboard' y hoja='notifs'. Se llegaba con dos clics: el
+    // reloj de la barra abre el panel, y ese panel tiene una campana dentro
+    // (Panels/Dashboard.qml). Hay una prueba en tests/logica.qml que ahora
+    // comprueba el invariante detrás de CADA entrada.
     function open(p) {
-        if (g._esNotifDeIsla(p)) {
-            IslandState.openDestination("notifs")
+        const dest = g.islandDestinationFor(p)
+        if (dest !== "") {
+            openPanel = ""
+            IslandState.openDestination(dest)
             return
         }
-        // Abrir un panel CIERRA la hoja de la isla. No es cosmético: la isla se
-        // esconde entera mientras haya un panel abierto, así que sin esto quedan
-        // dos cosas abiertas a la vez y una de ellas no se ve. Al cerrar el
-        // panel reaparecía la hoja que abriste hace diez minutos, sola, como si
-        // el shell tuviera memoria de algo que ya habías dejado atrás.
-        //
-        // Y desde que la hoja pide teclado (ver IslandWindow) es algo más que
-        // raro: la isla invisible volvería a quedarse con las teclas.
+        // Y el sentido contrario, que sí funcionaba: abrir un panel cierra la
+        // hoja. Al cerrar el panel reaparecía si no, sola, como si el shell
+        // tuviera memoria de algo que ya habías dejado atrás.
         IslandState.closeDestination()
         openedOnMonitor = g.focusedMonitorName()
         openPanel = p
     }
     function toggle(p) {
-        if (g._esNotifDeIsla(p)) {
-            IslandState.toggleDestination("notifs")
+        const dest = g.islandDestinationFor(p)
+        if (dest !== "") {
+            // Con OTRO panel delante esto no es alternar: es ir a los avisos.
+            // Alternar aquí podría cerrar una hoja que no estabas viendo —la
+            // tapaba el panel— y el gesto se sentiría como que no hace nada.
+            if (g.openPanel !== "") {
+                g.open(p)
+                return
+            }
+            IslandState.toggleDestination(dest)
             return
         }
         if (openPanel === p) openPanel = ""
@@ -226,11 +281,26 @@ Singleton {
         return out
     }
 
+    // Dónde estás dentro del recorrido. Casi siempre es 'openPanel', pero no
+    // siempre: con la isla encendida, saltar a "notif" no abre un panel sino
+    // una hoja, y deja openPanel vacío. Sin esto el recorrido se acababa ahí
+    // —indexOf("") es -1— y las flechas dejaban de responder hasta que cerrabas
+    // y abrías otra cosa a mano. Un callejón sin salida en mitad de un anillo.
+    readonly property string ringPosition: {
+        if (g.openPanel !== "")
+            return g.openPanel
+        if (IslandState.destination !== "")
+            for (const e of g.panels)
+                if (e.island === IslandState.destination)
+                    return e.name
+        return ""
+    }
+
     function switchPanel(direction) {
         const order = g.switchOrder
         if (order.length < 2)
             return false
-        const at = order.indexOf(g.openPanel)
+        const at = order.indexOf(g.ringPosition)
         if (at === -1)
             return false
         // Circular a propósito: llegar al extremo y no poder seguir obliga a

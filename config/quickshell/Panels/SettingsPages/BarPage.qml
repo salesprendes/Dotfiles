@@ -31,6 +31,14 @@ SettingsPage {
             shown: Settings.islandEnabled
             checked: Settings.islandShowWeather
             onToggled: Settings.islandShowWeather = !Settings.islandShowWeather }
+        // Sin 'shown': esto también manda sobre los avisos clásicos, que son
+        // los que salen con la isla apagada.
+        SwitchRow { glyph: "󰊓"; skey: "hideOnFullscreen"
+            aliases: ["pantalla completa", "fullscreen", "video", "vídeo", "cine", "netflix", "youtube"]
+            label: I18n.tr("Step aside in fullscreen")
+            desc: I18n.tr("Also the notification popups when the island is off. The volume OSD and the recording pill always stay.")
+            checked: Settings.hideOnFullscreen
+            onToggled: Settings.hideOnFullscreen = !Settings.hideOnFullscreen }
         Hint {
             skey: "islandEnabled"
             shown: Settings.islandEnabled

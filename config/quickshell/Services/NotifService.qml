@@ -138,7 +138,7 @@ Singleton {
             root._pruneArrival()
             root._arrival[notif.id] = Date.now()
             // Mostrar popup solo si "No molestar" está desactivado.
-            if (!Globals.dnd)
+            if (!Settings.dnd)
                 root.posted(notif)
         }
     }

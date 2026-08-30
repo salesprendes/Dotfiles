@@ -15,7 +15,7 @@ SettingsPage {
             checked: Settings.notifPopupsEnabled
             onToggled: Settings.notifPopupsEnabled = !Settings.notifPopupsEnabled }
         SwitchRow { glyph: "󰂛"; skey: "@do-not-disturb"; aliases: ["dnd", "silencio", "no molestar", "mute"]; label: I18n.tr("Do not disturb"); desc: I18n.tr("Silences popups (keeps them in the center)")
-            checked: Globals.dnd; onToggled: Globals.dnd = !Globals.dnd }
+            checked: Settings.dnd; onToggled: Settings.dnd = !Settings.dnd }
         // La esquina solo significa algo con la isla APAGADA: con ella
         // encendida, las notificaciones salen en la isla, que vive donde vive
         // la barra y no tiene esquina que elegir.
