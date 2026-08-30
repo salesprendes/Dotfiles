@@ -110,7 +110,7 @@ Singleton {
                 subtitle: I18n.tr("Session"),
                 type: "action",
                 glyph: a.ic,
-                run: function () { Globals.runPowerAction(a.action) }
+                run: function () { PowerActions.run(a.action) }
             })
         }
         return out

@@ -135,7 +135,7 @@ Popout {
                 RailBtn { icon: "\u{f009a}"; onClicked: Globals.toggleNotifCenter() }
                 RailBtn { icon: "󰅌"; onClicked: Globals.toggleClipboard() }
                 RailBtn { icon: "󰍛"; onClicked: Globals.toggleSysMon() }
-                RailBtn { icon: "󰌾"; onClicked: Globals.runPowerAction("lock") }
+                RailBtn { icon: "󰌾"; onClicked: PowerActions.run("lock") }
 
                 Rectangle {
                     Layout.fillWidth: true

@@ -407,7 +407,7 @@ Popout {
                             cursorShape: Qt.PointingHandCursor
                             onEntered: launcher.hoverAction = pbtn.modelData.label
                             onExited: if (launcher.hoverAction === pbtn.modelData.label) launcher.hoverAction = ""
-                            onClicked: Globals.runPowerAction(pbtn.modelData.action)
+                            onClicked: PowerActions.run(pbtn.modelData.action)
                         }
                     }
                 }

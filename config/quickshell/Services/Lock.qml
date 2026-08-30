@@ -222,9 +222,9 @@ Singleton {
 
     // Petición de bloqueo desde el menú de energía. Llega por señal y no por
     // llamada directa porque Config no puede importar qs.Services (ver
-    // Config/Globals.qml).
+    // Config/PowerActions.qml).
     Connections {
-        target: Globals
+        target: PowerActions
         function onLockRequested() { root.lock() }
     }
 }

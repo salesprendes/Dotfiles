@@ -186,7 +186,10 @@ Item {
         // El ancho del contenido. Son dos reglas distintas y tienen que serlo:
         //
         //   · COMPACTO: manda el contenido. La píldora se ciñe a lo que hay
-        //     dentro, así que aquí se pide lo que se necesita y ya.
+        //     dentro — salvo que no quepa, y ahí está el 'min': pasado
+        //     maxCompactWidth la píldora deja de crecer y es el contenido el
+        //     que se recorta. Sin ese tope, una canción de título kilométrico
+        //     estiraría la isla de lado a lado de la pantalla.
         //   · EXPANDIDO: manda la hoja, y el contenido la LLENA. Una hoja
         //     expandida mide siempre lo mismo (maxExpandedWidth) pase lo que
         //     pase, así que un contenido que pidiera menos se quedaba flotando
@@ -194,13 +197,35 @@ Item {
         //     reproductor ocupaba 146 px de los 349 disponibles — el 42 % de su
         //     propia hoja.
         //
-        // Y en expandido se usa el ancho FINAL, no 'parent.width', que es el del
-        // muelle y está en movimiento. Con el del muelle, el contenido se
-        // recalcula entero en cada fotograma mientras la hoja se abre: el texto
-        // baila, y encima el alto objetivo que sale de ahí (targetHeight) se
-        // mueve solo, o sea que el muelle persigue un destino que él mismo está
-        // cambiando. Con el ancho final se mide UNA vez y el recorte de la forma
-        // lo va descubriendo, que es como lo hace Components/Popout.
+        // ── POR QUÉ UNA RAMA USA EL ANCHO FINAL Y LA OTRA EL DEL MUELLE ──────
+        // Salta a la vista y parece un descuido. No lo es, y la asimetría se
+        // intentó cerrar: sale mal por dos motivos distintos, los dos medidos.
+        //
+        // EXPANDIDO usa el ancho FINAL ('maxExpandedWidth'), una constante. Ahí
+        // hacía falta: con 'parent.width' el contenido se recalculaba entero en
+        // cada fotograma mientras la hoja se abre, y como el alto objetivo sale
+        // de ese contenido (targetHeight ← implicitHeight), el muelle perseguía
+        // un destino que él mismo estaba moviendo. Con el ancho final se mide
+        // UNA vez y el recorte de la forma lo va descubriendo, como Popout.
+        //
+        // COMPACTO tiene que seguir con 'parent.width', que es el del muelle:
+        //
+        //   · El muelle es lo que ROMPE EL CICLO. targetWidth sale del
+        //     implicitWidth de esto mismo, así que darle aquí 'targetWidth'
+        //     cierra el lazo de forma síncrona y QML lo canta:
+        //         Island.qml: QML Loader: Binding loop detected for "width"
+        //     dos veces por transición. Con el muelle en medio no pasa, porque
+        //     el muelle avanza por reloj y no por binding.
+        //   · Y el 'min' con implicitWidth es lo que deja al contenido en su
+        //     tamaño NATURAL, que es lo que hace que 'anchors.centerIn' centre
+        //     de verdad. Quitándolo, cada contenido recibe 8 px que no pidió
+        //     (targetWidth = implicitWidth + space16*2, y aquí se restan
+        //     space12*2), y los que no llevan 'Layout.fillWidth' —el reloj, el
+        //     nivel, la grabación— se van 4 px a la izquierda.
+        //
+        // Y aquí no hay nada que arreglar de todos modos: en compacto
+        // targetHeight es la constante 'compactHeight', así que el muelle no
+        // persigue nada suyo. El problema del expandido no existe en esta rama.
         Loader {
             id: slotIn
             anchors.centerIn: parent

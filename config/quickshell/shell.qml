@@ -192,7 +192,7 @@ ShellRoot {
         function spotlight(): void { Globals.toggleSpotlight() }
         function dnd(): void { Globals.dnd = !Globals.dnd }
         function caffeine(): void { Settings.caffeine = !Settings.caffeine }
-        function lock(): void { Globals.runPowerAction("lock") }
+        function lock(): void { PowerActions.run("lock") }
         function nightlight(): void { NightLight.toggle() }
     }
 
@@ -221,7 +221,7 @@ ShellRoot {
                     // al inactivarse, el menú de energía del escritorio y
                     // systemd antes de suspender— tiene que acabar aquí, o
                     // suspender el portátil dejaría la sesión abierta.
-                    Globals.runPowerAction("lock")
+                    PowerActions.run("lock")
                 }
                 // Suspensión/reanudación: por este mismo bus logind emite
                 // Manager.PrepareForSleep(true) antes de dormir y (false) al

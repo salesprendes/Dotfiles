@@ -197,8 +197,8 @@ Singleton {
     // Cierra solo los popups (la ventana de Ajustes es independiente).
     // "Cierra lo que haya" incluye la hoja de la isla: es lo que espera quien
     // llama a `qs ipc call panel close`, y sobre todo lo que hace falta antes de
-    // bloquear la pantalla (ver runPowerAction) — una hoja abierta debajo del
-    // bloqueo no la ve nadie, pero sigue ahí al volver.
+    // bloquear la pantalla (ver Config/PowerActions.run) — una hoja abierta
+    // debajo del bloqueo no la ve nadie, pero sigue ahí al volver.
     //
     // closeDestination y no collapse: un aviso que está a la vista se va cuando
     // le toca, no porque hayas cerrado un panel que no tenía nada que ver.
@@ -252,21 +252,6 @@ Singleton {
         return list.length > 0 ? list[0] : null
     }
 
-    // Acciones de sesión/energía compartidas (lanzador y centro de control).
-    //
-    // El bloqueo ya no sale a hyprlock: lo sirve el propio shell con
-    // WlSessionLock (ver Services/Lock.qml), así que comparte tema, paleta e
-    // idioma con todo lo demás. Y desaparece la pausa de 0,25 s que hacía
-    // falta antes para que el popout soltara el teclado exclusivo a tiempo:
-    // ahora el bloqueo es una capa del mismo proceso y Wayland le da el foco
-    // en exclusiva por protocolo.
-    //
-    // Se pide por SEÑAL y no llamando a Services.Lock: Config es la capa de
-    // abajo y no debe importar qs.Services (Services ya importa qs.Config; el
-    // par cruzado es una dependencia circular entre directorios del módulo).
-    // El servicio se suscribe; shell.qml lo mantiene vivo.
-    signal lockRequested()
-
     // ── Cambiar el interruptor de la isla con algo abierto ───────────────────
     // Sin esto el shell se queda en un estado imposible, y de los que no dan
     // ningún error:
@@ -288,17 +273,5 @@ Singleton {
                 g.openPanel = ""
             IslandState.closeDestination()
         }
-    }
-
-    function runPowerAction(action) {
-        closeAll()
-        if (action === "lock")
-            g.lockRequested()
-        else if (action === "suspend")
-            Quickshell.execDetached(["systemctl", "suspend"])
-        else if (action === "reboot")
-            Quickshell.execDetached(["systemctl", "reboot"])
-        else if (action === "poweroff")
-            Quickshell.execDetached(["systemctl", "poweroff"])
     }
 }

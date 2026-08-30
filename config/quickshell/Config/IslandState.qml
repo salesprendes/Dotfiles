@@ -23,6 +23,39 @@ import qs.Config
 // gracia de una isla, y es lo que se pierde si esto se implementa con un
 // simple "activity = X".
 //
+// ── QUIÉN TOCA QUÉ ─────────────────────────────────────────────────────────
+// Las capas se leen arriba; esto es lo otro que hace falta saber, y es lo que
+// no se deduce de ningún nombre: qué capas MUEVE cada función. La pregunta que
+// contesta —la que aparece cada vez que alguien cierra algo— es "¿aquí
+// closeDestination o collapse?".
+//
+//   función                 transitorio      destino          cola
+//   ─────────────────────────────────────────────────────────────────────────
+//   showLevel               pone "level"     ·                ·
+//   pushNotification        pone "notif"     ·                encola
+//   dismissNotification     quita si era él  ·                saca la primera
+//   clearNotifications      quita si era él  ·                vacía
+//   clearTransient          QUITA            ·                ·
+//   openDestination         LIMPIA           pone             ·
+//   peekMedia               exige vacío      pone ("auto")    ·
+//   pinDestination          ·                fija el asomado  ·
+//   toggleDestination       limpia o nada    pone o quita     ·
+//   closeDestination        ·                QUITA            ·
+//   collapse                QUITA            QUITA            ·
+//
+// Las dos columnas de la izquierda explican la regla entera:
+//
+//   · collapse() es el ÚNICO que se lleva un transitorio que no había pedido
+//     nadie. Por eso lo llaman los gestos que significan "quita lo que hay"
+//     —ESC, el clic fuera, el botón derecho— y NO Globals al abrir un panel:
+//     un aviso que estás leyendo no es daño colateral de haber abierto otra
+//     cosa. Ahí se llama a closeDestination(), que deja el transitorio en paz.
+//   · openDestination() sí limpia lo transitorio, y eso no se contradice con
+//     lo anterior: has entrado TÚ a un sitio, y dejar el volumen tapando el
+//     calendario que acabas de abrir sería absurdo.
+//   · peekMedia() no limpia nada: se niega a asomarse si hay algo puesto. Un
+//     vistazo que se abre solo no puede pisar lo que estabas mirando.
+//
 // ── POR QUÉ UNA COLA DE NOTIFICACIONES ──────────────────────────────────────
 // Los popups de antes eran una pila: cabían cuatro a la vez. La isla es UNA,
 // así que las que llegan mientras hay otra puesta tienen que esperar turno o
@@ -321,14 +354,21 @@ Singleton {
                || root.destinationMonitor === screenName
     }
 
-    // Cierra todo y vuelve al reposo. Es lo que hacen el clic FUERA de una hoja
-    // abierta a mano (ver 'modal') y el botón derecho sobre la propia isla.
+    // Cierra TODO —las dos capas— y vuelve al reposo. Lo llaman tres gestos, y
+    // los tres significan lo mismo: "quita lo que hay puesto".
     //
-    // Decía "ESC y el clic fuera" y no hacía ninguna de las dos: el clic fuera
-    // no existía —la máscara de la ventana ni siquiera dejaba que llegara— y
-    // ESC sigue sin existir, porque la ventana de la isla no pide teclado en
-    // ningún momento (IslandWindow: keyboardFocus None). Si algún día se quiere
-    // ESC, hay que pedirlo mientras sea modal, como hace Components/Popout.
+    //   · ESC                    Island.qml, mientras la hoja es modal
+    //   · un clic FUERA          Island.qml, mismo caso (ver 'modal')
+    //   · el botón derecho       sobre la propia isla
+    //
+    // Es el único que se lleva por delante un transitorio, y por eso NO es lo
+    // que usa Globals al abrir o cerrar un panel: ver la tabla de la cabecera.
+    //
+    // Aviso a quien lo lea dentro de un año: este comentario ya ha mentido dos
+    // veces. Primero decía que ESC y el clic fuera llamaban aquí cuando no
+    // existía ninguno de los dos; luego, ya escritos los dos, siguió diciendo
+    // que ESC "sigue sin existir" y que la ventana no pide teclado nunca. Si
+    // tocas quién llama a esto, corrige estas líneas en el mismo cambio.
     function collapse() {
         root.clearTransient()
         root.closeDestination()

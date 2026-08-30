@@ -739,7 +739,7 @@ Item {
                 cursorShape: Qt.PointingHandCursor
                 onClicked: {
                     if (sb.armed) {
-                        Globals.runPowerAction(sb.action)
+                        PowerActions.run(sb.action)
                         return
                     }
                     sb.armed = true
