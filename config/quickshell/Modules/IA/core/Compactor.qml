@@ -7,40 +7,36 @@ import "Payload.js" as PL
 import "Prune.js" as PR
 import "Transcript.js" as TR
 
-// EL CICLO DE VIDA DEL CONTEXTO. Cuatro reductores, del más barato al más caro,
-// y cada uno se usa cuando el anterior no llega:
+// El ciclo de vida del contexto: cuatro reductores, del más barato al más caro, y
+// cada uno se usa cuando el anterior no llega.
 //
-//   PODAR      determinista, sin modelo, sin coste. Sustituye resultados de
+//   PODAR      determinista, sin modelo y sin coste. Sustituye resultados de
 //              herramienta que ya no hacen falta literalmente.
-//   SACUDIR    determinista. Archiva a un fichero los bloques enormes que la
-//              poda no alcanza (los que están dentro de un mensaje, no de una
-//              tarjeta) y deja en su sitio la ruta para recuperarlos.
-//   RESUMIR    una llamada al modelo. Sustituye el historial viejo por un
-//              traspaso estructurado y conserva literales los últimos turnos.
-//   TRASPASAR  una llamada al modelo y una conversación NUEVA sembrada con el
+//   SACUDIR    determinista. Archiva a un fichero los bloques enormes que la poda
+//              no alcanza y deja en su sitio la ruta para recuperarlos.
+//   RESUMIR    una llamada al modelo. Sustituye el historial viejo por un traspaso
+//              estructurado y conserva literales los últimos turnos.
+//   TRASPASAR  una llamada al modelo y una conversación nueva sembrada con el
 //              documento de continuación. Para cuando el hilo ya no da más.
 //
-// Tres cosas separan esto de un simple resumidor:
+// Tres cosas lo separan de un simple resumidor:
 //
-//   · LA CACHÉ DE PREFIJO MANDA. Tocar un mensaje viejo obliga al servidor a
-//     reprocesar todo lo que va detrás. Podar automáticamente solo se hace donde
-//     eso es barato, o cuando la conversación lleva tanto parada que la caché ya
-//     está fría. Lo que pide el usuario a mano no lleva esa brida: él sabe lo
-//     que quiere.
-//   · AL ARCHIVERO SE LE MANDA UNA TRANSCRIPCIÓN, no el protocolo de
-//     herramientas con los resultados íntegros. Resumir pasa a costar una
-//     fracción — y, sobre todo, pasa a CABER cuando el contexto acaba de
-//     desbordar, que es justo cuando hace falta.
-//   · EL RESUMEN ES INCREMENTAL. El texto del resumen anterior no se vuelve a
-//     resumir (resumir un resumen es la forma clásica de perder datos turno a
-//     turno): entra aparte como ESTADO ACUMULADO con órdenes de actualizarlo
-//     casilla a casilla.
+//   · La caché de prefijo manda. Tocar un mensaje viejo obliga al servidor a
+//     reprocesar todo lo que va detrás, así que podar automáticamente solo se hace
+//     donde eso es barato, o con la caché ya fría. Lo que se pide a mano no lleva
+//     esa brida.
+//   · Al archivero se le manda una transcripción, no el protocolo de herramientas
+//     con los resultados íntegros. Resumir cuesta una fracción y, sobre todo, cabe
+//     cuando el contexto acaba de desbordar.
+//   · El resumen es incremental: el texto del resumen anterior no se vuelve a
+//     resumir —resumir un resumen es la forma clásica de perder datos— sino que
+//     entra aparte como estado acumulado, con órdenes de actualizarlo casilla a
+//     casilla.
 //
-// Es una operación DEL HARNESS, no un mensaje del chat: viaja por su propio
-// proceso, sin streaming y SIN herramientas. La versión antigua metía la
-// petición de resumen por el flujo normal — en modo agente el modelo podía
-// contestar al "resume esto" con una tool_call, y esa tarjeta se tomaba como
-// resumen y se cargaba el historial.
+// Es una operación del harness y no un mensaje del chat: viaja por su propio
+// proceso, sin streaming y sin herramientas. Metiéndola por el flujo normal, en
+// modo agente el modelo puede contestar al "resume esto" con una tool_call, y esa
+// tarjeta se tomaría como resumen.
 Scope {
     id: comp
 
@@ -72,21 +68,20 @@ Scope {
     property int _ahorro: 0
     property int _sustituidos: 0
 
-    // Cuánto puede ocupar la cola literal. Sin tope, unos últimos turnos llenos
-    // de salidas gordas hacían que compactar no bajara nada: se pagaba el
-    // resumen y el medidor seguía en rojo.
+    // Cuánto puede ocupar la cola literal. Sin tope, unos últimos turnos llenos de
+    // salidas gordas hacen que compactar no baje nada: se paga el resumen y el
+    // medidor sigue en rojo.
     readonly property real _topeCola: 0.5
     // Si tras podar el hilo baja de aquí, ya cabe.
     readonly property real _yaCabe: 0.7
-    // La transcripción no puede comerse la ventana: es la ENTRADA del resumen,
-    // y el resumen tiene que caber junto a ella.
+    // La transcripción no puede comerse la ventana: es la entrada del resumen, y
+    // el resumen tiene que caber junto a ella.
     readonly property int _topeGuion: Math.round(svc ? svc.charBudget * 0.6 : 60000)
 
-    // ── Las bridas de la caché ───────────────────────────────────────────────
-    // Cuánto puede quedar DETRÁS de una tarjeta para que valga la pena tocarla,
-    // y cuánto hay que ahorrar en total para que compense romper el prefijo.
-    // Proporcionales a la ventana: en un modelo pequeño reprocesar 30 000
-    // caracteres es carísimo y en uno grande es calderilla.
+    // Cuánto puede quedar detrás de una tarjeta para que valga la pena tocarla, y
+    // cuánto hay que ahorrar para que compense romper el prefijo. Proporcionales a
+    // la ventana: en un modelo pequeño reprocesar treinta mil caracteres es
+    // carísimo y en uno grande es calderilla.
     readonly property int _sufijoBarato: Math.round(svc ? svc.charBudget * 0.12 : 6000)
     readonly property int _ahorroMinimo:
         Math.max(6000, Math.round(svc ? svc.charBudget * 0.05 : 6000))
@@ -96,10 +91,9 @@ Scope {
         + "Resumes con fidelidad y NUNCA continúas la conversación ni contestas "
         + "a lo que se pregunta dentro de ella."
 
-    // ── Las órdenes ──────────────────────────────────────────────────────────
-    // El formato con CASILLAS no es cosmético: es lo que permite que la
-    // actualización siguiente sea mecánica ("mueve lo terminado de En curso a
-    // Hecho") en vez de una reescritura entera, que es donde un resumen pierde
+    // El formato con casillas no es cosmético: es lo que permite que la
+    // actualización siguiente sea mecánica —mover lo terminado de En curso a
+    // Hecho— en vez de una reescritura entera, que es donde un resumen pierde
     // datos generación tras generación.
     readonly property string _secciones:
         "## Resumen corto\n"
@@ -171,7 +165,7 @@ Scope {
         return t
     }
 
-    // ── Utilidades del hilo ──────────────────────────────────────────────────
+    // Utilidades del hilo
     function _plano() {
         const out = []
         for (let i = 0; i < comp.conv.messages.count; i++)
@@ -189,18 +183,18 @@ Scope {
         return ""
     }
 
-    // La poda sobre el hilo REAL, sin reconstruirlo: solo cambia el texto de
-    // unos resultados, así que las posiciones no se mueven y las rutas ya
-    // resueltas que guarda el runner por posición siguen valiendo.
+    // La poda sobre el hilo real, sin reconstruirlo: solo cambia el texto de unos
+    // resultados, así que las posiciones no se mueven y las rutas ya resueltas que
+    // guarda el runner por posición siguen valiendo.
     function _podarHilo(plan) {
         for (const k in plan.marcas)
             comp.conv.messages.setProperty(Number(k), "toolResult", plan.marcas[k])
         comp.conv.save()
     }
 
-    // Cómo se poda según quién lo pida. A mano no hay bridas —el usuario sabe
-    // lo que quiere—; en automático manda la caché, salvo que ya esté fría o que
-    // quien llame vaya a reescribir el hilo de todos modos.
+    // Cómo se poda según quién lo pida: a mano no hay bridas, y en automático
+    // manda la caché salvo que ya esté fría o que quien llame vaya a reescribir el
+    // hilo de todos modos.
     function _reglasPoda(auto, msgs) {
         if (!auto)
             return ({})
@@ -210,10 +204,9 @@ Scope {
                   ahorroMinimo: comp._ahorroMinimo })
     }
 
-    // ── PODAR ────────────────────────────────────────────────────────────────
     // La mitad barata de compactar: sin llamar a nadie y sin perder el hilo
     // literal. Cuando el contexto va justo por culpa de cuatro salidas gordas
-    // —que es lo normal en modo agente— esto basta, y sale gratis.
+    // —lo normal en modo agente— esto basta y sale gratis.
     function prune(auto) {
         if (svc.busy || compacting)
             return 0
@@ -236,12 +229,10 @@ Scope {
         return plan.ahorro
     }
 
-    // ── SACUDIR ──────────────────────────────────────────────────────────────
-    // Lo que la poda no alcanza: un bloque de código de veinte mil caracteres
-    // pegado por el usuario o escrito por el modelo. No es resultado de ninguna
-    // herramienta, así que ninguna regla de la poda lo mira, y sin embargo suele
-    // ser lo más gordo del hilo. No se resume ni se tira: se ARCHIVA en un
-    // fichero y en su hueco queda la ruta, que el agente puede volver a leer.
+    // Lo que la poda no alcanza: un bloque de código enorme pegado por el usuario
+    // o escrito por el modelo. No es resultado de ninguna herramienta, así que
+    // ninguna regla de la poda lo mira, y suele ser lo más gordo del hilo. No se
+    // resume ni se tira: se archiva en un fichero y en su hueco queda la ruta.
     property var _colaArchivo: []
     function shake() {
         if (svc.busy || compacting || _colaArchivo.length > 0)
@@ -286,9 +277,8 @@ Scope {
 
     Process {
         id: archProc
-        // El bloque puede pasar de cien mil caracteres, así que entra por la
-        // ENTRADA ESTÁNDAR y no por el entorno, que tiene el mismo tope de
-        // 128 kB por variable que el argv.
+        // El bloque puede ser enorme, así que entra por la entrada estándar y no
+        // por el entorno, que tiene el mismo tope por variable que el argv.
         command: ["sh", "-c",
             'd=$(dirname -- "$QS_OUT") && mkdir -p -- "$d" && umask 077 && cat > "$QS_OUT"']
         onStarted: {
@@ -298,8 +288,8 @@ Scope {
         }
         onExited: (code) => {
             if (code !== 0) {
-                // Un bloque que no se pudo archivar NO se elide: perderlo para
-                // ahorrar contexto es exactamente lo que esto no debe hacer.
+                // Un bloque que no se pudo archivar no se elide: perderlo para
+                // ahorrar contexto es lo que esto no debe hacer.
                 comp._colaArchivo[comp._archivados].fallo = true
             }
             comp._archivados++
@@ -307,18 +297,17 @@ Scope {
         }
     }
 
-    // Con todo ya en disco se reescriben los mensajes. De ATRÁS hacia delante
-    // dentro de cada uno: al revés, el primer reemplazo desplazaría las
-    // posiciones de los siguientes.
+    // Con todo ya en disco se reescriben los mensajes, de atrás hacia delante
+    // dentro de cada uno: al revés, el primer reemplazo desplazaría las posiciones
+    // de los siguientes.
     function _aplicarSacudida() {
         const porMensaje = ({})
         let n = 0
         let ganado = 0
         for (let i = 0; i < comp._colaArchivo.length; i++) {
             const t = comp._colaArchivo[i]
-            // Un bloque que no se pudo archivar NO se elide: perderlo para
-            // ahorrar contexto es exactamente lo que esto no debe hacer, así
-            // que tampoco cuenta en lo ahorrado.
+            // Un bloque que no se pudo archivar no se elide, y tampoco cuenta en
+            // lo ahorrado.
             if (t.fallo)
                 continue
             if (!porMensaje[t.idx])
@@ -347,32 +336,30 @@ Scope {
                            .arg(comp.svc.dataDir + "/archivo/"))
     }
 
-    // ── COMPACTAR ────────────────────────────────────────────────────────────
+    // COMPACTAR
     function compact(motivo) {
         const razon = String(motivo || "")
         if (compacting || svc.notConfigured || conv.messages.count < 2)
             return false
-        // Mitad de turno es el ÚNICO caso en que el servicio está ocupado a
+        // Mitad de turno es el único caso en que el servicio está ocupado a
         // propósito: el bucle de herramientas ha parado en una frontera segura y
-        // está esperando a que esto termine para seguir.
+        // espera a que esto termine.
         if (svc.busy && razon !== "midturn")
             return false
-        // Con una tarjeta esperando aprobación no se compacta: resolverla a
-        // mitad de resumen dejaría el protocolo a medias.
+        // Con una tarjeta esperando aprobación no se compacta: resolverla a mitad
+        // de resumen dejaría el protocolo a medias.
         for (let i = 0; i < conv.messages.count; i++)
             if (conv.messages.get(i).role === "tool"
                     && conv.messages.get(i).toolStatus === "pending")
                 return false
 
-        // ── 1. Podar ─────────────────────────────────────────────────────────
-        // Aquí SIN bridas de caché: se va a reescribir el hilo entero de todos
-        // modos, así que el prefijo está muerto y podar a fondo sale gratis.
+        // Sin bridas de caché: se va a reescribir el hilo entero de todos modos,
+        // así que el prefijo está muerto y podar a fondo sale gratis.
         const todo = _plano()
         const plan = PR.planificar(todo, ({}))
         const podado = PR.aplicar(todo, plan)
         _ahorro = plan.ahorro
 
-        // ── 2. ¿Hace falta el archivero? ─────────────────────────────────────
         // Solo se pregunta cuando la compactación no la pidió el usuario. Si la
         // pidió él, quiere un resumen; dárselo podado y sin resumir sería
         // contestar a otra cosa.
@@ -393,7 +380,6 @@ Scope {
         _previo = _estadoPrevio()
         _fich = PR.bloqueFicheros(PR.ficheros(podado), 24)
 
-        // ── 3. La cola literal ───────────────────────────────────────────────
         // Se aparta ANTES de pedir el resumen: los últimos K turnos vuelven
         // después LITERALES, tarjetas de herramienta incluidas — el resumen es
         // para lo viejo, no para lo que aún tienes en la retina. Ya podados,
@@ -429,7 +415,6 @@ Scope {
         }
         _sustituidos = podado.length - _keepTail.length
 
-        // ── 4. La transcripción ──────────────────────────────────────────────
         // El resumen anterior no viaja dos veces: sale del cuerpo y entra como
         // estado en la orden final.
         const cuerpo = []
@@ -443,7 +428,6 @@ Scope {
         return true
     }
 
-    // ── TRASPASAR ────────────────────────────────────────────────────────────
     // Compactar reescribe ESTE hilo; traspasar abre otro. Cuando una sesión ya
     // no da más de sí, un documento de continuación en una conversación limpia
     // es mejor que un resumen apretado dentro de la vieja.

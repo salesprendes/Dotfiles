@@ -150,7 +150,7 @@ SettingsPage {
             glyph: "󰸱"
             skey: "dockIconStyle"
             label: I18n.tr("Icon look")
-            aliases: ["monocromo", "mono", "nandoroid", "color"]
+            aliases: ["monocromo", "mono", "color"]
             options: [ { text: I18n.tr("Monochrome"), value: "mono" },
                        { text: I18n.tr("Colour"), value: "color" } ]
             current: Settings.dockIconStyle

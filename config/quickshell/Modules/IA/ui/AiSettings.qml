@@ -8,23 +8,19 @@ import qs.Modules.IA.core
 
 // La configuración del asistente, en dos plantas.
 //
-// A la vista, SOLO lo que hace falta para hablar: proveedor, dirección, clave y
-// si contesta. Todo lo demás vive en GRUPOS PLEGADOS que dicen su estado en la
-// propia línea — «Permisos: Normal», «Habilidades: 20», «Servidores: 2» — así
-// que la lámina entera se lee en ocho renglones y solo se abre lo que se va a
-// tocar.
+// A la vista solo lo que hace falta para hablar: proveedor, dirección, clave y si
+// contesta. Lo demás vive en grupos plegados que dicen su estado en la propia
+// línea —«Permisos: Normal», «Habilidades: 20»—, así que la lámina se lee en ocho
+// renglones y solo se abre lo que se va a tocar.
 //
-// Lo que había antes era una lista plana de cuarenta y tantos controles, con
-// una fila de tres botones POR CADA HERRAMIENTA: cuarenta veces la misma
-// decisión, tomada a mano, para configurar una sola idea (cuánta correa lleva
-// el agente). Esa idea es hoy un control de tres opciones y las excepciones
-// son eso, excepciones — plegadas y con contador.
+// La correa del agente es un control de tres opciones y no una decisión por
+// herramienta: las excepciones son eso, excepciones, plegadas y con contador.
 Rectangle {
     id: root
 
     Layout.fillWidth: true
-    // Sin conversación aún, la lámina puede permitirse más alto: es lo único
-    // que hay en pantalla y quien la abre viene a configurar.
+    // Sin conversación aún, la lámina puede permitirse más alto: es lo único que
+    // hay en pantalla y quien la abre viene a configurar.
     implicitHeight: Math.min(col.implicitHeight + Theme.space12 * 2,
                              Theme.dp(AiService.messages.count === 0 ? 540 : 430))
     radius: Theme.shapeMd
@@ -53,7 +49,7 @@ Rectangle {
             width: flick.width
             spacing: Theme.space8
 
-            // ── Planta baja: poder hablar ────────────────────────────────────
+            // Planta baja: poder hablar
             SegRow {
                 glyph: "󰚩"
                 label: I18n.tr("Provider")
@@ -65,11 +61,10 @@ Rectangle {
                 onPicked: (v) => Settings.aiProvider = v
             }
 
-            // La URL va PRIMERO en los proveedores de servidor propio: sin
-            // dirección, la credencial no tiene adónde ir. Se admite cualquier
-            // forma razonable (host a secas, con o sin /v1, o el endpoint
-            // entero pegado): el servicio la normaliza y debajo se enseña la
-            // dirección real que se va a llamar.
+            // La URL va primero en los proveedores de servidor propio: sin
+            // dirección, la credencial no tiene adónde ir. Se admite cualquier forma
+            // razonable —host a secas, con o sin /v1, o el endpoint entero— porque
+            // el servicio la normaliza y debajo se enseña la dirección real.
             TextField {
                 shown: AiService.provider.userUrl
                 label: I18n.tr("Server URL")
@@ -103,11 +98,10 @@ Rectangle {
                 onEdited: (t) => AiService.setKey(Settings.aiProvider, t)
             }
 
-            // ── Estado de la conexión ────────────────────────────────────────
-            // Con un servidor remoto, la mitad de los problemas son de red y no
-            // del modelo: aquí se ve si contesta, cuánto tarda y cuántos
-            // modelos publica ANTES de escribir la primera pregunta. La sonda
-            // salta sola al cambiar URL o clave.
+            // Con un servidor remoto la mitad de los problemas son de red y no del
+            // modelo: aquí se ve si contesta, cuánto tarda y cuántos modelos publica
+            // antes de escribir la primera pregunta. La sonda salta sola al cambiar
+            // URL o clave.
             Rectangle {
                 Layout.fillWidth: true
                 implicitHeight: Math.max(Theme.dp(40),
@@ -207,10 +201,9 @@ Rectangle {
                        && (AiService.provider.needsKey || Settings.aiProvider === "custom")
                 text: I18n.tr("Keys are stored in the system keyring, not in settings.json.")
             }
-            // Si el llavero ha fallado, la clave NO se ha perdido: se ha quedado
-            // en los ajustes. Hay que decirlo, porque la promesa de la línea de
-            // arriba deja de ser cierta y el usuario tiene derecho a saber
-            // dónde está su clave.
+            // Si el llavero ha fallado, la clave no se ha perdido: se ha quedado en
+            // los ajustes. Hay que decirlo, porque la promesa de la línea de arriba
+            // deja de ser cierta.
             Hint {
                 Layout.leftMargin: 0
                 shown: AiService.keyringWarn !== ""
@@ -218,7 +211,7 @@ Rectangle {
                 text: AiService.keyringWarn
             }
 
-            // ── Planta de arriba: los grupos ─────────────────────────────────
+            // Planta de arriba: los grupos
             Rectangle {
                 Layout.fillWidth: true
                 Layout.topMargin: Theme.space4
@@ -283,15 +276,13 @@ Rectangle {
                             onPicked: (v) => Settings.aiPersona = v
                         }
 
-                        // Razonamiento (Qwen3): el interruptor suave
-                        // /think · /no_think. Con un modelo local, apagar el
-                        // pensamiento es la mayor mejora de latencia que
-                        // existe — y encenderlo, la de calidad.
+                        // Interruptor suave de razonamiento. Con un modelo local,
+                        // apagar el pensamiento es la mayor mejora de latencia que
+                        // existe, y encenderlo, la de calidad.
                         SegRow {
                             glyph: "󰟃"
-                            // Con un modelo reconocido ya no es "lo de Qwen":
-                            // es la palanca de ese modelo, se llame como se
-                            // llame por dentro.
+                            // Con un modelo reconocido es la palanca de ese modelo,
+                            // se llame como se llame por dentro.
                             label: AiService.profileLabel !== ""
                                 ? I18n.tr("Reasoning") : I18n.tr("Reasoning (Qwen)")
                             options: [ { text: "Auto", value: "auto" },
@@ -302,9 +293,9 @@ Rectangle {
                         }
                         Hint {
                             Layout.leftMargin: 0
-                            // Cada familia enciende el pensamiento por un
-                            // sitio distinto, y decirlo evita que el usuario
-                            // busque un interruptor que en su modelo no existe.
+                            // Cada familia enciende el pensamiento por un sitio
+                            // distinto, y decirlo evita buscar un interruptor que en
+                            // ese modelo no existe.
                             text: AiService.profile.softSwitch
                                 ? I18n.tr("Qwen3 soft switch: adds /think or /no_think to your message. Other models ignore it.")
                                 : AiService.profile.thinking === "always"
@@ -314,7 +305,6 @@ Rectangle {
                                 : I18n.tr("%1 has its own flag: the switch travels in the request, not inside your message.").arg(AiService.profileLabel)
                         }
 
-                        // ── Lo que solo existe si el modelo está reconocido ──
                         // Con cualquier otro modelo esta parte no aparece: no
                         // tiene sentido ofrecer palancas que nadie va a leer al
                         // otro lado.
@@ -384,7 +374,6 @@ Rectangle {
                 }
             }
 
-            // ── El MODELO ───────────────────────────────────────────────────
             // Hasta ahora solo se podía elegir desde el botón de la cabecera, y
             // en Ajustes —donde uno viene precisamente a configurar el
             // servidor— no había forma. Es la misma lámina, con su buscador y
@@ -465,7 +454,7 @@ Rectangle {
                 }
             }
 
-            // ── Permisos ─────────────────────────────────────────────────────
+            // Permisos
             Fold {
                 glyph: "󰒃"
                 title: I18n.tr("Permissions")
@@ -546,7 +535,7 @@ Rectangle {
                 }
             }
 
-            // ── Habilidades ──────────────────────────────────────────────────
+            // Habilidades
             Fold {
                 glyph: "󰠮"
                 title: I18n.tr("Skills")
@@ -598,7 +587,7 @@ Rectangle {
                 }
             }
 
-            // ── Herramientas externas ────────────────────────────────────────
+            // Herramientas externas
             Fold {
                 glyph: "󱁤"
                 title: I18n.tr("External tools")
@@ -707,7 +696,6 @@ Rectangle {
                 }
             }
 
-            // ── Búsqueda web ────────────────────────────────────────────────
             // Tenía media línea escondida dentro del grupo de MCP, y era
             // engañosa: decía "opcional, sin esto el asistente busca igual". Ya
             // no es verdad, y esa mentira salía cara — las instancias públicas
@@ -809,7 +797,7 @@ Rectangle {
                 }
             }
 
-            // ── Servidores remotos ───────────────────────────────────────────
+            // Servidores remotos
             Fold {
                 glyph: "󰒋"
                 title: I18n.tr("Remote servers (SSH)")
@@ -974,7 +962,7 @@ Rectangle {
                 }
             }
 
-            // ── Memoria ──────────────────────────────────────────────────────
+            // Memoria
             Fold {
                 glyph: "󰍩"
                 title: I18n.tr("Memory")

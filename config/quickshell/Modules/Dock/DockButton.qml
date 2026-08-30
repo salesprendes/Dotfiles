@@ -8,19 +8,13 @@ import qs.Services
 // Un icono del dock: la app, si está abierta, cuántas ventanas tiene y cuántos
 // avisos pendientes.
 //
-// No sabe en qué estilo está el dock (pastilla o hotseat). Eso es a propósito:
-// lo único que cambia entre las dos formas es la geometría de la ventana y del
-// fondo, así que si este archivo tuviera que preguntarlo, las dos formas serían
-// el doble de trabajo en vez de un puñado de líneas en DockWindow.
+// No sabe en qué estilo está el dock, y es a propósito: lo único que cambia entre
+// las dos formas es la geometría de la ventana y del fondo, así que preguntarlo
+// aquí convertiría las dos formas en el doble de trabajo.
 //
-// ── EL MODO MONOCROMO ───────────────────────────────────────────────────────
-// Es la seña de nandoroid: cada icono va dentro de un círculo de acento y
-// teñido de ese mismo color. Allí lo hace un ColorOverlay de Qt5Compat, que en
-// este equipo no está instalado; MultiEffect (QtQuick.Effects, Qt 6) hace
-// exactamente lo mismo con 'colorization' y ya se usa en Panels/LockContent.
-//
-// El precio del modo mono es real y conviene saberlo: pierdes el color de marca
-// de cada app. Con cuatro fijadas queda tranquilo y coherente; con doce hay que
+// En modo mono cada icono va dentro de un círculo de acento y teñido de ese mismo
+// color. El precio es real y conviene saberlo: se pierde el color de marca de cada
+// app, así que con pocas fijadas queda coherente y con muchas hay que
 // distinguirlas por la silueta. De ahí que sea un ajuste y no una decisión.
 Item {
     id: root
@@ -53,6 +47,56 @@ Item {
     // puede decidir desde quien ve los dos botones a la vez.
     signal hoverCambia(var ranura, var boton, bool dentro)
 
+    // Pulsar el icono de una app cerrada no tiene respuesta visible hasta que
+    // la ventana aparece, y eso pueden ser varios segundos: sin nada en medio
+    // se duda de si el clic ha entrado y se vuelve a pulsar, que es como se
+    // acaban abriendo dos copias. El brinco ocupa exactamente ese hueco.
+    //
+    // Se para en cuanto hay ventana; el tope de repeticiones es el plan B para
+    // una app que no llega a abrir nunca, para no dejar un icono botando solo.
+    SequentialAnimation {
+        id: rebote
+        loops: 6
+        NumberAnimation {
+            target: brinco; property: "y"; to: -Theme.dp(10)
+            duration: Theme.animNormal; easing.type: Easing.OutQuad
+        }
+        NumberAnimation {
+            target: brinco; property: "y"; to: 0
+            duration: Math.round(Theme.animNormal * 1.6); easing.type: Easing.OutBounce
+        }
+        PauseAnimation { duration: Theme.animNormal }
+    }
+
+    function pararRebote() {
+        rebote.stop()
+        brinco.y = 0
+    }
+
+    onAbiertaChanged: if (root.abierta) root.pararRebote()
+
+    Connections {
+        target: Dock
+        function onLanzada(id) {
+            if (id === root.appId && Theme.animNormal > 0)
+                rebote.restart()
+        }
+    }
+
+    // Las pone DockRow desde la posición del cursor sobre la fila entera.
+    // 'empujeLupa' va como transform y NO como 'x': cambiar la x movería la
+    // disposición del Row, que es justo de donde sale el centro de reposo con
+    // el que se calcula esto — el bucle de vínculos que hay que evitar.
+    property real escalaLupa: 1.0
+    property real empujeLupa: 0
+    transform: Translate {
+        x: root.empujeLupa
+        Behavior on x {
+            enabled: Theme.animNormal > 0
+            NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic }
+        }
+    }
+
     // Contenedor de la escala: se escala ESTO y no el root, porque escalar un
     // item que está dentro de un Row le cambia el sitio a los vecinos.
     Item {
@@ -69,8 +113,17 @@ Item {
         // curva va muy cargada al principio. Lo que no se veía era el COLOR del
         // disco (ver ahí abajo). Aquí la entrada instantánea se queda porque es
         // lo correcto, no porque arreglara nada.
-        scale: zona.pressed ? 0.92
-             : (zona.containsMouse ? Settings.dockMagnify : 1.0)
+        // La ampliación la calcula DockRow para toda la fila a la vez (ver la
+        // nota de la ola allí): aquí solo se aplica. Crece desde el borde de
+        // ABAJO, no desde el centro, para que el icono suba y asome por encima
+        // de la píldora en vez de empujar también hacia el canto inferior.
+        transformOrigin: Item.Bottom
+        scale: zona.pressed ? 0.92 : root.escalaLupa
+
+        // El brinco de "estoy arrancando". Va aquí y no en root porque root ya
+        // lleva el desplazamiento lateral de la ola: dos transform sobre el
+        // mismo item se pisarían al escribir el segundo.
+        transform: Translate { id: brinco }
         Behavior on scale {
             enabled: Theme.animNormal > 0
             NumberAnimation {
@@ -79,7 +132,6 @@ Item {
             }
         }
 
-        // ── El círculo de detrás ─────────────────────────────────────────────
         // Solo en modo mono. Con los iconos a color, un círculo detrás de cada
         // uno los mete a todos en una caja y el dock pasa a ser una fila de
         // botones en vez de una fila de apps.
@@ -162,8 +214,7 @@ Item {
             }
         }
 
-        // ── Indicador de ventanas ────────────────────────────────────────────
-        // "auto" es el de nandoroid: una rayita ancha cuando hay UNA ventana y
+        // "auto": una rayita ancha cuando hay UNA ventana y
         // puntos cuando hay varias. Dice dos cosas con una sola forma —que está
         // abierta, y si tiene más de una— sin ocupar más sitio que cualquiera
         // de las dos por separado.
@@ -230,7 +281,7 @@ Item {
             }
         }
 
-        // ── Globo de avisos ──────────────────────────────────────────────────
+        // Globo de avisos
         CountBadge {
             anchors.right: marco.right
             anchors.top: marco.top
@@ -258,6 +309,10 @@ Item {
                 onda.press(ev.x, ev.y)
         }
         onClicked: (ev) => {
+            // Pulsar retira el globo en el acto, sin esperar a que el dock se
+            // esconda: has dejado de preguntar qué es este icono y has pasado a
+            // usarlo. No vuelve hasta que salgas y entres otra vez.
+            root.hoverCambia(root.ranura, root, false)
             if (ev.button === Qt.LeftButton) {
                 Dock.activar(root.ranura)
             } else if (ev.button === Qt.MiddleButton) {

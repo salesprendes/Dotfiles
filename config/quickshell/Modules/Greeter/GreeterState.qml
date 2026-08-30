@@ -29,33 +29,28 @@ Singleton {
     readonly property bool available: Greetd.available
     signal failed()
 
-    // Máquina de estados de auth. El reintento se conduce por
-    // Greetd.onStateChanged: al fallar NO se recrea la sesión, se cancela y se
-    // espera a que el estado caiga a Inactive; la nueva se abre SOLO con greetd
-    // libre (createSession jamás cae sobre una sesión viva). Evita las carreras
-    // del "unable to send message: Connection refused" y el descuadre de estado
-    // tras un fallo.
+    // Máquina de estados de autenticación. El reintento se conduce por
+    // Greetd.onStateChanged: al fallar no se recrea la sesión, se cancela y se
+    // espera a que el estado caiga a Inactive, y la nueva se abre solo con greetd
+    // libre. Evita las carreras de conexión y el descuadre de estado tras un fallo.
     property bool   canRespond: false     // hay una pregunta de PAM esperando respuesta
     property string _pwBuffer: ""         // clave aceptada, pendiente de enviar
     property bool   _submitPending: false // el usuario pidió enviar; se hará al llegar el prompt
     property bool   _leaving: false       // has entrado; la sesión está arrancando
     property string _lastPamError: ""     // lo último que dijo PAM al fallar
 
-    // Todo guiado por eventos (sin timers): cada vez que se pone busy=true es
-    // por una acción que greetd SIEMPRE contesta (authMessage, authFailure,
-    // readyToLaunch o error), y cada señal vuelve a bajar busy.
+    // Todo guiado por eventos y sin temporizadores: cada vez que se pone busy es
+    // por una acción que greetd siempre contesta, y cada señal vuelve a bajarlo.
     //
-    // 'available' es la red de seguridad: si greetd se cae y cierra el socket,
-    // se pone en false y desde aquí recuperamos el control. Si PAM se colgara
-    // sin cerrar el socket no nos enteraríamos, pero eso aquí no pasa: solo
-    // pedimos contraseña y PAM contesta al momento.
+    // 'available' es la red de seguridad: si greetd se cae y cierra el socket se
+    // pone en false y desde aquí se recupera el control.
     onAvailableChanged: {
         if (available) {
-            // (Re)disponible: si hay usuario elegido y greetd libre, abre sesión.
+            // Disponible otra vez: con usuario elegido y greetd libre, abre sesión.
             if (selectedUser !== "" && Greetd.state === GreetdState.Inactive)
                 Greetd.createSession(selectedUser)
         } else if (!_leaving) {
-            // greetd desapareció y no estábamos entrando: no dejes "Cargando".
+            // greetd desapareció sin que se estuviera entrando: no dejar "Cargando".
             _resetAuth()
             error = I18n.tr("greetd unavailable")
         }
@@ -91,9 +86,8 @@ Singleton {
     Process {
         id: sessionScan
         running: false
-        // Se descartan sesiones cuyo binario no está instalado (p.ej.
-        // hyprland-uwsm.desktop sin uwsm): elegirlas produce un login
-        // que muere al instante y devuelve al greeter.
+        // Se descartan las sesiones cuyo binario no está instalado: elegirlas
+        // produce un login que muere al instante y devuelve al greeter.
         command: ["sh", "-c",
             "for f in /usr/share/wayland-sessions/*.desktop /usr/share/xsessions/*.desktop; do " +
             "[ -e \"$f\" ] || continue; " +
@@ -111,10 +105,9 @@ Singleton {
             if (first === "start-hyprland" && watchdogIdx < 0) watchdogIdx = list.length
             list.push(found[i])
         }
-        // Garantiza una sesión que use el watchdog 'start-hyprland' y ponla la
-        // primera (= por defecto): así no salta el aviso "iniciaste sin
-        // start-hyprland". Si el sistema ya trae una (p.ej. hyprland.desktop),
-        // se reutiliza en vez de duplicarla; si no, se crea una sintética.
+        // Garantiza una sesión que use el watchdog y la pone la primera, para que
+        // no salte el aviso de haber iniciado sin él. Si el sistema ya trae una se
+        // reutiliza en vez de duplicarla; si no, se crea una sintética.
         if (watchdogIdx < 0)
             list.unshift({ id: "hyprland-watchdog",
                            name: Config.defaultSessionName,
@@ -151,8 +144,8 @@ Singleton {
         if (!Config.rememberLastUser) return
         const obj = { user: root.selectedUser,
                       session: root.currentSession ? root.currentSession.id : "" }
-        // Escritura detached vía argv (sin problemas de comillas). Si el
-        // path no es escribible, se ignora sin romper el login.
+        // Escritura desacoplada vía argv, sin problemas de comillas. Si la ruta no
+        // es escribible se ignora sin romper el login.
         Quickshell.execDetached(["sh", "-c",
             "mkdir -p \"$(dirname \"$1\")\" 2>/dev/null; printf '%s' \"$2\" > \"$1\" 2>/dev/null",
             "greetd-state", Config.statePath, JSON.stringify(obj)])
@@ -164,9 +157,8 @@ Singleton {
 
         // Pregunta / mensaje de PAM.
         function onAuthMessage(message, error, responseRequired, echoResponse) {
-            // Esto no es una pregunta, es PAM contándonos por qué ha fallado
-            // ("Authentication failure", "Permission denied"…). Lo guardamos
-            // para el aviso de después; como etiqueta del campo no pinta nada.
+            // Esto no es una pregunta sino PAM contando por qué ha fallado. Se
+            // guarda para el aviso posterior; como etiqueta del campo no pinta nada.
             if (error && !responseRequired) {
                 root._lastPamError = (message || "").trim()
                 return
@@ -174,11 +166,11 @@ Singleton {
             root.secret = !echoResponse
             root.prompt = _localizedPrompt(message, echoResponse)
             root.canRespond = responseRequired
-            // Solo nos está informando de algo: se contesta solo con una cadena
-            // vacía y la charla con PAM sigue. Aquí no hay nada que hacer.
+            // Solo está informando: se contesta con una cadena vacía y la charla con
+            // PAM sigue.
             if (!responseRequired) return
-            // Ahora sí pregunta: si ya le habías dado a enviar, va la clave que
-            // teníamos guardada; si no, a esperar a que escribas.
+            // Ahora sí pregunta: si ya se pulsó enviar, va la clave guardada; si no,
+            // a esperar a que se escriba.
             if (root._submitPending) {
                 root._sendResponse()
             } else {

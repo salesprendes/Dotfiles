@@ -5,25 +5,20 @@ import qs.Config
 import qs.Panels.SettingsPages
 import qs.Services
 
-// Editor de la disposición de la barra: tres carriles (izquierda, centro,
-// derecha) con las píldoras que hay puestas, y debajo el cajón de las que
-// quedan por poner. Se arrastra de un sitio a otro.
+// Editor de la disposición de la barra: tres carriles con las píldoras puestas y,
+// debajo, el cajón de las que quedan por poner. Se arrastra de un sitio a otro.
 //
-// CÓMO FUNCIONA EL ARRASTRE, y por qué así:
+// La píldora que se arrastra no se reparenta ni se mueve: se queda en su carril,
+// atenuada, haciendo de hueco de origen, y lo que sigue al ratón es un fantasma
+// dibujado aparte en una capa por encima de todo. Reparentar el delegate de un
+// Repeater funciona hasta que el modelo cambia: entonces el Repeater reclama a su
+// hijo, se encuentra con que tiene otro padre, y la píldora desaparece a mitad del
+// gesto o se queda pegada en la capa de arrastre.
 //
-// La píldora que se arrastra NO se reparenta ni se mueve. Se queda en su
-// carril, atenuada, haciendo de hueco de origen; lo que sigue al ratón es un
-// FANTASMA dibujado aparte, en una capa por encima de todo. Reparentar el
-// delegate de un Repeater —que es lo que hace el manual— funciona hasta que el
-// modelo cambia: entonces el Repeater reclama a su hijo, se encuentra con que
-// tiene otro padre, y lo que se ve es una píldora que desaparece a mitad del
-// gesto o que se queda pegada en la capa de arrastre para siempre.
-//
-// El destino se decide con DropArea: entre cada dos píldoras (y en las puntas)
-// hay un hueco de suelta que se enciende cuando el fantasma pasa por encima.
-// Es más código que calcular el índice por la coordenada x, pero no se
-// equivoca cuando un carril tiene píldoras de anchos muy distintos, que es
-// justo lo que pasa aquí — "Ventana activa" mide seis veces lo que "Cafeína".
+// El destino se decide con DropArea: entre cada dos píldoras, y en las puntas, hay
+// un hueco de suelta que se enciende cuando el fantasma pasa por encima. Es más
+// código que calcular el índice por la coordenada x, pero no se equivoca cuando un
+// carril tiene píldoras de anchos muy distintos, que es lo que pasa aquí.
 SettingsRow {
     id: editor
 
@@ -49,11 +44,9 @@ SettingsRow {
         Settings.barLayout = next
     }
 
-    // ── Disponibilidad ───────────────────────────────────────────────────────
-    // BarCatalog no importa qs.Services (Config no debe depender de la capa de
-    // servicios), así que la comprobación vive aquí, que es donde ya se conocen
-    // Power y Battery. Un widget cuyo servicio no está no se ofrece: añadirlo
-    // solo daría una píldora que nunca aparece.
+    // BarCatalog no importa qs.Services, así que la comprobación vive aquí, que es
+    // donde ya se conocen esos servicios. Un widget cuyo servicio no está no se
+    // ofrece: añadirlo solo daría una píldora que nunca aparece.
     function isAvailable(id) {
         const meta = BarCatalog.metaFor(id)
         if (!meta)
@@ -63,8 +56,8 @@ SettingsRow {
         return true
     }
 
-    // Widgets que se pueden añadir: los disponibles que no estén ya puestos
-    // (salvo los que admiten varias instancias, que siempre se ofrecen).
+    // Widgets que se pueden añadir: los disponibles que no estén ya puestos, salvo
+    // los que admiten varias instancias, que siempre se ofrecen.
     readonly property var addable: {
         const out = []
         for (const w of BarCatalog.widgets) {
@@ -77,7 +70,7 @@ SettingsRow {
         return out
     }
 
-    // ── Estado del arrastre ──────────────────────────────────────────────────
+    // Estado del arrastre
     property bool dragging: false
     property string dragId: ""
     property string dragSection: ""
@@ -86,7 +79,7 @@ SettingsRow {
     property real dragY: 0
     // Destino en curso, o null. { section, index }
     property var dropAt: null
-    // Un arrastre que viene del cajón AÑADE en vez de mover.
+    // Un arrastre que viene del cajón añade en vez de mover.
     property bool dragFromDrawer: false
 
     function beginDrag(section, index, id, pt, fromDrawer) {
@@ -116,7 +109,6 @@ SettingsRow {
             return
         if (fromDrawer) {
             // Añadir en el punto exacto donde se ha soltado, no al final de su
-            // sección de fábrica: si te has molestado en apuntar, va ahí.
             let next = BarCatalog.add(editor.layout, id, target.section)
             const placed = BarCatalog.locate(next, id)
             if (placed)
@@ -156,7 +148,7 @@ SettingsRow {
              : I18n.tr("Right")
     }
 
-    // ── Píldora ──────────────────────────────────────────────────────────────
+    // Píldora
     component WidgetChip: Rectangle {
         id: chip
 
@@ -256,7 +248,6 @@ SettingsRow {
         }
     }
 
-    // ── Hueco de suelta ──────────────────────────────────────────────────────
     // Uno entre cada dos píldoras y otro en cada punta. Estrecho en reposo; se
     // ensancha y se enciende cuando el fantasma está encima, que es lo que
     // dice "aquí es donde va a caer".
@@ -293,7 +284,7 @@ SettingsRow {
         }
     }
 
-    // ── Cuerpo ───────────────────────────────────────────────────────────────
+    // Cuerpo
     ColumnLayout {
         id: body
         anchors.left: parent.left
@@ -428,7 +419,6 @@ SettingsRow {
         }
     }
 
-    // ── Capa de arrastre ─────────────────────────────────────────────────────
     // Por encima de todo lo demás y SIN input: si capturara el ratón, el
     // MouseArea de la píldora dejaría de recibir los movimientos en cuanto el
     // fantasma se pusiera bajo el cursor — que es siempre.

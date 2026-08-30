@@ -25,13 +25,10 @@ Popout {
 
     // Con el panel oculto basta precisión de minuto (sin tick por segundo).
     SystemClock { id: clock; precision: dash.shown ? SystemClock.Seconds : SystemClock.Minutes }
-    // Selección del reproductor activo. La decide Services/Media.qml, no este
-    // archivo: la misma regla estaba escrita aquí y en Bar/MediaWidget.qml, y
-    // las dos copias ya habían divergido — la barra exigía metadatos y esto se
-    // conformaba con que existiera un reproductor, así que el fantasma que deja
-    // el navegador abierto pintaba aquí una tarjeta «Sin título» permanente.
-    // 'players' es la lista YA filtrada: el selector de más abajo no debe
-    // ofrecer cambiar a un reproductor que no tiene nada detrás.
+    // Selección del reproductor activo: la decide Services/Media.qml y no este
+    // archivo, para que la barra y el panel no puedan dar respuestas distintas.
+    // 'players' es la lista ya filtrada, así que el selector no ofrece cambiar a un
+    // reproductor que no tiene nada detrás.
     readonly property var players: Media.players
     readonly property var player: Media.active
     readonly property bool hasMedia: Media.hasMedia
@@ -45,7 +42,7 @@ Popout {
     Connections {
         target: dash.player
         // Solo con el panel a la vista: si no, cada avance de posición MPRIS
-        // re-evaluaba las barras de progreso de un panel oculto (por monitor).
+        // reevaluaría las barras de progreso de un panel oculto, por monitor.
         enabled: dash.shown
         ignoreUnknownSignals: true
         function onPositionChanged() { dash.displayPos = dash.player?.position ?? 0 }
@@ -69,9 +66,8 @@ Popout {
     onShownChanged: if (shown) {
         tab = "overview"
         displayPos = player?.position ?? 0   // ponte al día (Connections inactivo en oculto)
-        // Solo re-escanea las carpetas de fondos si el último escaneo es viejo:
-        // refresh() en cada apertura reseteaba el GridView (modelo = array
-        // plano) y re-pedía todas las miniaturas.
+        // Solo reescanea las carpetas de fondos si el último escaneo es viejo:
+        // hacerlo en cada apertura resetea el GridView y repide las miniaturas.
         Wallpaper.refreshIfStale(5 * 60 * 1000)
         Weather.refreshIfStale(10 * 60 * 1000)
     }
@@ -129,18 +125,9 @@ Popout {
 
                 Item { Layout.fillHeight: true }
 
-                // Atajos a otros paneles: mismos destinos que la barra, pero a
-                // mano desde el panel. Abrir cualquiera cierra este, así que no
-                // hace falta cerrar a mano.
-                //
-                // Esto último lo daba por hecho y durante un tiempo NO fue
-                // verdad para la campana: con la isla encendida, "notif" no
-                // abre un panel sino una hoja de la isla, y esa rama de
-                // Globals.toggle() se olvidaba de soltar el panel que había.
-                // Quedaban los dos puestos —el dashboard delante y la hoja
-                // detrás, invisible— y aparecía sola al cerrar este. Dos clics:
-                // el reloj de la barra y luego esta campana. Ahora lo garantiza
-                // el invariante de Globals, con su prueba.
+                // Atajos a otros paneles: mismos destinos que la barra, a mano
+                // desde aquí. Abrir cualquiera cierra este, que es lo que garantiza
+                // el invariante de Globals.
                 RailBtn { icon: "\u{f009a}"; onClicked: Globals.toggleNotifCenter() }
                 RailBtn { icon: "󰅌"; onClicked: Globals.toggleClipboard() }
                 RailBtn { icon: "󰍛"; onClicked: Globals.toggleSysMon() }
@@ -168,13 +155,10 @@ Popout {
     Item {
         id: pages
         Layout.fillWidth: true
-        // Altura ÚNICA para todas las pestañas: la que pida la página de
-        // RESUMEN, que es la referencia del panel (la anchura ya la fija la
-        // tarjeta con cardWidth, y todas las páginas se adaptan a ella). Las
-        // demás pestañas no participan: sistema y música se quedan cortas o
-        // se recortan si difieren, y la de fondos (anclada arriba y abajo)
-        // reparte el hueco entre héroe y rejilla. Ninguna pestaña salvo el
-        // resumen puede cambiar el tamaño del panel, por construcción.
+        // Altura única para todas las pestañas: la que pida la página de resumen,
+        // que es la referencia del panel. Las demás no participan, y la de fondos
+        // —anclada arriba y abajo— reparte el hueco entre héroe y rejilla. Ninguna
+        // pestaña salvo el resumen puede cambiar el tamaño del panel.
         Layout.preferredHeight: overviewPage.implicitHeight
         Behavior on Layout.preferredHeight {
             NumberAnimation { duration: dash.tabAnim; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasized }
@@ -250,12 +234,11 @@ Popout {
                                     font.bold: true
                                 }
                             }
-                            // Clima a la derecha DENTRO del espacio sobrante:
-                            // icono+temperatura arriba y la condición debajo,
+                            // Clima a la derecha dentro del espacio sobrante:
+                            // icono y temperatura arriba y la condición debajo,
                             // alineada a la derecha, en hasta dos líneas con
-                            // elipsis. Antes tenía ancho fijo (150dp) y en la
-                            // tarjeta estrecha desbordaba sobre el calendario
-                            // con textos largos ("Parcialmente nublado").
+                            // elipsis. Con ancho fijo, un texto largo desbordaría
+                            // sobre el calendario.
                             ColumnLayout {
                                 Layout.fillWidth: true
                                 visible: Weather.enabled && Weather.ready
@@ -289,8 +272,8 @@ Popout {
                         }
                     }
 
-                    // El tiempo: cabecera con la ubicación y los detalles (sensación y
-            // humedad), y el pronóstico diario con HOY destacado en acento.
+                    // El tiempo: cabecera con la ubicación y los detalles, y el
+            // pronóstico diario con hoy destacado en acento.
             OverviewCard {
                 visible: Weather.enabled && Weather.ready && Weather.forecast.length > 0
                          && Settings.weatherShowForecast
@@ -367,10 +350,10 @@ Popout {
                                 required property var modelData
                                 required property int index
                                 readonly property bool today: index === 0
-                                // Mismo peso de anchura para las cinco celdas
-                                // (sin depender del contenido) y márgenes
-                                // idénticos arriba y abajo: la pastilla de hoy
-                                // queda simétrica por construcción.
+                                // Mismo peso de anchura para las cinco celdas, sin
+                                // depender del contenido, y márgenes idénticos
+                                // arriba y abajo: la pastilla de hoy queda simétrica
+                                // por construcción.
                                 Layout.fillWidth: true
                                 Layout.preferredWidth: 100
                                 implicitHeight: dayCol.implicitHeight + Theme.space6 * 2
@@ -378,8 +361,8 @@ Popout {
                                 color: today ? Theme.withAlpha(Theme.accent, Theme.isDark ? 0.16 : 0.22)
                                              : "transparent"
 
-                                // Máxima y mínima apiladas: en celdas de ~60 px
-                                // el par en horizontal quedaba al límite.
+                                // Máxima y mínima apiladas: en celdas estrechas el
+                                // par en horizontal queda al límite.
                                 ColumnLayout {
                                     id: dayCol
                                     anchors.left: parent.left
@@ -449,10 +432,9 @@ Popout {
 
                 }
 
-                // Columna derecha: el calendario a toda la altura disponible
-                // y, si hay reproducción, el mini-reproductor debajo — así el
-                // hueco bajo el calendario se aprovecha en vez de alargar la
-                // columna izquierda.
+                // Columna derecha: el calendario a toda la altura disponible y, si
+                // hay reproducción, el mini-reproductor debajo, para aprovechar el
+                // hueco en vez de alargar la columna izquierda.
                 ColumnLayout {
                     Layout.fillWidth: false
                     Layout.preferredWidth: Theme.dp(300)
@@ -555,9 +537,8 @@ Popout {
 
         }
 
-        // Página: sistema — recursos en vivo de un vistazo. El panel
-        // "Monitor de sistema" completo (procesos, servicios…) sigue aparte;
-        // esto solo sondea mientras la pestaña está a la vista.
+        // Página de sistema: recursos en vivo de un vistazo. El monitor completo
+        // sigue aparte; esto solo sondea mientras la pestaña está a la vista.
         ColumnLayout {
             id: systemPage
             anchors { left: parent.left; right: parent.right; top: parent.top }
@@ -570,8 +551,8 @@ Popout {
             }
             Behavior on opacity { NumberAnimation { duration: dash.tabAnim; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
 
-            // Históricos para las gráficas (40 muestras ≈ 2 min), rellenados
-            // en cada tick solo mientras la pestaña está a la vista.
+            // Históricos para las gráficas, rellenados en cada tick solo mientras la
+            // pestaña está a la vista.
             property var cpuHist: []
             property var cpuTempHist: []
             property var memHist: []
@@ -587,8 +568,7 @@ Popout {
             function pushH(arr, v) { return arr.concat([v]).slice(-histSamples) }
 
             // Normaliza un histórico de red a 0..1 contra el pico conjunto de
-            // bajada y subida (mínimo 100 KB/s), para que ambas líneas
-            // compartan escala.
+            // bajada y subida, para que ambas líneas compartan escala.
             function netNorm(h) {
                 const d = netHist, u = netUpHist
                 let peak = 100
@@ -612,9 +592,8 @@ Popout {
                 }
             }
 
-            // Rejilla 2×2 de gráficas: la gráfica domina cada tarjeta y las
-            // cifras van debajo. La temperatura se superpone como segunda
-            // línea (roja) en CPU y GPU; en Red, la subida va en acento2.
+            // Rejilla de gráficas: la gráfica domina cada tarjeta y las cifras van
+            // debajo. La temperatura se superpone como segunda línea en CPU y GPU.
             GridLayout {
                 Layout.fillWidth: true
                 columns: 2
@@ -732,15 +711,15 @@ Popout {
         // Página: música
         ColumnLayout {
             id: musicPage
-            // Anclada arriba Y abajo (la altura la fija la página de resumen):
-            // así el contenido puede centrarse verticalmente y la página se
+            // Anclada arriba y abajo, con la altura fijada por la página de
+            // resumen: así el contenido puede centrarse verticalmente y la página se
             // adapta si el resumen crece o encoge.
             anchors { left: parent.left; right: parent.right; top: parent.top; bottom: parent.bottom }
             spacing: Theme.space12
             opacity: dash.tab === "music" ? 1 : 0
             visible: opacity > 0.01
-            // La carátula grande solo se decodifica tras visitar la pestaña
-            // (y se conserva: el panel entero se destruye al cerrar).
+            // La carátula grande solo se decodifica tras visitar la pestaña, y se
+            // conserva porque el panel entero se destruye al cerrar.
             property bool artArmed: false
             onVisibleChanged: if (visible) artArmed = true
             transform: Translate {
@@ -749,8 +728,7 @@ Popout {
             }
             Behavior on opacity { NumberAnimation { duration: dash.tabAnim; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
 
-            // Sin reproducción: solo el glifo, enorme y centrado en la página.
-            // Sin texto: el icono se explica solo.
+            // Sin reproducción, solo el glifo centrado: el icono se explica solo.
             Item {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
@@ -804,9 +782,9 @@ Popout {
                     radius: Theme.space12; color: Theme.bgAlt; clip: true
                     Image {
                         anchors.fill: parent
-                        // Atado a shown: visible:false no evita la decodificación,
-                        // y así no re-decodifica 440dp² por canción con el panel cerrado.
-                        // artArmed: tampoco antes de visitar la pestaña.
+                        // Atado a 'shown' porque visible:false no evita la
+                        // decodificación, y a 'artArmed' para no decodificar antes
+                        // de visitar la pestaña.
                         source: dash.shown && musicPage.artArmed ? (dash.player?.trackArtUrl ?? "") : ""
                         visible: status === Image.Ready
                         fillMode: Image.PreserveAspectCrop
@@ -904,18 +882,18 @@ Popout {
             Item { Layout.fillHeight: true; visible: dash.hasMedia }
         }
 
-        // Página: fondos — tarjeta héroe con el fondo en uso (velo degradado,
-        // nombre y chip "Activo") y rejilla con zoom al pasar el ratón.
+        // Página de fondos: tarjeta héroe con el fondo en uso y rejilla con zoom al
+        // pasar el ratón.
         ColumnLayout {
             id: wallpaperPage
-            // Anclada arriba Y abajo: su altura la fija la página de resumen
-            // (ver Layout.preferredHeight de 'pages'), nunca esta página.
+            // Anclada arriba y abajo: su altura la fija la página de resumen, nunca
+            // esta página.
             anchors { left: parent.left; right: parent.right; top: parent.top; bottom: parent.bottom }
             spacing: Theme.space8
             opacity: dash.tab === "wallpaper" ? 1 : 0
             visible: opacity > 0.01
             // Las miniaturas de la rejilla solo se decodifican tras visitar la
-            // pestaña (y se conservan: el panel entero se destruye al cerrar).
+            // pestaña, y se conservan porque el panel se destruye al cerrar.
             property bool thumbsArmed: false
             onVisibleChanged: if (visible) thumbsArmed = true
             transform: Translate {
@@ -993,18 +971,15 @@ Popout {
                 }
             }
 
-            // Héroe: el fondo en uso a lo ancho, en formato banner compacto
-            // para que la página no supere la altura de las demás pestañas.
-            // El pie va sobre un velo oscuro fijo (no tonal) para leerse
-            // sobre cualquier imagen.
+            // Héroe: el fondo en uso a lo ancho, en banner compacto para que la
+            // página no supere la altura de las demás pestañas. El pie va sobre un
+            // velo oscuro fijo, no tonal, para leerse sobre cualquier imagen.
             ClippingRectangle {
                 id: wpHero
                 Layout.fillWidth: true
                 visible: Wallpaper.current !== ""
-                // Altura natural compacta; fillHeight hace que el layout le
-                // entregue además todo el resto que la rejilla no convierte
-                // en filas completas. El reparto lo resuelve el motor de
-                // layout: aquí no hay ningún cálculo que mantener.
+                // Altura natural compacta; fillHeight hace que el layout le entregue
+                // además el resto que la rejilla no convierte en filas completas.
                 implicitHeight: wpGrid.heroBase
                 Layout.fillHeight: true
                 radius: Theme.dp(16)
@@ -1012,10 +987,10 @@ Popout {
 
                 Image {
                     anchors.fill: parent
-                    // Atado a shown para no decodificar con el panel cerrado,
-                    // y a thumbsArmed para no hacerlo antes de visitar la pestaña.
-                    // Miniatura en disco (640px) en vez del original: mismo
-                    // recorte a la vista, decodificación decenas de veces menor.
+                    // Atado a 'shown' para no decodificar con el panel cerrado y a
+                    // 'thumbsArmed' para no hacerlo antes de visitar la pestaña. Usa
+                    // la miniatura en disco y no el original: mismo recorte a la
+                    // vista, con una fracción de la decodificación.
                     source: dash.shown && wallpaperPage.thumbsArmed && Wallpaper.current !== ""
                             ? "file://" + Wallpaper.thumb(Wallpaper.current) : ""
                     fillMode: Image.PreserveAspectCrop
@@ -1090,21 +1065,18 @@ Popout {
                 }
             }
 
-            // 4 columnas y tope de ~2 filas: junto con el héroe compacto, la
-            // página queda a la altura que tenía la pestaña original (el panel
-            // dimensiona todas las pestañas a la más alta). Con más fondos, la
+            // Cuatro columnas y un tope de filas: junto con el héroe compacto, la
+            // página queda a la altura de las demás pestañas. Con más fondos, la
             // rejilla desplaza.
             GridView {
                 id: wpGrid
                 Layout.fillWidth: true
                 visible: Wallpaper.list.length > 0
-                // La altura de la página viene dada desde fuera (anclada
-                // arriba y abajo; la fija la página de resumen). La rejilla
-                // convierte su hueco en filas COMPLETAS —ninguna asoma
-                // cortada— y el sobrante lo estira el héroe (fillHeight).
-                // heroBase es la única constante compartida con el héroe:
-                // nada aquí depende de alturas renderizadas, así que no hay
-                // realimentación posible con el tamaño del panel.
+                // La altura de la página viene dada desde fuera. La rejilla
+                // convierte su hueco en filas completas —ninguna asoma cortada— y el
+                // sobrante lo estira el héroe. heroBase es la única constante
+                // compartida con él: nada aquí depende de alturas renderizadas, así
+                // que no hay realimentación con el tamaño del panel.
                 readonly property int heroBase: Theme.dp(104)
                 readonly property int staticH: wpHeader.implicitHeight + wallpaperPage.spacing
                                                + (wpHero.visible ? heroBase + wallpaperPage.spacing : 0)

@@ -6,47 +6,36 @@ import qs.Components
 import qs.Config
 import qs.Services
 
-// El CONTENIDO de la pantalla de bloqueo: reloj, tarjeta de autenticación,
+// El contenido de la pantalla de bloqueo: reloj, tarjeta de autenticación,
 // botones de sesión y pista. La superficie de Wayland que lo hospeda está en
-// Panels/LockScreen.qml, y la lógica (PAM, estado, respaldo a hyprlock) en
-// Services/Lock.qml.
+// Panels/LockScreen.qml, y la lógica —PAM, estado, respaldo— en Services/Lock.qml.
 //
-// POR QUÉ EN UN ARCHIVO APARTE Y NO DENTRO DE LA SUPERFICIE. Porque así se
-// puede PROBAR. Un WlSessionLockSurface solo lo crea el compositor cuando la
-// sesión está bloqueada de verdad, así que meter aquí dentro trescientas
-// líneas de interfaz significa que la única forma de comprobar que montan es
-// bloquearse la sesión — y si algo no carga, te quedas fuera. Siendo un Item
-// normal, tests/logica.qml lo instancia en una ventana invisible y comprueba
-// que el árbol entero se construye antes de que llegue a usarse en serio.
+// Vive en un archivo aparte y no dentro de la superficie para poder probarlo: un
+// WlSessionLockSurface solo lo crea el compositor con la sesión bloqueada de
+// verdad, así que meter aquí la interfaz obligaría a bloquearse para comprobar
+// que monta, y si algo no carga se queda uno fuera. Siendo un Item normal se
+// instancia en una ventana invisible.
 //
-// ── EL REPARTO ──────────────────────────────────────────────────────────────
-// Reloj grande arriba, en TODAS las pantallas. La tarjeta de autenticación,
-// solo en la principal: dos campos de contraseña compitiendo por el teclado es
-// el problema que ya se resolvió con los modales de red.
+// El reloj grande va en todas las pantallas; la tarjeta de autenticación solo en
+// una, porque dos campos de contraseña compitiendo por el teclado es el problema
+// que ya se resolvió con los modales de red.
 //
-// Dentro de la tarjeta, de arriba abajo: quién eres (avatar y nombre) y el
-// tiempo · el campo con su botón de entrar · los avisos de teclado (Bloq Mayús
-// y distribución) · el mensaje de PAM · y, separada por un filete, la fila de
-// contexto (reproductor, red y batería). Debajo de la tarjeta, los botones de
-// sesión y la pista de desbloqueo.
+// Dentro de la tarjeta, de arriba abajo: quién eres y el tiempo · el campo con su
+// botón de entrar · los avisos de teclado · el mensaje de PAM · y, tras un
+// filete, la fila de contexto. Debajo, los botones de sesión y la pista.
 //
-// El orden no es arbitrario: lo que necesitas para entrar está arriba y en el
-// centro óptico, y lo que solo es información útil de un vistazo —qué suena,
-// cuánta batería queda— vive debajo del filete, donde no compite con el campo.
+// El orden no es arbitrario: lo que hace falta para entrar está arriba y en el
+// centro óptico, y lo que solo es información de un vistazo vive bajo el filete,
+// donde no compite con el campo.
 Item {
     id: content
 
     // La pantalla que hospeda esto. En la sesión de verdad la pone la
     // superficie; en las pruebas, un stub.
     property var screen: null
-    // ¿Va la tarjeta en ESTA pantalla? Solo en una: dos campos de contraseña
-    // compitiendo por el teclado es el problema que ya se resolvió con los
-    // modales de red.
-    //
-    // Y esa una es donde ESTABAS al bloquear, no Quickshell.screens[0]. El
-    // índice cero es solo la primera pantalla que enumeró el compositor, sin
-    // ninguna relación con cuál es tu principal ni con dónde tenías el ratón:
-    // con dos monitores acertaba la mitad de las veces.
+    // ¿Va la tarjeta en esta pantalla? Solo en una, y esa es donde se estaba al
+    // bloquear: el índice cero es la primera que enumeró el compositor, sin
+    // relación con cuál es la principal ni con dónde estaba el ratón.
     readonly property bool primary: {
         const lista = Quickshell.screens
         if (lista.length === 0)
@@ -54,88 +43,70 @@ Item {
         const donde = Lock.lockedOnMonitor
         if (donde !== "" && content.screen)
             return content.screen.name === donde
-        // Sin Hyprland no hay forma de saber cuál es cuál: cae en la primera,
-        // que al menos es determinista.
+        // Sin Hyprland no hay forma de saber cuál es cuál: cae en la primera, que
+        // al menos es determinista.
         return content.screen === lista[0]
     }
-    // Si el bloqueo está activo. Se pasa desde fuera para que las pruebas
-    // puedan montar el árbol sin bloquear nada.
+    // Si el bloqueo está activo. Se pasa desde fuera para que las pruebas puedan
+    // montar el árbol sin bloquear nada.
     property bool active: Lock.locked
 
-    // ── Fondo ────────────────────────────────────────────────────────────
-    // El mismo fondo de escritorio, desenfocado y atenuado. Que sea el
-    // mismo importa: desbloquear no es un corte de plano, la imagen ya está
-    // donde estaba.
+    // El mismo fondo de escritorio, desenfocado y atenuado. Que sea el mismo
+    // importa: desbloquear no es un corte de plano, la imagen ya está donde estaba.
     //
     // El desenfoque va con MultiEffect y no pintando un rectángulo translúcido
-    // encima: un velo oscuro apaga la foto entera, mientras que desenfocar
-    // mata el DETALLE —que es lo que compite con el texto— y deja el color y
-    // la composición. Encima, un texto sobre una superficie desenfocada se
-    // lee sin necesidad de tanta oscuridad.
+    // encima: un velo oscuro apaga la foto entera, mientras que desenfocar mata el
+    // detalle —que es lo que compite con el texto— y deja el color y la
+    // composición.
     Image {
         id: wall
         anchors.fill: parent
         // La copia al tamaño de la pantalla (ver Services/Wallpaper.qml): el
-        // sourceSize de abajo ya limitaba la TEXTURA, pero no el pico de
-        // descodificación, que lo manda el fichero. Si no hay copia, full()
-        // devuelve el original y esto se comporta como antes.
+        // sourceSize de abajo limita la textura, pero no el pico de descodificación,
+        // que lo manda el fichero. Si no hay copia, full() devuelve el original.
         source: Wallpaper.current !== "" ? "file://" + Wallpaper.full(Wallpaper.current) : ""
         fillMode: Image.PreserveAspectCrop
         asynchronous: true
         cache: false
         sourceSize: Qt.size(content.width, content.height)
-        // Se queda VISIBLE debajo del efecto a propósito. MultiEffect es un
-        // shader, y un shader puede no ejecutarse: con el renderizador por
-        // software —o si el driver falla al reanudar tras suspender— el efecto
-        // no pinta nada. Si la imagen estuviera oculta, el resultado sería una
-        // pantalla de bloqueo de color plano, sin fondo y sin avisar de por
-        // qué. Dejándola debajo, lo peor que pasa es que el fondo salga
-        // nítido en vez de desenfocado.
+        // Se queda visible debajo del efecto a propósito. MultiEffect es un shader
+        // y un shader puede no ejecutarse —renderizador por software, o un driver
+        // que falla al reanudar—, y con la imagen oculta el resultado sería una
+        // pantalla de bloqueo de color plano sin avisar de por qué. Dejándola
+        // debajo, lo peor que pasa es que el fondo salga nítido.
         //
-        // El coste de pintarla dos veces cuando el efecto SÍ funciona es un
-        // blit de pantalla completa, y solo mientras la sesión está bloqueada.
+        // El coste de pintarla dos veces cuando el efecto sí funciona es un blit de
+        // pantalla completa, y solo mientras la sesión está bloqueada.
         visible: status === Image.Ready
     }
 
     MultiEffect {
         anchors.fill: parent
         source: wall
-        // Sin desenfoque no se instancia el efecto: se vería exactamente igual
-        // que la imagen de debajo, pintada una segunda vez para nada.
+        // Sin desenfoque no se instancia el efecto: se vería igual que la imagen de
+        // debajo, pintada una segunda vez para nada.
         visible: wall.status === Image.Ready && Settings.lockBlur > 0.001
         blurEnabled: true
         blur: Settings.lockBlur
-        // El radio se mide en píxeles, así que un valor fijo desenfoca mucho
-        // menos en 4K que en 1080p: se ata al alto de la pantalla para que se
-        // vea igual en cualquier monitor.
-        //
-        // Pero CON TOPE en 64, que es el máximo que Qt da por razonable para
-        // MultiEffect: por encima, cada escalón añade otra pasada de
-        // reducción y el coste sube sin que la imagen cambie apenas. Sin el
-        // tope, un 1440p pedía 72 y un 4K, 108 — justo lo contrario de lo que
-        // hace la configuración de Hyprland de esta máquina, que baja el blur
-        // a tamaño 2 y una sola pasada precisamente porque es lo que más
-        // cuesta en su APU.
-        //
-        // Aun así esto solo se paga mientras la sesión está bloqueada. Si en
-        // este equipo se notara, Ajustes ▸ Shell ▸ En la pantalla de bloqueo
-        // ▸ Desenfoque a 0 no lo baja: no llega a instanciar el efecto.
+        // El radio se mide en píxeles, así que un valor fijo desenfoca mucho menos
+        // en 4K que en 1080p: se ata al alto de la pantalla para que se vea igual en
+        // cualquier monitor, con un tope de 64, que es el máximo que Qt da por
+        // razonable para
         blurMax: Math.max(16, Math.min(64, Math.round(content.height * 0.05)))
         // Multipasada: con una sola, un radio grande deja bandas.
         blurMultiplier: 1.0
         autoPaddingEnabled: false
     }
 
-    // Atenuado, por encima del desenfoque. Menos que antes (0,45 frente a
-    // 0,62) porque el desenfoque ya hace la mitad del trabajo de separar el
-    // texto del fondo.
+    // Atenuado, por encima del desenfoque, y suave: el desenfoque ya hace la
+    // mitad del trabajo de separar el texto del fondo.
     Rectangle {
         anchors.fill: parent
         color: Theme.bg
         opacity: wall.status === Image.Ready ? Settings.lockDim : 1
     }
 
-    // ── Reloj (en todas las pantallas) ───────────────────────────────────
+    // Reloj (en todas las pantallas)
     Column {
         id: clockCol
         anchors.horizontalCenter: parent.horizontalCenter
@@ -147,27 +118,24 @@ Item {
             anchors.horizontalCenter: parent.horizontalCenter
             text: Qt.formatDateTime(Time.now, Time.clockFormat)
             color: Theme.fg
-            // Escala con la altura de la pantalla, con tope: en un monitor
-            // 4K un tamaño fijo se ve minúsculo y en uno pequeño, enorme.
+            // Escala con la altura de la pantalla, con tope: un tamaño fijo se ve
+            // minúsculo en 4K y enorme en un monitor pequeño.
             font.pixelSize: Math.max(Theme.sp(40),
                                      Math.min(Theme.sp(96),
                                               Math.round(content.height * 0.105)))
-            // Ligera, no negrita: a este tamaño el peso fuerte se convierte
-            // en una mancha. Es lo que hace que un reloj grande se lea como
+            // Ligera y no negrita: a este tamaño el peso fuerte se convierte en
+            // una mancha, y es lo que hace que un reloj grande se lea como
             // tipografía y no como un cartel.
             font.weight: Font.Light
         }
-        // Fecha LARGA, no la abreviada de la barra: aquí hay sitio de sobra y
-        // "sábado, 29 de agosto" se lee de un vistazo desde lejos, que es la
-        // distancia a la que se mira una pantalla de bloqueo.
+        // Fecha larga, no la abreviada de la barra: aquí hay sitio y se lee de un
+        // vistazo desde lejos, que es la distancia a la que se mira una pantalla de
+        // bloqueo.
         ThemedText {
             anchors.horizontalCenter: parent.horizontalCenter
-            // LongFormat y no un patrón escrito a mano: "d MMMM" da
-            // "29 agosto" en castellano, cuando lo natural es "29 de agosto" —
-            // y esa preposición cambia en cada idioma (en catalán además se
-            // apostrofa: "29 d'agost"). El formato largo de la locale ya sabe
-            // todo eso; escribirlo a mano es acertar en uno y fallar en los
-            // otros dos.
+            // LongFormat y no un patrón escrito a mano: "d MMMM" daría "29 agosto"
+            // en castellano cuando lo natural es "29 de agosto", y esa preposición
+            // cambia en cada idioma. El formato largo de la locale ya lo sabe.
             text: Time.now.toLocaleDateString(I18n.locale(), Locale.LongFormat)
             color: Theme.fgDim
             font.pixelSize: Math.max(Theme.sp(12),
@@ -176,23 +144,21 @@ Item {
         }
     }
 
-    // ── Tarjeta de autenticación (solo en el monitor principal) ──────────
+    // Tarjeta de autenticación (solo en el monitor principal)
     Item {
         id: card
 
         visible: content.primary
-        // Ancho "regular": lo bastante para que la fila de contexto respire
-        // sin que el campo de contraseña quede perdido en medio de un
-        // panel gigante.
+        // Ancho suficiente para que la fila de contexto respire sin que el campo de
+        // contraseña quede perdido en medio de un panel gigante.
         width: Math.min(Theme.dp(560), content.width - Theme.dp(64))
         height: cardCol.implicitHeight + Theme.dp(44)
         anchors.horizontalCenter: parent.horizontalCenter
         y: Math.max(clockCol.y + clockCol.height + Theme.dp(48),
                     Math.round((content.height - height) / 2))
 
-        // Sacudida al fallar: el acuse físico de "no". Va en un transform,
-        // no en 'x', para no recalcular la posición de la tarjeta en cada
-        // fotograma de la animación.
+        // Sacudida al fallar: el acuse físico de "no". Va en un transform y no en
+        // 'x', para no recalcular la posición de la tarjeta en cada fotograma.
         property real shake: 0
         transform: Translate { x: card.shake }
         Connections {
@@ -210,7 +176,7 @@ Item {
             NumberAnimation { target: card; property: "shake"; to: 0;             duration: 60; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel }
         }
 
-        // Entrada: sube un poco y aparece. Al bloquear, la tarjeta llega
+        // Entrada: sube un poco y aparece, así que al bloquear la tarjeta llega
         // después del fondo en vez de estar ya puesta.
         opacity: 0
         property real enterY: Theme.dp(18)
@@ -240,7 +206,7 @@ Item {
             anchors.rightMargin: Theme.dp(22)
             spacing: Theme.space12
 
-            // ── Identidad + tiempo ───────────────────────────────────────
+            // Identidad + tiempo
             RowLayout {
                 Layout.fillWidth: true
                 spacing: Theme.space12
@@ -279,7 +245,7 @@ Item {
                 }
             }
 
-            // ── Campo de contraseña + botón de entrar ────────────────────
+            // Campo de contraseña + botón de entrar
             RowLayout {
                 Layout.fillWidth: true
                 spacing: Theme.space8
@@ -313,27 +279,24 @@ Item {
                         anchors.rightMargin: Theme.dp(16)
                         verticalAlignment: TextInput.AlignVCenter
                         // El campo se apaga mientras PAM trabaja: seguir
-                        // escribiendo durante la comprobación solo sirve
-                        // para mandar media contraseña con el siguiente
-                        // Enter.
+                        // escribiendo durante la comprobación solo sirve para
+                        // mandar media contraseña con el siguiente Enter.
                         enabled: !Lock.busy
                         echoMode: TextInput.Password
                         passwordCharacter: "●"
-                        // Sin retardo: el enmascarado inmediato es lo que
-                        // se espera de una pantalla de bloqueo, y lo que
-                        // evita enseñar la última letra a quien mire por
-                        // encima del hombro.
+                        // Sin retardo: el enmascarado inmediato es lo que se espera
+                        // de una pantalla de bloqueo, y lo que evita enseñar la
+                        // última letra a quien mire por encima del hombro.
                         passwordMaskDelay: 0
                         color: Theme.fg
                         font.family: Theme.fontFamily
                         font.pixelSize: Theme.sp(15)
                         selectByMouse: true
                         selectionColor: Theme.withAlpha(Theme.accent, 0.45)
-                        // Es el único sitio donde se escribe, así que se
-                        // declara como el item con foco DENTRO de la
-                        // superficie. Es la mitad declarativa del asunto;
-                        // la otra mitad —insistir hasta que el compositor
-                        // nos dé el foco de teclado— la hace focusKeeper.
+                        // Es el único sitio donde se escribe, así que se declara
+                        // como el item con foco dentro de la superficie. La otra
+                        // mitad —insistir hasta que el compositor dé el foco de
+                        // teclado— la hace focusKeeper.
                         focus: true
 
                         onAccepted: pwInput.send()
@@ -362,9 +325,9 @@ Item {
                     }
                 }
 
-                // Botón de entrar. Redundante con Enter a propósito: en una
-                // pantalla de bloqueo con el ratón a mano, no todo el mundo
-                // da por hecho que Enter valga.
+                // Botón de entrar, redundante con Enter a propósito: en una
+                // pantalla de bloqueo con el ratón a mano, no todo el mundo da por
+                // hecho que Enter valga.
                 Rectangle {
                     implicitWidth: Theme.dp(46)
                     implicitHeight: Theme.dp(46)
@@ -393,11 +356,9 @@ Item {
                 }
             }
 
-            // ── Avisos de teclado ────────────────────────────────────────
-            // Bloq Mayús es la causa número uno de "me sé la contraseña y
-            // no entra", y una contraseña enmascarada no deja verlo. La
-            // distribución, lo mismo cuando tienes dos: se puede cambiar
-            // desde aquí sin salir del bloqueo.
+            // Bloq Mayús es la causa número uno de "me sé la contraseña y no
+            // entra", y una contraseña enmascarada no deja verlo. La distribución,
+            // lo mismo cuando hay dos: se puede cambiar desde aquí.
             RowLayout {
                 Layout.fillWidth: true
                 spacing: Theme.space8
@@ -416,16 +377,15 @@ Item {
                     clickable: true
                     onActivated: {
                         Keyboard.cycle()
-                        // Cambiar de distribución con el ratón se lleva el
-                        // foco del campo; se devuelve, o la siguiente tecla
-                        // se pierde.
+                        // Cambiar de distribución con el ratón se lleva el foco del
+                        // campo; se devuelve, o la siguiente tecla se pierde.
                         pwInput.forceActiveFocus()
                     }
                 }
                 Item { Layout.fillWidth: true }
             }
 
-            // ── Mensaje de PAM ───────────────────────────────────────────
+            // Mensaje de PAM
             ThemedText {
                 Layout.fillWidth: true
                 visible: Lock.message !== ""
@@ -435,11 +395,10 @@ Item {
                 wrapMode: Text.WordWrap
             }
 
-            // Salida de emergencia, y solo cuando hace falta: si la
-            // autenticación no arranca (PAM mal configurado), una pantalla
-            // de bloqueo sin salida deja la sesión inaccesible. Los TTY
-            // siguen ahí y conviene recordarlo en ese momento exacto, no
-            // como aviso permanente que nadie lee.
+            // Salida de emergencia, y solo cuando hace falta: si la autenticación
+            // no arranca, una pantalla de bloqueo sin salida deja la sesión
+            // inaccesible. Los TTY siguen ahí y conviene recordarlo en ese momento
+            // exacto, no como aviso permanente que nadie lee.
             ThemedText {
                 Layout.fillWidth: true
                 visible: Lock.messageIsError && Lock.failures === 0
@@ -449,10 +408,8 @@ Item {
                 wrapMode: Text.WordWrap
             }
 
-            // ── Fila de contexto ─────────────────────────────────────────
-            // Bajo el filete: información, no acción. Solo aparece si hay
-            // algo que contar, para que la tarjeta se encoja hasta lo justo
-            // cuando no lo hay.
+            // Bajo el filete: información, no acción. Solo aparece si hay algo que
+            // contar, para que la tarjeta se encoja hasta lo justo cuando no lo hay.
             Rectangle {
                 Layout.fillWidth: true
                 Layout.topMargin: Theme.space4
@@ -467,9 +424,8 @@ Item {
                 spacing: Theme.space12
                 visible: mediaBlock.visible || statusBlock.visible
 
-                // Reproductor. Usa el mismo criterio que la barra
-                // (Services/Media.qml), así que aquí tampoco aparece el
-                // reproductor fantasma que deja registrado el navegador.
+                // Reproductor, con el mismo criterio que la barra, así que aquí
+                // tampoco aparece el reproductor fantasma del navegador.
                 RowLayout {
                     id: mediaBlock
                     Layout.fillWidth: true
@@ -500,8 +456,8 @@ Item {
                             elide: Text.ElideRight
                         }
                     }
-                    // Controlar la música sin desbloquear es justo lo que se
-                    // espera de una pantalla de bloqueo.
+                    // Controlar la música sin desbloquear es lo que se espera de
+                    // una pantalla de bloqueo.
                     LockIconButton {
                         glyph: "󰒮"
                         enabled: Media.active?.canGoPrevious ?? false
@@ -519,12 +475,9 @@ Item {
                     }
                 }
 
-                // El empujón a la derecha solo cuando hay música: la fila es
-                // "lo que suena · el estado", y sin lo primero un icono de red
-                // solo, pegado al canto derecho con medio panel vacío a su
-                // izquierda, se lee como algo que se ha quedado a medias. Sin
-                // música, el estado arranca a la izquierda y la línea parece lo
-                // que es: una línea de estado.
+                // El empujón a la derecha solo cuando hay música: la fila es "lo
+                // que suena · el estado", y sin lo primero un icono de red solo,
+                // pegado al canto con medio panel vacío, se lee como algo a medias.
                 Item { Layout.fillWidth: true; visible: mediaBlock.visible }
 
                 // Red y batería.
@@ -541,10 +494,8 @@ Item {
                             color: Net.online ? Theme.fgDim : Theme.fgMuted
                             font.pixelSize: Theme.sp(14)
                         }
-                        // Con el nombre, no solo el icono: un glifo de wifi
-                        // suelto en la esquina no dice nada — la pregunta que
-                        // se hace uno al bloquear es "¿sigo conectado a la de
-                        // casa?", y para eso hace falta el nombre.
+                        // Con el nombre y no solo el icono: un glifo de wifi suelto
+                        // en la esquina no dice nada — la pregunta que
                         ThemedText {
                             Layout.maximumWidth: Theme.dp(150)
                             text: Net.label
@@ -576,7 +527,6 @@ Item {
         }
     }
 
-    // ── Botones de sesión ────────────────────────────────────────────────
     // Fuera de la tarjeta: no son parte de entrar, son la alternativa a
     // entrar. Mezclarlos con el campo invita a pulsar "apagar" buscando
     // "aceptar".
@@ -606,7 +556,6 @@ Item {
         Behavior on opacity { NumberAnimation { duration: Theme.animNormal } }
     }
 
-    // ── El foco del campo ────────────────────────────────────────────────
     // Un forceActiveFocus() al construirse NO basta, y esa era la razón de que
     // hubiera que hacer clic antes de escribir: la superficie se crea antes de
     // que el compositor le entregue el foco de teclado, así que la petición se
@@ -629,7 +578,7 @@ Item {
         }
     }
 
-    // ── Piezas locales ───────────────────────────────────────────────────
+    // Piezas locales
 
     // Etiqueta con glifo para los avisos de teclado.
     component Badge: Rectangle {

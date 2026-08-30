@@ -22,7 +22,6 @@ import qs.Config
 // collapse?" que aparece cada vez que algo tiene que cerrarse:
 //
 //   función                 transitorio      destino          cola
-//   ─────────────────────────────────────────────────────────────────────────
 //   showLevel               pone "level"     ·                ·
 //   pushNotification        pone "notif"     ·                encola
 //   dismissNotification     quita si era él  ·                saca la primera

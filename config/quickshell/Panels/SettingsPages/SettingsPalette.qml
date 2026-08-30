@@ -8,21 +8,19 @@ import qs.Services
 // Paleta compartida de Ajustes: colores derivados del tema. Singleton para
 // no repetir las fórmulas en cada fichero.
 Singleton {
-    // ── La escalera de contenedores de M3, aplicada a Ajustes ────────────────
-    // M3 dice la altura subiendo de contenedor, no metiendo sombras. En esta
+    // La altura se dice subiendo de contenedor, no metiendo sombras. En esta
     // ventana el orden es:
     //
-    //   ventana            el fondo translúcido (settingsBackdrop)
+    //   ventana            el fondo translúcido
     //   surfaceContainer   las tarjetas de grupo y las cajas de la ventana
-    //   ...High            los CONTROLES dentro de ellas: desplegables,
-    //                      campos, segmentos. Un peldaño por encima de la
-    //                      tarjeta que los contiene, que es lo que los hace
-    //                      leerse como algo que se puede tocar.
+    //   ...High            los controles dentro de ellas: desplegables, campos,
+    //                      segmentos. Un peldaño por encima de la tarjeta que los
+    //                      contiene, que es lo que los hace leerse como algo que
+    //                      se puede tocar.
     //
-    // Eran mezclas con alfa sobre 'surface' (0,72 y 0,86). El problema del alfa
-    // aquí no es el tono sino que DEPENDE DE LO QUE HAYA DEBAJO: el mismo
-    // desplegable se veía de un gris dentro de una tarjeta y de otro sobre el
-    // fondo de la ventana, y no había forma de decir cuál era el correcto.
+    // Opacos y no mezclas con alfa: con alfa, el tono depende de lo que haya
+    // debajo, y el mismo desplegable se vería de un gris dentro de una tarjeta y
+    // de otro sobre el fondo de la ventana.
     readonly property color settingsCard: Theme.surfaceContainer
     readonly property color settingsControl: Theme.surfaceContainerHigh
     // El tono de fila lo define el TEMA (Theme.rowHover): aquí solo se le da
@@ -41,25 +39,15 @@ Singleton {
     // cristal. Se difumina a los lados para no chocar con las esquinas.
     readonly property color cardSheen: Theme.withAlpha(Theme.fg, Theme.isDark ? 0.10 : 0.16)
 
-    // ── Grupo de ajustes (SettingsCard) ──────────────────────────────────────
-    // Superficie PLANA. Antes cada grupo llevaba degradado cenital + reflejo
-    // especular + filete bajo la cabecera + insignia de icono con su propio
-    // degradado y su propio borde: cinco recursos para decir «esto es un
-    // bloque». Apilados seis veces en una página, el ojo no distinguía un
-    // grupo de otro y la página entera se leía como relieve estampado.
-    //
-    // Ahora el grupo dice lo suyo con dos cosas: un tono y un borde. Todo lo
-    // demás (el acento, el movimiento) se gasta en las FILAS, que es donde
-    // está el trabajo del usuario.
-    // Contenedor de M3, opaco. Era withAlpha(surfaceHi, 0.42), y el alfa tenía
-    // un problema que no se ve hasta que muerde: dos superficies con alfa una
-    // encima de otra SUMAN, así que el mismo token salía de un tono distinto
-    // según lo que hubiera detrás. Con los tramos de esquina agrupada eso pasó
-    // de ser teórico a ser el caso normal — una tarjeta es ahora una pila de
-    // piezas, no una sola superficie.
-    //
-    // El tono resultante es casi el mismo (#1d2125 contra el #1b1f23 que salía
-    // compuesto), así que no cambia el aspecto: cambia que ahora es predecible.
+    // Superficie plana: el grupo dice lo suyo con un tono y un borde, y nada
+    // más. Acumular degradados, reflejos y filetes para decir "esto es un
+    // bloque" hace que, apilados media docena de veces en una página, el ojo no
+    // distinga un grupo de otro. El acento y el movimiento se gastan en las
+    // filas, que es donde está el trabajo del usuario.
+    // Contenedor de M3, opaco: con alfa, dos superficies superpuestas suman y el
+    // mismo token saldría de un tono distinto según lo que hubiera detrás. Con
+    // los tramos de esquina agrupada, una tarjeta es una pila de piezas y no una
+    // sola superficie, así que ese caso es el normal.
     readonly property color groupFill: Theme.surfaceContainer
     readonly property color groupBorder: Theme.outlineVariant
     // Fondo tintado de los distintivos (badges) de icono. En modo claro sube

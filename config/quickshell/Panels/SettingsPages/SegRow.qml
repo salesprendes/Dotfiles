@@ -4,17 +4,15 @@ import qs.Components
 import qs.Config
 import qs.Panels.SettingsPages
 
-// Selector segmentado: etiqueta a la izquierda y píldora de opciones a la
-// derecha, en la MISMA línea — igual que una fila de interruptor, para que una
-// página no parezca dos formularios distintos según el control.
+// Selector segmentado: etiqueta a la izquierda y píldora de opciones a la derecha,
+// en la misma línea, igual que una fila de interruptor, para que una página no
+// parezca dos formularios distintos según el control.
 //
-// La píldora se CIÑE a sus opciones. Antes ocupaba todo el ancho de la
-// tarjeta: en una ventana ancha, «Compacta | Normal | Grande» se convertía en
-// tres pancartas de 300 px cada una, con la palabra perdida en medio. Un
-// selector de tres opciones cortas es un objeto pequeño; hacerlo enorme no lo
-// hace más legible, solo más difícil de apuntar (ley de Fitts: el ancho útil
-// de un botón es el que separa su centro del siguiente, y estirarlos aleja
-// todos los destinos entre sí).
+// La píldora se ciñe a sus opciones. Ocupando todo el ancho de la tarjeta, en una
+// ventana ancha tres opciones cortas se convierten en tres pancartas con la palabra
+// perdida en medio: hacerlas enormes no las hace más legibles, solo más difíciles
+// de apuntar, porque el ancho útil de un botón es el que separa su centro del
+// siguiente y estirarlos aleja todos los destinos entre sí.
 // El filtro del buscador y la marca de fila vienen de la base (ver
 // Components/SettingsRow.qml).
 SettingsRow {
@@ -30,37 +28,30 @@ SettingsRow {
 
     readonly property int optCount: options ? options.length : 0
 
-    // ── Responsive por CONTENEDOR, no por ventana ────────────────────────────
-    // Cuando la fila se estrecha hasta que la etiqueta y la píldora ya no
-    // conviven, la píldora se baja a su propio renglón y ocupa todo el ancho.
+    // Cuando la fila se estrecha hasta que la etiqueta y la píldora ya no conviven,
+    // la píldora baja a su propio renglón y ocupa todo el ancho.
     //
-    // La decisión se toma con el ancho de ESTA fila, no con el de la ventana:
-    // la misma fila puede vivir en una tarjeta ancha o en una columna
-    // estrecha, y lo que decide si cabe es el sitio que tiene delante, no el
-    // tamaño del monitor. Es el equivalente a una container query.
-    // Lo que ocupa la fila en una sola línea: insignia + etiqueta + píldora.
-    // Se mide de verdad (implicitWidth de la etiqueta, ancho natural de la
-    // píldora) en vez de con un umbral inventado, así que el salto ocurre
-    // exactamente cuando deja de caber — ni antes, dejando hueco de sobra, ni
-    // después, recortando la etiqueta.
+    // La decisión se toma con el ancho de esta fila y no con el de la ventana: la
+    // misma fila puede vivir en una tarjeta ancha o en una columna estrecha, y lo
+    // que decide si cabe es el sitio que tiene delante.
+    //
+    // Se mide de verdad —implicitWidth de la etiqueta, ancho natural de la
+    // píldora— en vez de con un umbral inventado, así que el salto ocurre
+    // exactamente cuando deja de caber.
     readonly property real inlineNeed: Theme.dp(28) + Theme.space10
         + lbl.implicitWidth + Theme.space10 + seg.naturalWidth
     readonly property bool stacked:
         seg.label !== "" && seg.width > 0 && seg.width < seg.inlineNeed + Theme.space8
 
-    // Apilada, el alto es la CABECERA COMPLETA (insignia incluida) más la
-    // píldora. Se contaba solo el alto de la etiqueta, y la insignia —que es
-    // más alta que el texto— se comía la diferencia: la píldora acababa
-    // dibujada encima de la fila siguiente.
+    // Apilada, el alto es la cabecera completa —insignia incluida— más la píldora:
+    // contando solo el alto de la etiqueta, la insignia se come la diferencia y la
+    // píldora acaba dibujada encima de la fila siguiente.
     implicitHeight: stacked
         ? row.implicitHeight + Theme.space6 + Theme.rowS
         : Math.max(row.implicitHeight, Theme.dp(46))
 
-    // Ancho natural de la píldora. La interfaz va en monoespaciada, así que
-    // el número de CARACTERES de la opción más larga da su ancho exacto sin
-    // tener que medir cada texto por separado. Con una fuente proporcional la
-    // "M" sobreestima un poco, que es el lado seguro del error: la píldora
-    // sale algo holgada, nunca recortada.
+    // Ancho natural de la píldora. La interfaz va en monoespaciada, así que el
+    // número de caracteres de la opción más larga da su ancho exacto sin
     readonly property int maxChars: {
         let m = 1
         for (let i = 0; i < optCount; i++)
@@ -80,13 +71,12 @@ SettingsRow {
 
     // Apilada, la píldora baja a su renglón y la cabecera se queda arriba.
     //
-    // La posición VERTICAL va por 'y', no por anclas condicionales. Aquí había
-    // «anchors.top: stacked ? row.bottom : undefined» y compañía, y un ancla
-    // enlazada a undefined para soltarla NO siempre se suelta: medido en vivo,
-    // una fila que pasó por apilada durante el primer pase de disposición se
-    // quedaba con la píldora colgada de row.bottom para siempre (boxY=50 con
-    // el centro en 7), pintada encima de la fila siguiente. Un 'y' es un
-    // vínculo normal: se reevalúa siempre, sin estado que soltar.
+    // La posición vertical va por 'y' y no por anclas condicionales: un ancla
+    // enlazada a undefined para soltarla no siempre se suelta, y una fila que pasó
+    // por apilada durante el primer pase de disposición se queda con la píldora
+    // colgada del borde inferior de la cabecera, pintada encima de la fila
+    // siguiente. Un 'y' es un vínculo normal: se reevalúa siempre, sin estado que
+    // soltar.
     RowLayout {
         id: row
         anchors.left: parent.left
@@ -128,22 +118,14 @@ SettingsRow {
         x: seg.stacked ? Theme.dp(28) + Theme.space10 : seg.width - width
         y: seg.stacked ? row.y + row.height + Theme.space6
                        : Math.round((seg.height - height) / 2)
-        // Apilada arranca en el eje de texto de las filas (tras la insignia) y
-        // llega al borde; en línea se ciñe EXACTAMENTE a sus opciones.
+        // Apilada arranca en el eje de texto de las filas, tras la insignia, y llega
+        // al borde; en línea se ciñe exactamente a sus opciones.
         //
-        // Aquí había un techo — «como mucho el 62 % de la fila» — y era el
-        // único camino por el que la píldora podía acabar más estrecha que su
-        // propio contenido: con la fila aún sin medir, ese Math.min la dejaba
-        // en nada y las tres opciones se amontonaban en un punto ("CNopmdta" en
-        // pantalla). Se intentó tapar comprobando que el ancho ya se conociera,
-        // pero el fallo volvió a verse: un ancho pequeño y NO nulo pasa el
-        // guardia igual de bien.
-        //
-        // El techo sobraba de todos modos. Quien decide si la píldora cabe al
-        // lado de la etiqueta es 'stacked', y su cuenta (inlineNeed) ya incluye
-        // el ancho natural: si no cabe, la fila se apila y la píldora se lleva
-        // su propio renglón entero. Sin el techo, el caso "más estrecha que su
-        // contenido" deja de existir en vez de quedar vigilado.
+        // Sin techo de ancho a propósito: quien decide si la píldora cabe al lado de
+        // la etiqueta es 'stacked', y su cuenta ya incluye el ancho natural, así que
+        // si no cabe la fila se apila y la píldora se lleva su propio renglón. Un
+        // techo sería el único camino por el que podría acabar más estrecha que su
+        // contenido, con la fila aún sin medir y las opciones amontonadas.
         width: seg.stacked
             ? Math.max(0, seg.width - (Theme.dp(28) + Theme.space10))
             : (seg.label === "" ? seg.width : seg.naturalWidth)

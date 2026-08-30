@@ -5,9 +5,9 @@ import Quickshell
 import Quickshell.Services.Notifications
 import qs.Config
 
-// Daemon de notificaciones. Quickshell se registra como servidor
-// org.freedesktop.Notifications y conserva las notificaciones en list (centro
-// de notificaciones). Emite posted para los popups.
+// Daemon de notificaciones: Quickshell se registra como servidor
+// org.freedesktop.Notifications, conserva los avisos en 'list' para el centro de
+// notificaciones y emite 'posted' para los popups.
 Singleton {
     id: root
 
@@ -21,22 +21,19 @@ Singleton {
     property bool clearingAll: false
     property var _clearQueue: []
 
-    // Marca temporal de llegada por notificación (para "hace X min"), indexada
-    // por notif.id.
+    // Marca temporal de llegada, indexada por notif.id para poder decir "hace X
+    // min".
     //
-    // No usar un WeakMap con las notificaciones como clave: son QObjects de
-    // C++, y cuando uno se destruye (descarte/expiración) su wrapper JS puede
-    // colectarse mientras la clave sigue en la tabla interna del WeakMap. La
-    // siguiente escritura recorre esas claves comparándolas (sameValueZero) y
-    // desreferencia la muerta → segfault dentro del handler de onNotification.
-    // La clave es un uint, así que no retiene nada; _pruneArrival() evita que
-    // el mapa crezca sin límite.
+    // No se usa un WeakMap con la notificación como clave: son QObjects de C++, y
+    // al destruirse uno su wrapper JS puede colectarse mientras la clave sigue en
+    // la tabla interna del WeakMap; la siguiente escritura recorrería esas claves
+    // comparándolas y desreferenciaría la muerta. Un uint no retiene nada, y
+    // _pruneArrival() evita que el mapa crezca sin límite.
     property var _arrival: ({})
     property int nowTick: 0
-    // El tick solo late con el centro de notificaciones abierto: los "hace X
-    // min" no se ven en otro sitio (los popups viven segundos y nacen como
-    // "ahora"), y al abrir el centro los bindings se evalúan frescos solos. El
-    // tick solo refresca mientras se mira.
+    // El tick solo late con el centro de notificaciones abierto: los "hace X min"
+    // no se ven en otro sitio, y al abrir el centro los bindings se evalúan
+    // frescos solos.
     Timer {
         interval: 30000
         running: root.count > 0 && Globals.notifCenterOpen
@@ -44,9 +41,9 @@ Singleton {
         onTriggered: root.nowTick++
     }
 
-    // Las notificaciones que sobreviven a una recarga (keepOnReload) pierden
-    // su marca de llegada (el mapa muere con cada generación): se sellan con la
-    // hora de carga, envejecen desde ahí, mejor que "ahora" perpetuo.
+    // Las notificaciones que sobreviven a una recarga pierden su marca de
+    // llegada, porque el mapa muere con cada generación: se sellan con la hora de
+    // carga y envejecen desde ahí, que es mejor que un "ahora" perpetuo.
     Component.onCompleted: {
         const vals = server.trackedNotifications.values
         const now = Date.now()
@@ -56,7 +53,7 @@ Singleton {
     }
 
     // Descarta las marcas de las notificaciones que ya no existen. Se llama al
-    // llegar una nueva: es el único momento en que el mapa puede crecer.
+    // llegar una nueva, que es el único momento en que el mapa puede crecer.
     function _pruneArrival() {
         const vals = server.trackedNotifications.values
         const alive = ({})
@@ -117,11 +114,10 @@ Singleton {
 
     NotificationServer {
         id: server
-        // true: el registro D-Bus y las notificaciones retenidas pasan a la
-        // generación nueva en cada recarga en vivo. Con false, el servidor
-        // nuevo intentaba registrarse con el viejo aún vivo, fallaba
-        // ("already registered") y no reintentaba: el daemon quedaba muerto en
-        // silencio (sin popups ni centro) hasta reiniciar el shell entero.
+        // El registro D-Bus y las notificaciones retenidas pasan a la generación
+        // nueva en cada recarga en vivo. Sin esto, el servidor nuevo intenta
+        // registrarse con el viejo aún vivo, falla y no reintenta: el daemon
+        // queda muerto en silencio hasta reiniciar el shell entero.
         keepOnReload: true
 
         actionsSupported: true

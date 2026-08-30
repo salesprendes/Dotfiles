@@ -1,33 +1,27 @@
 import QtQuick
 
-// El motor de movimiento de la isla: un muelle amortiguado que integra la FORMA
+// El motor de movimiento de la isla: un muelle amortiguado que integra la forma
 // entera —ancho, alto y los dos radios— hacia un objetivo.
 //
-// POR QUÉ UN MUELLE Y NO `Behavior on width`. Una transición con curva tiene
-// una duración fija: le da igual de dónde venga. Si la isla está a medio
-// expandirse y llega una notificación, la curva reinicia y el movimiento se
-// parte por la mitad — se ve como un tirón. Un muelle no se reinicia nunca:
-// conserva la VELOCIDAD que ya llevaba, así que un cambio de objetivo a mitad
-// de camino se curva y sigue. Es lo que hace que la isla parezca una sola cosa
-// que se mueve, en vez de varias animaciones peleándose.
+// Un muelle y no `Behavior on width` porque una transición con curva tiene una
+// duración fija y le da igual de dónde venga: con la isla a medio expandirse, un
+// objetivo nuevo reinicia la curva y el movimiento se parte por la mitad. Un
+// muelle conserva la velocidad que llevaba, así que un cambio a mitad de camino se
+// curva y sigue, y la isla parece una sola cosa que se mueve.
 //
-// Y va SUBAMORTIGUADO a propósito. Con k=560 y m=1 el amortiguamiento crítico
-// serían 47,3; aquí es 34. O sea que se pasa un pelín del destino y vuelve.
-// Ese rebote de un par de píxeles es toda la diferencia entre "una caja que
-// cambia de tamaño" y la sensación de isla.
+// Va subamortiguado a propósito: con k=560 y m=1 el amortiguamiento crítico serían
+// 47,3 y aquí es 34, así que se pasa un poco del destino y vuelve. Ese rebote de
+// un par de píxeles es la diferencia entre una caja que cambia de tamaño y la
+// sensación de isla.
 //
-// CUATRO DIMENSIONES, no ocho. La referencia (DankMaterialShell) integra
-// además dos desplazamientos y los cuatro radios por separado. Aquí la isla
-// siempre está centrada y pegada a su borde, así que los desplazamientos son
-// constantes, y las esquinas son simétricas a izquierda y derecha: bastan un
-// radio "cerca" (el lado del borde de pantalla) y otro "lejos". Importa porque
-// este shell arranca con el JIT de QV4 apagado (ver shell.qml) y esto se
-// integra en cada fotograma: la mitad de dimensiones es la mitad de trabajo en
-// un intérprete, a 144 Hz.
+// Cuatro dimensiones y no ocho: la isla siempre está centrada y pegada a su borde,
+// así que los desplazamientos son constantes y las esquinas son simétricas, de
+// modo que bastan un radio cerca y otro lejos. Importa porque esto se integra en
+// cada fotograma a 144 Hz.
 QtObject {
     id: root
 
-    // ── Parámetros del muelle ────────────────────────────────────────────────
+    // Parámetros del muelle
     property real stiffness: 560
     property real damping: 34
     property real mass: 1
@@ -37,7 +31,7 @@ QtObject {
     // porque la forma la sigue publicando él.
     property bool reducedMotion: false
 
-    // ── Estado ───────────────────────────────────────────────────────────────
+    // Estado
     property real width: 200
     property real height: 36
     property real radiusNear: 18

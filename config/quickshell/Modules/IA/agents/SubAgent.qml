@@ -37,16 +37,16 @@ import "../security/Gate.js" as GT
 QtObject {
     id: sub
 
-    // ── El encargo ───────────────────────────────────────────────────────────
+    // El encargo
     property string agentId: ""
     property string label: ""
     property string task: ""
-    // Lo que el jefe YA sabe y no hace falta redescubrir. Un subagente que
-    // empieza de cero repite el trabajo que motivó delegarlo.
+    // Lo que el jefe ya sabe y no hace falta redescubrir: un subagente que empieza
+    // de cero repite el trabajo que motivó delegarlo.
     property string brief: ""
-    // La raíz a la que se acota (vacía = toda la carpeta personal). Estrechar
-    // el foco no es solo seguridad: un subagente al que se le dice "esto es tu
-    // proyecto" deja de traer resultados de otros veinte.
+    // La raíz a la que se acota; vacía = toda la carpeta personal. Estrechar el
+    // foco no es solo seguridad: un subagente al que se le dice cuál es su proyecto
+    // deja de traer resultados de otros veinte.
     property string workspace: ""
     property string role: "research"     // research | review | debug | build
     property string expectedOutput: ""   // la forma del informe, en prosa
@@ -55,7 +55,7 @@ QtObject {
     property int maxRounds: 8
     property int budgetMs: 180000        // el otro presupuesto: el reloj
 
-    // ── Estado ───────────────────────────────────────────────────────────────
+    // Estado
     property int rounds: 0
     property string state: "running"     // running | done | error
     property var msgs: []
@@ -87,9 +87,9 @@ QtObject {
         onPrepared: sub._begin()
     }
 
-    // Su vocabulario sale de la concesión, y de la MISMA lista que usa el
-    // constructor de comandos: no puede haber una herramienta anunciada que
-    // luego no se ejecute ni —lo que importa— una ejecutable sin anunciar.
+    // Su vocabulario sale de la concesión y de la misma lista que usa el
+    // constructor de comandos: no puede haber una herramienta anunciada que luego
+    // no se ejecute ni, lo que importa, una ejecutable sin anunciar.
     readonly property var toolDefs: AiService.subagentDefs(sub.grant)
 
     // El encargo concreto de cada papel: qué priorizar y cómo cerrar.
@@ -113,7 +113,7 @@ QtObject {
              + "archivos ya están ahí."
     })
 
-    // ── Arranque ─────────────────────────────────────────────────────────────
+    // Arranque
     function start() {
         sub.startedAt = Date.now()
         sub._trace({ t: "start", role: sub.role, label: sub.label,
@@ -123,8 +123,8 @@ QtObject {
 
     function _begin() {
         sub.msgs = [
-            // El prompt pasa por el perfil del modelo: hay familias que
-            // encienden el pensamiento escribiendo aquí y no en la petición.
+            // El prompt pasa por el perfil del modelo: hay familias que encienden
+            // el pensamiento escribiendo aquí y no en la petición.
             { role: "system", content: AiService.systemFor(sub._system(),
                   sub.role === "review" ? "review" : "subagent") },
             { role: "user", content: sub._encargo() }
@@ -133,7 +133,7 @@ QtObject {
     }
 
     // El prompt: quién es, qué alcanza, dónde está, cuánto le queda y qué se
-    // espera de vuelta. En ese orden — un modelo pequeño obedece mejor la
+    // espera de vuelta, en ese orden, porque un modelo pequeño obedece mejor la
     // primera y la última frase.
     function _system() {
         let s = (sub._roles[sub.role] || sub._roles.research)
@@ -162,10 +162,9 @@ QtObject {
            + "Cuando necesites mirar en varios sitios, pídelo TODO en el mismo "
            + "turno con varias llamadas en paralelo."
 
-        // El presupuesto dice cuándo hay que parar a la fuerza. Esto dice
-        // cuándo hay que parar porque ya está: sin un criterio de cierre, un
-        // modelo pequeño confunde "me quedan rondas" con "me falta trabajo" y
-        // se pone a confirmar por quinta vez algo que ya sabía.
+        // El presupuesto dice cuándo hay que parar a la fuerza; esto dice cuándo
+        // hay que parar porque ya está. Sin un criterio de cierre, un modelo
+        // pequeño confunde "me quedan rondas" con "me falta trabajo".
         s += " CUÁNDO HAS TERMINADO: en cuanto tengas lo que pedía el encargo "
            + "sostenido por dos o tres fuentes que coincidan, cierra y redacta. "
            + "No busques para confirmar lo que ya está confirmado. Y si dos "
@@ -194,10 +193,8 @@ QtObject {
             : sub.task
     }
 
-    // ── Cancelación ──────────────────────────────────────────────────────────
-    // SIN señal: para cuando la conversación que esperaba el informe ya no
-    // existe (limpiar, cambiar de hilo). Emitir finished aquí resolvería una
-    // tarjeta muerta y relanzaría el bucle principal.
+    // Sin señal, para cuando la conversación que esperaba el informe ya no existe:
+    // emitir finished aquí resolvería una tarjeta muerta y relanzaría el bucle.
     function cancelSilent() {
         curl.running = false
         toolP.running = false
@@ -213,14 +210,14 @@ QtObject {
         sub.finished("(subagente cancelado por el usuario)")
     }
 
-    // ── La ronda ─────────────────────────────────────────────────────────────
+    // La ronda
     function _round(withTools) {
         sub.rounds++
         const conHerr = withTools && sub.rounds < sub.maxRounds
                         && !sub._expired && !sub._seco
-        // Si se le retira el vocabulario, hay que DECÍRSELO: un modelo al que
-        // le desaparecen las herramientas sin explicación suele contestar que no
-        // puede hacer nada, en vez de redactar lo que ya sabe.
+        // Si se le retira el vocabulario hay que decírselo: un modelo al que le
+        // desaparecen las herramientas sin explicación suele contestar que no puede
+        // hacer nada, en vez de redactar lo que ya sabe.
         if (withTools && !conHerr && !sub._avisado) {
             sub._avisado = true
             sub.msgs = sub.msgs.concat([{ role: "user", content: sub._expired
@@ -242,13 +239,13 @@ QtObject {
         }
         if (conHerr)
             req.tools = sub.toolDefs
-        // Lo que sepamos del modelo, igual que el agente principal. El papel
-        // decide el esfuerzo: revisar código es donde un nivel más de
-        // pensamiento se nota; rastrear y leer, no tanto.
+        // Lo que se sepa del modelo, igual que el agente principal. El papel decide
+        // el esfuerzo: revisar código es donde un nivel más de pensamiento se nota;
+        // rastrear y leer, no tanto.
         AiService.tuneRequest(req, sub.role === "review" ? "review" : "subagent")
         // El mismo constructor de curl que el agente principal: credenciales,
-        // tiempos y opciones de red idénticos por construcción — y el cuerpo por
-        // la entrada estándar, que es lo que permite que un subagente con ocho
+        // tiempos y opciones de red idénticos por construcción, y el cuerpo por la
+        // entrada estándar, que es lo que permite que un subagente con muchas
         // rondas de resultados dentro siga cabiendo.
         const t = AiService.chatCommand(req, 120)
         sub._body = t.body
@@ -295,9 +292,8 @@ QtObject {
                 sub._fail("respuesta vacía")
                 return
             }
-            // Un Qwen tras un servidor sin parser escribe las llamadas EN EL
-            // TEXTO (XML de Qwen3-Coder incluido): sin este rescate, el
-            // subagente tomaría ese XML como si fuera el informe final.
+            // Un modelo tras un servidor sin parser escribe las llamadas en el
+            // texto: sin este rescate, el subagente tomaría eso como su informe.
             let llamadas = m.tool_calls || []
             let texto = m.content || ""
             if (llamadas.length === 0 && texto !== "") {
@@ -310,9 +306,9 @@ QtObject {
                 }
             }
             if (llamadas.length > 0) {
-                // Se apunta el turno del asistente tal cual (el protocolo
-                // exige devolverle luego un mensaje 'tool' por cada id) y se
-                // ejecutan las llamadas EN SERIE.
+                // Se apunta el turno del asistente tal cual —el protocolo exige
+                // devolverle luego un mensaje 'tool' por cada id— y se ejecutan las
+                // llamadas en serie.
                 sub.msgs = sub.msgs.concat([{ role: "assistant",
                     content: texto, tool_calls: llamadas }])
                 sub._calls = llamadas
@@ -321,17 +317,16 @@ QtObject {
                 sub._execNext()
                 return
             }
-            // Sin herramientas: es la entrega. El <think> de Qwen y compañía no
-            // pinta nada ahí.
+            // Sin herramientas es la entrega, y ahí el bloque de razonamiento no
+            // pinta nada.
             sub._entrega(TU.splitThink(String(m.content || "")).text.trim())
         }
     }
 
-    // ── La entrega ───────────────────────────────────────────────────────────
-    // Con esquema: se comprueba, y si falla se le devuelve el fallo. Un modelo
-    // pequeño acierta el formato a la segunda casi siempre; a la tercera, se
-    // entrega lo que haya con el aviso puesto — perder el trabajo por la forma
-    // del formulario sería el peor de los desenlaces.
+    // Con esquema se comprueba y, si falla, se le devuelve el fallo. Un modelo
+    // pequeño acierta el formato a la segunda casi siempre; a la tercera se entrega
+    // lo que haya con el aviso puesto, porque perder el trabajo por la forma del
+    // formulario sería el peor desenlace.
     function _entrega(texto) {
         if (!SC.usable(sub.outputSchema)) {
             sub._finish(texto !== "" ? texto
@@ -377,9 +372,8 @@ QtObject {
         })
     }
 
-    // El pie: qué papel, con qué permisos, cuánto tardó, qué gastó y qué dejó.
-    // Es lo que permite al jefe (y al usuario en la tarjeta) medir el coste de
-    // la delegación en vez de intuirlo.
+    // El pie: qué papel, con qué permisos, cuánto tardó, qué gastó y qué dejó. Es
+    // lo que permite medir el coste de la delegación en vez de intuirlo.
     function _pie(resumen) {
         const seg = (sub.ms / 1000).toFixed(1)
         let f = "\n\n— subagente «" + sub.label + "» (" + sub.role + " · "
@@ -401,15 +395,12 @@ QtObject {
         return f + "\n  traza: " + sub.ws.tracePath
     }
 
-    // ── Ejecución en serie de las herramientas de la ronda ───────────────────
+    // Ejecución en serie de las herramientas de la ronda
     function _execNext() {
         if (sub._callIdx >= sub._calls.length) {
-            // Cierre de ronda: ¿ha traído algo que no tuviéramos? Una ronda que
-            // no aporta nada es una advertencia; dos seguidas son un bucle, y un
-            // bucle no se rompe solo. Se midió: en un encargo de precios, de
-            // once rondas las siete últimas fueron exactamente la misma
-            // respuesta con la consulta reescrita, ciento cincuenta segundos
-            // para no averiguar nada.
+            // Cierre de ronda: ¿ha traído algo nuevo? Una ronda que no aporta nada
+            // es una advertencia; dos seguidas son un bucle, y un bucle no se rompe
+            // solo.
             if (sub._calls.length > 0) {
                 sub._esteriles = sub._nuevos === 0 ? sub._esteriles + 1 : 0
                 if (sub._esteriles >= sub.maxEsteriles)
@@ -425,22 +416,20 @@ QtObject {
         const name = String(tc["function"].name)
         sub.toolCalls++
         sub.lastTool = name
-        // Los argumentos pasan por el mismo reparador que usa el harness: un
-        // modelo local manda JSON roto a menudo, y aquí nadie mira para
-        // corregir.
+        // Los argumentos pasan por el mismo reparador que usa el harness: un modelo
+        // local manda JSON roto a menudo, y aquí nadie mira para corregir.
         const args = TU.repairJson(tc["function"].arguments) || ({})
         const crudos = String(tc["function"].arguments || "").slice(0, 300)
-        // Un subagente ejecuta SIN tarjeta: con más razón queda en el registro
-        // de auditoría del harness, y además en su propia traza.
+        // Un subagente ejecuta sin tarjeta, así que con más razón queda en el
+        // registro de auditoría del harness y en su propia traza.
         AiService.auditRecord({ src: "subagent", tool: name,
             args: tc["function"].arguments, decision: "auto",
             why: sub.role + ": " + sub.label })
         sub._trace({ t: "tool", n: name, a: crudos })
 
-        // El lsp no es un comando sino una petición al servidor de lenguaje: se
-        // acota la ruta al taller aquí, en su puerta, y se le niega el renombrado
-        // —que es una escritura repartida por medio proyecto y no cabe en la
-        // idea de "confinado".
+        // El lsp no es un comando sino una petición al servidor de lenguaje: la
+        // ruta se acota al taller aquí, en su puerta, y se le niega el renombrado,
+        // que es una escritura repartida por medio proyecto.
         if (name === "lsp") {
             if (String(args.op || "") === "rename") {
                 sub._pushResult(tc.id, "Para un subagente el lsp es de solo "
@@ -457,14 +446,12 @@ QtObject {
             return
         }
 
-        // Un subagente no pasa por hooks ni por el supervisor: su única pared es
-        // la concesión, así que la concesión tiene que aguantar sola — y la
-        // concesión mira QUÉ herramienta, no QUÉ argumentos. Aquí se mira el
-        // argumento, que es donde vive la fuga: descargar una URL saca datos
+        // Un subagente no pasa por hooks ni por el supervisor: su única pared es la
+        // concesión, y la concesión mira qué herramienta, no qué argumentos. Aquí se
+        // mira el argumento, que es donde vive la fuga: descargar una URL saca datos
         // además de traerlos, y un subagente es el blanco más goloso de una
-        // inyección porque trabaja solo y sin tarjetas. No hay a quién enseñarle
-        // una tarjeta aquí, así que esto no pregunta: se niega y se lo cuenta al
-        // jefe, que sí tiene a quién preguntar.
+        // inyección porque trabaja solo y sin tarjetas. No hay a quién enseñarle una
+        // tarjeta, así que no pregunta: se niega y se lo cuenta al jefe.
         if (name === "fetch_url" || name === "open_url") {
             const fuga = TU.urlLeakScan(args.url)
             if (fuga !== "") {
@@ -479,11 +466,10 @@ QtObject {
             }
         }
 
-        // ¿Esto ya se pidió, exactamente igual, en este mismo encargo? Entonces
-        // no se vuelve a la red: se devuelve lo de antes y se le DICE que se
-        // está repitiendo. Lo segundo importa más que lo primero — el modelo no
-        // se da cuenta solo de que lleva cinco consultas dando vueltas a lo
-        // mismo, y aquí es donde se le cuenta.
+        // ¿Esto ya se pidió exactamente igual en este encargo? Entonces no se
+        // vuelve a la red: se devuelve lo de antes y se le dice que se está
+        // repitiendo. Lo segundo importa más, porque el modelo no se da cuenta solo
+        // de que lleva cinco consultas dando vueltas a lo mismo.
         const mk = sub._memoClave(name, args)
         if (mk !== "") {
             const previo = sub._memo[mk]
@@ -498,21 +484,20 @@ QtObject {
             sub._memoKey = mk
         }
 
-        // EL PERMISO. La misma puerta que usan el agente principal y la celda
-        // de Python: ella decide el plazo, si lo que vuelva lo habrá escrito un
-        // desconocido y si esta llamada puede tocar la red de casa (un
-        // subagente NUNCA puede: trabaja solo y sin tarjetas, así que nadie ha
-        // leído a dónde va). Un subagente es además el blanco más goloso para
-        // una inyección, y por eso lee la web con el mismo marco que su jefe.
+        // El permiso: la misma puerta que usan el agente principal y la celda de
+        // Python. Ella decide el plazo, si lo que vuelva lo habrá escrito un
+        // desconocido y si esta llamada puede tocar la red de casa —un subagente
+        // nunca puede, porque nadie ha leído a dónde va—. Lee la web con el mismo
+        // marco que su jefe.
         const permiso = GT.evaluar({ quien: "subagente", herramienta: name,
                                      args: args })
 
-        // El constructor es el MISMO que usa el agente principal, con la
-        // concesión y el taller por delante: una sola jaula que auditar.
+        // El constructor es el mismo que usa el agente principal, con la concesión
+        // y el taller por delante: una sola jaula que auditar.
         const r = AiService.subagentCommand(name, args, sub.grant, sub.ws)
-        // Un rechazo NUESTRO no lleva marco: enmarcarlo como "escrito por un
-        // desconocido" sería mentirle sobre quién le está hablando. Por eso el
-        // permiso se suelta antes de contestar.
+        // Un rechazo propio no lleva marco: enmarcarlo como escrito por un
+        // desconocido sería mentirle sobre quién le habla. Por eso el permiso se
+        // suelta antes de contestar.
         if (r === null) {
             sub._permiso = null
             sub._memoKey = ""
@@ -526,14 +511,11 @@ QtObject {
             sub._pushResult(tc.id, r.error)
             return
         }
-        // El reloj lo pone la puerta, igual que en el ejecutor — y con él llegan
-        // el tope de salida y el cerco de enlaces simbólicos, que antes aquí no
-        // estaban: este camino montaba su propio `timeout` a mano y se quedaba
-        // sin las otras dos. El motivo del reloj es el mismo que allí, con uno
-        // peor de fondo: aquí no hay nadie mirando. Una herramienta colgada
-        // dejaba al subagente esperando para siempre, y su presupuesto de tiempo
-        // no lo salvaba: ese solo se mira al empezar la ronda siguiente, y la
-        // ronda siguiente no llegaba nunca.
+        // El reloj lo pone la puerta, igual que en el ejecutor, y con él llegan
+        // el tope de salida y el cerco de enlaces simbólicos. Aquí importa más
+        // que allí porque no hay nadie mirando: una herramienta colgada dejaría
+        // al subagente esperando para siempre, y su presupuesto de tiempo no lo
+        // salva, porque solo se mira al empezar la ronda siguiente.
         const listo = GT.envolver(permiso, r.cmd, r.env)
         if (listo === null) {
             sub._permiso = null
@@ -592,7 +574,6 @@ QtObject {
     // que vuelva lo habrá escrito un desconocido.
     property var _permiso: null
 
-    // ── Lo ya pedido, y lo ya visto ──────────────────────────────────────────
     // Dos cuentas distintas y las dos hacen falta. La memoria evita REPETIR la
     // llamada (misma consulta, misma URL). Las huellas detectan que llamadas
     // DISTINTAS están trayendo lo mismo, que es como se manifiesta un bucle
@@ -698,7 +679,6 @@ QtObject {
         }
     }
 
-    // ── Contexto propio ──────────────────────────────────────────────────────
     // Un subagente que lee cuatro archivos grandes se queda sin sitio en la
     // ronda seis y el modelo empieza a olvidar el encargo. Se recortan los
     // resultados MÁS VIEJOS —los recientes son los que está usando ahora— y se
@@ -733,7 +713,7 @@ QtObject {
         }
     }
 
-    // ── El reloj ─────────────────────────────────────────────────────────────
+    // El reloj
     readonly property Timer _reloj: Timer {
         interval: Math.max(30000, Math.min(600000, sub.budgetMs))
         running: sub.state === "running" && sub.startedAt > 0
@@ -743,7 +723,6 @@ QtObject {
         }
     }
 
-    // ── La traza ─────────────────────────────────────────────────────────────
     // Se acumula y se escribe de una vez al final, suelta: el subagente se
     // destruye en cuanto entrega, y un proceso a medias sobre un objeto que se
     // muere es la clase de carrera que solo aparece el día que estorba.

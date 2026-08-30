@@ -5,10 +5,9 @@ import Quickshell
 import Quickshell.Io
 import qs.Config
 
-// Clima con Open-Meteo (JSON gratuito, sin API key): estado actual +
-// pronóstico diario. En modo automático, ipinfo.io da ciudad y coordenadas;
-// con ciudad fija (query), el geocodificador de Open-Meteo resuelve las
-// coordenadas una vez y quedan cacheadas hasta cambiar la ciudad.
+// Clima con Open-Meteo: estado actual y pronóstico diario, sin clave de API. En
+// modo automático, ipinfo.io da ciudad y coordenadas; con ciudad fija, el
+// geocodificador de Open-Meteo las resuelve una vez y quedan cacheadas.
 Singleton {
     id: root
 
@@ -17,7 +16,7 @@ Singleton {
     property bool   enabled: Settings.weatherEnabled
     readonly property string unit: Settings.weatherMetric ? "celsius" : "fahrenheit"
 
-    // Re-consulta al cambiar ciudad o unidad, agrupando cambios seguidos. La
+    // Reconsulta al cambiar ciudad o unidad, agrupando cambios seguidos. La
     // ciudad fija invalida además sus coordenadas cacheadas.
     onQueryChanged: { fixedLoc = ""; fixedName = ""; if (enabled) refreshLater.restart() }
     onUnitChanged:  if (enabled) refreshLater.restart()
@@ -26,8 +25,8 @@ Singleton {
     property bool wantWind: Settings.weatherShowWind
     property bool wantRain: Settings.weatherShowRain
     property bool wantSun: Settings.weatherShowSun
-    // "El clima se ve en la barra": ya no es un ajuste propio sino una
-    // consecuencia de que el widget esté puesto en el layout.
+    // "El clima se ve en la barra" es consecuencia de que el widget esté puesto
+    // en el layout, no un ajuste propio.
     property bool showInBar: BarCatalog.has(Settings.barLayout, "weather")
     onForecastDaysChanged: if (enabled) refreshLater.restart()
     onWantWindChanged: if (enabled) refreshLater.restart()
@@ -49,13 +48,12 @@ Singleton {
     property var    forecast: []
     property bool   ready: false
     property bool _pendingRefresh: false
-    // Marca de tiempo del último dato bueno, para no repetir consultas
-    // recientes al reabrir el panel.
+    // Marca de tiempo del último dato bueno, para no repetir consultas recientes
+    // al reabrir el panel.
     property real _lastFetch: 0
 
-    // Geolocalización automática cacheada (ipinfo.io, "lat,lon"). Se pide UNA
-    // vez y el tick de 30 min reutiliza las coordenadas. Se invalida al
-    // reanudar de suspensión o al reconectar la red.
+    // Geolocalización automática cacheada. Se pide una vez y el tick reutiliza
+    // las coordenadas; se invalida al reanudar de suspensión o al reconectar.
     property string geoCity: ""
     property string geoLoc: ""
     // Coordenadas de la ciudad fija (geocodificador), cacheadas por query.
@@ -65,8 +63,8 @@ Singleton {
 
     property int refreshInterval: Settings.weatherRefreshMin * 60 * 1000
 
-    // Grupos de códigos WMO → glifo y texto: los códigos concretos se
-    // condensan en ocho estados legibles.
+    // Grupos de códigos WMO → glifo y texto: los códigos concretos se condensan
+    // en ocho estados legibles.
     readonly property var _bucketGlyphs: ["󰖙", "󰖕", "󰖐", "󰖑", "󰖗", "󰖗", "󰖘", "󰖓"]
     readonly property var _bucketNames: ["Clear sky", "Partly cloudy", "Overcast", "Fog",
                                          "Drizzle", "Rain", "Snow", "Storm"]
@@ -91,8 +89,8 @@ Singleton {
         return (r > 0 ? "+" : "") + r + "°" + (Settings.weatherMetric ? "C" : "F")
     }
 
-    // Consulta solo si el dato es más viejo que maxAgeMs: reabrir el panel
-    // con datos frescos no vuelve a llamar a la API.
+    // Consulta solo si el dato es más viejo que maxAgeMs: reabrir el panel con
+    // datos frescos no vuelve a llamar a la API.
     function refreshIfStale(maxAgeMs) {
         if (Date.now() - _lastFetch > maxAgeMs)
             refresh()
@@ -115,8 +113,8 @@ Singleton {
         }
     }
 
-    // Un único reintento corto tras un fallo: en un arranque con red lenta
-    // no hay que esperar 30 min al siguiente tick.
+    // Un único reintento corto tras un fallo: en un arranque con red lenta no
+    // hay que esperar al siguiente tick.
     function _fetchFailed() {
         if (_retried)
             return
@@ -124,10 +122,9 @@ Singleton {
         retryTimer.restart()
     }
 
-    // Restaura la última respuesta persistida (si coincide unidad y ciudad):
-    // el panel pinta al instante tras un arranque o recarga, y solo se
-    // consulta la API si el dato caducó. La condición y los glifos se
-    // recalculan del código WMO guardado (por si cambió el idioma).
+    // Restaura la última respuesta persistida si coinciden unidad y ciudad, para
+    // que el panel pinte al instante tras un arranque. La condición y los glifos
+    // se recalculan del código WMO guardado, por si cambió el idioma.
     function _restoreCache() {
         const c = Settings.weatherCache
         if (!c || c.t === undefined || c.unit !== unit || c.query !== query.trim()
@@ -162,8 +159,8 @@ Singleton {
         function on_LoadedChanged() { root._restoreCache() }
     }
 
-    // Sin consulta al arrancar ni sondeo de fondo: la primera apertura del
-    // panel dispara refreshIfStale() y el tick solo corre mientras se ve.
+    // Sin consulta al arrancar ni sondeo de fondo: la primera apertura del panel
+    // dispara refreshIfStale() y el tick solo corre mientras se ve.
     Timer {
         interval: root.refreshInterval
         running: root.enabled && (Globals.dashboardOpen || root.showInBar)
@@ -183,8 +180,8 @@ Singleton {
         onTriggered: root.refresh()
     }
 
-    // Tras el resume, los datos pueden llevar horas obsoletos y la ubicación
-    // puede haber cambiado: se invalida la geolocalización y se re-consulta.
+    // Tras el resume los datos pueden llevar horas obsoletos y la ubicación
+    // puede haber cambiado, así que se invalida la geolocalización.
     Connections {
         target: Resume
         function onResumed() {
@@ -196,8 +193,8 @@ Singleton {
         }
     }
 
-    // Al reconectar la red: si aún no hay datos o falta la geolocalización
-    // (arranque con red lenta), re-consulta en cuanto haya conexión.
+    // Al reconectar la red, si aún no hay datos o falta la geolocalización, se
+    // reconsulta en cuanto haya conexión.
     Connections {
         target: Net
         function onOnlineChanged() {
@@ -206,8 +203,8 @@ Singleton {
         }
     }
 
-    // Modo automático sin caché: una petición a ipinfo.io/json ("loc" ya viene
-    // como "lat,lon", directamente utilizable por Open-Meteo).
+    // Modo automático sin caché: una petición a ipinfo.io/json, cuyo "loc" ya
+    // viene como "lat,lon".
     Process {
         id: geoProc
         command: ["curl", "-sf", "--compressed", "--max-time", "6", "https://ipinfo.io/json"]

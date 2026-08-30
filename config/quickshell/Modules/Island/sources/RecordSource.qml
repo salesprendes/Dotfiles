@@ -7,7 +7,6 @@ import qs.Services
 // Con la isla encendida, Panels/RecordingPill.qml no se construye (ver
 // shell.qml) y el aviso de "se está grabando" lo da ella. Esto es el enganche.
 //
-// ── LAS TRES CONDICIONES, Y NINGUNA SOBRA ───────────────────────────────────
 // No basta con isRecording:
 //
 //   · showRecordingPill es un ajuste que YA EXISTE y dice "no quiero ver el

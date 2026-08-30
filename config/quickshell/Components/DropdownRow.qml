@@ -3,19 +3,18 @@ import QtQuick.Controls.Basic
 import QtQuick.Layouts
 import qs.Config
 
-// Desplegable reutilizable (etiqueta + selector con panel animado).
-// La animación va por altura + opacidad (no scale) para evitar artefactos de fondo.
+// Desplegable reutilizable: etiqueta más selector con panel animado. La
+// animación va por altura y opacidad, no por escala, para evitar artefactos.
 //
-// El panel FLOTA sobre el contenido: no ocupa sitio en el layout, así que al
-// abrirlo no empuja hacia abajo lo que venga después. La raíz es un Item, no
-// un ColumnLayout, precisamente por eso — en un layout todo hijo visible
-// reserva su espacio, y el panel no debe reservar ninguno.
+// El panel FLOTA sobre el contenido y no ocupa sitio en el layout, así que
+// abrirlo no empuja lo que venga después. La raíz es un Item y no un
+// ColumnLayout precisamente por eso: en un layout, todo hijo visible reserva su
+// espacio.
 //
-// El panel no cuelga de la fila sino de la capa de la página (ver hoistPanel):
-// asomando fuera de su contenedor dejaba de recibir el ratón. Sigue recortado
-// por el borde del área visible, que es lo que gobiernan 'flipUp' —abrir hacia
-// arriba cuando abajo no cabe— y el ceñido de altura.
-// El filtro del buscador y la marca de fila vienen de la base (SettingsRow).
+// El panel no cuelga de la fila sino de la capa de la página (ver hoistPanel),
+// porque Qt deja de entregar el ratón a lo que asoma fuera de su contenedor.
+// Sigue recortado por el borde del área visible, que es lo que gobiernan
+// 'flipUp' y el ceñido de altura.
 SettingsRow {
     id: root
     property string label: ""
@@ -31,8 +30,8 @@ SettingsRow {
 
     filterText: root.label
 
-    // Grupo exclusivo opcional: si varios DropdownRow comparten el objeto 'group'
-    // (con propiedad 'openItem'), solo uno queda abierto; abrir uno cierra los demás.
+    // Grupo exclusivo opcional: si varios comparten el objeto 'group', abrir uno
+    // cierra los demás.
     property QtObject group: null
     Connections {
         target: root.group
@@ -43,55 +42,48 @@ SettingsRow {
         }
     }
 
-    // Colores derivados de Theme (sobreescribibles).
-    // Escalera de M3: el control va un peldaño por encima de la tarjeta que lo
-    // contiene, y la lista desplegada otro más — porque flota SOBRE el control.
-    // Con alfa, el mismo desplegable se veía de un gris dentro de una tarjeta y
-    // de otro sobre el fondo de la ventana.
+    // Colores derivados de Theme, sobrescribibles. El control va un peldaño de
+    // la escalera de superficies por encima de la tarjeta que lo contiene, y la
+    // lista desplegada otro más, porque flota sobre el control.
     property color controlColor: Theme.surfaceContainerHigh
     property color borderColor:  Theme.outlineVariant
-    // OPACO, no translúcido. Cuando el panel se desplegaba empujando el
-    // contenido no había nada detrás y un 72 % de alfa pasaba desapercibido;
-    // flotando por encima, los interruptores y botones de debajo se
-    // transparentaban a través de la lista y el panel parecía roto. Un menú
-    // tiene que tapar lo que cubre.
+    // Opaco y no translúcido: flotando por encima, los controles de debajo se
+    // transparentarían a través de la lista. Un menú tiene que tapar lo que
+    // cubre.
     property color cardColor:    Theme.surfaceContainerHighest
     property color hoverColor:   Theme.stateLayer(Theme.surfaceContainerHighest, Theme.fg, 0.08)
 
-    // Panel flotante (por defecto) o acordeón que empuja. Lo segundo hace
-    // falta en contenedores pequeños y recortados —la barra de captura de
-    // pantalla— donde no hay sitio sobre el que flotar: allí el recorte del
-    // propio contenedor se comería el panel, y es mejor que crezca la caja.
+    // Panel flotante o acordeón que empuja. Lo segundo hace falta en
+    // contenedores pequeños y recortados donde no hay sitio sobre el que flotar
+    // y el recorte del propio contenedor se comería el panel.
     property bool floatingPanel: true
 
-    // Flotando, solo la fila cuenta para el layout y el panel es una capa
-    // aparte. En modo acordeón el panel sí reserva su hueco, como antes.
+    // Flotando, solo la fila cuenta para el layout; en acordeón el panel sí
+    // reserva su hueco.
     implicitHeight: headRow.implicitHeight
         + (root.floatingPanel || dropdownClip.height <= 0
            ? 0 : root.panelGap + dropdownClip.height)
-    // Con el panel abierto, la fila se pone por delante de sus hermanas para
-    // que el panel las tape en vez de colarse por debajo.
+    // Con el panel abierto la fila se pone por delante de sus hermanas, para que
+    // el panel las tape en vez de colarse por debajo.
     z: root.open ? 10 : 0
 
     // Hueco entre el selector y el panel.
     readonly property int panelGap: Theme.space6
 
     // ¿Se abre hacia arriba? Se decide en el momento de abrir; al ser una
-    // decisión puntual no hace falta que la posición en pantalla sea un binding
-    // reactivo (que en QML no lo sería).
+    // decisión puntual no hace falta que la posición sea un binding reactivo.
     property bool flipUp: false
 
-    // Sitio libre a cada lado de la fila, medido en el momento de abrir.
-    // Arrancan en -1 ("sin medir") para que el panel no se recorte a cero antes
-    // de la primera medición.
+    // Sitio libre a cada lado de la fila, medido al abrir. Arrancan en -1 para
+    // que el panel no se recorte a cero antes de la primera medición.
     property real roomBelow: -1
     property real roomAbove: -1
 
-    // Quién recorta de verdad al panel. NO es la ventana: el panel vive dentro
-    // del área desplazable de Ajustes, que va con 'clip', y es SU borde el que
-    // corta. Medir contra la ventana daba sitio de sobra donde no lo había, el
-    // panel se colocaba fuera del recorte y las opciones que caían ahí no se
-    // veían NI se podían pulsar (un hijo recortado tampoco recibe el ratón).
+    // Quién recorta de verdad al panel, que no es la ventana: el panel vive
+    // dentro del área desplazable de Ajustes, que va con 'clip', y es su borde el
+    // que corta. Medir contra la ventana daría sitio donde no lo hay, y lo que
+    // cayera fuera del recorte no se vería ni se podría pulsar, porque un hijo
+    // recortado tampoco recibe el ratón.
     function _viewport() {
         let it = root.parent
         for (let d = 0; d < 24 && it; d++) {
@@ -108,20 +100,13 @@ SettingsRow {
     // Margen de respiro contra el borde del recorte.
     readonly property int panelMargin: Theme.space8
 
-    // ── Dónde cuelga el panel ────────────────────────────────────────────────
-    // NO de la fila. Colgado de la fila, el panel sobresalía por debajo de la
-    // tarjeta de ajustes que la contiene, y Qt deja de entregar el ratón a lo
-    // que asoma fuera de su contenedor: las opciones que caían por debajo del
-    // borde de la tarjeta se veían perfectamente y no respondían ni al pasar
-    // por encima. Medido: tarjeta 293..609, opciones a 482/526/570 vivas y las
-    // de 614/658/702 muertas, con el corte clavado en el borde.
+    // Se cuelga del contenido del área desplazable, que abarca la página entera y
+    // por tanto siempre contiene al panel. Colgarlo de la fila lo dejaba
+    // asomando fuera de su tarjeta, y lo que asoma no recibe el ratón.
     //
-    // Así que se cuelga del CONTENIDO del área desplazable, que abarca la
-    // página entera y por tanto siempre lo contiene. Y sigue cumpliendo lo que
-    // buscaba colgarlo de la fila: como la fila y el panel viven los dos dentro
-    // de ese mismo contenido, al desplazar la página se mueven juntos y la
-    // posición calculada al abrir sigue valiendo, sin recalcular nada por
-    // fotograma.
+    // Como fila y panel viven los dos dentro de ese mismo contenido, al desplazar
+    // la página se mueven juntos y la posición calculada al abrir sigue valiendo,
+    // sin recalcular nada por fotograma.
     property Item panelHost: null
     property real hostX: 0
     property real hostY: 0
@@ -176,26 +161,19 @@ SettingsRow {
         root.roomAbove = top - v.top - root.panelGap - root.panelMargin
     }
 
-    // ── Anchos ───────────────────────────────────────────────────────────────
-    // El selector se ciñe a su valor; el PANEL, en cambio, se ciñe a la opción
-    // más larga y crece hacia la izquierda.
+    // El selector se ciñe a su valor y el panel a la opción más larga, creciendo
+    // hacia la izquierda: heredando el ancho del selector, una lista con nombres
+    // largos saldría recortada y habría que elegir entre puntos suspensivos.
     //
-    // Antes el panel heredaba el ancho del selector, y como el selector solo
-    // mide lo que mide el valor elegido, una lista con nombres largos salía
-    // toda recortada: "Dinám…", "Catppuc…". Elegir a ciegas entre puntos
-    // suspensivos es exactamente lo que un desplegable no debe pedirte.
-    //
-    // Los dos anchos se calculan a partir de medidas propias (contenido y
-    // tipografía), NUNCA leyendo el ancho ya resuelto del layout: hacerlo
-    // cerraba un ciclo y Qt abandonaba la colocación avisando de "recursive
-    // rearrange".
+    // Los dos anchos se calculan a partir de medidas propias —contenido y
+    // tipografía— y nunca leyendo el ancho ya resuelto del layout, porque eso
+    // cierra un ciclo y Qt abandona la colocación con "recursive rearrange".
     readonly property real selectorWidth:
         Math.min(Theme.dp(260), selRow.implicitWidth + Theme.space12 * 2)
 
-    // La interfaz es monoespaciada, así que el número de caracteres de la
-    // opción más larga da su ancho. Las listas de fuentes se pintan con la
-    // tipografía de cada opción (proporcional): ahí la "M" sobreestima, que es
-    // el lado seguro — el panel sale holgado, nunca recortado.
+    // La interfaz es monoespaciada, así que el número de caracteres de la opción
+    // más larga da su ancho. En las listas de fuentes, que se pintan con la
+    // tipografía de cada opción, la "M" sobreestima, que es el lado seguro.
     readonly property int optionChars: {
         let m = 1
         const o = options || []
@@ -211,37 +189,31 @@ SettingsRow {
         font.pixelSize: Theme.fontSize
         text: "M".repeat(Math.max(1, root.optionChars))
     }
-    // Hueco del delegado: márgenes + marca de elegido + canal de la barra,
-    // más la muestra de color cuando la lista la lleva.
+    // Hueco del delegado: márgenes, marca de elegido y canal de la barra, más la
+    // muestra de color cuando la lista la lleva.
     readonly property real optionPadding: Theme.dp(64)
         + (hasSwatches ? swatchSize + Theme.space8 : 0)
     readonly property real panelWidth:
         Math.max(root.selectorWidth, optTm.advanceWidth + root.optionPadding)
 
-    // ── Cascada de apertura ──────────────────────────────────────────────────
-    // Las opciones no aparecen de golpe: entran una detrás de otra, de arriba
-    // abajo. Da el sentido de lectura de la lista y hace que el panel se lea
-    // como algo que se despliega, no como un recorte que crece.
+    // Las opciones entran una detrás de otra, en el sentido de lectura, para que
+    // el panel se lea como algo que se despliega y no como un recorte que crece.
     property real reveal: root.open ? 1 : 0
-    // Abrir y cerrar NO son el mismo gesto. Abrir es una presentación: se toma
-    // su tiempo y aterriza con la curva de entrada del shell (OutQuint, que
-    // cubre casi todo el recorrido enseguida y dedica el resto a asentarse).
-    // Cerrar es quitarse de en medio: más corto y con la curva de salida. Antes
-    // los dos iban con la misma curva y la misma duración, y por eso el panel
-    // se cerraba con la misma parsimonia con la que se abría.
+    // Abrir y cerrar no son el mismo gesto: abrir es una presentación y se toma
+    // su tiempo con la curva de entrada; cerrar es quitarse de en medio, más
+    // corto y con la curva de salida.
     Behavior on reveal {
         NumberAnimation {
             duration: root.open ? Theme.animNormal : Math.round(Theme.animNormal * 0.55)
             easing.type: root.open ? Theme.enterEasing : Theme.exitEasing
         }
     }
-    // Retardo por posición, saturado a las 7 primeras: con listas largas el
-    // resto entra ya con la última del escalonado, sin arrastrar la animación.
+    // Retardo por posición, saturado a las primeras: con listas largas el resto
+    // entra con la última del escalonado, sin arrastrar la animación.
     //
-    // La cascada arranca por la opción MÁS CERCANA al selector: hacia abajo es
-    // la primera, hacia arriba la última. Iba siempre desde arriba, así que un
-    // panel abierto hacia arriba desplegaba al revés — las opciones brotaban
-    // del extremo lejano y venían hacia el botón, en contra del gesto.
+    // La cascada arranca por la opción más cercana al selector —la primera hacia
+    // abajo, la última hacia arriba— para que las opciones salgan del botón y no
+    // vengan hacia él en contra del gesto.
     function appearAt(i) {
         const n = Math.max(1, (root.options || []).length)
         const pos = root.flipUp ? (n - 1 - i) : i
@@ -265,12 +237,9 @@ SettingsRow {
         return opt && opt.font !== undefined ? opt.font : Theme.fontFamily
     }
 
-    // ── Opciones con color ───────────────────────────────────────────────────
-    // Si una opción trae 'color', se dibuja su muestra —un disco del color—
-    // delante del texto, tanto en el botón como en la lista. Sirve para elegir
-    // un acento sin desplegar seis discos con su nombre debajo ocupando media
-    // tarjeta: el botón ENSEÑA el color elegido y la lista los enseña todos
-    // solo cuando la abres.
+    // Si una opción trae 'color' se dibuja su muestra delante del texto, en el
+    // botón y en la lista: así el botón enseña el color elegido y la lista los
+    // enseña todos solo al abrirse.
     readonly property bool hasSwatches: {
         const o = options || []
         for (let i = 0; i < o.length; i++)
@@ -335,18 +304,15 @@ SettingsRow {
 
 
     onOpenChanged: {
-        // La barra desplazable no se ve hasta que termina de abrirse (ver
-        // dropdownClip.settled): al arrancar un ciclo nuevo (abrir o cerrar)
-        // se apaga de golpe, y solo vuelve a encenderse si la apertura llega
-        // a completarse (settleTimer, temporizada a la par de la animación
-        // de altura — no depende de que la animación emita 'finished').
+        // La barra desplazable no se ve hasta que el panel termina de abrirse:
+        // al arrancar un ciclo se apaga de golpe y solo vuelve si la apertura
+        // llega a completarse.
         dropdownClip.settled = false
         if (open) {
-            // Antes de nada: medir el sitio real y decidir hacia dónde se abre.
-            // Se baja solo si abajo cabe la lista entera; si no cabe en ninguno
-            // de los dos lados, se elige el lado más holgado y el panel se ciñe
-            // a él (ver dropdownClip.panelHeight), que es lo que garantiza que
-            // ninguna opción quede fuera del recorte.
+            // Primero se mide el sitio real y se decide hacia dónde se abre. Se
+            // baja solo si abajo cabe la lista entera; si no cabe en ninguno de
+            // los dos lados se elige el más holgado y el panel se ciñe a él, que
+            // es lo que garantiza que ninguna opción quede fuera del recorte.
             root.hoistPanel()
             root.measureRoom()
             root.flipUp = root.floatingPanel
@@ -359,11 +325,10 @@ SettingsRow {
         }
     }
 
-    // Etiqueta y selector en la MISMA línea (el selector se ciñe a su valor y
-    // se alinea a la derecha), no apilados: un valor de diez caracteres no
-    // necesita una caja de ancho completo debajo de su etiqueta, y apilarlos
-    // gastaba dos renglones por ajuste. Sin etiqueta (usos fuera de Ajustes)
-    // el selector recupera el ancho completo.
+    // Etiqueta y selector en la misma línea, con el selector ceñido a su valor y
+    // alineado a la derecha: apilarlos gastaría dos renglones por ajuste para un
+    // valor de diez caracteres. Sin etiqueta, el selector recupera el ancho
+    // completo.
     RowLayout {
         id: headRow
         anchors.left: parent.left
@@ -372,8 +337,8 @@ SettingsRow {
         spacing: Theme.space10
 
         RowBadge {
-            // Sin glifo, sin disco: los usos compactos (p. ej. el selector de
-            // modelo del panel de IA) no quieren una insignia vacía delante.
+            // Sin glifo no se dibuja disco: los usos compactos no quieren una
+            // insignia vacía delante.
             visible: root.glyph !== ""
             Layout.alignment: Qt.AlignVCenter
             glyph: root.glyph
@@ -394,9 +359,10 @@ SettingsRow {
         readonly property bool inline: root.label !== ""
         Layout.fillWidth: !inline
         Layout.alignment: Qt.AlignVCenter
-        // Se ciñe al contenido, con un mínimo para que un valor corto no
-        // encoja la caja hasta parecer un botón, y un techo para que uno largo
-        // no se coma la etiqueta.
+        // Se ciñe al contenido, con un mínimo para que un valor corto no encoja
+        // la caja hasta parecer un botón y un techo para que uno largo no se coma
+        // la etiqueta. El techo es una medida fija y no una proporción del ancho
+        // de la fila; ver la nota de selectorWidth sobre "recursive rearrange".
         Layout.minimumWidth: inline ? Theme.dp(112) : 0
         // El techo es una medida fija, NO una proporción del ancho de la fila
         // (ver la nota de selectorWidth sobre el "recursive rearrange").
@@ -406,8 +372,8 @@ SettingsRow {
         radius: Theme.pillRadius
 
         readonly property bool hot: selMa.containsMouse || root.open || activeFocus
-        // Abierto o señalado, el selector se tiñe de acento: el control
-        // responde al puntero en vez de quedarse inerte hasta que lo pulsas.
+        // Abierto o señalado, el selector se tiñe de acento: responde al puntero
+        // en vez de quedarse inerte hasta que lo pulsan.
         color: root.open ? Theme.withAlpha(Theme.accent, Theme.isDark ? 0.13 : 0.16)
              : selMa.containsMouse ? root.hoverColor
              : root.controlColor
@@ -428,10 +394,9 @@ SettingsRow {
         Keys.onLeftPressed: root.moveKeyboard(-1)
         Keys.onEscapePressed: root.closeKeyboard()
 
-        // Al perder el foco se cierra. Antes el panel empujaba el contenido y
-        // dejarlo abierto solo estorbaba; ahora TAPA lo que hay debajo, así que
+        // Al perder el foco se cierra: el panel tapa lo que hay debajo, así que
         // uno olvidado abierto esconde ajustes. Pulsar una opción no roba el
-        // foco (los MouseArea no lo hacen), así que elegir sigue funcionando.
+        // foco, así que elegir sigue funcionando.
         onActiveFocusChanged: if (!activeFocus) root.open = false
 
         RowLayout {
@@ -490,19 +455,18 @@ SettingsRow {
     }
     }   // fin de la fila etiqueta + selector
 
-    // Sombra del panel flotante. Va ANTES que él (se dibuja debajo) y fuera
+    // Sombra del panel flotante. Va antes que él, para dibujarse debajo, y fuera
     // de su recorte, que si no se la comería.
     //
     // Son tres anillos concéntricos de negro cada vez más tenue en lugar de un
-    // desenfoque de verdad: este equipo no tiene el módulo de efectos gráficos
-    // de Qt, así que no hay DropShadow disponible. Con bordes en vez de
-    // rellenos no hay superposición de capas, y a tres anillos el degradado ya
-    // engaña al ojo lo suficiente para separar el panel del fondo.
+    // desenfoque: sin el módulo de efectos gráficos de Qt no hay DropShadow. Con
+    // bordes en vez de rellenos no hay superposición de capas, y a tres anillos
+    // el degradado ya separa el panel del fondo.
     Item {
         id: panelShadow
         anchors.fill: dropdownClip
-        // Reparentado fuera de la fila, ya no hereda su visibilidad: hay que
-        // atarla a mano o el panel sobreviviría a su propia fila oculta.
+        // Reparentado fuera de la fila ya no hereda su visibilidad, así que hay
+        // que atarla a mano o el panel sobreviviría a su propia fila oculta.
         visible: root.visible && root.floatingPanel && dropdownClip.height > 0.5
         z: dropdownClip.z - 1
         opacity: dropdownClip.opacity
@@ -523,14 +487,15 @@ SettingsRow {
 
     Item {
         id: dropdownClip
-        // Colocado a mano, no por el layout: cuelga del borde derecho del
-        // selector y crece hacia la IZQUIERDA hasta que quepa la opción más
-        // larga (ver panelWidth), sin pasarse del ancho de la fila.
+        // Colocado a mano y no por el layout: cuelga del borde derecho del
+        // selector y crece hacia la izquierda hasta que quepa la opción más
+        // larga, sin pasarse del ancho de la fila. Las coordenadas son de la capa
+        // de la página cuando está reparentado, y relativas a la fila si no.
         width: selector.inline ? Math.min(root.panelWidth, root.width) : root.width
         // Coordenadas de la capa de la página cuando está reparentado (ver
         // hoistPanel); relativas a la fila mientras no lo esté.
         x: root.panelHost ? root.hostX + root.width - width : root.width - width
-        // Debajo del selector, o encima si abajo no cabía (ver flipUp).
+        // Debajo del selector, o encima si abajo no cabía.
         y: root.panelHost
            ? (root.flipUp ? root.hostY - height - root.panelGap
                           : root.hostY + root.height + root.panelGap)
@@ -541,49 +506,44 @@ SettingsRow {
         visible: root.panelHost ? root.visible : true
         clip: true
         readonly property int optionHeight: Theme.rowM
-        // Alto que PIDE la lista (con su tope de maxVisibleItems). Se saca del
-        // NÚMERO DE OPCIONES, no de optionList.contentHeight: como el panel
-        // ahora se ciñe al sitio disponible, encogerlo encogía la lista, y una
-        // lista más corta crea menos delegados y devuelve un contentHeight
-        // menor — que volvía a encoger el panel. El bucle lo dejaba en 10 px.
+        // Alto que pide la lista, sacado del número de opciones y no de
+        // contentHeight: como el panel se ciñe al sitio disponible, encogerlo
+        // encogería la lista, y una lista más corta crea menos delegados y
+        // devuelve un contentHeight menor, que volvería a encoger el panel.
         readonly property int rowCount: Math.max(1, Math.min(
             Math.max(1, root.maxVisibleItems), (root.options || []).length))
         readonly property int naturalHeight: rowCount * optionHeight + Theme.space4 * 2
-        // Alto REAL: nunca más de lo que cabe en el lado hacia el que se abre.
-        // Es lo que impide que una opción quede fuera del área visible, donde
-        // no se vería ni se podría pulsar; si no cabe entera, la lista se
-        // desplaza dentro del panel y todas siguen siendo alcanzables.
+        // Alto real: nunca más de lo que cabe en el lado hacia el que se abre.
+        // Es lo que impide que una opción quede fuera del área visible, donde no
+        // se vería ni se podría pulsar; si no cabe entera, la lista se desplaza
+        // dentro del panel.
         readonly property real available: root.flipUp ? root.roomAbove : root.roomBelow
         readonly property int minHeight: Math.min(naturalHeight, optionHeight * 2 + Theme.space4 * 2)
         readonly property int panelHeight: available < 0
             ? naturalHeight
             : Math.max(minHeight, Math.min(naturalHeight, available))
-        // Se enciende cuando termina de crecer, no antes: mientras el panel
-        // todavía se está abriendo, optionList.height va de 0 al valor
-        // final, así que decidir la barra con eso a medias se veía como un
-        // parpadeo feo desde el primer fotograma. settleTimer (temporizado a
-        // la par de la animación de altura) la enciende al terminar — no un
-        // 'onFinished' de la animación, que con Behavior no siempre llega a
-        // dispararse si el destino cambia a media transición.
+        // Se enciende cuando termina de crecer: mientras el panel se abre, la
+        // altura va de 0 al valor final, y decidir la barra con eso a medias es
+        // un parpadeo desde el primer fotograma. Lo enciende un temporizador a la
+        // par de la animación, y no un 'onFinished', que con Behavior no siempre
+        // llega a dispararse si el destino cambia a media transición.
         property bool settled: false
         Timer {
             id: settleTimer
             interval: Theme.animNormal
             onTriggered: {
                 dropdownClip.settled = root.open
-                // Segunda medición, ya con todo quieto. La primera se toma en el
-                // instante de abrir, y la página entra con una animación de
-                // desplazamiento: abrir mientras corre daba 230 px de sitio
-                // donde en realidad había 917, y el panel se colocaba fuera del
-                // área visible.
+                // Segunda medición, ya con todo quieto: la primera se toma al
+                // abrir, y si la página está entrando con su animación de
+                // desplazamiento el sitio medido no es el real.
                 if (!root.open)
                     return
                 root.hoistPanel()
                 root.measureRoom()
-                // El lado solo se corrige si de verdad NO cabe en el elegido y
-                // sí en el contrario. Un salto puntual en ese caso raro es
-                // mejor que media lista escondida; fuera de ahí no se toca,
-                // que reubicar el panel a media apertura se ve fatal.
+                // El lado solo se corrige si de verdad no cabe en el elegido y sí
+                // en el contrario: un salto puntual en ese caso raro es mejor que
+                // media lista escondida, pero reubicar el panel a media apertura
+                // se ve mal.
                 const chosen = root.flipUp ? root.roomAbove : root.roomBelow
                 const other = root.flipUp ? root.roomBelow : root.roomAbove
                 if (root.floatingPanel && chosen >= 0
@@ -591,13 +551,14 @@ SettingsRow {
                     root.flipUp = !root.flipUp
             }
         }
-        // Un ÚNICO reloj para todo el panel: alto, opacidad y la cascada de las
-        // opciones salen los tres de 'reveal'. Antes cada uno llevaba su propia
-        // animación con su duración y su curva —alto en animNormal/OutCubic,
-        // opacidad en animFast, cascada sobre reveal— y al no compartir reloj
-        // se desincronizaban: el panel terminaba de crecer con las últimas
-        // opciones aún entrando, y al cerrar se quedaba un rectángulo vacío
-        // encogiéndose después de que el contenido ya hubiera desaparecido.
+        // Un único reloj para todo el panel: alto, opacidad y cascada de las
+        // opciones salen los tres de 'reveal'. Con una animación propia por cada
+        // uno se desincronizan, y el panel termina de crecer con las últimas
+        // opciones aún entrando.
+        //
+        // La opacidad sube por delante del alto para que el panel esté opaco casi
+        // desde el principio: si el fundido acompañara al crecimiento se vería el
+        // contenido de debajo a través de la lista.
         implicitHeight: panelHeight * root.reveal
         // Sube por delante del alto (x2,5) para que el panel esté opaco casi
         // desde el principio: si el fundido acompañara al crecimiento se vería
@@ -619,13 +580,11 @@ SettingsRow {
                 clip: true
                 model: root.options
                 boundsBehavior: Flickable.StopAtBounds
-                // Contra el hueco YA ABIERTO del todo (panelHeight, que es el
-                // destino), no contra 'height': ese va animando de 0 al valor
-                // final según se abre, y compararse con eso hacía que
-                // 'scrollable' fuera true casi siempre mientras crecía (falso
-                // positivo, no un parpadeo de verdad). Se mira el alto real y
-                // no el tope de maxVisibleItems porque ahora el panel puede
-                // salir más bajo si el sitio no da para más: justo ahí es
+                // Se compara contra el hueco ya abierto del todo y no contra
+                // 'height', que va animando de 0 al valor final y daría
+                // 'scrollable' verdadero casi siempre mientras crece. Se mira el
+                // alto real y no el tope de maxVisibleItems, porque el panel
+                // puede salir más bajo si el sitio no da para más, y es justo ahí
                 // cuando hace falta poder desplazar.
                 readonly property bool scrollable:
                     (root.options || []).length * dropdownClip.optionHeight
@@ -634,18 +593,14 @@ SettingsRow {
 
                 ScrollBar.vertical: ThinScrollBar {
                     policy: optionList.scrollable ? ScrollBar.AlwaysOn : ScrollBar.AlwaysOff
-                    // No se ve hasta que el panel termina de abrirse del
-                    // todo (ver dropdownClip.settled): antes se dibujaba con
-                    // el tamaño/posición a medio calcular sobre una altura
-                    // que todavía se estaba animando.
+                    // No se ve hasta que el panel termina de abrirse: antes se
+                    // dibujaba con el tamaño y la posición a medio calcular.
                     opacity: dropdownClip.settled ? 1 : 0
                     Behavior on opacity { NumberAnimation { duration: Theme.animFast } }
-                    // Retranqueo vertical = lo que le falta al tirador para
-                    // librar el redondeo de las esquinas del panel (la lista
-                    // ya está metida 'space4'): en los extremos del recorrido
-                    // se metía en la curva y parecía asomar fuera del menú.
-                    // Calculado, no estimado, para que siga valiendo con
-                    // cualquier ajuste de redondeo de esquinas.
+                    // Retranqueo vertical: lo que le falta al tirador para
+                    // librar el redondeo de las esquinas del panel. Calculado y
+                    // no estimado, para que siga valiendo con cualquier ajuste de
+                    // redondeo.
                     rightPadding: Theme.dp(3)
                     topPadding: Math.max(Theme.dp(2), Theme.pillRadius - Theme.space4)
                     bottomPadding: Math.max(Theme.dp(2), Theme.pillRadius - Theme.space4)
@@ -665,24 +620,21 @@ SettingsRow {
                     width: ListView.view.width - optionList.scrollGutter
                     height: dropdownClip.optionHeight
 
-                    // Entrada escalonada: cada opción aparece un poco después
-                    // que la anterior. Solo al abrir; una vez abierto vale 1 y
-                    // no interviene en nada.
+                    // Entrada escalonada, solo al abrir; una vez abierto vale 1
+                    // y no interviene.
                     //
-                    // Se desliza en el EJE en el que se abre el panel, no de
-                    // lado: iba desde la derecha, y un movimiento horizontal
-                    // dentro de una lista que crece hacia abajo son dos gestos
-                    // distintos a la vez. Ahora las opciones salen del selector
-                    // — caen si el panel baja, suben si sube.
+                    // Se desliza en el eje en el que se abre el panel y no de
+                    // lado: un movimiento horizontal dentro de una lista que crece
+                    // en vertical son dos gestos a la vez.
                     readonly property real appear: root.appearAt(index)
                     opacity: appear
                     transform: Translate {
                         y: (1 - optionRow.appear) * Theme.dp(root.flipUp ? 9 : -9)
                     }
                     radius: Theme.pillRadius - Theme.space2
-                    // El color base solo va de acento-tinte a "transparent"; el hover
-                    // es una capa aparte que anima su opacidad (si no, se interpola
-                    // hacia el negro de "transparent").
+                    // El color base va de acento-tinte a "transparent"; el hover
+                    // es una capa aparte que anima su opacidad, porque si no se
+                    // interpolaría hacia el negro de "transparent".
                     color: sel ? Theme.withAlpha(Theme.accent, 0.18)
                                : focused ? Theme.focusBg : "transparent"
                     Behavior on color { ColorAnimation { duration: Theme.animNormal; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }

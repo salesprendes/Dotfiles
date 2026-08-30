@@ -2,23 +2,17 @@ import QtQuick
 
 // Da el foco de teclado a un campo, insistiendo hasta que lo coge.
 //
-// ── EL PROBLEMA, QUE ES DE CARRERA ──────────────────────────────────────────
-// Un `forceActiveFocus()` en cuanto se abre un panel se pierde: la superficie
-// se ha construido, pero el compositor todavía no le ha entregado el foco de
-// teclado, así que la petición cae sobre una ventana que aún no puede tenerlo.
-// No avisa: simplemente no pasa nada, y el usuario tiene que hacer clic en el
-// campo antes de escribir.
+// Un `forceActiveFocus()` en cuanto se abre un panel se pierde: la superficie está
+// construida pero el compositor todavía no le ha entregado el foco, así que la
+// petición cae sobre una ventana que aún no puede tenerlo. No avisa: simplemente
+// no pasa nada, y hay que hacer clic en el campo antes de escribir.
 //
-// El shell lo esquivaba con un `Timer { interval: 60 }` de una sola pulsación,
-// copiado en seis paneles. Funciona casi siempre, y "casi" es el problema: con
-// el sistema cargado, 60 ms no bastan y el fallo reaparece — sin dejar rastro,
-// porque no hay error, solo un campo que no responde.
-//
+// Un temporizador de una sola pulsación funciona casi siempre, y "casi" es el
+// problema: con el sistema cargado no basta y el fallo reaparece sin dejar rastro.
 // Aquí se insiste hasta que agarra, con tope para no dejar un temporizador
-// corriendo para siempre si algo va mal. En cuanto el objetivo tiene el foco,
-// el temporizador se apaga solo (su 'running' lo mira).
+// corriendo para siempre, y en cuanto el objetivo tiene el foco se apaga solo.
 //
-// USO:
+// Uso:
 //     FocusPulse { id: foco; target: searchField.input }
 //     onShownChanged: if (shown) foco.start()
 Item {

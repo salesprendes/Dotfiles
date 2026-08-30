@@ -6,25 +6,27 @@ import qs.Config
 import qs.Services
 import "Search.js" as Search
 
-// De dónde salen los resultados de Spotlight. Cada fuente convierte lo suyo a
-// la MISMA forma de elemento, y a partir de ahí el motor (Search.js) las trata
-// a todas igual — que es lo que permite que una búsqueda mezcle una app, un
-// emoji y un ajuste sin que ninguna sepa de las otras.
+// De dónde salen los resultados de Spotlight. Cada fuente convierte lo suyo a la
+// misma forma de elemento, y a partir de ahí el motor las trata a todas igual, que
+// es lo que permite mezclar una app, un emoji y un ajuste sin que ninguna sepa de
+// las otras.
 //
 //   { id, name, subtitle, keywords, type, glyph, icon, run }
 //
-// 'run' es la función que se ejecuta al elegirlo. Va en el propio elemento y no
-// en un switch por tipo: así añadir una fuente es escribir una función que
-// devuelve elementos, y no tocar además el sitio donde se decide qué hacer con
-// cada uno.
+// 'run' es la función que se ejecuta al elegirlo, y va en el propio elemento y no
+// en un switch por tipo: añadir una fuente es escribir una función que devuelve
+// elementos, sin tocar además el sitio donde se decide qué hacer con cada uno.
 //
-// PEREZA A PROPÓSITO. Solo se construyen las listas que la consulta puede
-// necesitar. El catálogo de emojis son 2.500 objetos y el índice de ajustes hay
-// que montarlo página a página: hacerlo en cada pulsación de tecla, para una
-// consulta que empieza por "fir", sería tirar el trabajo entero.
+// Pereza a propósito: solo se construyen las listas que la consulta puede
+// necesitar. El catálogo de emojis son miles de objetos y el índice de ajustes hay
+// que montarlo página a página, así que hacerlo en cada pulsación sería tirar el
+// trabajo entero.
 Singleton {
     id: root
 
+    // El nombre de una fuente, para el encabezado de su sección. Siempre devuelve
+    // una cadena: la fila de encabezado no lleva 'item', así que el delegate
+    // pregunta por el tipo de un objeto vacío y aquí llegaría 'undefined'.
     function label(type) {
         switch (type) {
         case "calc":      return I18n.tr("Result")
@@ -36,18 +38,16 @@ Singleton {
         case "file":      return I18n.tr("Files")
         case "action":    return I18n.tr("Actions")
         }
-        return type
+        return type ?? ""
     }
 
-    // ── Aplicaciones ─────────────────────────────────────────────────────────
-    // Junto con sus ACCIONES: una entrada .desktop puede declarar cosas como
-    // «Nueva ventana privada» o «Nuevo documento», y hasta ahora el único modo
-    // de llegar a ellas era abrir la app y buscarlas por dentro.
+    // Junto con sus acciones: una entrada .desktop puede declarar cosas como «Nueva
+    // ventana privada», y sin esto el único modo de llegar a ellas es abrir la app y
+    // buscarlas por dentro.
     //
-    // Van en la misma lista y no en un menú aparte (que es como lo resuelve la
-    // referencia) porque son pocas —aquí las declara menos del 10 % de las
-    // apps, una o dos cada una— así que no ensucian nada, y a cambio se llega
-    // a ellas escribiendo, que es de lo que va esto.
+    // Van en la misma lista y no en un menú aparte porque son pocas —las declara
+    // una minoría de las apps, con una o dos cada una— así que no ensucian nada, y
+    // a cambio se llega a ellas escribiendo.
     function apps() {
         const out = []
         const list = AppCatalog.entries
@@ -79,11 +79,11 @@ Singleton {
                     id: "appact:" + (e.id ?? e.name) + ":" + a.name,
                     name: a.name,
                     subtitle: e.name ?? "",
-                    // El nombre de la app va en una palabra clave JUNTO al de
-                    // la acción, y ese detalle es el que hace que funcione
-                    // "firefox privada": la búsqueda por varias palabras exige
-                    // que todos los trozos casen dentro del MISMO campo, y el
-                    // nombre de la app está en el subtítulo, no en el nombre.
+                    // El nombre de la app va en una palabra clave junto al de la
+                    // acción, y ese detalle es el que hace que funcione buscar las
+                    // dos cosas a la vez: la búsqueda por varias palabras exige que
+                    // todos los trozos casen dentro del mismo campo, y el nombre de
+                    // la app está en el subtítulo.
                     keywords: [(e.name ?? "") + " " + a.name],
                     type: "action",
                     icon: a.icon || e.icon || "",
@@ -94,11 +94,9 @@ Singleton {
         return out
     }
 
-    // ── Acciones de sesión ───────────────────────────────────────────────────
-    // Bloquear, suspender, reiniciar y apagar. El modelo ya existe y lo
-    // comparten el centro de control y el lanzador (ver Config/PowerActions),
-    // así que aquí solo se traduce a elementos: una etiqueta que cambie de
-    // sitio no puede quedarse a medias entre dos listas.
+    // Bloquear, suspender, reiniciar y apagar. El modelo ya existe y lo comparten
+    // el centro de control y el lanzador, así que aquí solo se traduce a elementos:
+    // una etiqueta que cambie de sitio no puede quedarse a medias entre dos listas.
     function actions() {
         const out = []
         const list = PowerActions.model
@@ -116,7 +114,7 @@ Singleton {
         return out
     }
 
-    // ── Emojis ───────────────────────────────────────────────────────────────
+    // Emojis
     function emojis() {
         Emoji.load()
         const out = []
@@ -135,12 +133,9 @@ Singleton {
         return out
     }
 
-    // ── Ajustes ──────────────────────────────────────────────────────────────
-    // El índice ya existe y se construye solo recorriendo las páginas (ver
-    // Config/SettingsSearchIndex.qml). Aquí solo se traduce a elementos.
-    // De qué página de Ajustes sale una fila. Las etiquetas son las mismas que
-    // la navegación de la ventana, para que lo que lees en el buscador y lo que
-    // ves al llegar coincidan.
+    // El índice ya existe y se construye solo recorriendo las páginas; aquí solo se
+    // traduce a elementos. Las etiquetas de página son las mismas que la navegación
+    // de la ventana, para que coincida lo que se lee en los dos sitios.
     function _catLabel(cat) {
         switch (cat) {
         case "theme":     return I18n.tr("Theme")
@@ -182,7 +177,7 @@ Singleton {
         return out
     }
 
-    // ── Portapapeles ─────────────────────────────────────────────────────────
+    // Portapapeles
     function clipboard() {
         Clipboard.refresh()
         const out = []
@@ -201,7 +196,6 @@ Singleton {
         return out
     }
 
-    // ── Archivos ─────────────────────────────────────────────────────────────
     // Ruta corta para enseñar: "/home/salesprendes/Documentos" → "~/Documentos".
     // No es cosmética — en un subtítulo de 300 dp, el prefijo del hogar se come
     // el tramo que de verdad distingue un archivo de otro.
@@ -232,20 +226,15 @@ Singleton {
                 id: "file:" + ruta,
                 name: nombre,
                 subtitle: root._corta(carpeta),
-                // La RUTA ENTERA como palabra clave. score() puntúa contra el
-                // nombre y contra la carpeta por separado, y una consulta de
-                // ruta —"dotfiles/script"— no está en ninguno de los dos: está
-                // justo en la junta.
+                // La ruta entera como palabra clave. score() puntúa contra el
+                // nombre y contra la carpeta por separado, y una consulta de ruta
+                // no está en ninguno de los dos: está justo en la junta, así que
+                // sin esto escribir "/carpeta/nombre" no daría nada aunque el
+                // archivo se hubiera encontrado.
                 //
-                // Sin esto, escribir "/carpeta/nombre" no daba nada NUNCA, aun
-                // habiendo encontrado el archivo: Services/FileSearch pide
-                // expresamente 'fd --full-path' (o 'find -ipath') en cuanto la
-                // consulta lleva una barra dentro, y luego rank() tiraba lo que
-                // había traído. La búsqueda por ruta existía a medias.
-                //
-                // Va como palabra clave y no como nombre a propósito: el peso
-                // de las claves es menor, así que acertar el nombre del archivo
-                // sigue ganándole a acertar un trozo de su ruta.
+                // Va como palabra clave y no como nombre a propósito: el peso de
+                // las claves es menor, así que acertar el nombre del archivo sigue
+                // ganándole a acertar un trozo de su ruta.
                 keywords: [ruta],
                 type: "file",
                 glyph: "󰈔",
@@ -260,7 +249,6 @@ Singleton {
         return out
     }
 
-    // ── Calculadora ──────────────────────────────────────────────────────────
     // No es una lista que se filtra: o la consulta es una cuenta o no lo es.
     function calc(text) {
         const value = Search.calc(text)
@@ -279,7 +267,6 @@ Singleton {
         }]
     }
 
-    // ── Comando ──────────────────────────────────────────────────────────────
     // Solo con el prefijo ">": ofrecer "ejecutar esto en un terminal" para
     // cualquier cosa que se teclee es una forma rápida de que algún día se
     // ejecute algo que solo era una búsqueda.
@@ -300,7 +287,6 @@ Singleton {
         }]
     }
 
-    // ── Reunir según el modo ─────────────────────────────────────────────────
     // Sin prefijo se buscan las fuentes "de todos los días". Los emojis y el
     // portapapeles quedan fuera de la búsqueda general a propósito: son 2.500 y
     // N entradas de texto libre que ensuciarían cualquier consulta corta. Se

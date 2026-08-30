@@ -10,9 +10,7 @@ import qs.Modules.IA.core
 // Dice tres cosas en una línea de 30 px: qué modelo hay puesto (por su NOMBRE,
 // no por su ruta), de quién es, y si contesta — el punto es el mismo semáforo
 // de la conexión, así que el botón que abre el selector ya avisa de que el
-// servidor está caído sin abrir nada. Antes esto era un desplegable de ajustes
-// con la etiqueta vacía: enseñaba el id entero cortado a la mitad y no decía
-// nada del estado.
+// servidor está caído sin abrir nada.
 Rectangle {
     id: chip
 

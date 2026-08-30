@@ -6,26 +6,23 @@ import Quickshell.Hyprland
 import Quickshell.Wayland
 import qs.Config
 
-// El lado vivo del dock: qué hay abierto ahora mismo, con qué icono se dibuja,
-// y qué pasa al pulsarlo.
+// El lado vivo del dock: qué hay abierto ahora mismo, con qué icono se dibuja y
+// qué pasa al pulsarlo.
 //
-// La lógica de listas —fusionar fijadas con abiertas, ordenar, sanear— NO está
-// aquí: vive en Config/DockCatalog.qml, que es puro y se prueba entero en
-// tests/logica.qml sin sesión gráfica. Este archivo es la mitad que no se
-// puede probar así, y por eso se ha dejado lo más delgada posible.
+// La lógica de listas —fusionar fijadas con abiertas, ordenar, sanear— vive en
+// Config/DockCatalog.qml, que es puro y comprobable sin sesión gráfica. Esta es
+// la mitad que no lo es, y por eso se ha dejado lo más delgada posible.
 Singleton {
     id: root
 
-    // ── La clave de una app ──────────────────────────────────────────────────
-    // El problema central del dock. Fijar guarda el id de un .desktop; una
-    // ventana de Wayland solo trae su appId, que según la app es "firefox",
-    // "Firefox", "org.mozilla.firefox" o cualquier otra cosa. Sin llevar ambos
-    // a la MISMA clave, un Firefox fijado y su propia ventana abierta salen
-    // como dos iconos distintos en el dock.
+    // Fijar guarda el id de un .desktop; una ventana de Wayland solo trae su
+    // appId, que según la app es "firefox", "Firefox" o "org.mozilla.firefox".
+    // Sin llevar ambos a la misma clave, una app fijada y su ventana abierta
+    // salen como dos iconos distintos.
     //
-    // heuristicLookup es el mismo emparejador que ya usa Bar/ActiveWindow.qml
-    // para resolver el título de la ventana enfocada, así que el dock acierta
-    // exactamente donde acierta la barra — ni un caso más ni uno menos.
+    // heuristicLookup es el mismo emparejador que usa Bar/ActiveWindow.qml para
+    // resolver el título de la ventana enfocada, así que el dock acierta
+    // exactamente donde acierta la barra.
     function claveDe(appId) {
         if (!appId || appId === "")
             return ""
@@ -54,11 +51,9 @@ Singleton {
         return icono !== "" ? Quickshell.iconPath(icono, true) : ""
     }
 
-    // ── Lo que está abierto ──────────────────────────────────────────────────
     // Se reagrupa entero en cada cambio en vez de mantener un índice
-    // incremental. Es O(ventanas) sobre una lista que en la práctica tiene
-    // decenas de elementos, y a cambio no hay estado que se pueda desincronizar
-    // — que es justo el fallo que un índice incremental daría en silencio.
+    // incremental: es O(ventanas) sobre una lista de decenas de elementos, y a
+    // cambio no hay estado que pueda desincronizarse en silencio.
     readonly property var abiertas: {
         const porId = {}
         const orden = []
@@ -85,7 +80,7 @@ Singleton {
                                                      root.abiertas,
                                                      Settings.dockShowRunning)
 
-    // ── Monitores ────────────────────────────────────────────────────────────
+    // Monitores
     function enSuMonitor(nombre) {
         const solo = Settings.dockOnlyMonitors
         if (!Array.isArray(solo) || solo.length === 0)
@@ -93,15 +88,14 @@ Singleton {
         return solo.indexOf(nombre) !== -1
     }
 
-    // ¿Tiene ventanas el espacio de trabajo activo DE ESTE MONITOR? Es lo que
-    // decide el autoocultar inteligente, y que sea por monitor importa: con dos
-    // pantallas, un navegador a pantalla completa en la principal no debe
-    // esconder el dock de la secundaria, que está vacía.
+    // ¿Tiene ventanas el espacio de trabajo activo de este monitor? Es lo que
+    // decide el autoocultar inteligente, y que sea por monitor importa: una
+    // ventana a pantalla completa en la principal no debe esconder el dock de
+    // la secundaria, que está vacía.
     //
-    // Sin Hyprland no hay forma de saber en qué monitor está cada ventana. Se
-    // devuelve false, o sea "el escritorio está vacío", con lo que el modo
-    // inteligente se comporta como "siempre visible". Es lo razonable cuando
-    // falta el dato: esconder un dock que no se sabe si estorba sería peor.
+    // Sin Hyprland no se sabe en qué monitor está cada ventana, y se devuelve
+    // false —"escritorio vacío"—, con lo que el modo inteligente se comporta
+    // como "siempre visible": esconder un dock sin saber si estorba sería peor.
     function hayVentanasEn(monitor) {
         if (!Settings.hyprlandAvailable)
             return false
@@ -124,25 +118,15 @@ Singleton {
         return false
     }
 
-    // ── Notificaciones por app ───────────────────────────────────────────────
-    // NotifService agrupa por appName: EL NOMBRE QUE LA APP SE PONE A SÍ MISMA
-    // al enviar el aviso. El dock indexa por id de .desktop. No son la misma
-    // cosa y no hay conversión general entre ambas.
+    // NotifService agrupa por el nombre que la app se pone a sí misma al enviar
+    // el aviso, y el dock indexa por id de .desktop. No son la misma cosa ni hay
+    // conversión general, así que se comparan plegados contra el nombre y el id
+    // de la entrada: acierta con la mayoría y falla con apps que se anuncien con
+    // un nombre sin parecido con su .desktop.
     //
-    // Se comparan plegados (minúsculas, sin diacríticos) contra el nombre y el
-    // id de la entrada. Acierta con Firefox, Signal o Thunderbird; falla con
-    // apps que se anuncien con un nombre sin parecido con su .desktop.
-    //
-    // El recuento por nombre de app plegado, hecho UNA vez.
-    //
-    // Antes esto vivía dentro de avisosDe(), o sea que cada icono del dock
-    // recorría la lista entera plegando el nombre de cada aviso. fold() hace un
-    // toLowerCase, un normalize("NFD") y un replace con expresión regular: tres
-    // objetos nuevos por aviso y por icono, cada vez que llega o se va una
-    // notificación. Con veintiocho avisos y diez iconos eran 280 pliegues por
-    // cambio, para responder diez preguntas.
-    //
-    // Ahora se pliega la lista una vez y cada icono hace dos búsquedas.
+    // El recuento por nombre plegado se hace una vez para toda la lista, y cada
+    // icono hace dos búsquedas: plegar dentro de la consulta por icono son tres
+    // objetos nuevos por aviso y por icono en cada cambio de la lista.
     readonly property var _avisosPorApp: {
         const cuenta = ({})
         if (!Settings.dockNotifBadges)
@@ -167,18 +151,17 @@ Singleton {
         const porId = DockCatalog.normalizeId(e.id || "")
         if (porId !== "" && root._avisosPorApp[porId] !== undefined)
             return root._avisosPorApp[porId]
-        // SIN COINCIDENCIA, CERO. Nunca un número adivinado sobre el icono
-        // equivocado: un globo que falta es una función ausente, un globo mal
-        // puesto es información falsa, y de las dos la segunda es peor.
+        // Sin coincidencia, cero: nunca un número adivinado sobre el icono
+        // equivocado. Un globo que falta es una función ausente; uno mal puesto
+        // es información falsa, y eso es peor.
         return 0
     }
 
-    // ── Acciones ─────────────────────────────────────────────────────────────
+    // Acciones
 
-    // Rotación por app: pulsar repetidamente el icono de una app con tres
-    // ventanas las recorre en vez de traer siempre la misma. El índice se
-    // guarda por clave (no por delegate) para que sobreviva a que el dock
-    // reordene sus botones al abrirse o cerrarse otra app.
+    // Rotación por app: pulsar repetidamente el icono de una app con varias
+    // ventanas las recorre. El índice se guarda por clave y no por delegate,
+    // para que sobreviva a que el dock reordene sus botones.
     property var _rotacion: ({})
 
     function activar(ranura) {
@@ -197,10 +180,8 @@ Singleton {
         root.enfocar(vs[i])
     }
 
-    // Traer una ventana. Si está en otro espacio de trabajo se mueve al ACTUAL
-    // y se enfoca, que es el mismo comportamiento que ya da la bandeja al
-    // pulsar un icono (ver Bar/Tray.qml:openApplication) — y con la misma
-    // trampa: en modo Lua la sintaxis clásica de dispatchers no vale.
+    // Trae una ventana, moviéndola al espacio de trabajo actual si estaba en
+    // otro. En modo Lua la sintaxis clásica de dispatchers no vale.
     function enfocar(toplevel) {
         if (!toplevel)
             return
@@ -236,7 +217,7 @@ Singleton {
     }
 
     // El toplevel de Hyprland que corresponde a uno de Wayland. Quickshell ya
-    // enlaza ambos: se busca por la referencia, no por título ni por clase.
+    // enlaza ambos, así que se busca por la referencia y no por título o clase.
     function _hyprDe(toplevel) {
         for (const hl of (Hyprland.toplevels ? Hyprland.toplevels.values : []))
             if (hl && hl.wayland === toplevel)
@@ -244,10 +225,18 @@ Singleton {
         return null
     }
 
+    // Se avisa de que ARRANCA, no de que ha arrancado: es justo el hueco entre
+    // pulsar y ver la ventana lo que el icono tiene que rellenar diciendo "voy".
+    // Quien escuche decide cuándo parar; aquí no se sabe si la app tardará
+    // medio segundo o diez.
+    signal lanzada(string id)
+
     function lanzarNueva(id) {
         const e = root.entradaDe(id)
-        if (e && e.execute)
+        if (e && e.execute) {
             e.execute()
+            root.lanzada(id)
+        }
     }
 
     function cerrarTodas(ranura) {
@@ -256,11 +245,10 @@ Singleton {
                 tl.close()
     }
 
-    // ── Edición de las fijadas ───────────────────────────────────────────────
-    // Los DOS sitios que editan la lista —arrastrar en el propio dock y el
-    // editor de Ajustes— pasan por aquí, y esto pasa por DockCatalog. Es la
-    // única forma de que no diverjan: dos sitios escribiendo el mismo array con
-    // su propia idea de qué es válido acaban discrepando siempre.
+    // Los dos sitios que editan la lista —arrastrar en el dock y el editor de
+    // Ajustes— pasan por aquí, y esto pasa por DockCatalog. Es la única forma de
+    // que no diverjan: dos sitios escribiendo el mismo array con su propia idea
+    // de qué es válido acaban discrepando.
     function fijar(id)   { Settings.dockPinned = DockCatalog.add(Settings.dockPinned, id) }
     function soltar(id)  { Settings.dockPinned = DockCatalog.remove(Settings.dockPinned, id) }
     function estaFijada(id) { return DockCatalog.has(Settings.dockPinned, id) }

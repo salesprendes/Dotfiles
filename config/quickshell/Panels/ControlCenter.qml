@@ -6,12 +6,10 @@ import qs.Config
 import qs.Panels
 import qs.Services
 
-// Centro de control, al estilo del Control Center de macOS: tarjetas del mismo
-// material sin etiquetas de sección, rejilla compacta de tiles, sliders gruesos
-// tipo píldora con el icono embebido (Pantalla y Sonido en tarjeta propia) y
-// las acciones de energía como pie del panel. Los tiles con detalle desplegable
-// (WiFi, Bluetooth, audio, micro y perfil de energía) conservan su cableado y
-// comportamiento.
+// Centro de control: tarjetas del mismo material sin etiquetas de sección,
+// rejilla compacta de tiles, sliders gruesos tipo píldora con el icono embebido
+// y las acciones de energía como pie del panel. Los tiles con detalle
+// desplegable conservan su cableado y comportamiento.
 Popout {
     id: cc
     ns: "qs-controlcenter"
@@ -42,10 +40,10 @@ Popout {
         border.color: Theme.withAlpha(Theme.overlay, 0.34)
     }
 
-    // Slider grueso tipo píldora (como el de macOS): el icono va embebido en el
-    // relleno y toda la pista es el control. Misma interacción que
-    // Components/Slider.qml vía la lógica compartida SliderDrag: al arrastrar
-    // sigue al puntero sin esperar el eco del backend, y flechas para ajuste fino.
+    // Slider grueso tipo píldora: el icono va embebido en el relleno y toda la
+    // pista es el control. Misma interacción que Components/Slider.qml a través
+    // de la lógica compartida SliderDrag: al arrastrar sigue al puntero sin
+    // esperar el eco del backend, y flechas para el ajuste fino.
     component FatSlider: Item {
         id: fs
 
@@ -71,8 +69,8 @@ Popout {
 
         Rectangle {
             id: track
-            // Como en macOS, la pista engorda al pasar el ratón o arrastrar;
-            // crece centrada dentro del Item (de alto fijo) sin mover el layout.
+            // La pista engorda al pasar el ratón o arrastrar, creciendo centrada
+            // dentro del Item, de alto fijo, sin mover el layout.
             anchors.verticalCenter: parent.verticalCenter
             width: parent.width
             height: fs.engaged ? parent.height : parent.height - Theme.space6
@@ -181,7 +179,7 @@ Popout {
     readonly property bool micMuted: mic?.muted ?? true
     readonly property int micPercent: Math.round((mic?.volume ?? 0) * 100)
 
-    // ── Cabecera · identidad del equipo ──
+    // Cabecera · identidad del equipo
     SectionCard {
         implicitHeight: Theme.dp(64)
         opacity: cc.blockReveal(0)
@@ -356,9 +354,8 @@ Popout {
         }
     }
 
-    // ── Rejilla de tiles ──
-    // Un solo bloque compacto, sin etiquetas: la agrupación la da el orden de
-    // las filas (conexiones, audio, sistema), como en macOS.
+    // Un solo bloque compacto y sin etiquetas: la agrupación la da el orden de
+    // las filas (conexiones, audio, sistema).
     ColumnLayout {
         Layout.fillWidth: true
         spacing: Theme.space8
@@ -508,7 +505,7 @@ Popout {
         }
     }
 
-    // ── Pantalla · brillo ──
+    // Pantalla · brillo
     SliderCard {
         visible: Brightness.available
         opacity: cc.blockReveal(5)
@@ -520,7 +517,7 @@ Popout {
         onMoved: (v) => Brightness.setPercent(v * 100)
     }
 
-    // ── Sonido · volumen ──
+    // Sonido · volumen
     SliderCard {
         opacity: cc.blockReveal(6)
         transform: Translate { y: (1 - cc.blockReveal(6)) * Theme.dp(14) }

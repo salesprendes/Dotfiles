@@ -4,39 +4,33 @@ import QtQuick
 import Quickshell
 import qs.Config
 
-// Catálogo de widgets de la barra: SOLO metadatos (id, nombre, glifo, sección
-// por defecto…). La implementación de cada uno vive en Bar/BarWidgetLoader.qml,
-// que es quien mapea id → Component.
+// Catálogo de widgets de la barra: solo metadatos. La implementación de cada
+// uno vive en Bar/BarWidgetLoader.qml, que es quien mapea id → Component.
 //
-// La separación no es ceremonia. El editor de Ajustes tiene que poder listar
-// "qué widgets existen" sin instanciar una barra, y un singleton que instanciara
-// componentes de barra arrastraría consigo Hyprland, Pipewire, MPRIS y el resto
-// de servicios solo por abrir una página de ajustes. Aquí no hay ningún
-// Component: son datos.
+// La separación permite que el editor de Ajustes liste qué widgets existen sin
+// instanciar una barra: un singleton que instanciara componentes arrastraría
+// Hyprland, PipeWire, MPRIS y el resto de servicios solo por abrir una página.
 //
 // El layout vive en Settings.barLayout con esta forma:
 //
 //     { "left": [ {"id":"launcher"}, … ], "center": [ … ], "right": [ … ] }
 //
-// Cada entrada es un OBJETO, no un id suelto, para que un widget pueda llevar
-// sus propios ajustes en línea el día que haga falta (dos relojes en husos
-// distintos = dos entradas con 'tz' distinto). Hoy solo se usa 'id'.
+// Cada entrada es un objeto y no un id suelto, para que un widget pueda llevar
+// sus propios ajustes en línea el día que haga falta. Hoy solo se usa 'id'.
 //
-// La presencia en el layout es la ÚNICA fuente de verdad sobre si un widget se
-// ve. Antes había un booleano suelto por widget (showTray, showSysmon,
-// showBattery…): siete ajustes que solo servían para simular un orden que en
-// realidad estaba cableado en el QML de la barra.
+// La presencia en el layout es la única fuente de verdad sobre si un widget se
+// ve.
 Singleton {
     id: cat
 
     readonly property var sections: ["left", "center", "right"]
 
-    // 'needs' declara una dependencia del sistema que el EDITOR comprueba
-    // (Config no importa qs.Services para no acoplar la capa de configuración a
-    // la de servicios). El widget en sí ya se auto-oculta si su servicio no
-    // está; esto solo evita ofrecer en la lista algo que nunca se verá.
+    // 'needs' declara una dependencia del sistema que comprueba el editor;
+    // Config no importa qs.Services para no acoplar la capa de configuración a
+    // la de servicios. El widget ya se auto-oculta si su servicio no está, así
+    // que esto solo evita ofrecer algo que nunca se verá.
     //
-    // 'multiple' permite varias instancias del mismo id (hoy solo el separador).
+    // 'multiple' permite varias instancias del mismo id.
     readonly property var widgets: [
         { id: "launcher",     glyph: "󰣇",  section: "left",   needs: "", multiple: false },
         { id: "workspaces",   glyph: "󰧨",  section: "left",   needs: "", multiple: false },
@@ -63,10 +57,9 @@ Singleton {
         { id: "spacer",       glyph: "󰇜",  section: "right",  needs: "", multiple: true }
     ]
 
-    // Nombre visible. Vive aparte de 'widgets' porque pasa por I18n y las
-    // traducciones se resuelven en el idioma ACTUAL: si el nombre estuviera en
-    // el mapa de arriba (un binding que se evalúa una vez) cambiar de idioma
-    // dejaría el editor en el idioma anterior hasta reiniciar.
+    // Nombre visible, aparte de 'widgets' porque pasa por I18n y se resuelve en
+    // el idioma actual: dentro de aquel mapa se evaluaría una sola vez y cambiar
+    // de idioma dejaría el editor en el anterior hasta reiniciar.
     function nameFor(id) {
         switch (id) {
         case "launcher":      return I18n.tr("Launcher")
@@ -109,15 +102,9 @@ Singleton {
         return m ? m.glyph : "󰘿"
     }
 
-    // Disposición de fábrica: la que tenía la barra cableada a mano antes de
-    // que el layout fuese configurable, widget por widget y en el mismo orden.
-    //
-    // Solo entra lo que ANTES se veía de fábrica. El clima no: su píldora
-    // estaba en el QML de la barra pero colgada de 'weatherShowInBar', que
-    // venía apagado — meterlo aquí le habría estrenado una píldora de clima a
-    // quien nunca la pidió, tanto en una instalación nueva como al migrar. Lo
-    // mismo con la cafeína, el separador y los widgets nuevos: se añaden desde
-    // Ajustes ▸ Barra.
+    // Disposición de fábrica. Solo entra lo que se ve de serie: el clima, la
+    // cafeína, el separador y los widgets nuevos vienen apagados y se añaden
+    // desde Ajustes, para no estrenarle a nadie una píldora que no ha pedido.
     function defaultLayout() {
         return {
             left:   [{ id: "launcher" }, { id: "workspaces" }, { id: "activeWindow" }],
@@ -128,7 +115,6 @@ Singleton {
         }
     }
 
-    // ── Lectura ──────────────────────────────────────────────────────────────
 
     function entriesOf(layout, section) {
         if (!layout || typeof layout !== "object")
@@ -138,7 +124,7 @@ Singleton {
     }
 
     // ¿Está este widget puesto en alguna sección? Lo usan los servicios que solo
-    // deben sondear si su widget está a la vista (SysMon, Weather).
+    // deben sondear si su widget está a la vista.
     function has(layout, id) {
         for (const sec of sections)
             for (const e of entriesOf(layout, sec))
@@ -147,9 +133,9 @@ Singleton {
         return false
     }
 
-    // Posición de una entrada por su id. Devuelve null si no está puesta.
-    // Con 'multiple' devuelve la primera; el editor trabaja por índice, no por
-    // id, precisamente para poder distinguir dos separadores.
+    // Posición de una entrada por su id, o null si no está puesta. Con
+    // 'multiple' devuelve la primera: el editor trabaja por índice y no por id,
+    // precisamente para poder distinguir dos separadores.
     function locate(layout, id) {
         for (const sec of sections) {
             const list = entriesOf(layout, sec)
@@ -160,11 +146,9 @@ Singleton {
         return null
     }
 
-    // ── Escritura ────────────────────────────────────────────────────────────
-    //
-    // Todas devuelven un layout NUEVO en vez de mutar el recibido. Settings
-    // guarda el layout en una 'property var': mutar el objeto in situ no emite
-    // el cambio, así que la barra no se enteraría y no se guardaría nada.
+    // Todas devuelven un layout nuevo en vez de mutar el recibido. Settings lo
+    // guarda en una 'property var', y mutar el objeto in situ no emite el
+    // cambio, así que la barra no se enteraría y no se guardaría nada.
 
     function clone(layout) {
         const out = {}
@@ -173,9 +157,9 @@ Singleton {
         return out
     }
 
-    // Descarta ids desconocidos y duplicados de widgets que no admiten varias
-    // instancias, y garantiza las tres secciones. Es lo que protege de un
-    // settings.json editado a mano o venido de una versión con otros widgets.
+    // Descarta ids desconocidos y duplicados de widgets de instancia única, y
+    // garantiza las tres secciones. Es lo que protege de un settings.json
+    // editado a mano o venido de una versión con otros widgets.
     function sanitize(layout) {
         const out = { left: [], center: [], right: [] }
         const seen = {}
@@ -198,10 +182,9 @@ Singleton {
         return out
     }
 
-    // Mueve la entrada (fromSection, fromIndex) a (toSection, toIndex).
-    // toIndex se interpreta sobre la lista YA sin la entrada movida, que es lo
-    // que hace que arrastrar un widget dos puestos a la derecha dentro de su
-    // propia sección caiga donde el usuario ve el hueco.
+    // Mueve una entrada entre posiciones. toIndex se interpreta sobre la lista
+    // ya sin la entrada movida, que es lo que hace que arrastrar un widget
+    // dentro de su sección caiga donde se ve el hueco.
     function move(layout, fromSection, fromIndex, toSection, toIndex) {
         const next = clone(layout)
         const from = next[fromSection]

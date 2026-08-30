@@ -6,8 +6,8 @@ import Quickshell.Services.UPower
 import qs.Config
 
 // Estado de batería (UPower), compartido por la barra, Ajustes y el aviso de
-// batería baja. Único punto que lee displayDevice: los consumidores no
-// duplican la lógica de UPower.
+// batería baja. Único punto que lee displayDevice, para que los consumidores no
+// dupliquen la lógica.
 Singleton {
     id: batt
 
@@ -18,19 +18,18 @@ Singleton {
                                      || (device?.state ?? 0) === UPowerDeviceState.PendingCharge
     readonly property bool discharging: device ? device.state === UPowerDeviceState.Discharging : false
 
-    // Aviso de batería baja (solo portátiles). Los umbrales y si avisar o no
-    // se configuran en Ajustes ▸ Notificaciones ▸ Batería: lo que para una
-    // batería nueva son dos horas, para una gastada son quince minutos.
+    // Aviso de batería baja, solo en portátiles. Los umbrales y si avisar o no
+    // se configuran, porque lo que en una batería nueva son dos horas en una
+    // gastada son quince minutos.
     //
-    // Un aviso por cruce de umbral; se rearma al subir por encima del umbral
-    // bajo con margen (normalmente al enchufar). En equipos sin batería no
-    // hace nada.
+    // Un aviso por cruce de umbral, rearmado al subir por encima del umbral bajo
+    // con margen.
     property int _stage: 0
     readonly property real _pct: present ? (device?.percentage ?? -1) : -1
     readonly property int lowThreshold: Settings.batteryLowThreshold
-    // El crítico nunca puede quedar por encima del bajo: si al mover los
-    // deslizadores se cruzaran, el aviso "crítico" saltaría antes que el
-    // "bajo" y el orden de gravedad se leería al revés.
+    // El crítico nunca puede quedar por encima del bajo: cruzados, el aviso
+    // crítico saltaría antes que el bajo y el orden de gravedad se leería al
+    // revés.
     readonly property int criticalThreshold: Math.min(Settings.batteryCriticalThreshold,
                                                       Settings.batteryLowThreshold)
     on_PctChanged: _check()

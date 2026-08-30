@@ -1,23 +1,21 @@
 import QtQuick
 
-// Instancia UN widget de barra a partir de su id. Es el único sitio donde un id
+// Instancia un widget de barra a partir de su id. Es el único sitio donde un id
 // del catálogo se convierte en un componente de verdad.
 //
 // El mapa vive aquí y no en Config/BarCatalog.qml a propósito: el catálogo son
 // datos que el editor de Ajustes lista sin instanciar nada, y un singleton que
-// declarase estos Component arrastraría Hyprland, Pipewire, MPRIS y el resto de
+// declarase estos Component arrastraría Hyprland, PipeWire, MPRIS y el resto de
 // servicios solo por abrir una página de ajustes.
 //
-// PARA AÑADIR UN WIDGET hacen falta dos cosas: una entrada en
-// BarCatalog.widgets (con su nombre en BarCatalog.nameFor) y un par
-// id → Component aquí abajo.
+// Para añadir un widget hacen falta dos cosas: una entrada en BarCatalog.widgets,
+// con su nombre, y un par id → Component aquí abajo.
 //
-// Es un Item CON un Loader dentro, y no un Loader a secas, por un detalle de
-// implementación de Qt: QQuickLoader escribe su implicitWidth/implicitHeight
-// desde C++ cada vez que carga o descarga, y eso destruye cualquier binding que
-// se declare sobre esas propiedades. Como aquí hace falta que la ranura mida
-// CERO cuando su widget no se muestra —si no, deja un hueco en la fila—, el
-// tamaño tiene que vivir en un item que Qt no vaya a pisar.
+// Es un Item con un Loader dentro, y no un Loader a secas, por un detalle de Qt:
+// QQuickLoader escribe su implicitWidth e implicitHeight desde C++ cada vez que
+// carga o descarga, y eso destruye cualquier binding declarado sobre ellas. Como
+// la ranura tiene que medir cero cuando su widget no se muestra —si no deja un
+// hueco en la fila—, el tamaño tiene que vivir en un item que Qt no vaya a pisar.
 Item {
     id: root
 

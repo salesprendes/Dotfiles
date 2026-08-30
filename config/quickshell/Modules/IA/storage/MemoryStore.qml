@@ -7,7 +7,7 @@ import "../TextUtils.js" as TU
 // Lo que el asistente RECUERDA entre conversaciones, en dos cajones que a
 // propósito no se mezclan:
 //
-//   · MEMORIA (idea de OpenWorker) — hechos del usuario que él aprobó guardar
+//   · MEMORIA — hechos del usuario que él aprobó guardar
 //     con la herramienta 'remember'. Van con su [#id] para que el modelo pueda
 //     CORREGIR o RETIRAR una nota desfasada en vez de apilar el dato nuevo al
 //     lado del rancio y contradecirse más tarde.
@@ -79,7 +79,7 @@ Scope {
         return "Aprendido."
     }
 
-    // ── Lo que entra al prompt ───────────────────────────────────────────────
+    // Lo que entra al prompt
     readonly property string instinctBlock: {
         const all = instincts
         if (all.length === 0)
@@ -113,10 +113,10 @@ Scope {
                   + "alguna queda desfasada, corrígela con memory_update o "
                   + "retírala con memory_forget usando su número, en vez de "
                   + "guardar una nota nueva que la contradiga:"
-        // Orden por RELEVANCIA a lo último que preguntó el usuario (idea de
-        // OpenHarness): con el presupuesto lleno, lo que entra es lo que viene a
-        // cuento, no lo que se guardó primero. Los ids [#n] siguen siendo los de
-        // la lista real, para que corregir siga apuntando bien.
+        // Orden por relevancia a lo último que preguntó el usuario: con el
+        // presupuesto lleno, lo que entra es lo que viene a cuento y no lo que se
+        // guardó primero. Los ids [#n] siguen siendo los de la lista real, para que
+        // corregir siga apuntando bien.
         const order = TU.rankNotes(n, _query)
         let chars = 0
         for (let k = 0; k < order.length; k++) {
@@ -129,10 +129,10 @@ Scope {
         return block
     }
 
-    // ── Persistencia ─────────────────────────────────────────────────────────
     // Cada cajón en su archivo, dentro del módulo y fuera de git.
     FileView {
         path: store.svc ? store.svc.dataDir + "/ai-memory.json" : ""
+        printErrors: false
         onAdapterUpdated: writeAdapter()
 
         JsonAdapter {
@@ -143,6 +143,7 @@ Scope {
 
     FileView {
         path: store.svc ? store.svc.dataDir + "/ai-instincts.json" : ""
+        printErrors: false
         onAdapterUpdated: writeAdapter()
 
         JsonAdapter {

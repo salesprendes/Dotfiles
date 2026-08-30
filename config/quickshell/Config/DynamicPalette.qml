@@ -1,29 +1,23 @@
 import QtQuick
 
-// Paleta dinámica: de los píxeles de un fondo de pantalla a una paleta
-// completa. Funciones PURAS, sin estado ni efectos secundarios: quien llama
-// decide qué hacer con el resultado (Settings lo cachea y lo guarda; el
-// greeter lo aplica a su Theme).
+// Paleta dinámica: de los píxeles de un fondo de pantalla a una paleta completa.
+// Funciones puras, sin estado ni efectos secundarios; quien llama decide qué
+// hacer con el resultado.
 //
-// Sin dependencias de Settings a propósito, igual que Scale.qml: el greeter
-// corre antes de la sesión, como usuario 'greeter', y no puede leer
-// settings.json (el HOME del usuario es 0700). Compartir ESTE fichero es lo
-// que permite que el login y la sesión deriven la misma paleta del mismo
+// Sin dependencias de Settings a propósito: el greeter corre antes de la sesión,
+// como usuario 'greeter', y no puede leer settings.json. Compartir este fichero
+// es lo que permite que el login y la sesión deriven la misma paleta del mismo
 // fondo en vez de mantener dos copias de la fórmula.
 //
-// NO es singleton adrede: los singletons (Settings, el Theme del greeter) lo
-// instancian como hijo. Ver la nota de Scale.qml sobre singletons que se
-// referencian entre sí durante el arranque del motor.
+// No es singleton adrede: los singletons que lo usan lo instancian como hijo.
+// Ver la nota de Scale.qml sobre singletons que se referencian entre sí durante
+// el arranque del motor.
 QtObject {
-    // El color se trabaja en OKLCh (claridad · croma · tono), no en HSL. En HSL
-    // la "L" NO es claridad percibida: un amarillo y un azul con la misma L se
-    // ven con brillos muy distintos, así que una paleta a claridades fijas
-    // salía luminosa con unos fondos y apagada con otros, y había que elegir
-    // números de compromiso que no quedaban bien con ninguno. En OKLab la
-    // claridad sí es perceptual: cada papel de la paleta (fondo, superficie,
-    // texto, acento) conserva el MISMO peso visual salga el tono que salga.
-    // Es lo que hacen los generadores tipo matugen con CAM16/HCT, en cuarenta
-    // líneas y sin dependencias.
+    // El color se trabaja en OKLCh y no en HSL: la "L" de HSL no es claridad
+    // percibida, así que un amarillo y un azul con la misma L se ven con brillos
+    // muy distintos y una paleta a claridades fijas sale luminosa con unos fondos
+    // y apagada con otros. En OKLab la claridad sí es perceptual, y cada papel de
+    // la paleta conserva el mismo peso visual salga el tono que salga.
 
     function _srgbToLinear(v) {
         return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)
@@ -57,9 +51,9 @@ QtObject {
         }
     }
 
-    // OKLCh → "#rrggbb". Si el color pedido no cabe en sRGB se le baja el
-    // croma (búsqueda binaria) hasta que quepa, en vez de recortar cada canal
-    // por separado: recortar canales TUERCE el tono, y un acento que vira al
+    // OKLCh → "#rrggbb". Si el color pedido no cabe en sRGB se le baja el croma
+    // por búsqueda binaria hasta que quepa, en vez de recortar cada canal por
+    // separado: recortar canales tuerce el tono, y un acento que vira al
     // recortarse deja de armonizar con la paleta de la que salió.
     function _okHex(L, C, hueDeg) {
         const hr = hueDeg * Math.PI / 180
@@ -82,8 +76,8 @@ QtObject {
         return "#" + hx(rgb.r) + hx(rgb.g) + hx(rgb.b)
     }
 
-    // Recibe los píxeles RGBA de una miniatura del fondo y saca de ella el tono
-    // y el croma con los que se construye la paleta.
+    // Recibe los píxeles RGBA de una miniatura del fondo y saca el tono y el
+    // croma con los que se construye la paleta.
     function fromPixels(data) {
         const N = 36                       // cubos de 10°
         const vx = new Array(N).fill(0)    // componentes del voto circular
@@ -117,23 +111,22 @@ QtObject {
             weightSum += w
         }
 
-        // Fondo sin color (blanco y negro, escala de grises): paleta sobria
-        // en un azul frío neutro, en vez de inventarse un tono a partir del
-        // ruido de compresión.
+        // Fondo sin color: paleta sobria en un azul frío neutro, en vez de
+        // inventarse un tono a partir del ruido de compresión.
         if (weightSum <= 0) {
             return fromSeed(250, 0.02)
         }
 
-        // El pico se busca sumando cada cubo con sus dos vecinos: un tono
-        // repartido a caballo entre dos cubos perdía antes contra otro peor
-        // pero mejor centrado, por puro azar de dónde cae la frontera.
+        // El pico se busca sumando cada cubo con sus dos vecinos, para que un
+        // tono repartido a caballo entre dos no pierda contra otro peor pero
+        // mejor centrado.
         let best = 0, bestScore = -1
         for (let i = 0; i < N; i++) {
             const s = vw[(i + N - 1) % N] + vw[i] + vw[(i + 1) % N]
             if (s > bestScore) { bestScore = s; best = i }
         }
-        // Media circular del pico y sus vecinos: precisión de grados, no de
-        // cubo (antes se usaba el centro del cubo ganador, hasta 5° de error).
+        // Media circular del pico y sus vecinos: precisión de grados y no de
+        // cubo.
         let cx = 0, cy = 0
         for (let d = -1; d <= 1; d++) {
             const k = (best + d + N) % N
@@ -142,28 +135,24 @@ QtObject {
         let hue = Math.atan2(cy, cx) * 180 / Math.PI
         if (hue < 0) hue += 360
 
-        // El croma sale del croma REAL de la imagen, no de una escalera de tres
-        // peldaños: un fondo pastel da paleta pastel y uno saturado, paleta
-        // viva. Si el color es solo una pincelada sobre una imagen casi gris
-        // ('share' bajo), se rebaja para no teñir todo el shell por un detalle.
+        // El croma sale del croma real de la imagen y no de una escalera de
+        // peldaños fijos: un fondo pastel da paleta pastel y uno saturado, viva.
+        // Si el color es solo una pincelada sobre una imagen casi gris se rebaja,
+        // para no teñir todo el shell por un detalle.
         const share = colored / Math.max(1, total)
         const imgC = chromaSum / weightSum
         return fromSeed(hue, imgC * (share < 0.12 ? 0.55 : 1.0))
     }
 
-    // Deriva la paleta completa (oscura + variantes claras) del tono semilla.
+    // Deriva la paleta completa —oscura y variantes claras— del tono semilla.
     // Las claridades van en OKLab, así que son las mismas para cualquier tono.
-    // 'cf' es lo colorido que es el fondo (croma medio de sus píxeles con
-    // color). Las rectas de abajo están calibradas midiendo fondos reales: van
-    // de ~0.02 (un tema desaturado tipo Nord) a ~0.13 (uno muy vivo tipo
-    // Gruvbox), y reparten ese recorrido de verdad — con la escala anterior la
-    // mayoría de los fondos topaba con el mínimo y acababa con el mismo acento
-    // exacto, que era justo lo que la paleta dinámica debía evitar.
+    // 'cf' es lo colorido que es el fondo, y las rectas están calibradas sobre
+    // fondos reales para repartir de verdad el recorrido entre un tema
+    // desaturado y uno muy vivo.
     function fromSeed(hue, cf) {
         const H = (x) => ((x % 360) + 360) % 360
-        // Armoniza un tono fijo (rojo, verde…) acercándolo un 15% al semilla:
-        // siguen siendo reconocibles, pero pertenecen a la misma familia que
-        // el resto de la paleta.
+        // Armoniza un tono fijo acercándolo un 15 % al semilla: sigue siendo
+        // reconocible, pero pertenece a la misma familia que el resto.
         const harm = (h) => H(h + (((hue - h + 540) % 360) - 180) * 0.15)
         const k = (L, C, h) => _okHex(L, C, h === undefined ? hue : h)
         const ac = Math.max(0.085, Math.min(0.210, 0.060 + cf * 1.15))   // acentos
@@ -185,9 +174,8 @@ QtObject {
             lightSurface:   k(0.905, nc * 1.1), lightSurfaceHi: k(0.865, nc * 1.2),
             lightOverlay:   k(0.735, nc * 1.6),
             lightFg:        k(0.255, nc * 1.4), lightFgDim:     k(0.420, nc * 1.3),
-            // 0.540 y no más claro: es el punto donde el texto secundario
-            // sobre fondo claro cruza el 4.5:1 de WCAG AA (a 0.560 se quedaba
-            // en 4.21:1). En oscuro el equivalente ya iba sobrado.
+            // 0.540 y no más claro: es donde el texto secundario sobre fondo
+            // claro cruza el 4.5:1 de WCAG AA. En oscuro va sobrado.
             lightFgMuted:   k(0.540, nc * 1.2),
             lightAccent:    k(0.520, ac * 1.05),
             lightAccent2:   k(0.500, ac * 0.95, H(hue + 42)),

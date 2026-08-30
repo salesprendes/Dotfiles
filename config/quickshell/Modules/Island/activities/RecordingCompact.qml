@@ -6,7 +6,6 @@ import qs.Services
 
 // "Se está grabando": punto rojo latiendo y el tiempo que llevas.
 //
-// ── POR QUÉ LATE ────────────────────────────────────────────────────────────
 // Un punto rojo quieto se mira una vez y se convierte en parte del decorado.
 // Late porque tiene que seguir contando algo a los veinte minutos, que es justo
 // cuando ya no te acuerdas de que le diste a grabar. Al PAUSAR se para y se

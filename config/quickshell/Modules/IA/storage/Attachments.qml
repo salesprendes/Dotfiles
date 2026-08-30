@@ -74,7 +74,6 @@ Scope {
         }
     }
 
-    // ── Referencias @ruta en el mensaje (idea de gemini-cli) ─────────────────
     // "arregla @~/.config/quickshell/Bar/Bar.qml" adjunta el archivo sin tener
     // que pedirle al agente que lo lea: un paso menos, y el contenido llega ya en
     // el primer turno. Lo que no exista o se salga de la carpeta personal se deja
@@ -95,17 +94,11 @@ Scope {
         // no puede convertirse en otra orden. La tilde la expande el propio
         // harness, no el shell.
         const home = Quickshell.env("HOME")
-        // EL CERCO. El comentario de arriba decía desde el primer día que lo que
-        // se saliera de la carpeta personal se quedaba como texto, y era mentira:
-        // no había ninguna comprobación, así que un "@/etc/passwd" —o un
-        // "@~/../../etc/shadow"— se adjuntaba y viajaba al modelo. Las
-        // herramientas llevan este cerco desde el principio (_safePath); la
-        // puerta de las @ se quedó sin él, que es exactamente la clase de agujero
-        // que abre una puerta lateral y no la principal.
-        //
-        // Se pasa por el MISMO _safePath que todo lo demás: una sola política de
-        // rutas que auditar, y las que no pasen se dejan tal cual — una @ que no
-        // era una ruta válida es simplemente texto, como siempre.
+        // El cerco de rutas. Las referencias con @ pasan por el mismo _safePath
+        // que todo lo demás —una sola política de rutas que auditar— y lo que no
+        // pase se deja tal cual: una @ que no era una ruta válida es texto, como
+        // siempre. Sin esta comprobación, un "@/etc/passwd" se adjuntaría y
+        // viajaría al modelo.
         const abs = []
         for (const r of refs) {
             const conCasa = r === "~" ? home

@@ -14,11 +14,9 @@ Popout {
     shown: Globals.clipboardOpen
     property int selectedIndex: 0
 
-    // Filtro del hover fantasma. Al escribir en el buscador, la lista se
-    // refiltra y las filas cruzan por debajo del cursor PARADO: cada una
-    // emitía 'entered' y la selección saltaba a la que quedase encima,
-    // pisando la que se estaba eligiendo con las flechas. Ver
-    // Components/PointerMoveGate.qml.
+    // Filtro del hover fantasma: al escribir en el buscador, la lista se refiltra y
+    // las filas cruzan por debajo del cursor parado, de modo que sin él la selección
+    // salta a la que quede encima. Ver Components/PointerMoveGate.qml.
     PointerMoveGate {
         id: hoverGate
         referenceItem: historyList

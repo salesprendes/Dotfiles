@@ -5,15 +5,14 @@ import qs.Config
 import "../TextUtils.js" as TU
 import "Payload.js" as PL
 
-// EL TRANSPORTE: una vuelta al /chat/completions con streaming SSE, leída línea
-// a línea con SplitParser sobre un `curl -N`.
+// El transporte: una vuelta al /chat/completions con streaming SSE, leída línea a
+// línea con SplitParser sobre un `curl -N`.
 //
-// Por qué curl y no XMLHttpRequest: un Process es trivial de cancelar (SIGTERM),
-// que es la mitad de un harness decente, y el SSE llega en crudo sin que nadie
-// lo interprete por el camino. Aquí dentro está también toda la tolerancia con
-// modelos LOCALES — llamadas escritas en el texto, tool_calls sin numerar,
-// respuestas vacías — que es lo que separa "funciona con GPT" de "funciona con
-// el Qwen que tienes en casa".
+// Con curl y no XMLHttpRequest porque un Process es trivial de cancelar, que es
+// la mitad de un harness decente, y el SSE llega en crudo sin que nadie lo
+// interprete por el camino. Aquí dentro está también la tolerancia con modelos
+// locales: llamadas escritas en el texto, tool_calls sin numerar y respuestas
+// vacías.
 Scope {
     id: chat
 
@@ -40,45 +39,44 @@ Scope {
 
     // Reintento con espera ante errores TRANSITORIOS (429 de cuota, 5xx,
     // timeouts): dos intentos con pausa creciente antes de rendirse y enseñar el
-    // error. Lo de siempre en los clientes de aider/OpenAI.
+    // error.
     property int retries: 0
     function transient(msg) {
         return /429|rate.?limit|overloaded|unavailable|timed?.?out|502|503|500/i.test(msg)
     }
 
-    // EL CONTEXTO NO CABE. Cada servidor lo dice a su manera —y los locales, a
-    // la suya propia—, así que el reconocimiento es amplio a propósito: el
-    // castigo por acertar de más es compactar una vez sin necesidad, y el de
-    // fallar es dejar el turno muerto con un error que el usuario no puede
-    // arreglar salvo borrando la conversación.
+    // El contexto no cabe. Cada servidor lo dice a su manera, así que el
+    // reconocimiento es amplio a propósito: el castigo por acertar de más es
+    // compactar una vez sin necesidad, y el de fallar es dejar el turno muerto con
+    // un error que el usuario no puede arreglar salvo borrando la conversación.
     function overflow(msg) {
         return /context[_ ]?(length|window|limit|size)|maximum context|prompt is too long|input is too long|too many tokens|token count.{0,24}exceeds|exceeds? (the )?context|exceeds the maximum number of tokens|reduce the length|request too large|n_ctx|kv cache is full/i
                    .test(msg)
     }
-    // Una sola recuperación por turno: si tras compactar vuelve a desbordar, es
-    // que el problema no era el historial y reintentar sería un bucle.
+    // Una sola recuperación por turno: si tras compactar vuelve a desbordar, el
+    // problema no era el historial y reintentar sería un bucle.
     property bool _desbordado: false
     Timer {
         id: retryTimer
         onTriggered: if (!chat.busy) chat.start()
     }
 
-    // PARAR DE VERDAD. Matar el curl no bastaba: onExited sigue su camino
-    // normal —rescata las llamadas a medias, monta sus tarjetas y encadena la
-    // ronda siguiente—, así que "parar" mientras el modelo escribía dejaba una
-    // tanda de tarjetas recién nacidas y el turno vivo. La marca dice que lo
-    // que llegue ya no vale para nada.
+    // Parar de verdad. Matar el curl no basta: onExited seguiría su camino normal
+    // —rescatar las llamadas a medias, montar sus tarjetas y encadenar la ronda
+    // siguiente—, así que parar mientras el modelo escribe dejaría una tanda de
+    // tarjetas recién nacidas y el turno vivo. La marca dice que lo que llegue ya
+    // no vale.
     property bool aborted: false
 
     function stop() {
         if (!proc.running)
             return                  // nada que cortar: no se deja marca puesta
         aborted = true
-        // EL CORTE SE VE AL INSTANTE. Antes se esperaba a que el proceso
-        // muriera para apagar 'busy', y matar un curl que está recibiendo un
-        // stream no es inmediato: el panel seguía diciendo "pensando" varios
-        // segundos y el aviso de interrumpido aparecía tarde — que es
-        // exactamente lo que lleva a pulsar el botón cinco veces.
+        // El corte se ve al instante. Esperar a que el proceso muera para apagar
+        // 'busy' no vale: matar un curl que está recibiendo un stream no es
+        // inmediato, el panel seguiría diciendo "pensando" varios segundos y el
+        // aviso de interrumpido llegaría tarde, que es lo que lleva a pulsar el
+        // botón cinco veces.
         //
         // Así que el turno se cierra AQUÍ, con lo que hubiera escrito, y lo
         // que el proceso tarde en morir ya no lo mira nadie: su onExited ve la
@@ -96,11 +94,9 @@ Scope {
         svc.replied()
     }
 
-    // El vocabulario que se le enseña a ESTE turno. Las herramientas solo existen
-    // en modo agente: en chat el modelo ni sabe que hay manos (los modos
-    // plan/build de opencode, en pequeño). Y las apagadas por política ("off") ni
-    // se anuncian: para el modelo no existen (las listas de denegación de
-    // aisuite).
+    // El vocabulario que se le enseña a este turno. Las herramientas solo existen
+    // en modo agente: en chat el modelo ni sabe que hay manos. Y las apagadas por
+    // política ("off") ni se anuncian: para el modelo no existen.
     function _toolsForTurn() {
         const defs = svc.toolDefs.filter(d => {
             const n = d["function"].name
@@ -110,21 +106,19 @@ Scope {
             // MCP, sus herramientas de recursos tampoco.
             if (n === "use_skill" && skills.activeSkills.length === 0)
                 return false
-            // propose_plan siempre está disponible en modo agente: quien mejor
-            // sabe si una tarea merece plan es quien acaba de leer el encargo, no
-            // el usuario antes de escribirlo.
+            // propose_plan siempre está disponible en modo agente: quien mejor sabe
+            // si una tarea merece plan es quien acaba de leer el encargo.
             if ((n === "list_mcp_resources" || n === "read_mcp_resource")
                     && (Settings.aiMcpServers || []).length === 0)
                 return false
-            // Sin sesión de depuración, controlarla o mirarla no significa
-            // nada: solo se anuncia la puerta de entrada (debug_start). En
-            // cuanto hay sesión, el turno siguiente ya enseña el resto.
+            // Sin sesión de depuración solo se anuncia la puerta de entrada; en
+            // cuanto hay sesión, el turno siguiente enseña el resto.
             if (n.startsWith("debug_") && n !== "debug_start"
                     && dbg.state === "idle")
                 return false
-            // Habilidad en uso con allowed-tools: solo su lista, más las que
-            // nunca sobran (preguntar, planificar, cambiar de habilidad) para no
-            // dejar al agente sin salida.
+            // Habilidad en uso con allowed-tools: solo su lista, más las que nunca
+            // sobran —preguntar, planificar, cambiar de habilidad— para no dejar al
+            // agente sin salida.
             if (skills.activeSkillTools.length > 0
                     && skills.activeSkillTools.indexOf(n) === -1
                     && ["ask_user", "todo_write", "use_skill"].indexOf(n) === -1)
@@ -132,16 +126,15 @@ Scope {
             return true
         })
             // Las herramientas MCP entran al final, filtradas igual: una política
-            // "off" sobre mcp__servidor__tool la borra del vocabulario del modelo
-            // como cualquier otra.
+            // "off" las borra del vocabulario como a cualquier otra.
             .concat(mcp.toolDefs.filter(d => svc.toolPolicy(d["function"].name) !== "off"))
         // Recorte por relevancia si la ventana es modesta (ver maxTools).
         return svc.selectTools(defs)
     }
 
-    // ¿Este envío ABRE un encargo o CONTINÚA uno? Se mira hacia atrás desde el
-    // final: si desde el último mensaje del usuario ya hay herramientas
-    // resueltas, esto es una continuación. Lo usa el reparto de esfuerzo.
+    // ¿Este envío abre un encargo o continúa uno? Se mira hacia atrás desde el
+    // final: si desde el último mensaje del usuario ya hay herramientas resueltas,
+    // es una continuación. Lo usa el reparto de esfuerzo.
     function _continuacion() {
         for (let i = conv.messages.count - 1; i >= 0; i--) {
             const m = conv.messages.get(i)
@@ -154,10 +147,9 @@ Scope {
     }
 
     function start() {
-        // Turno nuevo, marca limpia. Sin esto, un stop pulsado cuando ya no
-        // había nada corriendo —el botón se pulsa varias veces seguidas justo
-        // porque parece que no responde— dejaba la marca puesta y MATABA el
-        // turno siguiente nada más nacer.
+        // Turno nuevo, marca limpia. Sin esto, un stop pulsado cuando ya no había
+        // nada corriendo dejaría la marca puesta y mataría el turno siguiente nada
+        // más nacer.
         chat.aborted = false
         chat.streamBuf = ""
         chat.reasonBuf = ""
@@ -178,12 +170,12 @@ Scope {
                 keepReasoning: svc.profile.preserveThinking
                                && Settings.aiKeepThinking !== false
                                && !svc.profileDegraded.reasoning,
-                // Un modelo de solo texto no admite imágenes: mandárselas es un
-                // error del servidor y un "algo falló" que el usuario no puede
-                // interpretar. Se avisa al adjuntar (ver AiService.canSeeImages).
+                // Un modelo de solo texto no admite imágenes: mandárselas da un
+                // error del servidor que el usuario no puede interpretar. Se avisa
+                // al adjuntar.
                 images: svc.canSeeImages ? svc.sendImages : [],
-                // Gemma 4 pide las imágenes ANTES del texto; los demás las
-                // quieren detrás, que es como estaban.
+                // Algunas familias piden las imágenes antes del texto; las demás
+                // las quieren detrás.
                 imagesFirst: svc.profile.imagesFirst === true
             }),
             stream: true
@@ -191,22 +183,18 @@ Scope {
         // Temperatura: el parámetro universal del contrato, con el valor del
         // usuario (Ajustes del panel).
         req.temperature = Math.round(Settings.aiTemperature * 100) / 100
-        // Lo que sabemos del modelo concreto: pensamiento, esfuerzo, muestreo
-        // recomendado y tope de salida. Con un modelo no reconocido esta línea
-        // no hace nada — devuelve la misma petición.
+        // Lo que se sabe del modelo concreto: pensamiento, esfuerzo, muestreo
+        // recomendado y tope de salida. Con uno no reconocido devuelve la misma
+        // petición.
         //
-        // El TIPO de turno decide el esfuerzo: el primero de un encargo es
-        // donde se elige el plan y merece pensar a fondo; los que vienen detrás
-        // de un resultado de herramienta son sobre todo integrar lo que ya
-        // llegó, y ahí pensar a fondo es pagar de más en cada ronda.
+        // El tipo de turno decide el esfuerzo: el primero de un encargo es donde se
+        // elige el plan y merece pensar a fondo, y los que vienen detrás de un
+        // resultado de herramienta son sobre todo integrar lo que ya llegó.
         svc.tuneRequest(req, chat._continuacion() ? "tools" : "turn")
-        // Interruptor de razonamiento de Qwen3: "/think" y "/no_think" son
-        // interruptores SUAVES que el modelo entiende dentro del turno del
-        // usuario — van en el mensaje, no en la API, así que no rompen nada en
-        // servidores que no los conocen. Con un Qwen local, apagar el pensamiento
-        // es la mayor mejora de latencia que existe. Los modelos que traen
-        // bandera propia (Qwen 3.8) no los quieren: ahí solo serían ruido dentro
-        // del mensaje del usuario.
+        // Interruptores suaves de razonamiento que el modelo entiende dentro del
+        // turno del usuario: van en el mensaje y no en la API, así que no rompen
+        // nada en servidores que no los conocen. Los modelos que traen bandera
+        // propia no los quieren, porque ahí solo serían ruido.
         if (Settings.aiThink !== "auto" && svc.profile.softSwitch)
             for (let i = req.messages.length - 1; i >= 0; i--)
                 if (req.messages[i].role === "user"
@@ -223,12 +211,12 @@ Scope {
         if (Settings.aiProvider !== "gemini")
             req.stream_options = { include_usage: true }
         // Credenciales y opciones de red salen de las mismas funciones que usa la
-        // sonda, así que lo que prueba el botón "Probar" es exactamente lo que va
-        // a viajar. 300 s para el stream entero.
-        // El cuerpo ya no viaja en el comando: se escribe en la entrada estándar
-        // en cuanto el proceso arranca (ver onStarted). Con la conversación
-        // entera en el argv, un adjunto de captura o un hilo largo pasaba de los
-        // 128 kB por argumento y la petición fallaba con E2BIG antes de salir.
+        // sonda, así que lo que prueba el botón "Probar" es lo que va a viajar.
+        //
+        // El cuerpo no viaja en el comando: se escribe en la entrada estándar en
+        // cuanto el proceso arranca. Con la conversación entera en el argv, un
+        // adjunto o un hilo largo pasa del tope por argumento y la petición falla
+        // con E2BIG antes de salir.
         const t = svc.chatCommand(req, 300)
         chat._body = t.body
         proc.command = t.cmd
@@ -243,13 +231,13 @@ Scope {
 
     Process {
         id: proc
-        // Se escribe en onStarted y no justo después de running=true: hasta que
-        // el proceso no existe no hay tubería a la que escribir.
+        // Se escribe en onStarted y no justo después de running=true: hasta que el
+        // proceso no existe no hay tubería a la que escribir.
         onStarted: {
             proc.write(chat._body)
             chat._body = ""
-            // Cerrar la entrada es lo que hace que el shell deje de leer y
-            // lance curl. Sin esto no se envía nada y no se sabría por qué.
+            // Cerrar la entrada es lo que hace que el shell deje de leer y lance
+            // curl. Sin esto no se envía nada y no se sabría por qué.
             proc.stdinEnabled = false
         }
 
@@ -257,9 +245,8 @@ Scope {
             onRead: (line) => {
                 // Ya se paró: lo que siga llegando por la tubería mientras el
                 // proceso muere no entra en el hilo. Sin esto el razonamiento
-                // seguía acumulándose después del corte —el panel seguía
-                // "pensando" con el turno ya cerrado— y podía resucitar
-                // llamadas a herramientas que nadie había aprobado.
+                // seguiría acumulándose con el turno ya cerrado y podría resucitar
+                // llamadas que nadie aprobó.
                 if (chat.aborted)
                     return
                 const l = line.trim()
@@ -280,9 +267,8 @@ Scope {
                         const d = j.choices && j.choices[0] && j.choices[0].delta
                         if (!d)
                             return
-                        // El razonamiento llega con dos nombres según el servidor:
-                        // reasoning_content (Qwen/DashScope/vLLM) o reasoning
-                        // (OpenRouter). Se aceptan ambos.
+                        // El razonamiento llega con dos nombres según el servidor,
+                        // y se aceptan ambos.
                         const razon = d.reasoning_content || d.reasoning
                         if (razon)
                             chat.reasonBuf += razon
@@ -293,12 +279,11 @@ Scope {
                         if (d.tool_calls)
                             for (let k = 0; k < d.tool_calls.length; k++) {
                                 const tc = d.tool_calls[k]
-                                // Algunos servidores de Qwen no numeran las
-                                // llamadas en el stream (falta 'index'). Sin
-                                // esto, dos llamadas paralelas se fundían en una
-                                // sola con los argumentos mezclados: un id NUEVO
-                                // abre hueco nuevo; sin id, se sigue rellenando
-                                // el último.
+                                // Algunos servidores no numeran las llamadas en el
+                                // stream: sin esto, dos llamadas paralelas se
+                                // funden en una con los argumentos mezclados. Un id
+                                // nuevo abre hueco; sin id, se sigue rellenando el
+                                // último.
                                 let idx = tc.index
                                 if (idx === undefined || idx === null) {
                                     if (tc.id && chat._tc[chat._tcCur]
@@ -330,10 +315,9 @@ Scope {
 
         onExited: (code) => {
             chat.busy = false
-            // Interrumpido: el turno ya se cerró en stop() —con lo que hubiera
-            // escrito y su aviso—, así que este final tardío no toca nada. Solo
-            // se tira lo que siguió llegando por la tubería mientras el proceso
-            // moría: sin tarjetas, sin ronda siguiente, sin segundo aviso.
+            // Interrumpido: el turno ya se cerró en stop(), así que este final
+            // tardío no toca nada. Solo se tira lo que siguió llegando mientras el
+            // proceso moría.
             if (chat.aborted) {
                 chat.aborted = false
                 chat.streamBuf = ""
@@ -345,9 +329,8 @@ Scope {
             const think = (chat.reasonBuf + parts.think).trim()
             let text = parts.text.trim()
             // Modelo local que escribe la llamada en el texto en vez de emitirla
-            // como tool_call: se rescata y se trata igual. Sin esto, con Qwen
-            // sobre un servidor que no traduce, el agente "habla" de usar una
-            // herramienta y no usa ninguna.
+            // como tool_call: se rescata y se trata igual. Sin esto, el agente
+            // habla de usar una herramienta y no usa ninguna.
             if (svc.agentMode && Object.keys(chat._tc).length === 0 && text !== "") {
                 const found = svc.extractTextToolCalls(text)
                 if (found.calls.length > 0) {
@@ -357,18 +340,12 @@ Scope {
                                         args: found.calls[i].args }
                 }
             }
-            // EN MODO CHAT NO HAY HERRAMIENTAS, Y ESO TIENE QUE SER VERDAD.
-            // Chat no las anuncia (ver arriba, `if (svc.agentMode)` al armar la
-            // petición), pero anunciar no es lo mismo que impedir: el ejecutor
-            // actúa por NOMBRE, así que un tool_call que llegue igualmente
-            // —porque el servidor lo inventa, porque hay un proxy por medio, o
-            // porque una página inyectada convenció al modelo de escribirlo en
-            // el texto— se convertía en tarjeta como cualquier otra. Y una
-            // tarjeta en Chat es peor que en agente: el usuario NO espera que
-            // ahí pueda ejecutarse nada, así que la aprobaría con menos cuidado.
-            //
-            // Se descarta en silencio para el modelo pero se dice en el hilo: si
-            // no se contase, el modelo parecería no haber contestado.
+            // En modo chat no hay herramientas, y eso tiene que ser verdad.
+            // Anunciar no es lo mismo que impedir: el ejecutor actúa por nombre, así
+            // que un tool_call que llegue igualmente —porque el servidor lo invente,
+            // por un proxy, o porque una página inyectada convenciera al modelo de
+            // escribirlo en el texto— se convertiría en tarjeta. Y una tarjeta en
+            // chat es peor que en agente: el usuario no espera que
             if (!svc.agentMode && Object.keys(chat._tc).length > 0) {
                 chat._tc = ({})
                 conv.pushInfo(I18n.tr("In Chat mode no tools are run. Switch to "

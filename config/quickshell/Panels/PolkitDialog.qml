@@ -5,21 +5,15 @@ import Quickshell.Services.Polkit
 import qs.Components
 import qs.Config
 
-// Agente de polkit propio: el diálogo de "se requiere autenticación" que sale
-// al hacer algo privilegiado (montar un disco, cambiar la red, reiniciar…).
+// Agente de polkit propio: el diálogo de "se requiere autenticación" que sale al
+// hacer algo privilegiado. Implementado aquí, usa la misma ventana modal, los
+// mismos campos y la misma paleta que todo lo demás del shell.
 //
-// Antes lo pintaba hyprpolkitagent, un binario aparte cuyo QML va compilado
-// dentro: no se puede rediseñar, y como no hay ningún tema de Qt configurado
-// en este equipo, salía con la paleta gris por defecto de Qt — ajeno al resto
-// del shell. Al implementar el agente aquí, el diálogo usa la misma ventana
-// modal, los mismos campos y la misma paleta que todo lo demás.
-//
-// IMPORTANTE: polkit admite UN agente por sesión. Para que este se registre,
-// hyprpolkitagent tiene que estar parado:
+// polkit admite UN agente por sesión, así que para que este se registre, el
+// agente externo tiene que estar parado:
 //     systemctl --user disable --now hyprpolkitagent.service
 // Si el otro sigue vivo, 'agent.isRegistered' se queda en false y aquí no se
-// muestra nada — no hay conflicto ni pantallas dobles, simplemente sigue
-// saliendo el de siempre.
+// muestra nada: no hay conflicto ni pantallas dobles.
 Scope {
     id: root
 

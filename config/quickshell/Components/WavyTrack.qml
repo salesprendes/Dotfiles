@@ -4,21 +4,19 @@ import qs.Config
 // Pista ondulada de Material 3 Expressive: el tramo RECORRIDO de un deslizador
 // dibujado como una onda en vez de una barra recta.
 //
-// ── POR QUÉ SOLO EL TRAMO RECORRIDO ─────────────────────────────────────────
 // En M3E la onda vive en lo que ya está hecho y lo pendiente va recto. Esa
 // asimetría es lo que hace que se lea como energía —algo está pasando aquí— y
 // no como un adorno repartido por todo el control.
 //
-// ── POR QUÉ NO ESTÁ SIEMPRE ─────────────────────────────────────────────────
-// Es un Canvas, y animarlo cuesta un repintado por fotograma. La referencia de
-// la que viene esto (nandoroid) mueve la fase con Date.now() de forma continua;
-// en una página de Ajustes con ocho deslizadores a la vista, eso son ocho
-// lienzos repintando a 60 Hz para que nadie los mire.
+// Es un Canvas, y animarlo cuesta un repintado por fotograma. Por eso quien lo
+// usa (ver Components/Slider.qml) la hace aparecer al tocar el control y
+// retirarse al soltar, en vez de mover la fase de forma continua: en una página
+// de Ajustes con ocho deslizadores a la vista, eso serían ocho lienzos
+// repintando a 60 Hz para que nadie los mire.
 //
-// Quien lo usa (ver Components/Slider.qml) la hace APARECER al tocar el control
-// y retirarse al soltar. Gana el aspecto y el coste: en reposo la pista vuelve
-// a ser una barra limpia con su degradado —una onda permanente ocupaba trece de
-// los dieciséis píxeles del carril y competía con él— y no hay lienzo pintando.
+// Gana también el aspecto: en reposo la pista vuelve a ser una barra limpia con
+// su degradado, y una onda permanente ocuparía casi todo el carril compitiendo
+// con él.
 Item {
     id: root
 

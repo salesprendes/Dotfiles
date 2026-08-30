@@ -33,7 +33,6 @@ FloatingWindow {
             from: 1.06; to: 1.0; duration: 1200; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel
         }
     }
-    // ── Extractor de paleta dinámica ─────────────────────────────────────────
     // Mismo mecanismo que la barra de la sesión (Bar.qml): un Canvas fuera del
     // viewport —su búfer pinta igual— reduce el fondo a 64×36 px y Theme deriva
     // de ahí la paleta completa. Solo en el monitor principal: el fondo es el

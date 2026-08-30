@@ -47,34 +47,27 @@ Scope {
 
     readonly property var messages: conv ? conv.messages : null
 
-    // ── Correa del turno ─────────────────────────────────────────────────────
     // Pasos de herramienta del turno en curso. Con la auto-aprobación de
     // lecturas activa, un modelo en bucle podría encadenar 'ls' para siempre:
-    // pasado el tope, la tarjeta se queda pendiente y decide el humano (el límite
-    // de turnos de Claude Code / Cline, en pequeño).
+    // pasado el tope, la tarjeta se queda pendiente y decide el humano.
     property int toolRounds: 0
-    // El tope sale del modelo cuando se le conoce: ocho pasos se le quedan
-    // cortos a uno entrenado para tareas largas de varios pasos justo cuando
-    // empieza a ser útil, y le sobran a uno pequeño. Con un modelo desconocido,
-    // los ocho de siempre.
+    // El tope sale del modelo cuando se le conoce: ocho pasos se quedan cortos a
+    // uno entrenado para tareas de varios pasos y le sobran a uno pequeño.
     readonly property int maxToolRounds:
         (svc && svc.profile && svc.profile.rounds > 0) ? svc.profile.rounds : 8
 
-    // ── Qué se está ejecutando AHORA ─────────────────────────────────────────
-    // Solo corre una herramienta a la vez (un único Process, por diseño), así
-    // que basta con el índice de la tarjeta y desde cuándo. Vive aquí y no en el
-    // mensaje a propósito: es estado de ESTA sesión, no historial — al recargar
-    // una conversación no hay nada ejecutándose, y guardarlo dejaría tarjetas
-    // eternamente "en curso" de un proceso que ya no existe.
+    // Solo corre una herramienta a la vez, así que basta con el índice de la
+    // tarjeta y desde cuándo. Es estado de esta sesión y no historial: al
+    // recargar una conversación no hay nada ejecutándose, y guardarlo dejaría
+    // tarjetas eternamente "en curso" de un proceso que ya no existe.
     //
-    // Que exista arregla además algo que se notaba: entre aprobar y ver el
-    // resultado, la tarjeta se quedaba idéntica —con sus botones de Aprobar y
-    // Rechazar puestos— y no había forma de distinguir "el comando está
-    // corriendo" de "el modelo está pensando" o de "esto se ha colgado".
+    // Sin él, entre aprobar y ver el resultado la tarjeta queda idéntica —con
+    // sus botones puestos— y no se distingue "corriendo" de "pensando" ni de
+    // "colgado".
     property int runningIndex: -1
     property double runningSince: 0
-    // Aprobaciones del usuario que llegaron con algo ya en marcha (ver
-    // approveTool): se guardan y se atienden por orden al quedar el sitio libre.
+    // Aprobaciones que llegaron con algo ya en marcha: se guardan y se atienden
+    // por orden al quedar el sitio libre.
     property var _colaClics: []
 
     function _enCurso(index) {
@@ -86,15 +79,13 @@ Scope {
             runningIndex = -1
     }
 
-    // ── El vigilante ─────────────────────────────────────────────────────────
-    // Hasta que existió, NADA tenía reloj: exec() arrancaba el proceso y se
-    // esperaba a que saliera, y de los treinta y dos constructores de comando
-    // solo tres traían un `timeout` propio. Un find sobre un montaje de red
-    // caído o un ssh a una máquina que se traga los paquetes dejaba la tarjeta
-    // en "Ejecutando…" para siempre — y como solo corre una herramienta a la
-    // vez, eso no colgaba una llamada: colgaba el turno entero, sin nada que
-    // pudiera desatascarlo salvo cambiar de conversación.
+    // Reloj de seguridad para toda llamada. Sin él, un find sobre un montaje de
+    // red caído o un ssh a una máquina que se traga los paquetes deja la tarjeta
+    // en "Ejecutando…" para siempre, y como solo corre una herramienta a la vez
+    // eso no cuelga una llamada sino el turno entero.
     //
+    // El plazo sale de ToolPolicy por nombre: el riesgo no dice nada de lo que
+    // tarda algo.
     // El plazo sale de ToolPolicy, por nombre: el riesgo no dice nada de lo que
     // tarda algo (read_file y disk_query son las dos "lectura").
     readonly property Timer _reloj: Timer {
@@ -109,14 +100,12 @@ Scope {
         return TP.deadlineMs(m ? String(m.toolName || "") : "")
     }
 
-    // El corte de verdad, para lo que es un PROCESO, lo pone `timeout` dentro
-    // del propio comando (ver exec): así el que mata es coreutils, el proceso
-    // sale por su propio pie y no hay ninguna carrera entre el reloj y la
-    // salida tardía. Este temporizador es la red por debajo, y cubre lo que
-    // NO es un proceso —el servidor de lenguaje, un servidor MCP, el depurador,
-    // una celda de Python, un subagente—, que se resuelve por callback y donde
-    // no hay ningún `timeout` que valga. Por eso espera un poco más que el
-    // plazo: si hay un proceso detrás, quien debe cortarlo es él.
+    // El corte de verdad de un proceso lo pone `timeout` dentro del propio
+    // comando (ver exec): así lo mata coreutils, el proceso sale por su propio
+    // pie y no hay carrera entre el reloj y la salida tardía. Este temporizador
+    // es la red de debajo y cubre lo que no es un proceso —servidor de lenguaje,
+    // servidor MCP, depurador, celda de Python, subagente—, que se resuelve por
+    // callback. Por eso espera un poco más que el plazo.
     readonly property int margenReloj: 15000
 
     function _colgada(index) {
@@ -135,50 +124,39 @@ Scope {
         resolveTool(index, TP.deadlineText(nombre, ms))
     }
 
-    // ── El pestillo de la búsqueda web ───────────────────────────────────────
-    // Cuando no hay NINGÚN buscador que funcione, el fallo no es de la consulta:
-    // es de configuración, y va a fallar igual las diez veces siguientes. Sin
-    // este pestillo el modelo lo descubría una vez por llamada —reformulando y
-    // razonando entre medias, que es lo caro— hasta agotar las rondas del turno.
-    // Con él, la primera avería se explica entera y las siguientes se contestan
-    // en el acto y sin red.
+    // Sin ningún buscador que funcione, el fallo es de configuración y va a
+    // repetirse igual: el pestillo lo explica entero la primera vez y contesta en
+    // el acto las siguientes, en vez de dejar al modelo reformulando y razonando
+    // entre medias hasta agotar las rondas del turno.
     //
-    // Dura lo que dura el ENCARGO. Dentro de él es donde hace falta: es ahí
-    // donde el modelo, si le dejas, reformula la misma consulta diez veces. Al
-    // mensaje siguiente se levanta, y no por optimismo — desde que las fuentes
-    // pueden entrar en cuarentena, una avería ya no es forzosamente de
-    // configuración: puede ser un castigo de quince minutos que a la pregunta
-    // siguiente ya haya caducado. Volver a probar cuesta una décima de segundo
-    // y ninguna conexión, y si sigue caído el pestillo se arma otra vez a la
-    // primera. También se levanta en cuanto el usuario cambia un ajuste que
-    // pueda arreglarlo.
+    // Dura lo que dura el encargo, que es donde hace falta. Al mensaje siguiente
+    // se levanta, porque desde que las fuentes pueden entrar en cuarentena una
+    // avería no es forzosamente de configuración: puede ser un castigo temporal
+    // ya caducado. Volver a probar cuesta una décima de segundo, y si sigue caído
+    // el pestillo se arma otra vez a la primera. También se levanta al cambiar un
+    // ajuste que pueda arreglarlo.
     property bool searchBroken: false
     property int _searchIndex: -1
 
-    // ── La correa de las descargas en seco ───────────────────────────────────
-    // Sin buscador, un agente decidido no se para: se pone a ADIVINAR URLs. Se
-    // vio tal cual — veintidós fetch_url en tres minutos contra páginas de
-    // resultados de tiendas, todas devolviendo menús, captchas o "página no
-    // encontrada", y cada una engordando el contexto que se reenvía en la ronda
-    // siguiente. Los tiempos de respuesta crecían 21 → 34 → 42 → 50 segundos, y
-    // desde fuera parecía que el modelo se había atascado.
+    // Sin buscador, un agente decidido no se para: se pone a adivinar URLs, y
+    // cada descarga fallida engorda el contexto que se reenvía en la ronda
+    // siguiente, con los tiempos de respuesta creciendo hasta parecer que se ha
+    // atascado.
     //
-    // Cinco seguidas sin sacar nada es señal de sobra: no es investigar, es dar
-    // palos de ciego. Una descarga que SÍ trae contenido pone el contador a cero,
-    // así que una tanda de exploración legítima con algún fallo no se penaliza.
+    // Varias seguidas sin sacar nada es señal de sobra. Una descarga que sí trae
+    // contenido pone el contador a cero, así que una tanda de exploración
+    // legítima con algún fallo no se penaliza.
     readonly property int maxFetchSecos: 5
     property int fetchSecos: 0
 
-    // ── Los permisos ─────────────────────────────────────────────────────────
     // El permiso con el que se aprobó cada tarjeta, por índice. Lo acuña la
     // puerta (security/Gate.js) UNA vez por llamada y lleva dentro todo lo que
     // hay que aplicarle: el plazo, si lo que vuelve lo escribió un desconocido,
     // y si esta llamada concreta puede tocar la red de casa.
     //
-    // Antes esto eran tres variables sueltas —_fenceIndex, _fenceSrc y una
-    // línea que levantaba QS_LAN— que cada rama del despachador tenía que
-    // acordarse de poner. El permiso las sustituye a las tres, y el ejecutor no
-    // acepta nada que no venga con uno.
+    // El permiso agrupa lo que si no serían variables sueltas que cada rama del
+    // despachador tendría que acordarse de poner, y el ejecutor no acepta nada
+    // que no venga con uno.
     property var _permisos: ({})
     function _permisoDe(index) { return runner._permisos[index] || null }
     function _olvidaPermiso(index) {
@@ -201,9 +179,9 @@ Scope {
         function onSearchKeyChanged() { runner.searchBroken = false }
     }
 
-    // Permisos permanentes de ESTA conversación (el "session allowlist" de
-    // OpenWorker): el usuario pulsa "Siempre" en una tarjeta y esa herramienta
-    // deja de preguntar hasta que cambie de conversación. Efímero por diseño.
+    // Permisos permanentes de esta conversación: el usuario pulsa "Siempre" en
+    // una tarjeta y esa herramienta deja de preguntar hasta que cambie de
+    // conversación. Efímero por diseño.
     property var sessionAllow: ({})
     function allowForSession(name) {
         const m = Object.assign({}, sessionAllow)
@@ -211,22 +189,18 @@ Scope {
         sessionAllow = m
     }
 
-    // ── La ráfaga de lecturas ────────────────────────────────────────────────
-    // Un diagnóstico remoto son treinta comandos de MIRAR contra la misma
-    // máquina, y hasta ahora eran treinta tarjetas: medido, 23 clics en una
-    // sesión, con el turno parado esperando cada uno.
+    // Un diagnóstico remoto son decenas de comandos de mirar contra la misma
+    // máquina, y sin esto son decenas de tarjetas con el turno parado en cada una.
     //
-    // Esto NO es un "siempre" para ssh_exec —eso sigue prohibido a conciencia
-    // (TP.neverAuto): ejecutar en una máquina jamás se auto-aprueba por el
-    // nombre de la herramienta—. Lo que se recuerda es una firma mucho más
-    // estrecha: MISMA herramienta, MISMO destino y comando de SOLO LECTURA
-    // reconocido por lista blanca (TP.verdictKey → TP.readOnlyCommand). Un
-    // `rm`, una redirección, un `bash -c` o un destino distinto no casan con
-    // la firma y vuelven a pedir su tarjeta.
+    // No es un "siempre" para ssh_exec, que sigue prohibido a conciencia:
+    // ejecutar en una máquina jamás se auto-aprueba por el nombre de la
+    // herramienta. Lo que se recuerda es una firma mucho más estrecha —misma
+    // herramienta, mismo destino y comando de solo lectura reconocido por lista
+    // blanca—, así que un `rm`, una redirección, un `bash -c` o un destino
+    // distinto no casan y vuelven a pedir tarjeta.
     //
-    // Y dura UN TURNO, no la conversación: se concede viendo una ráfaga
-    // concreta en marcha, así que se apaga con ella. El siguiente encargo
-    // vuelve a preguntar.
+    // Y dura un turno, no la conversación: se concede viendo una ráfaga concreta
+    // en marcha, así que se apaga con ella.
     property var burstAllow: ({})
     function allowBurst(name, argsJson) {
         const k = TP.verdictKey(name, argsJson)
@@ -251,29 +225,29 @@ Scope {
     // la política (para forzar la tarjeta) y la propia tarjeta (para pintarlo).
     function dangerOf(name, argsJson) {
         const a = TU.repairJson(argsJson) || ({})
-        // Una URL no solo TRAE datos: los SACA. Lo que viaje dentro se lo lleva
-        // quien esté al otro lado, y descargar admite permiso permanente, así
-        // que sin esto una página inyectada podía pedirle al asistente que
+        // Una URL no solo trae datos: los saca. Como descargar admite permiso
+        // permanente, sin esto una página inyectada podría pedir al asistente que
         // "verificara" abriendo un recolector con una credencial en la consulta,
         // sin que apareciera ninguna tarjeta. Taparla en la respuesta no sirve:
         // para entonces ya ha viajado.
         if (name === "fetch_url" || name === "open_url")
             return TU.urlLeakScan(a.url)
-        // Engancharse a un proceso que ya corre no se parece a lanzar uno tuyo:
-        // el depurador puede leer TODA su memoria —claves, sesiones, lo que
-        // tuviera dentro—, pararlo y cambiarle variables. La tarjeta lo dice con
-        // el número delante, porque "debug_start" a secas no lo insinúa.
+        // Engancharse a un proceso que ya corre no se parece a lanzar uno propio:
+        // el depurador puede leer toda su memoria, pararlo y cambiarle variables.
+        // La tarjeta lo dice con el número delante, porque el nombre de la
+        // herramienta a secas no lo insinúa.
         if (name === "debug_start" && parseInt(a.attach_pid) > 0)
             return "se engancha al proceso " + parseInt(a.attach_pid)
                  + " que ya está corriendo: podrá leer su memoria entera, "
                  + "detenerlo y modificarlo"
         // Una escritura en el sitio correcto es una ejecución con retardo: un
         // .bashrc, un .desktop de autostart o un hook de git no son archivos,
-        // son comandos que esperan. La ejecución directa nunca se auto-aprueba,
-        // así que este es el rodeo que quedaba.
-        // Se lee el argumento a pelo y no por _pathArgOf: ese solo conoce las
-        // herramientas que resuelven enlaces, y aquí hacen falta TODAS las que
-        // escriben (edit_lines, ast_edit, lsp_fix… todas llevan 'path').
+        // son comandos que esperan. Como la ejecución directa nunca se
+        // auto-aprueba, este es el rodeo que queda.
+        //
+        // Se lee el argumento a pelo y no por _pathArgOf, que solo conoce las
+        // herramientas que resuelven enlaces: aquí hacen falta todas las que
+        // escriben.
         if (TP.riskClass(name) === "write") {
             const p = String(a.path || a.local_path || "")
             if (p !== "")
@@ -285,38 +259,36 @@ Scope {
         return cmd ? TU.dangerScan(cmd) : ""
     }
 
-    // Política de UNA LLAMADA concreta: la del nombre, salvo en las consultas
-    // remotas, donde también cuentan los argumentos. Leer un servidor que el
-    // usuario ya guardó es rutina; asomarse por primera vez a una máquina que
-    // acaba de nombrar en el mensaje merece que se vea la tarjeta.
+    // Política de una llamada concreta: la del nombre, salvo en las consultas
+    // remotas, donde también cuentan los argumentos. Leer un servidor ya guardado
+    // es rutina; asomarse por primera vez a una máquina recién nombrada en el
+    // mensaje merece que se vea la tarjeta.
     function callPolicy(name, argsJson) {
-        // Preguntar y proponer plan SIEMPRE esperan al usuario: son la pausa, no
-        // una acción que se pueda automatizar.
+        // Preguntar y proponer plan siempre esperan al usuario: son la pausa, no
+        // una acción automatizable.
         if (name === "ask_user" || name === "propose_plan")
             return "ask"
-        // GARANTÍA DURA: lo crítico (shell, ssh, Python, evaluar en el
-        // depurador) no se auto-aprueba jamás. Se comprueba ANTES que el
-        // permiso permanente para que ni un "siempre" concedido a la ligera
-        // pueda saltárselo.
+        // Garantía dura: lo crítico —shell, ssh, Python, evaluar en el
+        // depurador— no se auto-aprueba jamás, y se comprueba antes que el
+        // permiso permanente para que ni un "siempre" concedido a la ligera pueda
+        // saltárselo.
         //
-        // La ÚNICA excepción es la ráfaga de lecturas, y por eso va aquí
-        // dentro y no fuera: el usuario tiene delante una tarjeta con este
-        // mismo comando, ve qué se va a leer y en qué máquina, y concede
-        // explícitamente las siguientes IGUALES de este turno. La firma exige
-        // mismo destino y comando de solo lectura por lista blanca, así que
-        // un `rm` o una redirección no pueden colarse por aquí — y sigue sin
-        // existir ningún "siempre" para ssh_exec a secas.
+        // La única excepción es la ráfaga de lecturas, y por eso va aquí dentro:
+        // el usuario tiene delante una tarjeta con este mismo comando, ve qué se
+        // va a leer y en qué máquina, y concede explícitamente las siguientes
+        // iguales de este turno. La firma exige mismo destino y comando de solo
+        // lectura por lista blanca.
         if (TP.neverAuto(name))
             return inBurst(name, argsJson) ? "auto" : "ask"
-        // Un comando destructivo se enseña SIEMPRE, diga lo que diga la
-        // política: la clase de riesgo mira la herramienta, esto mira lo que
-        // esa llamada concreta va a hacer.
+        // Un comando destructivo se enseña siempre, diga lo que diga la política:
+        // la clase de riesgo mira la herramienta, esto mira lo que esa llamada
+        // concreta va a hacer.
         if (dangerOf(name, argsJson) !== "")
             return "ask"
-        // Un subagente que va a ESCRIBIR nace de una tarjeta, aunque delegar sea
-        // clase external y se pueda permitir "siempre": esa tarjeta es la única
-        // aprobación que habrá para todo lo que escriba después. También va
-        // antes del permiso permanente, por el mismo motivo que lo crítico.
+        // Un subagente que va a escribir nace de una tarjeta aunque delegar sea
+        // clase external: esa tarjeta es la única aprobación que habrá para todo
+        // lo que escriba después. Va antes del permiso permanente por el mismo
+        // motivo que lo crítico.
         if (name === "subagent"
                 && TP.grantNeedsApproval(
                        svc.subagentGrantFor(TU.repairJson(argsJson) || ({}))))
@@ -328,16 +300,15 @@ Scope {
         const p = svc.toolPolicy(name)
         const a = TU.repairJson(argsJson) || ({})
 
-        // Guardia de shell (idea de OpenWorker): un comando "auto" que encadena,
+        // Guardia de shell: un comando "auto" que encadena,
         // redirige o sustituye vuelve a preguntar — "permite git status" no debe
         // colar "git status; rm -rf ~".
         if (p === "auto" && (name === "run_command" || name === "ssh_exec")
                 && TU.hasShellOps(a.command))
             return "ask"
 
-        // Consulta a un servidor: aunque esté permitida (por política o por la
-        // auto-lectura), asomarse por primera vez a una máquina que acaba de
-        // salir del mensaje se enseña; a una ya guardada, no.
+        // Consulta a un servidor: aunque esté permitida, asomarse por primera vez
+        // a una máquina recién salida del mensaje se enseña; a una ya guardada, no.
         if (RT.CONSULTAS.indexOf(name) !== -1 && p === "auto") {
             const h = RT.resolveHost(a.host, a, svc.toolCtx)
             return (h && h.saved) ? "auto" : "ask"
@@ -345,15 +316,14 @@ Scope {
         return p
     }
 
-    // ── Detección de bucles (idea de gemini-cli) ─────────────────────────────
-    // El atasco más típico de un modelo pequeño es repetir LA MISMA llamada una y
-    // otra vez porque no le gusta el resultado. El tope de pasos lo cortaría ocho
-    // turnos después, habiendo gastado contexto y tiempo; esto lo corta al tercer
-    // intento idéntico y se lo dice, que así cambia de táctica o pregunta.
-    // Idénticas = mismo nombre Y mismos argumentos. Solo cuenta DENTRO del
-    // encargo en curso (desde el último mensaje del usuario): repetir una consulta
-    // legítima tres veces a lo largo del día no es un bucle, es usar el
-    // asistente.
+    // El atasco más típico de un modelo pequeño es repetir la misma llamada
+    // porque no le gusta el resultado. El tope de pasos lo cortaría ocho turnos
+    // después; esto lo corta al tercer intento idéntico y se lo dice, para que
+    // cambie de táctica o pregunte.
+    //
+    // Idénticas = mismo nombre y mismos argumentos, y solo dentro del encargo en
+    // curso: repetir una consulta legítima tres veces a lo largo del día no es un
+    // bucle.
     readonly property int loopThreshold: 3
     function loopCount(name, argsJson) {
         const sig = String(name) + "\u0000" + String(argsJson || "")
@@ -373,15 +343,13 @@ Scope {
         return n
     }
 
-    // ── Resolver una tarjeta ─────────────────────────────────────────────────
     // 'cap' permite a una herramienta concreta un tope distinto del genérico
     // (use_skill: el texto de una habilidad vale más contexto que un ls).
     function resolveTool(index, result, cap) {
-        // IDEMPOTENTE. Una tarjeta se resuelve una vez y solo una. No es celo:
-        // desde que hay un vigilante que corta lo que se cuelga, hay dos caminos
-        // que pueden llegar aquí con el mismo índice —el reloj y la salida
-        // tardía del propio proceso—, y sin esta guarda el segundo volvería a
-        // llamar a advance() y adelantaría el lote una posición de más.
+        // Idempotente: una tarjeta se resuelve una vez y solo una. Con un
+        // vigilante que corta lo que se cuelga hay dos caminos que pueden llegar
+        // aquí con el mismo índice —el reloj y la salida tardía del proceso—, y
+        // sin la guarda el segundo adelantaría el lote una posición de más.
         const previo = messages.get(index)
         if (!previo || previo.role !== "tool" || previo.toolStatus !== "pending")
             return
@@ -396,12 +364,11 @@ Scope {
             const seca = String(result).indexOf(LT.FETCH_KO) !== -1
             fetchSecos = seca ? fetchSecos + 1 : 0
         }
-        // La búsqueda web es la única herramienta que distingue entre "no hay
-        // resultados" y "no hay buscador": lo segundo es una avería de
-        // configuración, y hay que tratarla como tal ANTES de que el texto entre
-        // al contexto. Si no, el modelo lee un fallo cualquiera, supone que la
-        // culpa es de su consulta, reformula, y se pasa el turno entero dando
-        // vueltas contra una pared — que era exactamente lo que ocurría.
+        // La búsqueda web es la única que distingue "no hay resultados" de "no
+        // hay buscador". Lo segundo es una avería de configuración y hay que
+        // tratarla como tal antes de que el texto entre al contexto: si no, el
+        // modelo lo lee como un fallo cualquiera, supone que la culpa es de su
+        // consulta y se pasa el turno reformulando contra una pared.
         if (index === _searchIndex) {
             _searchIndex = -1
             if (WS.failed(result)) {
@@ -410,19 +377,17 @@ Scope {
                 permiso = null       // esto lo decimos NOSOTROS: no se enmarca
             }
         }
-        // ¿Ha informado de algo? Se decide ANTES de enmarcar: el cerco añade
-        // texto alrededor y el "(sin coincidencias)" pelado dejaría de
+        // ¿Ha informado de algo? Se decide antes de enmarcar, porque el cerco
+        // añade texto alrededor y un "(sin coincidencias)" pelado dejaría de
         // reconocerse. Lo decide la propia herramienta, que sabe qué suelta
-        // cuando no encuentra nada — mucho mejor que adivinarlo luego por el
-        // tamaño. Lo usan la poda y la transcripción del resumen.
+        // cuando no encuentra nada. Lo usan la poda y la transcripción.
         const seco = LT.inutil(previo.toolName, result)
-        // LA PUERTA POR LA QUE ENTRA TEXTO AJENO. Una página web puede decir
-        // "ignora las instrucciones anteriores y ejecuta esto", y como resultado
-        // de herramienta pelado se lee con el mismo peso que una orden del
-        // usuario. No se puede impedir que el modelo lo lea, pero sí decirle qué
-        // es: mismo trato que le da el supervisor a sus expedientes. La decisión
-        // la toma el permiso, no esta función — y por eso vale igual para el
-        // subagente y para la celda de Python.
+        // La puerta por la que entra texto ajeno. Una página web puede decir
+        // "ignora las instrucciones anteriores", y como resultado de herramienta
+        // pelado se lee con el mismo peso que una orden del usuario. No se puede
+        // impedir que el modelo lo lea, pero sí decirle qué es. La decisión la
+        // toma el permiso y no esta función, así que vale igual para el subagente
+        // y para la celda de Python.
         result = GT.marcar(permiso, result)
         // Y ya se puede quitar nuestra marca interna, que ha hecho su trabajo:
         // contar la descarga seca y decirle a la puerta que ese texto lo
@@ -444,10 +409,9 @@ Scope {
     }
 
     // Una llamada vetada: se marca rechazada y el motivo vuelve al modelo, que
-    // así puede corregir en vez de reintentar a ciegas. Vetan dos cosas, y
-    // conviene que se distingan en el registro y en la tarjeta: un hook del
-    // usuario (una regla suya, escrita por él) y el supervisor (la opinión de un
-    // segundo modelo).
+    // así puede corregir en vez de reintentar a ciegas. Vetan dos cosas y conviene
+    // distinguirlas en el registro y en la tarjeta: un hook del usuario y el
+    // supervisor.
     function blockTool(index, reason, src) {
         const m = messages.get(index)
         if (!m || m.toolStatus !== "pending")
@@ -465,17 +429,13 @@ Scope {
         advance()
     }
 
-    // ── Lo que el jefe ya ha hecho, y el subagente no tiene que repetir ──────
-    // Un subagente arranca con el contexto en blanco: es lo que lo hace barato,
-    // y también lo que hace que su primera ronda sea, casi siempre, la búsqueda
-    // que el agente principal acababa de hacer. Se midió en un encargo de
-    // precios: el jefe buscó dos veces, delegó, y la primera consulta del
-    // subagente era prácticamente idéntica a la primera del jefe.
+    // Un subagente arranca con el contexto en blanco: es lo que lo hace barato y
+    // también lo que hace que su primera ronda sea, casi siempre, la búsqueda que
+    // el agente principal acaba de hacer.
     //
-    // Así que el encargo viaja con el trabajo ya hecho: las últimas búsquedas
-    // con sus resultados, y la lista de páginas que ya se abrieron —esas sin
-    // contenido, solo la dirección: lo caro es volver a descargarlas, y para no
-    // hacerlo basta con saber que ya se hizo.
+    // Por eso el encargo viaja con el trabajo ya hecho: las últimas búsquedas con
+    // sus resultados, y la lista de páginas ya abiertas —solo la dirección, que lo
+    // caro es volver a descargarlas y basta con saber que ya se hizo—.
     readonly property int _briefBusquedas: 3
     function _briefConTrabajoHecho(propio) {
         const busquedas = []
@@ -486,11 +446,10 @@ Scope {
                 continue
             const res = String(m.toolResult || "")
             if (m.toolName === "web_search") {
-                // Solo viaja lo que vino ENMARCADO, es decir, lo que escribió
-                // el buscador. Cuando no hay buscador, en la tarjeta no queda
-                // su respuesta sino nuestro aviso de configuración —"no pude
-                // buscar, arréglalo en Ajustes"—, y eso, metido en un encargo,
-                // se leería como un hallazgo del jefe.
+                // Solo viaja lo que vino enmarcado, o sea lo que escribió el
+                // buscador. Sin buscador, en la tarjeta no queda su respuesta
+                // sino el aviso de configuración, y eso metido en un encargo se
+                // leería como un hallazgo del jefe.
                 if (busquedas.length >= _briefBusquedas || !WS.fenced(res))
                     continue
                 let q = ""
@@ -508,10 +467,10 @@ Scope {
         }
         if (busquedas.length === 0 && paginas.length === 0)
             return String(propio || "")
-        // El encargo entero se recorta a 4000 caracteres más adelante, así que
-        // el hueco se reparte AQUÍ: primero lo que escribió el jefe, que es
-        // suyo y no se toca, y con lo que quede se meten las búsquedas más
-        // recientes enteras. Media búsqueda cortada no vale para nada.
+        // El encargo se recorta más adelante, así que el hueco se reparte aquí:
+        // primero lo que escribió el jefe, que es suyo y no se toca, y con lo que
+        // quede las búsquedas más recientes enteras. Media búsqueda cortada no
+        // vale para nada.
         const base = String(propio || "").trim()
         let hueco = 3900 - base.length - 400
         let cuerpo = ""
@@ -523,7 +482,7 @@ Scope {
             hueco -= b.length + 2
         }
         // Si el resumen del jefe ya llenaba el encargo, no se añade una cabecera
-        // sin nada debajo: sería gastar cien caracteres en anunciar el vacío.
+        // sin nada debajo.
         if (cuerpo === "" && (paginas.length === 0 || hueco <= 120))
             return String(propio || "")
         let extra = "TRABAJO YA HECHO por el agente principal — no lo repitas."
@@ -556,14 +515,13 @@ Scope {
         return false
     }
 
-    // CORTARLO TODO: la herramienta que esté corriendo y las tarjetas que
-    // esperan aprobación. Sin esto, parar el turno dejaba el `find` en marcha
-    // en un servidor y cuatro tarjetas pendientes que, al aprobarlas después,
-    // resucitaban un turno que el usuario creía muerto.
+    // Corta la herramienta en marcha y las tarjetas que esperan aprobación. Sin
+    // esto, parar el turno deja el proceso corriendo y unas tarjetas pendientes
+    // que, al aprobarlas después, resucitan un turno que se creía muerto.
     //
-    // Las pendientes NO se rechazan una a una con rejectTool: eso llama a
-    // advance(), que es justo lo que se quiere evitar — el resultado volvería
-    // al modelo y el turno seguiría. Se marcan y se calla.
+    // Las pendientes no se rechazan una a una con rejectTool, que llama a
+    // advance(): el resultado volvería al modelo y el turno seguiría. Se marcan y
+    // se calla.
     function cancelAll() {
         if (proc.running)
             proc.running = false
@@ -599,16 +557,12 @@ Scope {
         messages.setProperty(index, "toolResult",
             "El usuario rechazó ejecutar esta acción.")
         conv.save()
-        // advance() y NO svc.start(). Parece lo mismo cuando el modelo pidió una
-        // sola herramienta, y no lo es cuando pidió varias: rechazar una de
-        // cuatro y arrancar el envío deja las otras tres en "pendiente", y el
-        // constructor del cuerpo se salta las pendientes. Al servidor le llega un
-        // assistant con cuatro tool_calls y un solo resultado, que es un cuerpo
-        // inválido según el contrato de OpenAI — un servidor tolerante lo traga y
-        // uno estricto lo rechaza, pero en los dos casos el modelo pierde tres
-        // llamadas sin enterarse. advance() atiende lo que quede y solo llama al
-        // modelo cuando el lote está completo, que es justo lo que hace ya el
-        // veto de un hook.
+        // advance() y no svc.start(). Con una sola herramienta parecen lo mismo;
+        // con varias no lo son: rechazar una de cuatro y arrancar el envío deja
+        // las otras tres pendientes, y el constructor del cuerpo se las salta.
+        // Al servidor le llegaría un assistant con cuatro tool_calls y un solo
+        // resultado, que es un cuerpo inválido según el contrato. advance()
+        // atiende lo que quede y solo llama al modelo con el lote completo.
         advance()
     }
 
@@ -644,7 +598,7 @@ Scope {
             + ". Revísalo y vuelve a proponerlo; no ejecutes nada aún.")
     }
 
-    // ── Aprobar y ejecutar ───────────────────────────────────────────────────
+    // Aprobar y ejecutar
     property int _toolIndex: -1
     property int _hookPassed: -1        // tarjeta cuyos hooks ya dieron paso
 
@@ -671,9 +625,9 @@ Scope {
         approveTool(index)
     }
 
-    // La aprobación de UN clic del usuario (el botón de la tarjeta). El
-    // coordinador llama a approveTool directamente para las automáticas, así
-    // que distinguirlas es cuestión de por dónde entran.
+    // La aprobación de un clic del usuario. El coordinador llama a approveTool
+    // directamente para las automáticas, así que distinguirlas es cuestión de por
+    // dónde entran.
     function approveToolByUser(index) {
         _userApproved = index
         approveTool(index)
@@ -684,11 +638,14 @@ Scope {
         if (!m || m.role !== "tool" || m.toolStatus !== "pending" || svc.busy
                 || svc.compacting)
             return
-        // Esta tarjeta YA se está ejecutando. Mientras corre, su estado sigue
-        // siendo "pending" (que es lo correcto: aún no hay resultado que mandar
-        // al modelo), así que sin esta guarda un segundo paso por aquí —dos
-        // clics seguidos, un advance() que llega a destiempo— la lanzaba otra
-        // vez, con el mismo comando y encima pisando el Process del primero.
+        // Esta tarjeta ya se está ejecutando. Mientras corre, su estado sigue
+        // siendo "pending" —correcto, porque aún no hay resultado que mandar—, así
+        // que sin la guarda un segundo paso por aquí la lanzaría otra vez pisando
+        // el Process del primero.
+        //
+        // Y si lo que corre es otra tarjeta, tampoco: solo hay un Process, y
+        // lanzar la segunda encima dejaría a la primera esperando un resultado que
+        // no le va a llegar. El clic no se pierde, se atiende al quedar libre.
         if (runningIndex === index)
             return
         // Y si lo que corre es OTRA tarjeta, tampoco: solo hay un Process, y
@@ -701,9 +658,9 @@ Scope {
             return
         }
         runner._toolIndex = index
-        // Argumentos tolerantes: un modelo local manda JSON roto a menudo. Si ni
-        // con reparación sale, se le dice al modelo qué esperaba en vez de
-        // ejecutar con argumentos vacíos (que sería peor que fallar).
+        // Argumentos tolerantes, porque un modelo local manda JSON roto a menudo.
+        // Si ni con reparación sale, se le dice qué esperaba en vez de ejecutar
+        // con argumentos vacíos.
         const parsed = TU.repairJson(m.toolArgs)
         if (parsed === null) {
             resolveTool(index, "No entendí los argumentos: no son JSON válido. "
@@ -712,14 +669,13 @@ Scope {
         }
         const args = parsed
 
-        // ask_user y propose_plan no se "aprueban": esperan al usuario. Su
-        // tarjeta se pinta distinta (pregunta con opciones / plan con "Empezar")
-        // y se resuelven por answerQuestion o approvePlan.
+        // ask_user y propose_plan no se aprueban: esperan al usuario. Su tarjeta
+        // se pinta distinta y se resuelven por answerQuestion o approvePlan.
         if (m.toolName === "ask_user" || m.toolName === "propose_plan")
             return
 
         // Hooks pre_tool_use: la última palabra del usuario antes de que algo
-        // corra. Se ejecutan UNA vez por llamada; si uno veta, la tarjeta se
+        // corra. Se ejecutan una vez por llamada, y si uno veta, la tarjeta se
         // rechaza con su motivo y el modelo se entera.
         if (_hookPassed !== index && hooks.hooksFor("pre_tool_use", m.toolName).length > 0) {
             hooks.run("pre_tool_use", m.toolName,
@@ -731,28 +687,26 @@ Scope {
         }
         _hookPassed = -1
 
-        // A partir de aquí la llamada SE EJECUTA: queda en el registro de
+        // A partir de aquí la llamada se ejecuta, así que queda en el registro de
         // auditoría con quién la aprobó y por qué. Es el único punto por el que
-        // pasan todas las herramientas del agente principal, así que es el
-        // sitio honesto para anotarlo.
+        // pasan todas las herramientas del agente principal.
         audit.record({ src: "card", tool: m.toolName, args: m.toolArgs,
                        danger: dangerOf(m.toolName, m.toolArgs),
                        decision: _decisionDe(index, m.toolName) })
 
-        // EL PERMISO. Se acuña UNA vez, aquí, que es el único punto por el que
-        // pasan todas las llamadas del agente principal. Lleva dentro el plazo,
-        // si lo que vuelva lo habrá escrito un desconocido y si esta llamada
-        // concreta puede tocar la red de casa. De aquí en adelante nadie vuelve
-        // a decidir nada de eso: solo se aplica.
+        // El permiso se acuña una vez, aquí, que es el único punto por el que
+        // pasan todas las llamadas del agente principal. Lleva dentro el plazo, si
+        // lo que vuelva lo habrá escrito un desconocido y si esta llamada puede
+        // tocar la red de casa. De aquí en adelante solo se aplica.
         const permiso = GT.evaluar({
             quien: "agente", herramienta: m.toolName, args: args,
-            // La tarjeta se enseñó y el usuario dijo que sí: entonces sabía a
+            // La tarjeta se enseñó y el usuario dijo que sí, así que sabía a
             // dónde iba. Las auto-aprobadas no cuentan como aprobación suya.
             aprobadaPorUsuario: (_userApproved === index),
-            // ¿La dirección YA nombraba la red de casa? Si sí, el usuario la
-            // leyó en la tarjeta. Lo que no se permite nunca es aterrizar
-            // dentro por sorpresa: una URL pública que redirige, o un nombre
-            // que resuelve hacia dentro.
+            // Si la dirección ya nombraba la red de casa, el usuario la leyó en
+            // la tarjeta. Lo que no se permite nunca es aterrizar dentro por
+            // sorpresa: una URL pública que redirige, o un nombre que resuelve
+            // hacia dentro.
             zonaLocal: m.toolName === "fetch_url"
                        && TU.urlZone(args.url) !== ""
         })
@@ -767,15 +721,15 @@ Scope {
         conPermiso[index] = permiso
         runner._permisos = conPermiso
 
-        // A partir de aquí la tarjeta está EN CURSO. Se marca aquí y no en
-        // exec() para que valga también para las asíncronas (lsp, depurador,
-        // celda de Python, subagente, MCP), que son justo las que más tardan.
-        // Las que se resuelven en el acto pasan por los dos estados dentro del
-        // mismo ciclo, así que no llegan a pintarse: no parpadea nada.
+        // A partir de aquí la tarjeta está en curso. Se marca aquí y no en exec()
+        // para que valga también para las asíncronas —servidor de lenguaje,
+        // depurador, celda, subagente, MCP—, que son las que más tardan. Las que
+        // se resuelven en el acto pasan por los dos estados en el mismo ciclo, así
+        // que no llegan a pintarse.
         _enCurso(index)
 
         // Herramienta de un servidor MCP: el nombre viaja con el esquema
-        // mcp__<servidor>__<tool> de Claude Code. Se enruta a su proceso.
+        // mcp__<servidor>__<tool>. Se enruta a su proceso.
         if (m.toolName.startsWith("mcp__")) {
             const parts = m.toolName.split("__")
             if (parts.length < 3) { resolveTool(index, "Nombre MCP inválido."); return }
@@ -803,23 +757,20 @@ Scope {
             return
         }
 
-        // Todo lo que no cambia nada (leer archivos, consultar el sistema,
-        // consultar un servidor) lo construye el mismo sitio que sirve al
+        // Todo lo que no cambia nada lo construye el mismo sitio que sirve al
         // subagente: una sola jaula que auditar.
         const built = svc.readOnlyCommand(m.toolName, args)
         if (built !== null) {
             if (built.error !== undefined) { resolveTool(index, built.error); return }
-            // Ni marco ni QS_LAN aquí: los lleva el permiso, y los aplica el
+            // Ni marco ni QS_LAN aquí: los lleva el permiso y los aplica el
             // ejecutor. Esta rama solo construye el comando.
             exec(permiso, built.cmd, built.env)
             return
         }
 
-        // ── 1. Las asíncronas: una TABLA, no un switch ──────────────────────
-        // Dieciséis casos que solo se diferenciaban en qué gestor y qué método,
-        // resueltos en seis líneas. La tarjeta se resuelve cuando el gestor
-        // conteste, con el mismo tope y la misma redacción de secretos que todo
-        // lo demás.
+        // Los casos de gestión de paquetes solo se diferencian en qué gestor y
+        // qué método. La tarjeta se resuelve cuando el gestor conteste, con el
+        // mismo tope y la misma redacción de secretos que todo lo demás.
         const asinc = DP.ASINCRONAS[m.toolName]
         if (asinc) {
             const gestor = asinc.gestor === "lsp" ? lsp
@@ -830,13 +781,12 @@ Scope {
             return
         }
 
-        // ── 2. Las que construyen un comando ────────────────────────────────
-        // Doce casos con la misma forma: construir {cmd, env} y entregárselo al
+        // Los constructores de comando comparten forma: {cmd, env} para el
         // ejecutor, que es quien pone el reloj y el cerco. Viven en Dispatch.js
-        // porque son JavaScript puro, así que se prueban sin levantar nada.
+        // porque son JavaScript puro y se prueban sin levantar nada.
         //
-        // La copia previa se apunta ANTES de construir: su ruta es parte del
-        // comando, y es lo que luego permite Deshacer desde la tarjeta.
+        // La copia previa se apunta antes de construir: su ruta es parte del
+        // comando, y es lo que permite Deshacer desde la tarjeta.
         const rutaEscr = DP.rutaDeEscritura(m.toolName, args)
         let bak = ""
         if (rutaEscr !== "" && DP.dejaCopia(m.toolName, args)) {
@@ -865,17 +815,15 @@ Scope {
             return
         }
 
-        // ── 3. Las que tocan estado del harness ─────────────────────────────
         // Lo que no construye ningún comando: el plan visible, la memoria, el
-        // catálogo de habilidades, los recursos MCP. Se quedan en QML porque de
-        // verdad son QML.
+        // catálogo de habilidades, los recursos MCP.
         switch (m.toolName) {
         case "job_list":
             resolveTool(index, jobs.list())
             return
         case "todo_write": {
-            // El plan visible (el TodoWrite de Claude Code): sustituye la lista
-            // entera; el panel la pinta encima de la entrada.
+            // El plan visible: sustituye la lista entera y el panel la pinta
+            // encima de la entrada.
             const list = Array.isArray(args.todos) ? args.todos : []
             svc.todos = list.slice(0, 20).map(t => ({
                 content: String(t.content || "").slice(0, 200),
@@ -926,19 +874,16 @@ Scope {
                 { uri: String(args.uri || "") },
                 (res) => runner.mcp.flatten(res.contents).trim() || "(recurso sin texto)")
             return
-        // ── Edición anclada por hash: UNA puerta, UN motor ──────────────────
-        // edit_patch es el camino bueno (varios hunks, atómico, con
-        // recuperación de anclas) y edit_lines es la puerta estrecha de
-        // siempre, traducida a un parche de un solo hunk: así el anclaje vive
-        // implementado en UN sitio y no puede divergir entre las dos.
+        // edit_patch es el camino completo —varios hunks, atómico, con
+        // recuperación de anclas— y edit_lines se traduce a un parche de un solo
+        // hunk, así que el anclaje vive implementado en un sitio.
         case "open_url": {
             const url = String(args.url || "").trim()
-            // xdg-open no abre URLs: abre LO QUE SEA con el programa que le
+            // xdg-open no abre URLs: abre lo que sea con el programa que le
             // toque. Un file:// lo entrega al gestor de archivos, un .desktop lo
-            // EJECUTA, y esquemas como smb://, ssh:// o vnc:// levantan un
-            // cliente entero. Sin esta línea, "abre esto en el navegador" era un
-            // ejecutor de propósito general con permiso de clase externa, que es
-            // el escalón más barato de todos.
+            // ejecuta, y esquemas como smb://, ssh:// o vnc:// levantan un cliente
+            // entero. Sin esta comprobación, "abre esto en el navegador" sería un
+            // ejecutor de propósito general con permiso de clase externa.
             if (!/^https?:\/\//i.test(url)) {
                 resolveTool(index, "Solo se abren URLs http(s). Lo que has "
                     + "pasado no lo es, y abrir cualquier otra cosa no es "
@@ -956,9 +901,9 @@ Scope {
             const want = String(args.name || "").trim()
             const s = skills.find(want)
             if (!s) {
-                // Puede que la habilidad se instalara DESPUÉS de arrancar el
-                // shell: se reescanea la carpeta y se reintenta una vez, en vez
-                // de contestar 404 sobre un catálogo viejo.
+                // La habilidad puede haberse instalado después de arrancar el
+                // shell: se reescanea y se reintenta una vez, en vez de contestar
+                // sobre un catálogo viejo.
                 if (skills.rescanFor(want, index))
                     return
                 resolveTool(index, "No hay ninguna habilidad activa con ese nombre. Disponibles: "
@@ -966,16 +911,15 @@ Scope {
                 return
             }
             // La habilidad puede acotar su propio vocabulario mientras esté en
-            // uso (allowed-tools del frontmatter): un manual de lectura no
-            // debería poder pedir un rm.
-            // Con dueño: el recorte caduca cuando su habilidad deja de venir a
-            // cuento (ver SkillStore.update), no al final del hilo.
+            // uso: un manual de lectura no debería poder pedir un rm. Con dueño,
+            // el recorte caduca cuando su habilidad deja de venir a cuento, no al
+            // final del hilo.
             skills.activeSkillTools = (s.allowedTools && s.allowedTools.length > 0)
                 ? s.allowedTools.slice() : []
             skills.toolsOwner = skills.activeSkillTools.length > 0 ? s.id : ""
-            // El texto ya está en memoria desde el escaneo: no hace falta ir al
-            // disco otra vez. Y entra con el tope de habilidad, no con el
-            // genérico de resultados: son instrucciones, no salida de comando.
+            // El texto ya está en memoria desde el escaneo. Entra con el tope de
+            // habilidad y no con el genérico de resultados: son instrucciones, no
+            // salida de comando.
             resolveTool(index, s.text, Math.max(svc.toolResultCap, skills.textCap))
             return
         }
@@ -1012,11 +956,10 @@ Scope {
             return
         }
         default: {
-            // Nombre que no existe. Antes caía aquí run_command, así que un
-            // modelo que alucinaba un nombre con un argumento 'command' podía
-            // acabar ejecutando un comando bajo otra etiqueta. Ahora se rechaza y
-            // se le recuerda el vocabulario: los modelos locales se inventan
-            // nombres a menudo y así corrigen en el siguiente turno.
+            // Nombre que no existe: se rechaza y se le recuerda el vocabulario.
+            // Los modelos locales se inventan nombres a menudo, y hacerlos caer en
+            // una rama de ejecución permitiría colar un comando bajo otra
+            // etiqueta.
             resolveTool(index, "No existe la herramienta '" + m.toolName
                 + "'. Las disponibles son: " + svc.knownToolNames().join(", "))
         }
@@ -1040,34 +983,30 @@ Scope {
             })
     }
 
-    // Lanzar la herramienta aprobada. Un solo Process para todas (solo corre una
-    // cada vez, por diseño), así que arrancarlo era el mismo trío de líneas
-    // repetido veinte veces; aquí se dice una.
-    // De QUIÉN es el proceso que corre ahora mismo. Se apunta al lanzarlo y NO
-    // se lee `_toolIndex` al volver: si una salida llega tarde —porque la
-    // tarjeta ya se dio por colgada y el lote siguió—, `_toolIndex` ya apunta a
-    // otra tarjeta, y resolverla con esta salida sería ponerle a una llamada el
-    // resultado de otra. Con el índice capturado, lo peor que puede pasar es
-    // que la resolución no haga nada, que es justo lo que debe pasar.
+    // Lanza la herramienta aprobada. Un solo Process para todas, porque solo
+    // corre una cada vez por diseño.
+    // De quién es el proceso que corre ahora mismo. Se apunta al lanzarlo y no se
+    // lee `_toolIndex` al volver: si una salida llega tarde porque la tarjeta ya
+    // se dio por colgada, `_toolIndex` apunta a otra y resolverla con esta salida
+    // sería ponerle a una llamada el resultado de otra. Con el índice capturado,
+    // lo peor que puede pasar es que la resolución no haga nada.
     property int _procIndex: -1
 
-    // EL EJECUTOR NO RECIBE UN COMANDO: RECIBE UN PERMISO CON EL COMANDO.
+    // El ejecutor no recibe un comando: recibe un permiso con el comando dentro.
     //
-    // Antes esta función montaba el reloj por su cuenta y confiaba en que cada
-    // una de las doce ramas del despachador se hubiera acordado de apuntar el
-    // marco del texto ajeno y de decidir sobre la red de casa. Ahora todo eso
-    // viene dentro del permiso, lo aplica la puerta, y una rama que se olvide
-    // de pedirlo NO se salta las reglas en silencio: no ejecuta.
+    // El reloj, el marco del texto ajeno y la decisión sobre la red de casa vienen
+    // dentro del permiso y los aplica la puerta, en vez de depender de que cada
+    // rama del despachador se acuerde. Una rama que se olvide de pedirlo no se
+    // salta las reglas en silencio: no ejecuta.
     //
-    // Es la garantía honesta que se puede dar en QML, que no tiene visibilidad
-    // privada: no se puede impedir que alguien llame a proc.running, pero sí
-    // que un camino nuevo se cuele por aquí sin pasar por la puerta — y una
-    // prueba sobre el fuente vigila que nadie abra otro Process (t_puerta.js).
+    // Es la garantía que se puede dar en QML, que no tiene visibilidad privada: no
+    // impide que alguien llame a proc.running, pero sí que un camino nuevo se cuele
+    // sin pasar por la puerta, siempre que este siga siendo el único Process.
     function exec(permiso, cmd, env) {
         const listo = GT.envolver(permiso, cmd, env)
         if (listo === null) {
-            // Fallar RUIDOSAMENTE. Ejecutar de todas formas sería exactamente
-            // el descuido que esto viene a cerrar.
+            // Fallar ruidosamente: ejecutar de todas formas sería exactamente el
+            // descuido que esto viene a cerrar.
             resolveTool(_toolIndex, "El harness no ha podido autorizar esta "
                 + "ejecución (falta el permiso de la puerta). No se ha "
                 + "ejecutado nada.")
@@ -1088,20 +1027,18 @@ Scope {
             const m = messages.get(idx)
             const nombre = m ? String(m.toolName || "") : ""
             const plazo = TP.deadlineMs(nombre)
-            // Un comando cortado suele traer salida A MEDIAS, y esa media salida
-            // es peor que nada: el modelo la leería como el resultado completo.
-            // Así que aquí se descarta y se dice lo que pasó de verdad.
+            // Un comando cortado suele traer salida a medias, y esa media salida
+            // es peor que nada porque el modelo la leería como el resultado
+            // completo. Se descarta y se dice lo que pasó.
             //
-            // Tres formas de volver de un corte, y hay que reconocer las tres:
+            // Hay tres formas de volver de un corte y hay que reconocer las tres:
             //   124  `timeout` cortó y salió por su cuenta.
-            //   137  cortó, hubo que rematar con KILL, y él sobrevivió.
-            //   muerte por señal — el caso normal en realidad: `timeout` mata al
-            //     GRUPO de procesos (que es lo que queremos, para que no queden
-            //     hijos sueltos), y en ese grupo está él mismo. Comprobado: sale
-            //     con exitStatus de caída y sin código.
-            // El último es ambiguo —un programa que revienta llega igual—, así
-            // que se desempata con el reloj: si murió al cumplirse el plazo, fue
-            // el plazo; si murió antes, reventó, y eso se dice como lo que es.
+            //   137  cortó, hubo que rematar con KILL y él sobrevivió.
+            //   muerte por señal — el caso normal: `timeout` mata al grupo de
+            //     procesos, y en ese grupo está él mismo.
+            // El último es ambiguo, porque un programa que revienta llega igual,
+            // así que se desempata con el reloj: si murió al cumplirse el plazo
+            // fue el plazo, y si murió antes, reventó.
             const señal = estado !== 0
             const tarde = (Date.now() - runner.runningSince) >= plazo - 500
             if (code === 124 || code === 137 || (señal && tarde)) {
@@ -1120,13 +1057,11 @@ Scope {
                     + "se usa.")
                 return
             }
-            // Se pasó del tope de salida y `head` le cerró la tubería. Decirlo
-            // con nombre y no como "murió por señal": es un fallo con arreglo
-            // —acotar, filtrar, redirigir a un archivo— y el modelo puede tomar
-            // esa decisión si se le cuenta lo que pasó.
-            // Los dos códigos se comprueban con la salida delante: 141 y 97 los
-            // puede devolver también la propia herramienta, y confundir un
-            // `exit 97` suyo con un fallo nuestro sería mentirle al modelo.
+            // Se pasó del tope de salida y `head` cerró la tubería. Se dice con
+            // nombre y no como "murió por señal": es un fallo con arreglo —acotar,
+            // filtrar, redirigir a un archivo— y el modelo puede decidir si se le
+            // cuenta. Los dos códigos se comprueban con la salida delante, porque
+            // la propia herramienta también puede devolverlos.
             if (code === 141 && ((outCol.text || "").length >= 2097152
                                  || (errCol.text || "").length >= 131072)) {
                 runner.resolveTool(idx, "La herramienta " + nombre + " escribió "
@@ -1138,8 +1073,8 @@ Scope {
                 return
             }
             // El cerco de rutas del envoltorio: la ruta resolvía fuera de la
-            // pared siguiendo un enlace simbólico. El motivo ya viene escrito
-            // por el shell, con la ruta real dentro, que es el dato que importa.
+            // pared siguiendo un enlace simbólico. El motivo ya viene escrito por
+            // el shell, con la ruta real dentro.
             if (code === 96 && (errCol.text || "").indexOf("enlace") !== -1) {
                 runner.resolveTool(idx, (errCol.text || "").trim())
                 return
@@ -1159,13 +1094,13 @@ Scope {
         }
     }
 
-    // ── Deshacer una edición ─────────────────────────────────────────────────
+    // Deshacer una edición
     readonly property string undoDir:
         Quickshell.env("HOME") + "/.cache/quickshell-ai-undo"
 
-    // Dónde va la copia de seguridad de esta edición, anotada en la tarjeta: es
-    // lo que hace posible Deshacer. Las tres herramientas que escriben llevaban
-    // la misma línea de armar la ruta.
+    // Dónde va la copia de seguridad de esta edición, anotada en la tarjeta: es lo
+    // que hace posible Deshacer, y en un solo sitio para las tres herramientas que
+    // escriben.
     function backupFor(index, path) {
         const bak = undoDir + "/" + Date.now() + "-" + path.split("/").pop()
         messages.setProperty(index, "undoPath", bak)
@@ -1182,13 +1117,11 @@ Scope {
         const target = svc._safePath(a.path)
         if (target === "")
             return
-        // Tres desenlaces, no dos. Antes eran dos —"hay copia, restauro" y "no
-        // hay copia, borro"— y el segundo daba por hecho que la falta de copia
-        // significaba que el archivo era nuevo. También significa que la copia
-        // FALLÓ (disco lleno, permisos, la carpeta de copias limpiada), y ahí
-        // borrar es destruir el archivo que se venía a salvar. Ahora quien
-        // escribe deja una señal explícita cuando el archivo no existía, y sin
-        // copia y sin señal esto NO toca nada.
+        // Tres desenlaces y no dos. "No hay copia" no significa solo que el
+        // archivo fuera nuevo: también que la copia falló —disco lleno,
+        // permisos, carpeta limpiada— y ahí borrar sería destruir el archivo que
+        // se venía a salvar. Quien escribe deja una señal explícita cuando el
+        // archivo no existía, y sin copia y sin señal esto no toca nada.
         undoProc.command = ["sh", "-c",
             'if [ -f "$QS_BAK" ]; then cp -a -- "$QS_BAK" "$QS_P" && echo restaurado; '
             + 'elif [ -f "$QS_BAK.nuevo" ]; then rm -f -- "$QS_P" && echo borrado; '
@@ -1212,30 +1145,26 @@ Scope {
         }
     }
 
-    // ── Rutas reales: los enlaces simbólicos, a la vista ─────────────────────
-    // El cerco a $HOME no puede parar a un agente decidido (con run_command se
-    // sale por la puerta grande); sirve contra ACCIDENTES. Por eso un enlace que
-    // apunta fuera no se prohíbe —perderías rutas legítimas como ~/datos →
-    // /mnt/almacen— sino que se DESTAPA: se resuelve el destino real y, si sale
-    // de tu carpeta, esa llamada nunca se auto-aprueba y la tarjeta enseña adónde
-    // va de verdad. Escape visible en vez de prohibido.
+    // El cerco a $HOME sirve contra accidentes, no contra un agente decidido, que
+    // con run_command se sale por la puerta grande. Por eso un enlace que apunta
+    // fuera no se prohíbe —se perderían rutas legítimas como ~/datos → /mnt— sino
+    // que se destapa: se resuelve el destino real y, si sale de la carpeta
+    // personal, esa llamada nunca se auto-aprueba y la tarjeta enseña adónde va.
     property var pathReal: ({})        // índice de mensaje → {real, escapes}
 
-    // ── Veredictos del supervisor ────────────────────────────────────────────
     // Índice de mensaje → {veredicto, riesgo, irreversible, ajuste, fallo}. Se
-    // indexa por POSICIÓN, igual que pathReal, así que caduca exactamente igual
-    // (ver forgetPaths): heredar el "ok" de otra tarjeta sería justo el fallo
-    // que este componente viene a evitar.
+    // indexa por posición igual que pathReal, así que caduca igual: heredar el
+    // "ok" de otra tarjeta sería justo el fallo que este componente evita.
     property var supVerdict: ({})
 
     function _supDone(index, v) {
         const m = Object.assign({}, supVerdict)
         m[index] = v
         supVerdict = m
-        // Frenazo: se trata igual que el veto de un hook —tarjeta rechazada y el
-        // motivo de vuelta al modelo—, con la diferencia de que se le invita a
-        // rebatir. Un bloqueo sin réplica convierte al agente en alguien que
-        // reintenta a ciegas.
+        // Frenazo: mismo trato que el veto de un hook —tarjeta rechazada y motivo
+        // de vuelta al modelo— con la diferencia de que se le invita a rebatir. Un
+        // bloqueo sin réplica convierte al agente en alguien que reintenta a
+        // ciegas.
         if (v && v.veredicto === "bloqueo") {
             blockTool(index, SV.motivoBloqueo(v), "supervisor")
             return
@@ -1271,8 +1200,8 @@ Scope {
             return
         }
         _resolveIndex = index
-        // readlink -f canoniza siguiendo los enlaces; si el archivo aún no existe
-        // (write_file), resuelve igual la cadena de carpetas.
+        // readlink -f canoniza siguiendo los enlaces; si el archivo aún no existe,
+        // resuelve igual la cadena de carpetas.
         realProc.command = ["sh", "-c", 'readlink -f -- "$QS_P" 2>/dev/null || printf %s "$QS_P"']
         realProc.environment = ({ QS_P: abs })
         realProc.running = true
@@ -1292,17 +1221,16 @@ Scope {
         }
     }
 
-    // ── El coordinador del lote ──────────────────────────────────────────────
-    // El modelo puede pedir varias herramientas de golpe. Tras resolver una: si
-    // queda alguna pendiente, la auto-aprobable se ejecuta y la manual espera al
-    // usuario; solo cuando NO queda ninguna pendiente se devuelve todo al modelo
-    // con una única continuación. Así N llamadas paralelas no disparan N envíos.
+    // El modelo puede pedir varias herramientas de golpe. Tras resolver una, si
+    // queda alguna pendiente la auto-aprobable se ejecuta y la manual espera al
+    // usuario; solo con ninguna pendiente se devuelve todo al modelo en una única
+    // continuación, así que N llamadas paralelas no disparan N envíos.
     function advance() {
         if (svc.busy || svc.compacting)
             return
         if (_resolveIndex >= 0)        // resolviendo una ruta: se espera
             return
-        // Un plan esperando visto bueno PARA todo lo demás, aunque el modelo lo
+        // Un plan esperando visto bueno para todo lo demás, aunque el modelo lo
         // haya pedido junto a otras herramientas: proponer y ejecutar a la vez
         // sería proponer de boquilla.
         for (let i = 0; i < messages.count; i++) {
@@ -1311,8 +1239,8 @@ Scope {
                     && m.toolName === "propose_plan")
                 return
         }
-        // Un clic del usuario que llegó tarde (había otra herramienta corriendo)
-        // se atiende ANTES que la ronda automática: lo pidió él.
+        // Un clic que llegó tarde, con otra herramienta corriendo, se atiende
+        // antes que la ronda automática: lo pidió el usuario.
         while (_colaClics.length > 0) {
             const k = _colaClics[0]
             _colaClics = _colaClics.slice(1)
@@ -1325,9 +1253,9 @@ Scope {
         for (let i = 0; i < messages.count; i++) {
             const m = messages.get(i)
             if (m.role === "tool" && m.toolStatus === "pending") {
-                // Si la llamada lleva una ruta local, primero se averigua adónde
-                // apunta DE VERDAD (puede ser un enlace). Se hace una sola vez por
-                // tarjeta, y al volver se re-entra aquí.
+                // Con una ruta local se averigua primero adónde apunta de verdad,
+                // porque puede ser un enlace. Se hace una sola vez por tarjeta y
+                // al volver se re-entra aquí.
                 const args = TU.repairJson(m.toolArgs) || ({})
                 const p = _pathArgOf(m.toolName, args)
                 if (p !== "" && pathReal[i] === undefined) {
@@ -1336,13 +1264,12 @@ Scope {
                 }
                 const escapes = pathReal[i] && pathReal[i].escapes
                 const pol = callPolicy(m.toolName, m.toolArgs)
-                // Solo se calcula si hay quien lo mire: es un JSON.parse más
-                // en un camino por el que se pasa muchas veces.
+                // Solo se calcula si hay quien lo mire: es un JSON.parse más en
+                // un camino por el que se pasa muchas veces.
                 const peligro = sup ? dangerOf(m.toolName, m.toolArgs) : ""
-                // SUPERVISOR: el segundo modelo opina ANTES de que esto corra y
-                // antes de que el usuario decida. Igual que el enlace simbólico:
-                // se pregunta una sola vez por tarjeta, se guarda el veredicto y
-                // al volver se re-entra aquí.
+                // El supervisor opina antes de que esto corra y antes de que el
+                // usuario decida. Como el enlace simbólico: se pregunta una vez
+                // por tarjeta, se guarda el veredicto y al volver se re-entra.
                 if (sup && supVerdict[i] === undefined
                         && sup.wants(m.toolName, m.toolArgs, peligro, escapes)) {
                     sup.review(i, m,
@@ -1351,12 +1278,12 @@ Scope {
                         (v) => runner._supDone(i, v))
                     return
                 }
-                // Hay pendientes: si esta es auto (y no se pasó el tope de pasos),
-                // se ejecuta sola; si es manual, se espera aquí. Una ruta que se
-                // va fuera de $HOME por un enlace NUNCA va sola, por muy "auto"
-                // que esté la herramienta: eso lo miras. Y una llamada sobre la
-                // que el supervisor tiene dudas tampoco: su "ok" no aprueba
-                // nada, pero su duda sí frena la aprobación automática.
+                // Con pendientes: si esta es auto y no se pasó el tope de pasos
+                // se ejecuta sola, y si es manual se espera. Una ruta que se va
+                // fuera de $HOME por un enlace nunca va sola por muy "auto" que
+                // esté la herramienta, y una llamada sobre la que el supervisor
+                // tiene dudas tampoco: su "ok" no aprueba nada, pero su duda sí
+                // frena la aprobación automática.
                 const duda = supVerdict[i] && supVerdict[i].veredicto !== "ok"
                 if (toolRounds <= maxToolRounds && !escapes && !duda
                         && pol === "auto")
@@ -1365,24 +1292,23 @@ Scope {
             }
         }
         // Nada pendiente: el lote está completo, se continúa la conversación.
-        // Antes de seguir se le da un toque al CONSEJERO — no se le espera (no
+        // Antes de continuar se le da un toque al consejero, sin esperarlo (no
         // frena nada y su observación viaja en la petición siguiente), y solo
         // opina en turnos que ya se han hecho largos, que es donde un agente se
         // pone a dar vueltas.
         if (sup)
             sup.observe()
-        // FRONTERA SEGURA. Aquí el lote está resuelto y todavía no se ha
-        // hablado con el modelo: es el único punto del bucle de herramientas
-        // donde se puede compactar sin dejar el protocolo a medias. Sin esto,
-        // un turno de veinte rondas llenaba la ventana y desbordaba antes de
-        // llegar a la comprobación de fin de turno. Si compacta, ella misma
-        // retoma el turno al terminar.
+        // Frontera segura: el lote está resuelto y todavía no se ha hablado con el
+        // modelo, así que es el único punto del bucle de herramientas donde se
+        // puede compactar sin dejar el protocolo a medias. Sin esto, un turno de
+        // muchas rondas llena la ventana y desborda antes de llegar a la
+        // comprobación de fin de turno. Si compacta, ella misma retoma el turno.
         if (svc.maybeCompactMidTurn())
             return
         svc.start()
     }
 
-    // Todo lo que pertenece al HILO y no al historial: permisos dados de palabra,
+    // Todo lo que pertenece al hilo y no al historial: permisos dados de palabra,
     // el plan a la vista, las rutas ya resueltas.
     function resetThread() {
         sessionAllow = ({})
@@ -1399,21 +1325,20 @@ Scope {
         runningIndex = -1
         _colaClics = []
         fetchSecos = 0
-        // El pestillo del buscador NO se levanta al cambiar de conversación: la
+        // El pestillo del buscador no se levanta al cambiar de conversación: la
         // avería es de la máquina, no del hilo. Se levanta al tocar los ajustes.
     }
 
-    // Las rutas resueltas se indexan por POSICIÓN en el hilo, así que cualquier
-    // reordenación (compactar, borrar un mensaje, editar) las invalida: dejarlas
-    // haría que la tarjeta N heredara el veredicto de otra distinta — y un
-    // "no escapa" heredado por error sí abre la puerta a una auto-aprobación que
-    // no tocaba. Se tiran, que volver a resolverlas cuesta un readlink.
+    // Las rutas resueltas se indexan por posición en el hilo, así que cualquier
+    // reordenación —compactar, borrar un mensaje, editar— las invalida: la tarjeta
+    // N heredaría el veredicto de otra, y un "no escapa" heredado por error abre
+    // la puerta a una auto-aprobación que no tocaba. Volver a resolverlas cuesta
+    // un readlink.
     function forgetPaths() {
         pathReal = ({})
         supVerdict = ({})
         // Los permisos se guardan por el mismo índice y valen lo mismo: uno
-        // heredado por otra tarjeta traería el plazo y el marco de una llamada
-        // que no es esta.
+        // heredado traería el plazo y el marco de una llamada que no es esta.
         _permisos = ({})
     }
 }

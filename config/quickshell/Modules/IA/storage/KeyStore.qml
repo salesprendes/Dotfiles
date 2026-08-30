@@ -18,7 +18,7 @@ import qs.Config
 Scope {
     id: keys
 
-    // ── Claves de API ────────────────────────────────────────────────────────
+    // Claves de API
     property bool haveKeyring: false
     property string keyGemini: ""
     property string keyOpenrouter: ""
@@ -103,7 +103,6 @@ Scope {
         }
     }
 
-    // ── El escribano del llavero ─────────────────────────────────────────────
     // Una cola de UN proceso, con el secreto por la entrada estándar (que es
     // como `secret-tool store` lo espera) y sin ningún `sh -c`: así el nombre
     // del proveedor y —sobre todo— el del servidor SSH viajan como argumentos
@@ -188,7 +187,6 @@ Scope {
         }
     }
 
-    // ── Contraseñas de servidores ────────────────────────────────────────────
     // En memoria de sesión (cargadas del llavero al arrancar, o escritas en
     // Ajustes). El argumento 'password' de una llamada las pisa para el caso
     // "te la escribo en el mensaje".

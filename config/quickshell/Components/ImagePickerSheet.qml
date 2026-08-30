@@ -4,23 +4,17 @@ import QtQuick.Layouts
 import Qt.labs.folderlistmodel
 import qs.Config
 
-// Selector de imágenes con el lenguaje del panel de Ajustes (Material 3).
+// Selector de imágenes: una rejilla de miniaturas, porque para elegir una foto
+// el nombre del fichero no dice nada.
 //
-// Sustituye al diálogo genérico de Qt, que era una lista de nombres de fichero
-// con tamaños y fechas: para elegir una FOTO, el nombre no dice nada — hay que
-// VERLA. Por eso es una rejilla de miniaturas.
+// Al elegir para un avatar, lo que se guarda no es la foto entera sino el
+// círculo de dentro. Por eso la marca de "elegida" ES ese círculo, dibujado
+// sobre la miniatura, y el pie enseña el avatar al tamaño al que se va a ver:
+// elegir una foto cuya cara se sale del recorte se ve antes de confirmar.
 //
-// La idea que lo separa de un explorador cualquiera: al elegir para un avatar,
-// lo que se guarda no es la foto entera sino el CÍRCULO de dentro. Así que la
-// marca de "elegida" ES ese círculo, dibujado sobre la miniatura, y el pie
-// enseña el avatar de verdad al tamaño al que se va a ver. Elegir una foto cuya
-// cara se sale del recorte es el error clásico de estos selectores; aquí se ve
-// antes de confirmar.
-//
-// Se cuelga del contenido de su ventana (ver 'hoist'), no de quien lo declara:
-// es una capa modal que tapa la ventana entera, y colgada de una fila de
-// ajustes quedaría encerrada en su tarjeta — sin recibir el ratón fuera de
-// ella, que es el fallo que arrastraban los desplegables.
+// Se cuelga del contenido de su ventana (ver 'hoist') y no de quien lo declara:
+// es una capa modal que tapa la ventana entera, y colgada de una fila de ajustes
+// quedaría encerrada en su tarjeta sin recibir el ratón fuera de ella.
 Item {
     id: sheet
 
@@ -28,12 +22,12 @@ Item {
     signal picked(string path)
 
     property bool shown: false
-    // El destino recorta en círculo (avatar). Con false —un fondo de pantalla,
-    // por ejemplo— la selección se marca con un marco y no se enseña el círculo,
-    // que ahí sería mentira.
+    // El destino recorta en círculo. Con false —un fondo de pantalla— la
+    // selección se marca con un marco y no se enseña el círculo, que ahí
+    // mentiría.
     property bool circularCrop: false
-    // Carpeta visible. Es una URL porque FolderListModel trabaja con URLs; la
-    // ruta plana se deriva para lo que se enseña y para lo que se devuelve.
+    // Carpeta visible. Es una URL porque FolderListModel trabaja con URLs; la ruta
+    // plana se deriva para lo que se enseña y lo que se devuelve.
     property url folder: ""
     property string selected: ""
 
@@ -55,11 +49,9 @@ Item {
 
     readonly property string folderPath: sheet.toPath(sheet.folder)
 
-    // Migas de pan. La ruta ES una jerarquía, así que se navega por ella en vez
-    // de enseñarla como un rótulo muerto. La casa se abrevia a '~' y solo se
-    // muestran los últimos tramos: el principio de una ruta larga no aporta nada
-    // y empujaría el resto fuera. Nunca se enseña una URL — 'file://…' es ruido
-    // de máquina en una cara visible.
+    // Migas de pan: la ruta es una jerarquía, así que se navega por ella. La casa
+    // se abrevia y solo se muestran los últimos tramos, porque el principio de una
+    // ruta larga no aporta y empujaría el resto fuera. Nunca se enseña una URL.
     readonly property var crumbs: {
         const p = sheet.folderPath
         if (p === "")
@@ -95,9 +87,8 @@ Item {
         sheet.imageCount = n
     }
 
-    // Se cuelga del contenido de la ventana. Cuanto antes: declarado dentro de
-    // una página de ajustes es hijo de un layout, y un layout coloca a todos sus
-    // hijos — la capa modal no tiene nada que hacer en esa columna.
+    // Se cuelga del contenido de la ventana cuanto antes: declarado dentro de una
+    // página de ajustes es hijo de un layout, y un layout coloca a todos sus hijos.
     function hoist() {
         const win = sheet.Window.window
         if (win && win.contentItem && sheet.parent !== win.contentItem)
@@ -105,9 +96,8 @@ Item {
     }
     Component.onCompleted: sheet.hoist()
 
-    // Abre en 'startAt'. Si viene una imagen ya elegida, abre en SU carpeta y
-    // con ella marcada: volver a abrir y encontrarse donde lo dejaste es lo que
-    // uno espera.
+    // Abre en 'startAt'. Con una imagen ya elegida abre en su carpeta y con ella
+    // marcada.
     function present(startAt) {
         sheet.hoist()
         const s = startAt || ""
@@ -156,8 +146,8 @@ Item {
             sheet.selected = p
     }
 
-    // Sin anclas: 'parent' cambia al colgarse de la ventana, y una ancla fijada
-    // al padre de partida no la seguiría. Vinculado al tamaño del padre sí.
+    // Sin anclas: 'parent' cambia al colgarse de la ventana, y un ancla fijada al
+    // padre de partida no la seguiría. Vincularlo al tamaño del padre sí.
     x: 0
     y: 0
     width: parent ? parent.width : 0
@@ -166,19 +156,18 @@ Item {
     visible: opacity > 0.01
     opacity: sheet.shown ? 1 : 0
     Behavior on opacity { NumberAnimation { duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
-    // Sin esto la capa oculta seguiría comiéndose los clics del panel.
+    // Sin esto, la capa oculta seguiría comiéndose los clics del panel.
     enabled: sheet.shown
 
     Keys.onEscapePressed: sheet.dismiss()
 
-    // El aro del cursor de rejilla solo se enseña cuando se está navegando con
-    // el teclado. Al abrir, la rejilla toma el foco para que las flechas
-    // funcionen desde el primer momento, pero pintar entonces un aro sobre la
-    // primera miniatura la haría parecer elegida sin serlo.
+    // El aro del cursor solo se enseña navegando con teclado: al abrir, la
+    // rejilla toma el foco para que las flechas funcionen desde el principio,
+    // pero pintar entonces un aro haría parecer elegida a la primera miniatura.
     property bool keyNav: false
 
-    // Velo. Atenúa lo de detrás para que la atención caiga en la hoja, y recoge
-    // el clic fuera como "cancelar", que es lo que espera todo el mundo.
+    // Velo: atenúa lo de detrás para que la atención caiga en la hoja, y recoge
+    // el clic fuera como cancelar.
     Rectangle {
         anchors.fill: parent
         color: Qt.rgba(0, 0, 0, 0.44)
@@ -190,8 +179,8 @@ Item {
         }
     }
 
-    // Sombra de la hoja: tres anillos, como en el resto del shell (este equipo
-    // no tiene el módulo de efectos gráficos de Qt, así que no hay desenfoque).
+    // Sombra de la hoja: tres anillos, como en el resto del shell, porque sin el
+    // módulo de efectos gráficos de Qt no hay desenfoque disponible.
     Item {
         anchors.fill: card
         Repeater {
@@ -218,8 +207,8 @@ Item {
         color: Theme.surfaceHi
         border.width: Theme.hairline
         border.color: Theme.withAlpha(Theme.overlay, 0.34)
-        // Entra creciendo un pelín, no de golpe: es la transición estándar de M3
-        // para un diálogo, y da el sentido de "esto sale de la nada".
+        // Entra creciendo un poco, no de golpe: da el sentido de "esto sale de
+        // la nada".
         scale: sheet.shown ? 1 : 0.94
         Behavior on scale { NumberAnimation { duration: Theme.animNormal; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveSpatial } }
 
@@ -231,7 +220,7 @@ Item {
             anchors.margins: Theme.space16
             spacing: Theme.space12
 
-            // ── Cabecera ──────────────────────────────────────────────────────
+            // Cabecera
             RowLayout {
                 Layout.fillWidth: true
                 spacing: Theme.space10
@@ -353,18 +342,18 @@ Item {
                 }
             }
 
-            // ── Sitios + rejilla ──────────────────────────────────────────────
+            // Sitios + rejilla
             RowLayout {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 spacing: Theme.space12
 
                 ColumnLayout {
-                    // fillWidth EXPLÍCITO a false: dentro de un RowLayout un hijo
-                    // de tipo Layout lo trae puesto a true de fábrica, y esta
-                    // columna se quedaba con todo el ancho dejando la rejilla en
-                    // nada. En hoja estrecha se esconde entera: la rejilla vale
-                    // más que un menú lateral cuando no hay ancho para los dos.
+                    // fillWidth explícito a false: dentro de un RowLayout, un
+                    // hijo de tipo Layout lo trae puesto a true de fábrica y esta
+                    // columna se quedaría con todo el ancho. En hoja estrecha se
+                    // esconde entera, porque la rejilla vale más que un menú
+                    // lateral cuando no hay ancho para los dos.
                     Layout.fillWidth: false
                     Layout.preferredWidth: Theme.dp(192)
                     Layout.alignment: Qt.AlignTop
@@ -372,7 +361,7 @@ Item {
                     visible: card.width > Theme.dp(580)
 
                     // Rótulo en versalitas espaciadas, igual que las cabeceras de
-                    // las tarjetas de ajustes: ata el selector al resto del panel.
+                    // las tarjetas de ajustes.
                     ThemedText {
                         Layout.leftMargin: Theme.space12
                         Layout.bottomMargin: Theme.space4
@@ -461,10 +450,10 @@ Item {
                         focus: true
                         model: folderModel
                         // Celdas repartidas a partes iguales: la última fila no
-                        // queda con un hueco raro y las miniaturas mantienen la
-                        // misma medida al cambiar de tamaño la hoja. Alto = ancho
-                        // más la banda del nombre, así el área de imagen queda
-                        // CUADRADA — que es lo que más se parece al círculo final.
+                        // queda con un hueco raro y las miniaturas mantienen su
+                        // medida al cambiar el tamaño de la hoja. El alto es el
+                        // ancho más la banda del nombre, así el área de imagen
+                        // queda cuadrada, que es lo que más se parece al círculo.
                         readonly property int minCell: Theme.dp(112)
                         readonly property int cols: Math.max(1, Math.floor(width / minCell))
                         readonly property int nameBand: Theme.dp(20)
@@ -514,15 +503,14 @@ Item {
                                 anchors.fill: parent
                                 anchors.margins: Theme.dp(5)
                                 radius: Theme.shapeMd
-                                // La selección NO lleva marco: la marca es el
-                                // círculo de recorte sobre la miniatura (abajo).
-                                // Un marco además del círculo sería decir lo
-                                // mismo dos veces.
+                                // La selección no lleva marco: la marca es el
+                                // círculo de recorte sobre la miniatura, y un
+                                // marco además sería decir lo mismo dos veces.
                                 color: cell.sel ? Theme.withAlpha(Theme.accent, 0.16)
                                      : cellMa.containsMouse ? Theme.withAlpha(Theme.fg, Theme.stateHover)
                                      : "transparent"
-                                // El anillo de foco de teclado se calla en la elegida: ahí ya lo
-                                // dice el círculo, y dos marcas para una cosa sobran.
+                                // El anillo de foco se calla en la elegida: ahí
+                                // ya lo dice el círculo.
                                 border.width: cell.cursor && !cell.sel ? Theme.hairline : 0
                                 border.color: Theme.withAlpha(Theme.accent, 0.55)
                                 Behavior on color { ColorAnimation { duration: Theme.animFast } }
@@ -537,9 +525,9 @@ Item {
                                         Layout.fillWidth: true
                                         Layout.fillHeight: true
 
-                                        // Carpeta: glifo tonal, no miniatura. Se
-                                        // lee de un vistazo que es un sitio al
-                                        // que entrar y no algo que elegir.
+                                        // Carpeta: glifo tonal y no miniatura, se
+                                        // lee de un vistazo que es un sitio al que
+                                        // entrar y no algo que elegir.
                                         Rectangle {
                                             anchors.fill: parent
                                             visible: cell.fileIsDir
@@ -568,23 +556,21 @@ Item {
                                                 asynchronous: true
                                                 cache: false
                                                 // Se decodifica al tamaño de la
-                                                // celda, no al de la foto: una
-                                                // carpeta de fotos de 12 Mpx a
-                                                // tamaño completo se come la
-                                                // memoria y el arranque.
+                                                // celda y no al de la foto: una
+                                                // carpeta de fotos grandes se
+                                                // comería la memoria.
                                                 sourceSize.width: Math.round(grid.cellWidth)
                                                 sourceSize.height: Math.round(grid.cellWidth)
                                                 // Entra al estar lista, no de
                                                 // golpe: al desplazar, una rejilla
-                                                // dando saltos de imagen se lee
-                                                // como parpadeo.
+                                                // dando saltos se lee como
+                                                // parpadeo.
                                                 opacity: thumb.status === Image.Ready ? 1 : 0
                                                 Behavior on opacity { NumberAnimation { duration: Theme.animFast } }
                                             }
 
-                                            // Fichero que no carga (roto, o formato
-                                            // que Qt no lee). Se dice, en vez de
-                                            // dejar un cuadro vacío.
+                                            // Fichero que no carga: se dice, en
+                                            // vez de dejar un cuadro vacío.
                                             ThemedText {
                                                 anchors.centerIn: parent
                                                 visible: thumb.status === Image.Error
@@ -594,11 +580,9 @@ Item {
                                             }
                                         }
 
-                                        // ── La marca de elegida ───────────────
                                         // El círculo que de verdad se va a
-                                        // recortar, encima de la miniatura. Ver
-                                        // la nota de cabecera: es la razón de ser
-                                        // de este selector frente a un explorador.
+                                        // recortar, encima de la miniatura: es la
+                                        // razón de ser de este selector.
                                         Rectangle {
                                             anchors.centerIn: parent
                                             visible: cell.sel && sheet.circularCrop
@@ -609,8 +593,8 @@ Item {
                                             border.width: Theme.focusWidth
                                             border.color: Theme.accent
                                         }
-                                        // Sin recorte circular (un fondo de
-                                        // pantalla): marco, que es lo honesto.
+                                        // Sin recorte circular: marco, que es lo
+                                        // honesto.
                                         Rectangle {
                                             anchors.fill: parent
                                             visible: cell.sel && !sheet.circularCrop
@@ -623,11 +607,10 @@ Item {
 
                                     ThemedText {
                                         Layout.fillWidth: true
-                                        // Sin extensión: a tres columnas
-                                        // 'apple_gruvbox.jpg' se cortaba en
-                                        // mitad del nombre, y el formato no
-                                        // ayuda a elegir una foto. El pie
-                                        // enseña el nombre entero.
+                                        // Sin extensión: a pocas columnas el
+                                        // nombre se cortaría por la mitad, y el
+                                        // formato no ayuda a elegir una foto. El
+                                        // pie enseña el nombre entero.
                                         text: cell.fileBaseName
                                         horizontalAlignment: Text.AlignHCenter
                                         color: cell.sel ? Theme.fg : Theme.fgDim
@@ -651,7 +634,7 @@ Item {
                                     else
                                         sheet.selected = cell.filePath
                                 }
-                                // Doble clic sobre una imagen = elegirla. Es el
+                                // Doble clic sobre una imagen la elige: es el
                                 // gesto que todo el mundo prueba en una rejilla.
                                 onDoubleClicked: {
                                     if (!cell.fileIsDir) {
@@ -663,8 +646,8 @@ Item {
                         }
                     }
 
-                    // Carpeta sin nada. Una pantalla vacía es una invitación a
-                    // actuar, no un cartel de error: dice dónde seguir buscando.
+                    // Carpeta sin nada: una pantalla vacía es una invitación a
+                    // actuar, no un cartel de error.
                     ColumnLayout {
                         anchors.centerIn: parent
                         width: parent.width - Theme.dp(64)
@@ -689,11 +672,9 @@ Item {
                 }
             }
 
-            // ── Pie ───────────────────────────────────────────────────────────
-            // Con algo elegido, el avatar DE VERDAD, al tamaño al que se va a
-            // ver. El círculo de la rejilla dice qué trozo entra; esto dice cómo
-            // queda. Es el mismo componente que lo pinta en el panel, así que no
-            // puede mentir.
+            // Con algo elegido, el avatar real al tamaño al que se va a ver. El
+            // círculo de la rejilla dice qué trozo entra; esto dice cómo queda, y
+            // es el mismo componente que lo pinta en el panel.
             RowLayout {
                 Layout.fillWidth: true
                 spacing: Theme.space10

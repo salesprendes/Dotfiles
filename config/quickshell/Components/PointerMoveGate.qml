@@ -2,22 +2,18 @@ import QtQuick
 
 // Filtro de "hover fantasma" para listas que se mueven bajo un ratón quieto.
 //
-// EL PROBLEMA. Una fila de lista hace `onEntered: selectedIndex = index`, que
-// es lo correcto mientras el ratón se mueve. Pero `entered` no significa "el
-// ratón ha llegado aquí": significa "esta fila y el ratón ahora se tocan", y
-// eso también pasa cuando la que se mueve es la FILA. Al escribir en el
-// buscador del portapapeles o del lanzador, la lista se refiltra y las filas
-// pasan por debajo del cursor parado: cada una emite 'entered' al cruzarlo y
-// la selección salta a la que quedó encima, pisando la que el usuario estaba
-// eligiendo con las flechas. Se ve como "escribo y el resaltado se me va solo".
+// 'entered' no significa "el ratón ha llegado aquí" sino "esta fila y el ratón se
+// tocan ahora", y eso también pasa cuando la que se mueve es la fila. Al escribir
+// en un buscador, la lista se refiltra, las filas pasan por debajo del cursor
+// parado y la selección salta a la que quede encima, pisando la que se estaba
+// eligiendo con las flechas.
 //
-// LA CURA. No fiarse de 'entered' y mirar la POSICIÓN: solo se acepta un
-// cambio de selección si el puntero se ha movido de verdad desde la última vez
-// que se le hizo caso. Se mide en coordenadas de un item de referencia (la
-// lista), no de la fila, porque la fila se mueve y sus coordenadas locales
-// cambian aunque el ratón esté clavado.
+// La cura es no fiarse de 'entered' y mirar la posición: solo se acepta un cambio
+// de selección si el puntero se ha movido de verdad desde la última vez. Se mide
+// en coordenadas de un item de referencia —la lista— y no de la fila, porque la
+// fila se mueve y sus coordenadas locales cambian con el ratón clavado.
 //
-// USO, en la fila:
+// Uso, en la fila:
 //
 //     MouseArea {
 //         hoverEnabled: true

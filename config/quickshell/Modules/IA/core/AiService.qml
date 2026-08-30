@@ -19,9 +19,8 @@ import "../tools/RemoteTools.js" as RT
 import "../integrations/WebSearch.js" as WS
 import "Payload.js" as PL
 
-// Harness del asistente IA. La idea (tomada de la capa "aisuite" que usa
-// OpenWorker) es que el panel no sepa NADA de proveedores: todos hablan el
-// /chat/completions de OpenAI con streaming SSE, y aquí solo cambian URL,
+// Harness del asistente IA: el panel no sabe nada de proveedores. Todos hablan
+// el /chat/completions de OpenAI con streaming SSE, y aquí solo cambian URL,
 // credencial y modelo.
 //
 // ESTE ARCHIVO ES EL ORQUESTADOR, no el sitio donde vive todo. Cada pieza del
@@ -49,30 +48,25 @@ import "Payload.js" as PL
 Singleton {
     id: ai
 
-    // ── Dónde vive todo lo de la IA ──────────────────────────────────────────
     // Un único sitio: el propio módulo. Las habilidades en 'skills/' y el estado
-    // (historial, memoria, instintos, hooks) en 'data/', de modo que llevarse el
-    // asistente a otra máquina sea copiar una carpeta. Se cuelga de
-    // Quickshell.shellDir en vez de ~/.config/quickshell a pelo: así vale igual
-    // si el shell se carga desde otra ruta.
+    // en 'data/', de modo que llevarse el asistente a otra máquina sea copiar una
+    // carpeta. Cuelga de Quickshell.shellDir y no de una ruta fija, así que vale
+    // igual si el shell se carga desde otro sitio.
     readonly property string iaDir: Quickshell.shellDir + "/Modules/IA"
     readonly property string dataDir: iaDir + "/data"
     readonly property string skillsDir: iaDir + "/skills"
 
-    // El cerco de la carpeta de datos. Ahí dentro está la conversación entera,
-    // la memoria y el registro de auditoría con los argumentos de cada llamada,
-    // y nacían con 0644: legibles por cualquier cuenta de la máquina.
+    // El cerco de la carpeta de datos, que contiene la conversación entera, la
+    // memoria y el registro de auditoría con los argumentos de cada llamada.
     //
-    // Se cierra el DIRECTORIO y no solo los archivos, y es a propósito: los
-    // archivos los reescribe FileView con el umask de la sesión, así que un
-    // chmod sobre ellos se perdería en el siguiente guardado. Un directorio a
-    // 0700 no se reescribe nunca y hace irrelevante el modo de lo que hay
-    // dentro. Los archivos se aprietan igual, por si algún día se mueven.
-    // Las dos cachés de ~/.cache van en el mismo viaje. No son "temporales" en
-    // el sentido de inofensivas: la de deshacer guarda COPIAS ENTERAS de los
-    // archivos que se editaron —con sus claves y su configuración dentro— y la
-    // de búsqueda guarda qué se buscó, que dice tanto como lo que se encontró.
-    // Nacían a 0755.
+    // Se cierra el DIRECTORIO y no solo los archivos: a estos los reescribe
+    // FileView con el umask de la sesión, así que un chmod sobre ellos se
+    // perdería en el siguiente guardado, mientras que un directorio a 0700 no se
+    // reescribe nunca. Los archivos se aprietan igual, por si algún día se mueven.
+    //
+    // Las dos cachés de ~/.cache van en el mismo viaje: la de deshacer guarda
+    // copias enteras de los archivos editados, con lo que llevaran dentro, y la de
+    // búsqueda guarda qué se buscó, que dice tanto como lo encontrado.
     Process {
         running: true
         environment: ({ QS_D: ai.dataDir,
@@ -84,12 +78,10 @@ Singleton {
             + '  [ -d "$QS_C/$c" ] && chmod -R go-rwx "$QS_C/$c"; done; true']
     }
 
-    // ── Proveedores y modelos ────────────────────────────────────────────────
     // El catálogo, la normalización de URL y el reparto de "un modelo por
     // proveedor" viven en core/Endpoint.js: son JavaScript puro, y sacarlos de
-    // aquí es lo que permite probar de una en una las docenas de formas en que
-    // una URL se pega mal (ver tests/t_endpoint.js). Lo que queda aquí son los
-    // enlaces con los ajustes, que es lo único que de verdad es QML.
+    // aquí permite probar por separado las docenas de formas en que una URL se
+    // pega mal. Aquí quedan los enlaces con los ajustes.
     readonly property var provider: EP.proveedorDe(Settings.aiProvider)
     // La etiqueta del servidor propio se rotula aquí, que es donde se ve I18n.
     readonly property string providerLabel:
@@ -121,8 +113,8 @@ Singleton {
 
     function modelShort(id) { return MC.shortName(id) }
     function modelTag(id)   { return MC.tag(id) }
-    // La variante (27b, a3b, fp8, q4_k_m…): sin ella, tres modelos distintos
-    // del mismo servidor se leen iguales en la lista.
+    // La variante del modelo: sin ella, tres modelos distintos del mismo servidor
+    // se leen iguales en la lista.
     function modelVariant(id) { return MC.variant(id) }
     // Nombre y variante juntos, que es como se nombra un modelo en voz alta.
     function modelLabel(id) {
@@ -141,25 +133,23 @@ Singleton {
         modelFor: ai.modelFor
     })
 
-    // Falta algo para poder hablar: sin URL (los de servidor propio) o sin clave
-    // (los de nube). El panel lo usa para invitar a configurar en vez de dejar
-    // que el envío falle con un error de red.
+    // Falta algo para poder hablar: la URL en los de servidor propio o la clave en
+    // los de nube. El panel lo usa para invitar a configurar, en vez de dejar que
+    // el envío falle con un error de red.
     readonly property var _faltan: EP.faltan(Settings.aiProvider, apiBase, apiKey)
     readonly property bool urlMissing: _faltan.url
     readonly property bool keyMissing: _faltan.clave
     readonly property bool notConfigured: _faltan.alguna
 
-    // ── Qué modelo hay delante ───────────────────────────────────────────────
-    // Lo que ese modelo concreto admite (ventana, pensamiento, muestreo,
-    // imágenes). Un modelo desconocido devuelve el perfil genérico y con él
-    // NADA de esto se aplica: el harness se comporta como siempre. Ver
-    // ModelProfile.js.
+    // Lo que ese modelo concreto admite: ventana, pensamiento, muestreo,
+    // imágenes. Un modelo desconocido devuelve el perfil genérico y con él nada de
+    // esto se aplica.
     readonly property var profile: MP.of(model)
     readonly property string profileLabel: profile.label
 
-    // Lo que ESTE servidor ha rechazado. Un OpenAI-compatible puede no entender
-    // un campo y contestar 400; la respuesta no es dejar de mandarlo siempre
-    // (el que sí lo entiende lo aprovecha) sino apagar el que molesta aquí.
+    // Lo que este servidor ha rechazado. Un servidor compatible puede no entender
+    // un campo y contestar 400; la respuesta no es dejar de mandarlo siempre —el
+    // que sí lo entiende lo aprovecha— sino apagar el que molesta aquí.
     property var profileDegraded: ({})
     function profileDegrade(msg) {
         const k = MP.offenderOf(msg)
@@ -177,19 +167,16 @@ Singleton {
     onModelChanged: profileDegraded = ({})
     onEndpointChanged: profileDegraded = ({})
 
-    // ── El esfuerzo de razonamiento, por tarea ───────────────────────────────
-    // Un modelo con tres niveles de esfuerzo se suele dejar en el máximo "por si
+    // Un modelo con varios niveles de esfuerzo se suele dejar en el máximo "por si
     // acaso", y entonces se paga pensamiento profundo para resumir una
-    // conversación. El harness sabe algo que el usuario no puede saber a mano:
-    // QUÉ le está pidiendo en cada momento. Se piensa a fondo donde se toman las
-    // decisiones —el turno en el que se decide el plan, la revisión de código— y
-    // se va ligero donde el trabajo es mecánico: integrar el resultado de una
-    // herramienta, compactar, o decidir si una llamada es peligrosa.
+    // conversación. El harness sabe algo que el usuario no puede saber a mano: qué
+    // le está pidiendo en cada momento. Se piensa a fondo donde se toman
+    // decisiones y se va ligero donde el trabajo es mecánico.
     readonly property string effortSetting:
         ["auto", "low", "medium", "xhigh"].indexOf(Settings.aiEffort) !== -1
             ? Settings.aiEffort : "auto"
-    // 'p' permite preguntar por un perfil que no es el del agente (el supervisor
-    // puede usar otro modelo). Sin él, el del agente.
+    // 'p' permite preguntar por un perfil que no es el del agente, porque el
+    // supervisor puede usar otro modelo.
     function effortFor(kind, p) {
         const perfil = p || profile
         if (!perfil.efforts || perfil.efforts.length === 0)
@@ -208,24 +195,21 @@ Singleton {
         return "medium"
     }
 
-    // ¿Piensa en esta llamada? El ajuste del usuario manda, salvo en el modelo
-    // que no admite apagarlo (y ahí ModelProfile ya lo ignora).
+    // ¿Piensa en esta llamada? Manda el ajuste del usuario, salvo en el modelo que
+    // no admite apagarlo.
     readonly property bool wantThinking: Settings.aiThink !== "no_think"
 
-    // ¿Ve imágenes? Solo se dice que NO cuando el modelo está reconocido y
-    // sabemos que es de solo texto. De uno desconocido no se presume nada y se
-    // mandan como siempre — quitar una capacidad por si acaso sería peor que el
-    // error que evita.
+    // ¿Ve imágenes? Solo se dice que no cuando el modelo está reconocido y se sabe
+    // que es de solo texto. De uno desconocido no se presume nada y se
     readonly property bool canSeeImages: profile.family === "" || profile.vision
 
-    // La ÚNICA puerta por la que el perfil toca una petición. La usan el chat,
-    // el subagente, la compactación y el supervisor, así que lo que se sabe del
+    // La única puerta por la que el perfil toca una petición. La usan el chat, el
+    // subagente, la compactación y el supervisor, así que lo que se sabe del
     // modelo se aplica en los cuatro sin que ninguno tenga que acordarse.
-    // La otra mitad: hay familias que no encienden el pensamiento con un campo
-    // de la petición sino escribiendo en el PROMPT DE SISTEMA — una línea
-    // "Reasoning strength: …" (Muse Glimmer) o un token al principio del todo
-    // (Gemma 4). Por eso todo prompt de sistema del harness pasa por aquí, y
-    // con un modelo desconocido sale exactamente igual que entró.
+    //
+    // Hay familias que no encienden el pensamiento con un campo de la petición
+    // sino escribiendo en el prompt de sistema, así que todo prompt del harness
+    // pasa por aquí; con un modelo desconocido sale exactamente igual que entró.
     function systemFor(text, kind, thinking, modelId) {
         const p = (modelId && modelId !== model) ? MP.of(modelId) : profile
         return MP.systemFor(text, p, ({
@@ -235,9 +219,8 @@ Singleton {
         }))
     }
 
-    // 'modelId' solo hace falta cuando la petición NO va al modelo del agente
-    // (el supervisor puede usar otro): aplicarle el perfil del principal sería
-    // mandarle banderas de un modelo que no es.
+    // 'modelId' solo hace falta cuando la petición no va al modelo del agente:
+    // aplicarle el perfil del principal sería mandarle banderas de otro modelo.
     function tuneRequest(req, kind, thinking, modelId) {
         const p = (modelId && modelId !== model) ? MP.of(modelId) : profile
         return MP.tune(req, p, ({
@@ -255,44 +238,40 @@ Singleton {
     }
 
 
-    // ── Presupuesto de contexto ──────────────────────────────────────────────
-    // Antes el recorte era de 20 000 caracteres fijos, dijera lo que dijera el
-    // modelo. Con un modelo LOCAL eso es o derrochar (un Qwen de 32k aguanta el
-    // triple) o desbordar (uno de 8k no llega). Ahora todo cuelga de la ventana
-    // real: el usuario la declara y de ahí sale el recorte del historial, el tope
-    // de cada resultado de herramienta, el del catálogo de habilidades y el
-    // medidor.
+    // Todo cuelga de la ventana de contexto real, declarada por el usuario: de
+    // ella salen el recorte del historial, el tope de cada resultado de
+    // herramienta, el del catálogo de habilidades y el medidor. Un recorte fijo
+    // en caracteres derrocharía con un modelo grande y desbordaría con uno
+    // pequeño.
     readonly property int contextTokens:
         Settings.aiContextTokens > 0 ? Settings.aiContextTokens
-        // Si el modelo está reconocido, su ventana REAL manda sobre la
-        // heurística: adivinar 32k para un modelo de 262k es tirar casi todo el
-        // contexto que has pagado, y recortar el historial mucho antes de hacer
-        // ninguna falta.
+        // Con el modelo reconocido, su ventana real manda sobre la heurística:
+        // adivinar 32k para uno de 262k tira casi todo el contexto pagado y
+        // recorta el historial mucho antes de hacer falta.
         : (profile.ctx > 0 ? profile.ctx
         : (provider.userUrl ? 32768 : 128000))    // local típico vs. nube
     // Del total, algo menos de la mitad para el historial: el resto lo comen el
-    // prompt de sistema, los esquemas de herramientas y la respuesta. ~3,5
-    // caracteres por token es la regla de bolsillo habitual.
+    // prompt de sistema, los esquemas de herramientas y la respuesta.
     readonly property int charBudget: Math.round(contextTokens * 3.5 * 0.45)
     // Un solo resultado de herramienta no puede comerse el turno.
     readonly property int toolResultCap:
         Math.max(1500, Math.min(12000, Math.round(charBudget / 6)))
 
-    // ── Cuántas herramientas se le enseñan de golpe ──────────────────────────
-    // Casi cuarenta esquemas son mucho ruido para un modelo pequeño: le comen
-    // contexto y le hacen elegir peor. Con ventana holgada se le enseñan todas;
-    // con una ventana modesta, un núcleo fijo más las que vengan a cuento.
-    // Recortar aquí NO quita capacidades: el ejecutor actúa por nombre, así que
-    // si el modelo nombra una que no iba en la lista, funciona igual — esto es
-    // una sugerencia, no un muro.
+    // Muchos esquemas son ruido para un modelo pequeño: le comen contexto y le
+    // hacen elegir peor. Con ventana holgada se le enseñan todas; con una modesta,
+    // un núcleo fijo más las que vengan a cuento.
+    //
+    // Recortar aquí no quita capacidades: el ejecutor actúa por nombre, así que si
+    // el modelo nombra una que no iba en la lista funciona igual. Es una
+    // sugerencia, no un muro.
     readonly property int maxTools:
         contextTokens < 16000 ? 12 : contextTokens < 64000 ? 20 : 0    // 0 = todas
     readonly property var coreTools: ["ask_user", "todo_write", "run_command",
                                       "read_file", "write_file", "edit_file",
                                       "edit_lines", "list_dir", "grep_files"]
 
-    // Ordena por relevancia al último mensaje y recorta, dejando siempre el
-    // núcleo y lo que ya venía filtrado por modo/política.
+    // Ordena por relevancia al último mensaje y recorta, dejando siempre el núcleo
+    // y lo que ya venía filtrado por modo o política.
     function selectTools(defs) {
         if (maxTools <= 0 || defs.length <= maxTools)
             return defs
@@ -305,31 +284,27 @@ Singleton {
         return core.concat(picked)
     }
 
-    // ── Transporte ───────────────────────────────────────────────────────────
-    // Cabecera de credencial: Bearer si hay clave (también en los servidores
-    // propios con token) más la cabecera extra que pida la pasarela.
-    // (Aquí vivía authArgs(), que devolvía las cabeceras como argumentos de
-    // curl. Se ha ido entera: las credenciales ya no pasan por el argv en
-    // ningún camino — ni en el envío, ni en la compactación, ni en el
-    // subagente, ni en la sonda. Lo arma Payload.js en un fichero de
-    // configuración que escribe el propio shell.)
-    // Opciones de red del transporte: certificado no verificable (servidor propio
-    // con TLS autofirmado). Solo donde el usuario pone la URL: nadie necesita
-    // saltarse la verificación contra Google u OpenRouter.
+    // Cabecera de credencial: Bearer si hay clave —también en los servidores
+    // propios con token— más la cabecera extra que pida la pasarela.
+    //
+    // Las credenciales no pasan por el argv en ningún camino: las arma Payload.js
+    // en un fichero de configuración que escribe el propio shell.
+    // Opciones de red del transporte: certificado no verificable para un servidor
+    // propio con TLS autofirmado. Solo donde el usuario pone la URL, porque nadie
+    // necesita saltarse la verificación contra un proveedor público.
     function netArgs() {
         return (Settings.aiInsecureTls && provider.userUrl) ? ["-k"] : []
     }
 
-    // El argv completo de una llamada al /chat/completions. Lo comparten el
-    // streaming del panel, la compactación y el subagente: antes cada uno armaba
-    // su copia del mismo curl y las credenciales, los tiempos o el "-k" podían
-    // divergir entre los tres caminos. 15 s para conectar (VPN, túnel, arranque
-    // perezoso del modelo) y el tope total que pida cada uso.
-    // Devuelve { cmd, env, body }. El cuerpo NO viaja en el comando: quien llama
-    // lo escribe en la entrada estándar del proceso y la cierra. Ver el porqué
-    // entero en Payload.js — resumido: el argv es de lectura pública y además
-    // tiene un tope de 128 kB por argumento, así que la conversación completa
-    // ahí dentro era a la vez una fuga y un fallo.
+    // El argv completo de una llamada al /chat/completions, compartido por el
+    // streaming del panel, la compactación y el subagente, para que las
+    // credenciales, los tiempos y las opciones de TLS no diverjan entre los tres
+    // caminos.
+    //
+    // Devuelve { cmd, env, body }. El cuerpo no viaja en el comando: quien llama lo
+    // escribe en la entrada estándar del proceso y la cierra. El argv es de lectura
+    // pública y además tiene un tope por argumento, así que la conversación
+    // completa ahí dentro sería a la vez una fuga y un fallo.
     function chatCommand(req, maxTime) {
         return PL.transport(req, {
             url: endpoint,
@@ -343,8 +318,8 @@ Singleton {
     }
     function transportError(code) { return PL.transportError(code) }
 
-    // La sonda del catálogo, con las MISMAS credenciales y por la misma jaula:
-    // el botón "Probar" tiene que probar exactamente lo que va a viajar.
+    // La sonda del catálogo, con las mismas credenciales y por la misma jaula: el
+    // botón "Probar" tiene que probar exactamente lo que va a viajar.
     function probeCommand() {
         return PL.probeTransport({
             url: modelsUrl,
@@ -355,9 +330,8 @@ Singleton {
         })
     }
 
-    // ── Política de aprobación ───────────────────────────────────────────────
-    // UN control en vez de cuarenta: el usuario dice hasta dónde llega el agente
-    // y ToolPolicy.js reparte según la clase de riesgo de cada herramienta.
+    // Un control en vez de cuarenta: el usuario dice hasta dónde llega el agente y
+    // ToolPolicy.js reparte según la clase de riesgo de cada herramienta.
     readonly property string approvalMode: TP.mode(Settings.aiApproval)
 
     function riskClass(name)        { return TP.riskClass(name) }
@@ -378,34 +352,32 @@ Singleton {
     }
     function clearToolPolicies() { Settings.aiToolPolicies = ({}) }
 
-    // ── Herramientas: catálogo y jaula ───────────────────────────────────────
-    // Las que el modelo puede PROPONER en modo agente. Ejecutar, solo tras
-    // aprobación expresa — salvo las de solo lectura si el usuario aflojó la
-    // correa.
+    // Las que el modelo puede proponer en modo agente. Ejecutar, solo tras
+    // aprobación expresa, salvo las de solo lectura si se aflojó la correa.
     readonly property var toolDefs: TD.core().concat(sysQueryDefs).concat(sysActionDefs)
      .concat(sshQueryDefs).concat(sshActionDefs).concat(TD.dev())
 
-    // Las nuestras MÁS las de los servidores MCP, para la lista de permisos.
-    // Van aparte de `toolDefs` a propósito: esa es la que arma la petición y no
-    // debe cambiar. Pero la lista de permisos sí las necesita — sin ellas no
-    // había ninguna forma de decirle al harness "de este servidor me fío",
-    // y como una herramienta MCP tampoco puede auto-aprobarse por su nombre
-    // (ver ToolPolicy), la única salida habría sido una tarjeta por llamada
-    // para siempre. Un permiso que no se puede conceder no es una defensa: es
-    // una molestia que acaba en modo automático para todo.
+    // Las propias más las de los servidores MCP, para la lista de permisos. Van
+    // aparte de `toolDefs`, que es la que arma la petición y no debe cambiar.
+    //
+    // La lista de permisos sí las necesita: sin ellas no habría forma de decir "de
+    // este servidor me fío", y como una herramienta MCP tampoco puede
+    // auto-aprobarse por su nombre, la única salida sería una tarjeta por llamada
+    // para siempre. Un permiso que no se puede conceder no es una defensa, es una
+    // molestia que acaba en modo automático para todo.
     readonly property var policyToolDefs:
         toolDefs.concat(mcpClient ? mcpClient.toolDefs : [])
 
-    // Dos familias con reglas distintas. Las CONSULTAS no cambian nada del
-    // sistema: cuentan como lectura para la auto-aprobación y también las hereda
-    // el subagente, que así sabe diagnosticar solo. Las ACCIONES (parar
-    // servicios, matar procesos) siempre nacen con tarjeta.
+    // Dos familias con reglas distintas. Las consultas no cambian nada del
+    // sistema: cuentan como lectura para la auto-aprobación y las hereda el
+    // subagente, que así sabe diagnosticar solo. Las acciones —parar servicios,
+    // matar procesos— siempre nacen con tarjeta.
     readonly property var sysQueryDefs: TD.sysQuery()
     readonly property var sysActionDefs: TD.sysAction()
-    // Herramientas de servidores remotos. Funcionan SOLO CON LO QUE DIGA EL
-    // MENSAJE: 'host' admite un destino suelto ([usuario@]host[:puerto]) o el
-    // nombre de uno guardado, y user/port/password de la llamada mandan sobre lo
-    // guardado. Guardar servidores es comodidad, no requisito.
+    // Herramientas de servidores remotos. Funcionan solo con lo que diga el
+    // mensaje: 'host' admite un destino suelto o el nombre de uno guardado, y
+    // user, port y password de la llamada mandan sobre lo guardado. Guardar
+    // servidores es comodidad, no requisito.
     readonly property var sshQueryDefs: TD.sshQuery()
     readonly property var sshActionDefs: TD.sshAction()
 
@@ -413,15 +385,15 @@ Singleton {
     // el sistema y consultar servidores remotos son las tres familias que no
     // cambian nada. Se juntan aquí para que exista UNA respuesta a "¿qué puede
     // hacer algo que no toca nada?", y de ella cuelgan tanto los esquemas que ve
-    // un subagente como el constructor de comandos. Antes cada uno llevaba su
-    // copia y ya habían divergido.
+    // un subagente como el constructor de comandos, en vez de una copia por
+    // consumidor que acabaría divergiendo.
     readonly property var _roNames: ["read_file", "read_files", "list_dir",
                                      "grep_files", "glob_files", "fetch_url"]
     readonly property var readOnlyDefs:
         TD.core().filter(d => _roNames.indexOf(d["function"].name) !== -1)
           .concat(sysQueryDefs).concat(sshQueryDefs)
-          // La búsqueda estructural tampoco cambia nada: el subagente y la
-          // celda de Python la heredan igual que grep.
+          // La búsqueda estructural tampoco cambia nada: el subagente y la celda
+          // de Python la heredan igual que grep.
           .concat(TD.dev().filter(d => d["function"].name === "ast_search"))
 
     // Lo que necesitan los constructores de comando para trabajar sin saber nada
@@ -433,10 +405,9 @@ Singleton {
         haveSshpass: keys.haveSshpass
     })
 
-    // ── La búsqueda web ──────────────────────────────────────────────────────
     // Todo lo que WebSearch.js necesita para decidir a quién preguntar. La
-    // instancia del ARGUMENTO va aparte porque manda sobre el ajuste: si el
-    // usuario nombra su SearXNG en el mensaje, se usa ese y punto.
+    // instancia del argumento va aparte porque manda sobre el ajuste: si el
+    // usuario nombra su SearXNG en el mensaje, se usa ese.
     function searchCtx(instancia) {
         return ({ instancia: String(instancia || ""),
                   url: Settings.aiSearchUrl,
@@ -444,20 +415,20 @@ Singleton {
                   key: keys.searchKey })
     }
     // La clave del buscador se expone para que el ejecutor pueda levantar su
-    // pestillo de avería en cuanto cambie: si acabas de pegar la clave, lo justo
-    // es volver a intentarlo sin cambiar de conversación.
+    // pestillo de avería en cuanto cambie: recién pegada la clave, lo justo es
+    // volver a intentarlo sin cambiar de conversación.
     readonly property string searchKey: keys.searchKey
 
-    // Cómo se llama la fuente preferida, y si esa acepta clave. Lo consultan los
-    // ajustes: un campo de clave rotulado "Brave Search" cuando el elegido es
-    // Mojeek no confunde un poco, confunde del todo.
+    // Cómo se llama la fuente preferida y si acepta clave. Lo consultan los
+    // ajustes: un campo de clave rotulado con el nombre de otro buscador confunde
+    // del todo.
     readonly property string searchBackendLabel: WS.labelOf(Settings.aiSearchBackend)
     readonly property bool searchTakesKey:
         ["brave", "tavily", "exa", "kagi"].indexOf(Settings.aiSearchBackend) !== -1
 
-    // A cuántas voces se pregunta. Con la fusión por consenso, "configurado" ya
-    // no es un sí o un no: siempre hay al menos DuckDuckGo, y cada fuente que
-    // añadas mejora la ordenación (lo que coincide entre varias sube).
+    // A cuántas voces se pregunta. Con la fusión por consenso, "configurado" no es
+    // un sí o un no: siempre hay al menos una fuente, y cada una que se añada
+    // mejora la ordenación, porque lo que coincide entre varias sube.
     readonly property var searchSources: {
         // Se nombran las dependencias para que la lista se recalcule sola.
         const _ = [Settings.aiSearchBackend, keys.searchKey]
@@ -468,9 +439,9 @@ Singleton {
                           TU.normalizeSearchBase)
     }
 
-    // El SearXNG de esta máquina, si lo hay. "" = ninguno. Se comprueba al
-    // arrancar y cada vez que alguien abre los ajustes de búsqueda: levantar uno
-    // no debería obligar a reiniciar el shell para que se entere.
+    // El SearXNG de esta máquina, si lo hay. Se comprueba al arrancar y cada vez
+    // que se abren los ajustes de búsqueda: levantar uno no debería obligar a
+    // reiniciar el shell.
     property string searchLocal: ""
     function probeSearchLocal() {
         const p = WS.localProbe()
@@ -485,28 +456,26 @@ Singleton {
         onExited: ai.searchLocal = (localProbeOut.text || "").trim()
     }
 
-    // El trato del texto que viene de fuera, en un solo sitio: lo usan el
-    // ejecutor y también los subagentes, que leen la web igual que su jefe.
+    // El trato del texto que viene de fuera, en un solo sitio: lo usan el ejecutor
+    // y también los subagentes, que leen la web igual que su jefe.
     function searchFailed(salida) { return WS.failed(salida) }
     function searchFailureText(salida) { return WS.failureText(salida) }
     function stripFetchMark(salida) {
         return String(salida).replace(LT.FETCH_KO, "").trim()
     }
 
-    // El constructor correspondiente: prueba las tres familias en orden. Devuelve
-    // {cmd,env} | {error} | null (null = no es de solo lectura).
+    // El constructor correspondiente, probando las tres familias en orden.
+    // Devuelve {cmd,env} | {error} | null, donde null es "no es de solo lectura".
     function readOnlyCommand(tool, args) {
         return LT.sysQuery(tool, args, toolCtx)
             || RT.query(tool, args, toolCtx)
             || LT.files(tool, args, toolCtx)
     }
 
-    // ── La puerta de los subagentes ──────────────────────────────────────────
-    // Lo que un subagente puede ANUNCIAR y lo que puede EJECUTAR salen de la
-    // misma concesión y de la misma lista. Que sean dos funciones y no una es
-    // solo porque una devuelve esquemas y la otra comandos: si divergieran,
-    // existiría una herramienta ejecutable que nadie anunció, que es
-    // exactamente el agujero que esto viene a cerrar.
+    // Lo que un subagente puede anunciar y lo que puede ejecutar salen de la misma
+    // concesión y de la misma lista. Son dos funciones solo porque una devuelve
+    // esquemas y la otra comandos: si divergieran, existiría una herramienta
+    // ejecutable que nadie anunció.
     readonly property var _subExtraDefs:
         TD.core().filter(d => TP.SUB_ESCRITURA.indexOf(d["function"].name) !== -1
                               || d["function"].name === "web_search")
@@ -519,9 +488,9 @@ Singleton {
                  .filter(d => TP.subagentAllows(d["function"].name, grant))
     }
 
-    // {cmd,env} | {error} | null (null = fuera de sus permisos). Dos paredes
-    // distintas: se lee dentro de la RAÍZ y se escribe dentro del TALLER, que
-    // nunca es la carpeta viva del usuario.
+    // {cmd,env} | {error} | null, donde null es "fuera de sus permisos". Dos
+    // paredes distintas: se lee dentro de la raíz y se escribe dentro del taller,
+    // que nunca es la carpeta viva del usuario.
     function subagentCommand(tool, args, grant, ws) {
         if (!TP.subagentAllows(tool, grant))
             return null
@@ -539,9 +508,9 @@ Singleton {
             return LT.writes(tool, p, args, bak, ws.undoDir)
         }
         // La búsqueda web no la construye ninguna de las tres familias, así que
-        // hasta ahora un subagente con permiso de red la tenía ANUNCIADA y le
-        // rebotaba con "fuera de tus permisos" al usarla: justo la herramienta
-        // por la que se delega una investigación.
+        // se añade aquí: sin esto, un subagente con permiso de red la tendría
+        // anunciada y le rebotaría al usarla, siendo la herramienta por la que se
+        // delega una investigación.
         if (tool === "web_search")
             return WS.command(args.query, searchCtx(args.instance),
                               TU.normalizeSearchBase, args)
@@ -551,8 +520,7 @@ Singleton {
             || LT.files(tool, args, rctx)
     }
 
-    // La misma resolución de rutas, para quien no construye un comando (el lsp
-    // pide la ruta ya absoluta).
+    // La misma resolución de rutas para quien no construye un comando.
     function workPath(p, root) {
         return LT.safePath(p, Quickshell.env("HOME"), root)
     }
@@ -563,21 +531,20 @@ Singleton {
 
     function redactSecrets(text) { return TU.redactSecrets(text) }
 
-    // Los nombres que el modelo puede usar de verdad, para recordárselos cuando
-    // se inventa uno.
+    // Los nombres que el modelo puede usar de verdad, para recordárselos cuando se
+    // inventa uno.
     function knownToolNames() {
         return toolDefs.map(d => d["function"].name)
                  .concat(mcpClient.toolDefs.map(d => d["function"].name))
     }
 
-    // Llamadas escritas EN EL TEXTO (los modelos locales lo hacen a menudo). Los
-    // nombres conocidos se pasan desde aquí: así TextUtils no depende del
-    // harness.
+    // Llamadas escritas en el texto, que los modelos locales hacen a menudo. Los
+    // nombres conocidos se pasan desde aquí, así TextUtils no depende del harness.
     function extractTextToolCalls(raw) {
         return TU.extractTextToolCalls(raw, knownToolNames())
     }
 
-    // ── Prompt de sistema y personas ─────────────────────────────────────────
+    // Prompt de sistema y personas
     readonly property var personas: ({
         normal:   "",
         concise:  " Responde en el mínimo de palabras que resuelva la duda; sin preámbulos ni cierres.",
@@ -585,10 +552,10 @@ Singleton {
         reviewer: " Actúa como revisor de código: señala problemas concretos (correctitud, seguridad, rendimiento) antes que estilo, y propone el arreglo."
     })
 
-    // Dos modos: charlar o actuar. NO hay un tercer modo "plan" — planificar no
-    // es un ajuste que el usuario tenga que elegir de antemano, sino una decisión
-    // del agente al leer el encargo: si la tarea lo merece, llama a propose_plan
-    // y espera el visto bueno.
+    // Dos modos: charlar o actuar. Planificar no es un tercero, porque no es un
+    // ajuste que haya que elegir de antemano sino una decisión del agente al leer
+    // el encargo: si la tarea lo merece, llama a propose_plan y espera el visto
+    // bueno.
     readonly property bool agentMode: Settings.aiMode === "agent"
 
     readonly property string systemPrompt:
@@ -610,9 +577,10 @@ Singleton {
               + "aprueba el usuario. Los entregables (informes, scripts) "
               + "escríbelos como archivo con write_file."
               // El ruido de la web es el que más contexto quema: una página son
-              // veinte mil caracteres que se reenvían en TODAS las rondas
-              // siguientes, y de los que sirven dos frases. Investigar en un
-              // subagente deja ese ruido en su contexto y devuelve la conclusión.
+              // decenas de miles de caracteres que se reenvían en todas las
+              // rondas siguientes y de los que sirven dos frases. Investigar en
+              // un subagente deja ese ruido en su contexto y devuelve la
+              // conclusión.
               + " INVESTIGAR EN LA WEB: para un dato suelto, web_search y listo. "
               + "Si hace falta abrir varias páginas o comparar fuentes, delega "
               + "en un subagente con role:'research' y capabilities:['net']: lo "
@@ -636,10 +604,10 @@ Singleton {
 
     // Lo último que preguntó el usuario: la consulta contra la que se mide la
     // relevancia de la memoria, los instintos, las habilidades y el recorte de
-    // herramientas. Se actualiza al empujar su mensaje.
+    // herramientas.
     property string lastUserText: ""
 
-    // ── Las piezas ───────────────────────────────────────────────────────────
+    // Las piezas
     KeyStore { id: keys }
 
     ConnectionProbe { id: probe; svc: ai }
@@ -657,8 +625,8 @@ Singleton {
     SkillStore {
         id: skillStore
         svc: ai
-        // El catálogo se reescaneó porque el modelo pidió una habilidad que aún
-        // no estaba: ahora sí aparece, así que se reintenta su tarjeta.
+        // El catálogo se reescaneó porque el modelo pidió una habilidad que aún no
+        // estaba: ahora sí aparece, así que se reintenta su tarjeta.
         onRescanned: (pending, want) => {
             if (pending >= 0)
                 tools.approveTool(pending)
@@ -670,25 +638,24 @@ Singleton {
     ConversationStore {
         id: conv
         svc: ai
-        // El harness está en pie y con su historial: momento de session_start
-        // (montar algo, precalentar, avisar) y de recolocar la habilidad que el
-        // hilo restaurado traía a cuento.
+        // El harness está en pie y con su historial: momento de session_start y de
+        // recolocar la habilidad que el hilo restaurado traía a cuento.
         onRestored: {
             ai._restoreLastUser()
             hookRunner.fire("session_start", "", {})
         }
     }
 
-    // Las tres piezas de desarrollo (ideas de oh-my-pi): servidores de
-    // lenguaje vivos, depurador DAP y el Python persistente con loopback.
+    // Las tres piezas de desarrollo: servidores de lenguaje vivos, depurador DAP y
+    // el Python persistente con loopback.
     LspManager { id: lspMgr; svc: ai; backupDir: tools.undoDir }
     DebugSession { id: dbgSess; svc: ai }
     PersistentRepl { id: replKernel; svc: ai; lsp: lspMgr }
     JobRunner { id: jobRunner; svc: ai }
     AuditLog { id: auditLog; svc: ai }
 
-    // El segundo par de ojos. Va DESPUÉS de la auditoría porque escribe en ella,
-    // y antes del ejecutor porque este le pregunta.
+    // El segundo par de ojos. Va después de la auditoría porque escribe en ella, y
+    // antes del ejecutor porque este le pregunta.
     AgentSupervisor { id: supervisor; svc: ai; conv: conv; audit: auditLog }
 
     ToolRunner {
@@ -709,12 +676,11 @@ Singleton {
 
     Attachments { id: att; svc: ai }
 
-    // ── Superficie pública ───────────────────────────────────────────────────
-    // El panel habla SOLO con AiService. Los alias cuestan cero (son la misma
-    // propiedad, no una copia) y permiten mover una pieza de sitio sin tocar ni
-    // una línea de la interfaz.
+    // El panel habla solo con AiService. Los alias cuestan cero —son la misma
+    // propiedad, no una copia— y permiten mover una pieza de sitio sin tocar la
+    // interfaz.
     property alias haveKeyring: keys.haveKeyring
-    // Si el llavero falló al guardar, dónde ha quedado la clave. Vacío = todo
+    // Si el llavero falló al guardar, dónde ha quedado la clave; vacío = todo
     // bien. Lo enseña Ajustes: prometer "se guarda en el llavero" cuando no ha
     // sido así es peor que no prometer nada.
     property alias keyringWarn: keys.keyringWarn
@@ -754,26 +720,24 @@ Singleton {
 
     property alias toolRounds: tools.toolRounds
     property alias maxToolRounds: tools.maxToolRounds
-    // Qué tarjeta se está ejecutando ahora mismo, y desde cuándo, para que la
-    // interfaz pueda decirlo. Solo corre una a la vez, así que con el índice
-    // basta.
+    // Qué tarjeta se está ejecutando y desde cuándo, para que la interfaz pueda
+    // decirlo. Solo corre una a la vez, así que basta con el índice.
     property alias toolRunningIndex: tools.runningIndex
     property alias toolRunningSince: tools.runningSince
     // ¿Se ha dado ya por perdido el buscador en esta sesión? Los ajustes lo
     // enseñan: es la diferencia entre "no encuentro nada" y "no puedo buscar".
     property alias searchBroken: tools.searchBroken
     function approveTool(i) { tools.approveTool(i) }
-    // La aprobación con un clic del usuario: se distingue de la automática para
-    // que el registro de auditoría diga quién dejó pasar cada cosa.
+    // La aprobación con un clic, distinta de la automática para que el registro de
+    // auditoría diga quién dejó pasar cada cosa.
     function approveToolByUser(i) { tools.approveToolByUser(i) }
-    // Puerta de registro para lo que se ejecuta SIN tarjeta (subagentes y la
-    // celda de Python por el loopback).
+    // Puerta de registro para lo que se ejecuta sin tarjeta: subagentes y la celda
+    // de Python por el loopback.
     function auditRecord(o) { auditLog.record(o) }
 
-    // ── El supervisor, para la interfaz ──────────────────────────────────────
-    // El veredicto de una tarjeta ({veredicto, riesgo, irreversible, ajuste,
-    // fallo}) o null si aún no hay. La tarjeta ya está en pantalla mientras el
-    // guardián piensa, así que esto pasa de null a objeto y la banda aparece.
+    // El veredicto de una tarjeta, o null si aún no hay. La tarjeta ya está en
+    // pantalla mientras el guardián piensa, así que esto pasa de null a objeto y la
+    // banda aparece.
     function supervisorOf(i) { return tools.supVerdict[i] || null }
     readonly property int supervisorWatching: supervisor.reviewing
     readonly property string supervisorMode: supervisor.modo
@@ -785,9 +749,8 @@ Singleton {
         return m ? tools.dangerOf(m.toolName, m.toolArgs) : ""
     }
     function approveToolAlways(i) { tools.approveToolAlways(i) }
-    // La ráfaga de lecturas: aprueba esta llamada y las iguales de este turno
-    // (misma herramienta, mismo destino, solo lectura). La tarjeta pregunta
-    // antes con canBurstCall si tiene sentido ofrecerla.
+    // La ráfaga de lecturas: aprueba esta llamada y las iguales de este turno. La
+    // tarjeta pregunta antes con canBurstCall si tiene sentido ofrecerla.
     function approveToolBurst(i) { tools.approveToolBurst(i) }
     function canBurstCall(name, argsJson) { return tools.canBurst(name, argsJson) }
     function rejectTool(i) { tools.rejectTool(i) }
@@ -802,31 +765,27 @@ Singleton {
     property alias liveThink: chat.liveThink
     function isTransient(msg) { return chat.transient(msg) }
     function start() { chat.start() }
-    // PARAR EL TURNO ENTERO, como el ESC de Claude Code. El botón antes solo
-    // mataba la petición en vuelo, así que parar mientras el agente trabajaba
-    // dejaba vivo todo lo demás: las tarjetas ya propuestas seguían esperando
-    // aprobación, la herramienta en marcha seguía corriendo y la cola de
-    // mensajes arrancaba el turno siguiente. Un botón de parar que no para es
-    // peor que no tenerlo: se pulsa creyendo que se ha cortado.
+    // Para el turno entero y no solo la petición en vuelo: sin eso, parar mientras
+    // el agente trabaja deja las tarjetas propuestas esperando aprobación, la
+    // herramienta en marcha corriendo y la cola arrancando el turno siguiente.
     //
-    // Devuelve si había algo que parar, para que quien llama (la tecla ESC)
-    // sepa si el gesto se ha consumido aquí o tiene que hacer otra cosa.
+    // Devuelve si había algo que parar, para que quien llama sepa si el gesto se ha
+    // consumido aquí.
     function interrupt() {
-        // "Pensando" cuenta como estar haciendo algo: el supervisor juzgando
-        // una tarjeta es un turno vivo aunque el modelo ya haya callado, y ESC
-        // tiene que cortarlo ahí también — si no, la primera pulsación cerraba
-        // el panel dejando el trabajo por detrás.
+        // "Pensando" cuenta como estar haciendo algo: el supervisor juzgando una
+        // tarjeta es un turno vivo aunque el modelo haya callado, y ESC tiene que
+        // cortarlo ahí también.
         const habia = busy || compacting || tools.runningIndex >= 0
                    || sendQueue.length > 0 || tools.hasPending()
                    || supervisor.reviewing >= 0
-        // La cola primero: si no, el turno que se corta arrastra al siguiente
-        // y parece que no ha parado nada.
+        // La cola primero: si no, el turno que se corta arrastra al siguiente y
+        // parece que no ha parado nada.
         sendQueue = []
         chat.stop()
         comp.cancel()
         tools.cancelAll()
-        // El supervisor también: su veredicto en vuelo pertenece a una tarjeta
-        // que acaba de morir, y dejarlo llegar la reanimaría.
+        // El supervisor también: su veredicto en vuelo pertenece a una tarjeta que
+        // acaba de morir, y dejarlo llegar la reanimaría.
         supervisor.cancel()
         return habia
     }
@@ -835,8 +794,8 @@ Singleton {
     property alias compacting: comp.compacting
     function compact() { comp.compact("") }
     // Podar sin resumir: recorta los resultados de herramienta que ya no hacen
-    // falta literalmente y deja el hilo intacto. No cuesta una llamada. A mano
-    // va sin bridas; en automático manda la caché de prefijo.
+    // falta literalmente y deja el hilo intacto, sin coste de llamada. A mano va
+    // sin bridas; en automático manda la caché de prefijo.
     function prune() { return comp.prune(false) }
     // Sacudir: archiva a fichero los bloques enormes de los mensajes y deja la
     // ruta en su hueco. Tampoco cuesta una llamada, y se puede recuperar.
@@ -844,19 +803,16 @@ Singleton {
     // Traspasar: documento de continuación y conversación nueva.
     function handoff() { return comp.handoff() }
 
-    // EL CONTEXTO DESBORDÓ. El modelo dice que no cabe lo que le mandamos.
-    // Hasta ahora eso era un error rojo y se acabó el turno; ahora se compacta
-    // y se REINTENTA, que es lo que separa un harness que se salva solo de uno
-    // que se rinde. Es viable porque el resumen ya no manda el historial entero
-    // sino una transcripción acotada: cabe justo cuando el turno no cabía.
+    // El contexto desbordó: el modelo dice que no cabe lo que se le mandó. En vez
+    // de terminar el turno con un error, se compacta y se reintenta. Es viable
+    // porque el resumen no manda el historial entero sino una transcripción
+    // acotada: cabe justo cuando el turno no cabía.
     function recoverOverflow() {
         if (comp.compacting)
             return false
-        // Compactar reescribe el historial, y eso no se hace a espaldas de
-        // quien pidió llevar el contexto a mano. Con "Auto" se rescata solo;
-        // con "Manual" o "Avisar" se dice qué pasó y qué tecla lo arregla, que
-        // ya es infinitamente mejor que un error del proveedor que el usuario
-        // no puede interpretar.
+        // Compactar reescribe el historial, y eso no se hace a espaldas de quien
+        // pidió llevar el contexto a mano. Con "Auto" se rescata solo; con
+        // "Manual" o "Avisar" se dice qué pasó y qué tecla lo arregla.
         if (Settings.aiAutoCompact !== "auto") {
             conv.pushInfo(I18n.tr("Context overflowed: the turn did not go out. Run /compact (or /prune) and send it again."))
             return false
@@ -865,10 +821,9 @@ Singleton {
         return comp.compact("overflow")
     }
 
-    // A MITAD DE TURNO. Un bucle de veinte rondas de herramienta puede llenar la
-    // ventana sin que el turno haya terminado, y hasta ahora la única
-    // comprobación estaba al final: se desbordaba antes de llegar a ella. El
-    // coordinador de herramientas llama aquí en su frontera segura —lote
+    // A mitad de turno: un bucle de muchas rondas de herramienta puede llenar la
+    // ventana sin que el turno haya terminado, y una comprobación solo al final
+    // llegaría tarde. El coordinador llama aquí en su frontera segura —lote
     // resuelto, nada pendiente— justo antes de devolverle la palabra al modelo.
     function maybeCompactMidTurn() {
         if (Settings.aiAutoCompact !== "auto" || comp.compacting)
@@ -879,7 +834,7 @@ Singleton {
     }
 
     // Los trabajos en segundo plano: el panel enseña cuántos corren y puede
-    // cortarlos (el freno de mano del usuario, sin pasar por el modelo).
+    // cortarlos, que es el freno de mano del usuario sin pasar por el modelo.
     property alias jobs: jobRunner.jobs
     readonly property var runningJobs: jobRunner.running
     function stopJob(id) { jobRunner.ctl({ action: "kill", id: id }, () => {}) }
@@ -890,43 +845,37 @@ Singleton {
     function attachSelection() { att.attachSelection() }
     function attachScreenshot() { att.attachScreenshot() }
 
-    // ── Estado del turno y de la interfaz ────────────────────────────────────
     // Borrador y cola viven aquí y no en el panel, porque el panel se destruye al
-    // cerrar (PanelSlot) y una captura CIERRA el panel.
+    // cerrarse y una captura lo cierra.
     property string draft: ""
     // Cola de envío: puedes seguir escribiendo mientras responde; lo tuyo sale en
-    // cuanto termina (la cola de mensajes de Claude Code).
+    // cuanto termina.
     property var sendQueue: []
-    // El plan visible del turno (herramienta todo_write, el TodoWrite de Claude
-    // Code): [{content, status}]. Es efímero por diseño — pertenece a la tarea en
-    // curso, no al historial.
+    // El plan visible del turno, de la herramienta todo_write: [{content, status}].
+    // Es efímero por diseño: pertenece a la tarea en curso, no al historial.
     property var todos: []
-    // Las imágenes del turno EN CURSO. Los adjuntos de texto viajan DENTRO del
-    // mensaje (y quedan en el historial); las imágenes solo acompañan a este
-    // turno — reenviar pantallazos viejos en cada pregunta quemaría la cuota
-    // gratuita a lo tonto.
+    // Las imágenes del turno en curso. Los adjuntos de texto viajan dentro del
+    // mensaje y quedan en el historial; las imágenes solo acompañan a este turno,
+    // porque reenviar pantallazos viejos en cada pregunta quemaría la cuota.
     property var sendImages: []
 
     signal replied()
     // El panel escucha esto para poner el texto a editar en la entrada.
     signal editRequest(string text)
 
-    // ── Los subagentes ───────────────────────────────────────────────────────
-    // VARIOS a la vez (el fan-out en paralelo de oh-my-pi): el modelo puede
-    // pedir tres investigaciones en una ronda y las tres corren juntas, cada una
-    // resolviendo su propia tarjeta cuando termina. Un tope evita que una ronda
-    // desbocada abra veinte modelos. El panel enseña cuántos hay y qué hacen.
+    // Varios subagentes a la vez: el modelo puede pedir tres investigaciones en
+    // una ronda y las tres corren juntas, cada una resolviendo su tarjeta al
+    // terminar. Un tope evita que una ronda desbocada abra veinte modelos.
     property var activeSubs: []
     readonly property int maxConcurrentSubs: 4
-    // Compatibilidad con el panel y con quien mire "el subagente": el primero
-    // que siga vivo, o null. Así la barra existente sigue funcionando y además
-    // puede contar activeSubs.length.
+    // Para quien mire "el subagente": el primero que siga vivo, o null. Quien
+    // quiera todos cuenta activeSubs.length.
     readonly property var activeSub: activeSubs.length > 0 ? activeSubs[0] : null
     readonly property Component _subComp: Component { SubAgent {} }
 
-    // La concesión que TENDRÍA un subagente con estos argumentos. La consulta el
-    // ejecutor antes de arrancarlo: si incluye escritura, la tarjeta se enseña
-    // sí o sí, y dice exactamente qué se está concediendo.
+    // La concesión que tendría un subagente con estos argumentos. La consulta el
+    // ejecutor antes de arrancarlo: si incluye escritura, la tarjeta se enseña sí o
+    // sí y dice exactamente qué se está concediendo.
     function subagentGrantFor(opts) {
         const role = TP.SUB_ROLES.indexOf(String(opts.role || "")) !== -1
                      ? String(opts.role) : "research"
@@ -945,22 +894,20 @@ Singleton {
         const role = TP.SUB_ROLES.indexOf(String(opts.role || "")) !== -1
                      ? String(opts.role) : "research"
         // El tope por defecto depende del papel. Rastrear en internet se agota
-        // pronto: lo que se va a encontrar aparece en las tres primeras rondas,
-        // y a partir de ahí el modelo reformula la misma consulta cada vez con
-        // más contexto encima. Revisar código o diagnosticar una avería sí
-        // avanza ronda a ronda, y ahí ocho siguen teniendo sentido.
+        // pronto —lo que se va a encontrar aparece en las primeras rondas y a
+        // partir de ahí el modelo reformula con más contexto encima—, mientras que
+        // revisar código o diagnosticar una avería sí avanza ronda a ronda.
         const porDefecto = role === "research" ? 5 : 8
         const mr = Math.max(1, Math.min(12,
                                         parseInt(opts.max_rounds) || porDefecto))
-        // El esquema puede llegar como objeto o como texto: un modelo local
-        // manda cualquiera de los dos, y rechazar el encargo por eso sería
-        // absurdo.
+        // El esquema puede llegar como objeto o como texto: un modelo local manda
+        // cualquiera de los dos, y rechazar el encargo por eso sería absurdo.
         let esquema = opts.output_schema
         if (typeof esquema === "string")
             esquema = TU.repairJson(esquema)
         const id = "a" + Date.now().toString(36) + "-"
                  + Math.floor(Math.random() * 1679616).toString(36)
-        // La raíz que pide el jefe pasa por la MISMA comprobación que cualquier
+        // La raíz que pide el jefe pasa por la misma comprobación que cualquier
         // ruta: una carpeta de trabajo inventada no puede sacar al subagente de
         // $HOME. Si no vale, se ignora y trabaja con el alcance de siempre.
         const raiz = String(opts.workspace || "").trim() !== ""
@@ -988,10 +935,9 @@ Singleton {
         s.start()
         return ""
     }
-    // Soltar los subagentes vivos sin resolver sus tarjetas. Lo usa el vigilante
-    // del ejecutor cuando da por colgada la tarjeta de un subagente: si no, el
-    // trabajador seguiría gastando turnos del modelo redactando un informe que
-    // ya no va a leer nadie.
+    // Suelta los subagentes vivos sin resolver sus tarjetas. Lo usa el vigilante
+    // del ejecutor cuando da por colgada la tarjeta de uno: si no, seguiría
+    // gastando turnos del modelo redactando un informe que nadie va a leer.
     function dropSubagents() { _dropSub() }
     function _dropSub() {
         const subs = activeSubs
@@ -1002,7 +948,6 @@ Singleton {
         }
     }
 
-    // ── Operaciones de conversación ──────────────────────────────────────────
     // Todo lo que pertenece al HILO y no al historial: permisos dados de palabra,
     // la habilidad que acota el vocabulario, el plan a la vista, las rutas ya
     // resueltas. Cambiar de conversación sin soltarlo dejaría que un "siempre"
@@ -1013,8 +958,8 @@ Singleton {
         comp.cancel()
         tools.resetThread()
         skillStore.resetThread()
-        // La depuración y el estado del Python pertenecen al encargo: mueren
-        // con el hilo. El pool de LSP no — es por proyecto y de solo lectura.
+        // La depuración y el estado del Python pertenecen al encargo y mueren con
+        // el hilo. El pool de LSP no: es por proyecto y de solo lectura.
         dbgSess.resetThread()
         replKernel.resetThread()
         jobRunner.resetThread()
@@ -1024,12 +969,11 @@ Singleton {
         comp.warned = false
     }
 
-    // Al entrar en una conversación (cambiar, arrancar, estrenar), la consulta de
-    // relevancia vuelve a ser SU último mensaje de usuario: el orden del catálogo,
-    // la memoria y el recorte de herramientas hablan del tema de este hilo, no
-    // del de la conversación anterior. Y la habilidad que ese mensaje cargaría se
-    // recarga: retomar un hilo de SQL a medias debe retomarlo con las
-    // instrucciones de SQL puestas.
+    // Al entrar en una conversación, la consulta de relevancia vuelve a ser su
+    // último mensaje de usuario: el orden del catálogo, la memoria y el recorte de
+    // herramientas hablan del tema de este hilo. Y la habilidad que ese mensaje
+    // cargaría se recarga, para retomar un hilo a medias con sus instrucciones
+    // puestas.
     function _restoreLastUser() {
         lastUserText = conv.lastUserText()
         if (lastUserText !== "")
@@ -1045,11 +989,11 @@ Singleton {
         conv.saveNow()
     }
 
-    // /limpiar (el /clear de Claude Code): pizarra en blanco DE VERDAD. Nueva
-    // conversación archiva la actual y abre otra al lado; esto tira el hilo en
-    // curso —no queda en el historial— y con él se van el borrador, los adjuntos
-    // pendientes, la cola de envío y los contadores del turno. Lo que no toca es
-    // la memoria persistente: esa el usuario la guardó a propósito.
+    // /limpiar: pizarra en blanco de verdad. Una conversación nueva archiva la
+    // actual y abre otra al lado; esto tira el hilo en curso —no queda en el
+    // historial— y con él el borrador, los adjuntos pendientes, la cola de envío y
+    // los contadores del turno. No toca la memoria persistente, que se guardó a
+    // propósito.
     function clearConversation() {
         _resetThread()
         sendQueue = []
@@ -1129,7 +1073,7 @@ Singleton {
             }
     }
 
-    // ── Envío ────────────────────────────────────────────────────────────────
+    // Envío
     function dequeue() {
         if (busy || compacting || sendQueue.length === 0)
             return
@@ -1268,7 +1212,6 @@ Singleton {
         }
     }
 
-    // ── Exportar (entregable) ────────────────────────────────────────────────
     // La conversación entera como Markdown en tu carpeta personal.
     function exportMarkdown() {
         if (conv.messages.count === 0)

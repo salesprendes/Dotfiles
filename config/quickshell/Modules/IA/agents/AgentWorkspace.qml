@@ -2,27 +2,25 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 
-// EL TALLER de un subagente: las paredes dentro de las que trabaja.
+// El taller de un subagente: las paredes dentro de las que trabaja.
 //
-// Un subagente con escritura NO escribe encima de los archivos vivos del
-// usuario. Nunca. Escribe en un taller propio, y al terminar entrega lo que ha
-// hecho para que el agente principal —con la aprobación de siempre— decida qué
-// hacer con ello. Esa es la diferencia entre delegar y ceder el mando.
+// Un subagente con escritura no escribe encima de los archivos vivos del usuario.
+// Escribe en un taller propio y al terminar entrega lo hecho, para que el agente
+// principal decida qué hacer con ello con la aprobación de siempre. Esa es la
+// diferencia entre delegar y ceder el mando.
 //
-// Hay dos clases de taller, y se elige sola:
+// Hay dos clases de taller y se elige sola:
 //
-//   · WORKTREE. Si la raíz de trabajo está en un repositorio git, se le da un
-//     árbol de trabajo aparte en una rama nueva. El subagente ve el proyecto
-//     ENTERO y lo edita a gusto, y lo que hace se lee como un diff: git ya
-//     resuelve el aislamiento, el deshacer y el "qué cambió" mucho mejor que
-//     cualquier cosa que escribiéramos aquí. Varios subagentes a la vez no se
+//   · WORKTREE. Con la raíz de trabajo en un repositorio git, un árbol de trabajo
+//     aparte en una rama nueva: el subagente ve el proyecto entero y lo edita a
+//     gusto, y lo que hace se lee como un diff. Varios subagentes a la vez no se
 //     pisan porque cada árbol es un directorio distinto.
-//   · CUADERNO. Si no hay repositorio (o el encargo no lo quiere), una carpeta
-//     vacía suya. Sirve para lo que en realidad se pide casi siempre: producir
-//     un informe, un script, tres archivos de configuración.
+//   · CUADERNO. Sin repositorio, o si el encargo no lo quiere, una carpeta vacía
+//     suya. Sirve para lo que se pide casi siempre: un informe, un script, tres
+//     archivos de configuración.
 //
-// Leer es otra cosa: se lee dentro de la RAÍZ (por defecto $HOME, y el jefe
-// puede estrecharla). Lo que se lee no se rompe.
+// Leer es otra cosa: se lee dentro de la raíz, por defecto la carpeta personal, y
+// el jefe puede estrecharla.
 QtObject {
     id: ws
 
@@ -69,7 +67,7 @@ QtObject {
         return ""
     }
 
-    // ── Montaje ──────────────────────────────────────────────────────────────
+    // Montaje
     function prepare() {
         if (agentId === "" || agentsDir === "") {
             ws.ready = true
@@ -115,7 +113,6 @@ QtObject {
         proc.running = true
     }
 
-    // ── Recogida y desmontaje, de una vez ────────────────────────────────────
     // Qué produjo, en el formato que mejor lo cuenta: un diff si es un árbol de
     // git, la lista de archivos si es un cuaderno. Y en el mismo paso se quita
     // el árbol si está VACÍO — dejar una rama muerta en el repositorio del

@@ -8,13 +8,11 @@ import qs.Modules.IA.core
 
 // Selector de modelo: la lámina que abre el botón de la cabecera.
 //
-// Antes era una fila de ajustes reaprovechada (DropdownRow con la etiqueta
-// vacía) metida a presión bajo el título: un desplegable de sistema con el id
-// entero — "qwen/qwen3-30b-a3b:free" — cortado a la mitad. Elegir el cerebro
-// del asistente es de las tres cosas que más se tocan en el panel, y merece un
-// control propio: se busca escribiendo, se lee por NOMBRE, y los modelos van
-// agrupados por proveedor, así que cambiar de la nube a lo local es un clic en
-// otro grupo y no un viaje a la configuración.
+// Elegir el modelo es de las cosas que más se tocan en el panel, así que tiene
+// control propio en vez de una fila de ajustes reaprovechada: se busca
+// escribiendo, se lee por nombre y no por id, y los modelos van agrupados por
+// proveedor, de modo que pasar de la nube a lo local es un clic en otro grupo y
+// no un viaje a la configuración.
 ColumnLayout {
     id: sheet
 
@@ -294,7 +292,6 @@ ColumnLayout {
         }
     }
 
-    // ── OTRO ────────────────────────────────────────────────────────────────
     // El catálogo enseña lo que el servidor publica, y eso no siempre es todo:
     // un modelo recién cargado, uno servido por un proxy que no lo lista, un
     // ajuste fino propio. Esta fila era hasta ahora un truco escondido (escribir

@@ -3,18 +3,14 @@ import qs.Config
 
 // El hueco de suelta entre dos fichas del editor.
 //
-// ── POR QUÉ NO HAY DropArea AQUÍ ────────────────────────────────────────────
-// Lo había, y era código muerto: un DropArea solo reacciona al sistema de
-// Drag/Drop de QtQuick, y este arrastre lo lleva a mano un MouseArea con un
-// fantasma detrás (ver DockPinChip). Su onEntered no se disparaba jamás, así
-// que el resaltado lo hacía por completo el Connections de abajo — con el
-// agravante de que el DropArea, ahí puesto, se leía como si fuera EL mecanismo.
+// No usa DropArea: este arrastre lo lleva a mano un MouseArea con un fantasma
+// detrás, y un DropArea solo reacciona al sistema de Drag/Drop de QtQuick, así que
+// su onEntered no se dispararía nunca. Cada hueco mira dónde está el fantasma y se
+// enciende si le cae cerca.
 //
-// Cada hueco mira dónde está el fantasma y se enciende si le cae cerca. Y se
-// hace por huecos y no calculando el índice desde la coordenada X, que es lo
-// que haría el manual: las fichas llevan el NOMBRE de la app dentro, así que
-// sus anchos son muy distintos —"Kitty" mide un tercio que "Visual Studio
-// Code"— y un cálculo por posición se equivoca justo donde más se nota.
+// Por huecos y no calculando el índice desde la coordenada X: las fichas llevan el
+// nombre de la app dentro, así que sus anchos son muy distintos y un cálculo por
+// posición se equivoca justo donde más se nota.
 Item {
     id: root
 

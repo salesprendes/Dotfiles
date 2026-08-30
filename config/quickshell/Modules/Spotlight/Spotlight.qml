@@ -8,21 +8,17 @@ import qs.Config
 import qs.Services
 import "Search.js" as Search
 
-// Spotlight: buscar en todo, desde el centro de la pantalla.
+// Spotlight: buscar en todo, desde el centro de la pantalla. Se escribe y sale lo
+// que sea —una app, una cuenta resuelta, un ajuste, un emoji, algo del
+// portapapeles—, a diferencia del lanzador, que es una rejilla de aplicaciones por
+// categorías para cuando se quiere mirar.
 //
-// ── EN QUÉ SE DIFERENCIA DEL LANZADOR ───────────────────────────────────────
-// El lanzador (Panels/AppLauncher.qml) sigue existiendo y sigue en Super+Space:
-// es una rejilla de aplicaciones por categorías, para cuando sabes que quieres
-// una app y te apetece mirar. Esto es lo otro: escribes y sale lo que sea — una
-// app, una cuenta resuelta, un ajuste, un emoji, algo del portapapeles.
+// No cuelga de la barra: va centrado, porque no es un panel de la barra sino algo
+// que se pone delante de todo mientras se usa.
 //
-// Y no cuelga de la barra: va centrado, porque no es "un panel de la barra"
-// sino algo que se pone delante de todo mientras lo usas.
-//
-// ── LO QUE LO HACE ÚTIL ES EL ORDEN ─────────────────────────────────────────
-// Toda la inteligencia está en Modules/Spotlight/Search.js, que es JS puro y
-// tiene su propia batería (tests/t_busqueda.js): escalera de coincidencia,
-// acentos normalizados y frecencia con memoria del cuándo. Aquí solo se pinta.
+// Toda la inteligencia está en Modules/Spotlight/Search.js, que es JS puro:
+// escalera de coincidencia, acentos normalizados y frecencia con memoria del
+// cuándo. Aquí solo se pinta.
 PanelWindow {
     id: win
 
@@ -47,7 +43,6 @@ PanelWindow {
 
     visible: win.shown || win.progress > 0.001
 
-    // ── Apertura ─────────────────────────────────────────────────────────────
     // Un solo escalar gobierna velo, escala y opacidad, como en Popout: dos
     // animaciones sueltas acaban desincronizándose en cuanto una se interrumpe.
     property real progress: 0
@@ -74,17 +69,15 @@ PanelWindow {
     }
 
     // El foco se pide con un pulso: al abrir, la superficie aún no lo tiene del
-    // compositor y un forceActiveFocus() inmediato se pierde. Mismo patrón que
-    // el resto de paneles con buscador.
+    // compositor y un forceActiveFocus() inmediato se pierde.
     FocusPulse {
         id: focusTimer
         target: input
-        // Atado a la visibilidad: al cerrar el panel deja de
-        // insistir solo, sin tener que acordarse de pararlo.
+        // Atado a la visibilidad: al cerrar, el panel deja de insistir solo.
         active: win.shown
     }
 
-    // ── Estado de la búsqueda ────────────────────────────────────────────────
+    // Estado de la búsqueda
     property string text: ""
     property int selected: 0
 
@@ -92,14 +85,13 @@ PanelWindow {
     readonly property string mode: win.parsed.mode
     readonly property string query: win.parsed.text
 
-    // Los candidatos, CACHEADOS. Antes esto se reconstruía dentro del binding
-    // de resultados, o sea en cada pulsación de tecla: cuatrocientos objetos
-    // nuevos por letra tecleada, y el recolector detrás recogiendo los de la
-    // letra anterior. Ahora la lista solo se rehace cuando cambia el MODO (que
-    // es lo que decide de dónde salen) o cuando cambia el catálogo de apps.
+    // Los candidatos, cacheados. Reconstruirlos dentro del binding de resultados
+    // sería rehacer cientos de objetos en cada pulsación de tecla; así la lista
+    // solo se rehace cuando cambia el modo —que es lo que decide de dónde salen—
+    // o cuando cambia el catálogo de apps.
     //
-    // La consulta no entra en esta dependencia a propósito: filtrar y ordenar
-    // sí depende de lo que escribes, reunir los candidatos no.
+    // La consulta no entra en esta dependencia a propósito: filtrar y ordenar sí
+    // depende de lo que se escribe, reunir los candidatos no.
     readonly property var candidates: {
         if (!win.shown && win.progress <= 0.001)
             return []
@@ -107,22 +99,21 @@ PanelWindow {
         // sola cuando aparece o desaparece una app.
         const _ = AppCatalog.entries.length
         const __ = SettingsSearchIndex.built
-        // El modo 'calc' y 'command' SÍ dependen del texto: no son listas que
+        // Los modos de cálculo y comando sí dependen del texto: no son listas que
         // se filtran, son un resultado que se construye con lo escrito.
         return Sources.gather(win.mode, win.mode === "calc" || win.mode === "command"
                                         ? win.query : "")
     }
 
     readonly property var results: {
-        // La cuenta se resuelve fuera de la caché porque depende del texto: en
-        // modo general, teclear "45*1.21" tiene que dar 54,45 sin prefijo.
+        // La cuenta se resuelve fuera de la caché porque depende del texto: en modo
+        // general, teclear una operación tiene que dar su resultado sin prefijo.
         const extra = win.mode === "" && win.query !== ""
                       ? Sources.calc(win.query) : []
-        // Y los ARCHIVOS por lo mismo: dependen del texto, así que no pueden
-        // vivir en la caché por modo. Con "/" van sin tope —quien escribe la
-        // barra sabe que busca un archivo, y ahí una lista larga ayuda—; en el
-        // modo general con tope, para que su rastro no eche de la lista a los
-        // ajustes y las acciones.
+        // Y los archivos por lo mismo. Con "/" van sin tope —quien escribe la barra
+        // sabe que busca un archivo y ahí una lista larga ayuda— y en el modo
+        // general con tope, para que su rastro no eche de la lista a los ajustes y
+        // las acciones.
         const archivos = win.mode === "file"
                        ? Sources.files(win.query, 0)
                        : (win.mode === "" ? Sources.files(win.query,
@@ -139,15 +130,12 @@ PanelWindow {
         return ranked.map(r => r.item)
     }
 
-    // ── Secciones ────────────────────────────────────────────────────────────
-    // El primer resultado va DESTACADO y aparte, y el resto agrupado por tipo.
-    // Es lo que hace Spotlight de macOS, y no es adorno: en cuanto los archivos
-    // entran sin prefijo, una lista plana mezcla tres o cuatro clases de cosa y
-    // deja de poder recorrerse con la vista.
-    //
-    // 'filas' es la lista que se dibuja: encabezados y resultados intercalados.
-    // 'results' sigue siendo la lista PLANA y es la que manda para el teclado y
-    // para activar — así la navegación no tiene que saber nada de secciones.
+    // El primer resultado va destacado y aparte, y el resto agrupado por tipo. No
+    // es adorno: en cuanto los archivos entran sin prefijo, una lista plana mezcla
+    // tres o cuatro clases de cosa y deja de poder recorrerse con la vista.
+    // 'filas' es la lista que se dibuja, con encabezados y resultados intercalados.
+    // 'results' sigue siendo la lista plana y es la que manda para el teclado y para
+    // activar, así que la navegación no sabe nada de secciones.
     readonly property var filas: {
         const rs = win.results
         if (rs.length === 0)
@@ -171,11 +159,10 @@ PanelWindow {
         win.text = ""
         win.selected = 0
         Frecency.load()
-        // Al cerrar y volver a abrir, soltar lo del prefijo "/": un recorrido
-        // del disco que sigue vivo después de cerrar es trabajo para nadie, y
-        // la lista de la vez anterior no es lo que se acaba de pedir.
-        // Reconstruye el índice si está rancio. Son 12 ms: se paga en cada
-        // apertura y a cambio un archivo creado hace un minuto ya aparece.
+        // Al cerrar y volver a abrir se suelta lo del prefijo "/": un recorrido del
+        // disco que sigue vivo después de cerrar es trabajo para nadie. Y se
+        // reconstruye el índice si está rancio, que cuesta milisegundos y a cambio
+        // un archivo creado hace un minuto ya aparece.
         FileSearch.build()
     }
 
@@ -183,16 +170,16 @@ PanelWindow {
         const n = win.results.length
         if (n === 0)
             return
-        // Circular: llegar al final y no poder seguir obliga a recordar dónde
-        // estás en una lista que acabas de generar.
+        // Circular: llegar al final y no poder seguir obliga a recordar dónde se
+        // está en una lista recién generada.
         win.selected = (win.selected + delta + n) % n
         list.positionViewAtIndex(win.filaDe(win.selected), ListView.Contain)
     }
 
     // Dónde está dibujado el resultado número 'i'. Las flechas se mueven por la
-    // lista PLANA ('results'), que es la que manda; esto solo traduce a la fila
-    // de la vista para poder desplazarla. Así la navegación no sabe nada de
-    // secciones y no puede pararse en un encabezado.
+    // lista plana, que es la que manda; esto solo traduce a la fila de la vista
+    // para poder desplazarla, así que la navegación no puede pararse en un
+    // encabezado.
     function filaDe(i) {
         const f = win.filas
         for (let k = 0; k < f.length; k++)
@@ -207,9 +194,8 @@ PanelWindow {
             return
         Frecency.remember(it.id)
         Globals.closeAll()
-        // Después de cerrar: si la acción abre una ventana (Ajustes, un
-        // terminal), hacerlo con el buscador todavía tomando el teclado en
-        // exclusiva le roba el foco a lo que acaba de abrirse.
+        // Después de cerrar: si la acción abre una ventana, hacerlo con el buscador
+        // todavía tomando el teclado en exclusiva le robaría el foco.
         Qt.callLater(function () {
             try {
                 it.run()
@@ -219,13 +205,12 @@ PanelWindow {
         })
     }
 
-    // Los archivos ya no son una fuente asíncrona: el índice está en memoria y
-    // filtrarlo es una pasada de indexOf sobre tres mil cadenas. No hay nada
-    // que avisar al teclear — el binding de 'results' llama a Sources.files()
-    // y ya está.
+    // Los archivos no son una fuente asíncrona: el índice está en memoria y
+    // filtrarlo es una pasada de indexOf, así que no hay nada que avisar al
+    // teclear.
     onTextChanged: win.selected = 0
 
-    // ── Velo ─────────────────────────────────────────────────────────────────
+    // Velo
     Rectangle {
         anchors.fill: parent
         color: "black"
@@ -237,7 +222,7 @@ PanelWindow {
         onClicked: Globals.closeAll()
     }
 
-    // ── La tarjeta ───────────────────────────────────────────────────────────
+    // La tarjeta
     Rectangle {
         id: card
 
@@ -245,8 +230,7 @@ PanelWindow {
         height: Math.min(win.height * 0.7, col.implicitHeight + Theme.space16 * 2)
         anchors.horizontalCenter: parent.horizontalCenter
         // Un punto por encima del centro óptico: centrado exacto, un cuadro de
-        // diálogo se ve caído. Es la regla de toda la vida del cine y los
-        // carteles, y aquí funciona igual.
+        // diálogo se ve caído.
         y: Math.round((win.height - height) * 0.36)
 
         radius: Theme.shapeLg
@@ -257,8 +241,8 @@ PanelWindow {
         clip: true
 
         opacity: win.progress
-        // Entra creciendo un pelín desde abajo. Muy poco: es un buscador que se
-        // usa cien veces al día, y una animación lucida acaba cansando.
+        // Entra creciendo un poco desde abajo, y muy poco: es un buscador que se usa
+        // cien veces al día, y una animación lucida acaba cansando.
         scale: 0.97 + 0.03 * win.progress
         transform: Translate { y: (1 - win.progress) * Theme.dp(10) }
 
@@ -273,7 +257,7 @@ PanelWindow {
             anchors.margins: Theme.space16
             spacing: Theme.space12
 
-            // ── Campo ────────────────────────────────────────────────────────
+            // Campo
             RowLayout {
                 Layout.fillWidth: true
                 spacing: Theme.space10
@@ -307,8 +291,8 @@ PanelWindow {
                     Keys.onReturnPressed: win.activate()
                     Keys.onEnterPressed: win.activate()
                     Keys.onEscapePressed: Globals.closeAll()
-                    // Tab también baja: es el gesto que espera quien viene de
-                    // un navegador, y no colisiona con nada aquí.
+                    // Tab también baja: es el gesto que espera quien viene de un
+                    // navegador, y no colisiona con nada aquí.
                     Keys.onTabPressed: win.move(1)
                     Keys.onBacktabPressed: win.move(-1)
 
@@ -316,11 +300,9 @@ PanelWindow {
                         anchors.verticalCenter: parent.verticalCenter
                         anchors.left: parent.left
                         visible: input.text === ""
-                        // Corto, como el de macOS. Aquí vivía la lista entera
-                        // de los seis prefijos: ochenta y tres caracteres que
-                        // ni siquiera cabían —salían cortados por la derecha—,
-                        // así que no enseñaban los prefijos, solo ensuciaban el
-                        // campo. Un aviso que no se lee entero no avisa.
+                        // Corto a propósito: la lista entera de prefijos no cabe
+                        // en el campo y saldría cortada por la derecha, así que
+                        // no enseñaría los prefijos, solo ensuciaría el hueco.
                         //
                         // La clave va en inglés como todas: mezclar castellano
                         // dentro de una cadena que luego se traduce deja una
@@ -347,18 +329,16 @@ PanelWindow {
                 color: Theme.withAlpha(Theme.overlay, 0.45)
             }
 
-            // ── Vacío ────────────────────────────────────────────────────────
+            // Vacío
             ThemedText {
                 Layout.fillWidth: true
                 Layout.topMargin: Theme.space12
                 Layout.bottomMargin: Theme.space12
                 visible: win.results.length === 0
                 horizontalAlignment: Text.AlignHCenter
-                // Los archivos son la única fuente que TARDA, así que es la
-                // única donde una lista vacía puede querer decir dos cosas
-                // distintas. Decir "no hay nada" mientras se está recorriendo
-                // el disco es mentir durante medio segundo, y quien lo lee ya
-                // ha empezado a borrar para probar otra cosa.
+                // Los archivos son la única fuente que tarda, así que es la única
+                // donde una lista vacía puede querer decir dos cosas distintas.
+                // Decir "no hay nada" mientras se está recorriendo
                 text: win.mode === "file" && FileSearch.running
                           ? I18n.tr("Searching…")
                     // Contra la consulta YA limpia del servicio, no contra
@@ -374,7 +354,7 @@ PanelWindow {
                 wrapMode: Text.WordWrap
             }
 
-            // ── Resultados ───────────────────────────────────────────────────
+            // Resultados
             ListView {
                 id: list
                 Layout.fillWidth: true
@@ -444,21 +424,11 @@ PanelWindow {
                     }
                     color: "transparent"
 
-                    // El resaltado de fila del shell, el mismo que las listas
-                    // de Ajustes. Aquí se fundía el color a pelo con UN solo
-                    // Behavior de 100 ms para la selección Y el hover, que son
-                    // dos señales con presupuestos de latencia distintos:
-                    //
-                    //   · el hover persigue al puntero y puede permitirse una
-                    //     entrada suave
-                    //   · la SELECCIÓN la mueven las flechas, y con cualquier
-                    //     fundido de por medio hay dos filas medio encendidas a
-                    //     la vez todo el rato mientras bajas por la lista
-                    //
-                    // De ahí selectMs: 0 — el resaltado va bajo el dedo y no
-                    // detrás. Y por opacidad y no por color, que es lo que
-                    // evita el punto turbio a mitad de camino (ver la cabecera
-                    // de Components/RowHighlight.qml).
+                    // El resaltado de fila del shell, el mismo que las listas de
+                    // Ajustes, con selectMs 0: la selección la mueven las flechas, y
+                    // con cualquier fundido de por medio hay dos filas medio
+                    // encendidas a la vez mientras se baja por la lista. El hover sí
+                    // puede permitirse una entrada suave.
                     RowHighlight {
                         id: realce
                         selected: row.current

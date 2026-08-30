@@ -4,15 +4,13 @@ import QtQuick
 import Quickshell
 import qs.Config
 
-// Índice de ajustes buscables — construido SOLO, nada a mano. Al abrir
-// Ajustes por primera vez (ver Connections a Globals.settingsOpen), monta
-// cada página fuera de pantalla una a una (mismo Loader que usa la propia
-// ventana para mostrarlas), recorre su árbol de objetos buscando filas con
-// 'skey' + 'label' — el mismo contrato que ya usa SettingsFilter.accepts()
-// para decidir qué fila esconder — y las destruye antes de montar la
-// siguiente. Si se añade un ajuste nuevo a cualquier página, aparece solo en
-// la próxima construcción del índice: no hay una lista aparte que
-// mantener sincronizada a mano.
+// Índice de ajustes buscables, construido solo. Monta cada página fuera de
+// pantalla una a una con el mismo Loader que usa la ventana, recorre su árbol de
+// objetos buscando filas con 'skey' + 'label' —el mismo contrato que usa
+// SettingsFilter.accepts()— y las destruye antes de montar la siguiente.
+//
+// Un ajuste nuevo en cualquier página aparece solo en la próxima construcción:
+// no hay una lista aparte que mantener sincronizada.
 Singleton {
     id: root
 
@@ -36,20 +34,14 @@ Singleton {
     property int _buildAt: 0
     property var _collected: []
 
-    // Se dispara sola la primera vez que se abre Ajustes O SPOTLIGHT. No al
-    // arrancar el shell: si no usas ninguna de las dos cosas, no vale la pena
-    // montar once páginas por nada.
-    //
-    // Lo de Spotlight no es un extra, es lo que hacía falta para que los
-    // ajustes salgan al buscar. Este índice solo se construía al abrir la
-    // VENTANA de Ajustes, así que hasta que no la abrías una vez por sesión,
-    // Spotlight no encontraba un solo ajuste — ni escribiendo el prefijo. Se
-    // veía como "los ajustes no están en el buscador", cuando lo que pasaba es
-    // que aún no existían.
+    // Se dispara la primera vez que se abre Ajustes o Spotlight, no al arrancar
+    // el shell: sin usar ninguna de las dos cosas no vale la pena montar once
+    // páginas. Spotlight cuenta porque, si no, los ajustes no aparecen en el
+    // buscador hasta haber abierto la ventana una vez por sesión.
     //
     // La construcción es asíncrona y de una página cada vez, así que abrir
-    // Spotlight no se frena por esto; y cuando termina, 'built' cambia y la
-    // lista de candidatos se rehace sola (Sources.gather lo lee).
+    // Spotlight no se frena; al terminar, 'built' cambia y la lista de
+    // candidatos se rehace sola.
     Connections {
         target: Globals
         function onSettingsOpenChanged() {
@@ -62,18 +54,11 @@ Singleton {
         }
     }
 
-    // ── LA TRAMPA DEL SINGLETON PEREZOSO ─────────────────────────────────────
-    // El Connections de arriba NO PUEDE dispararse la primera vez, y por eso
-    // esto existe: QML no crea un singleton hasta que alguien lo toca, así que
-    // este objeto —y con él su Connections— no existe cuando Spotlight se abre.
-    // Quien lo toca es el propio Spotlight, al leer 'built' para montar sus
-    // candidatos... o sea DESPUÉS de que la señal haya pasado.
-    //
-    // El resultado era que los ajustes no salían en el buscador jamás, salvo
-    // que hubieras abierto la ventana de Ajustes antes en esa sesión.
-    //
-    // Es la misma trampa que shell.qml documenta para Battery, AppTemplates y
-    // Lock, y se resuelve igual: al nacer, mirar si el motivo ya se ha dado.
+    // QML no crea un singleton hasta que alguien lo toca, así que el Connections
+    // de arriba no existe todavía cuando Spotlight se abre por primera vez:
+    // quien toca este singleton es el propio Spotlight al leer 'built', o sea
+    // después de que la señal haya pasado. Por eso, al nacer, hay que mirar si
+    // el motivo ya se ha dado.
     Component.onCompleted: {
         if (Globals.spotlightOpen || Globals.settingsOpen)
             root.beginBuild()
@@ -99,9 +84,9 @@ Singleton {
         scanLoader.source = pageSources[scanLoader.cat]
     }
 
-    // Recorre el árbol real de objetos instanciados (item.children): así da
-    // igual cuántos SettingsCard/ColumnLayout haya de por medio, o si una
-    // fila vive dentro de un Repeater — si llegó a existir, se encuentra.
+    // Recorre el árbol real de objetos instanciados, así que da igual cuántos
+    // contenedores haya de por medio o si una fila vive dentro de un Repeater:
+    // si llegó a existir, se encuentra.
     function _walk(item, cat, out) {
         if (!item)
             return
@@ -111,9 +96,9 @@ Singleton {
                 skey: item.skey,
                 label: item.label,
                 desc: (item.desc !== undefined ? item.desc : ""),
-                // Los alias de la fila (ver Components/SettingsRow.qml) viajan
-                // con la entrada, así que el mismo "material you" que encuentra
-                // el ajuste dentro de la ventana lo encuentra desde Spotlight.
+                // Los alias de la fila viajan con la entrada, así que el mismo
+                // texto encuentra el ajuste dentro de la ventana y desde
+                // Spotlight.
                 alias: (Array.isArray(item.aliases) ? item.aliases.join(" ") : "")
             })
         const kids = item.children || []
@@ -121,13 +106,13 @@ Singleton {
             _walk(kids[i], cat, out)
     }
 
-    // Página "de usar y tirar": monta, recoge, descarga, pasa a la
-    // siguiente. Nunca hay más de una página fuera de pantalla a la vez.
+    // Página de usar y tirar: monta, recoge, descarga y pasa a la siguiente.
+    // Nunca hay más de una fuera de pantalla a la vez.
     Loader {
         id: scanLoader
         property string cat: ""
-        // Igual que pageLoader en Settings.qml: sin esto se nota un tirón
-        // (esto se dispara justo cuando la ventana está abriéndose).
+        // Carga asíncrona: esto se dispara justo cuando la ventana se está
+        // abriendo, y de forma síncrona se nota un tirón.
         asynchronous: true
         onLoaded: {
             const found = []
@@ -138,17 +123,10 @@ Singleton {
             root._buildNext()
         }
 
-        // Si una página NO carga hay que pasar a la siguiente igualmente.
-        //
-        // Sin esto, el recorrido se para en seco en la que falló: 'onLoaded' no
-        // se emite, '_buildAt' no avanza, '_building' se queda en true para
-        // siempre y 'built' nunca llega a ser cierto. El efecto visible es que
-        // NINGÚN ajuste aparece en el buscador — ni los de las nueve páginas que
-        // sí cargaban— y no hay ningún error que lo explique, porque el aviso
-        // del módulo que falta se pierde entre los del arranque.
-        //
-        // Se salta la página rota y se sigue: nueve páginas indexadas valen
-        // muchísimo más que ninguna.
+        // Si una página no carga hay que seguir igualmente: parándose ahí,
+        // '_buildAt' no avanza, '_building' se queda en true y 'built' no llega
+        // a ser cierto nunca, con lo que ningún ajuste aparecería en el
+        // buscador y sin ningún error que lo explique.
         onStatusChanged: {
             if (scanLoader.status !== Loader.Error)
                 return
@@ -160,17 +138,15 @@ Singleton {
         }
     }
 
-    // Comparación plegada (minúsculas, sin diacríticos), la misma que usa el
-    // filtro de la página activa (SettingsFilter.fold): ambos buscadores
-    // encuentran "Posición" escribiendo "posicion".
+    // Comparación plegada, la misma que usa el filtro de la página activa, para
+    // que ambos buscadores encuentren "Posición" escribiendo "posicion".
     function matches(entry, q) {
         return SettingsFilter.fold(entry.label + " " + entry.desc + " "
                                    + (entry.alias || "")).indexOf(q) !== -1
     }
 
-    // Resultados para una consulta, ya filtrados; excludeCat (opcional) deja
-    // fuera una categoría (la que ya se ve filtrada debajo, para no
-    // duplicarla).
+    // Resultados para una consulta; excludeCat deja fuera una categoría, la que
+    // ya se ve filtrada debajo, para no duplicarla.
     function search(query, excludeCat) {
         const q = SettingsFilter.fold(String(query || "").trim())
         if (q === "")

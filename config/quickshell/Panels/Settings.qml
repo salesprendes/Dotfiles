@@ -17,20 +17,14 @@ FloatingWindow {
 
     title: I18n.tr("Settings") + " · Quickshell"
     color: settingsBackdrop
-    // ── Geometría de referencia ──────────────────────────────────────────────
-    // 1100×800 y NUNCA más que la pantalla.
+    // 1100×800 y nunca más que la pantalla.
     //
-    // Antes eran 1280×600 a pelo, sin tope, y las dos cosas estaban mal:
-    //
-    //   · Demasiado ancha para lo que cabe. La columna de contenido está
-    //     acotada a 760 dp (ver contentCol.inset), así que pedir 1280 de ancho
-    //     es reservar sitio que nada puede ocupar: quedaban ~227 px de canalón
-    //     vacío a los lados. Y demasiado baja: con las tarjetas apiladas, 600
-    //     de alto obliga a desplazarse en casi todas las páginas.
-    //   · Sin tope de pantalla. En un portátil de 1024×768, dp(1280) pide 1114
-    //     px de ancho sobre 1024 disponibles: la ventana nacía más grande que
-    //     el monitor. Con Hyprland en mosaico no se nota porque él la recorta,
-    //     pero flotando sí, y en pantallas pequeñas es donde más duele.
+    // El ancho está medido contra la columna de contenido, acotada a 760 dp:
+    // pedir mucho más es reservar sitio que nada puede ocupar y deja canalones
+    // vacíos a los lados. Y el tope de pantalla es imprescindible, porque en un
+    // portátil pequeño una medida fija en dp puede pedir más ancho del que hay y
+    // la ventana nacería más grande que el monitor. En mosaico no se nota porque
+    // el compositor la recorta, pero flotando sí.
     //
     // Los factores (0,85 y 0,80) dejan ver que hay escritorio detrás, que es lo
     // que distingue una ventana de una pantalla completa.
@@ -38,18 +32,17 @@ FloatingWindow {
     readonly property int _screenH: cfg.screen ? cfg.screen.height : 1080
     implicitWidth: Math.min(Theme.dp(1100), Math.round(cfg._screenW * 0.85))
     implicitHeight: Math.min(Theme.dp(800), Math.round(cfg._screenH * 0.80))
-    // El mínimo es pequeño a propósito: Hyprland puede acorralar la ventana en
-    // un mosaico, y antes que recortarse la interfaz se compacta por tramos
-    // (ver headerCompact / navCompact). Y se acota también contra la pantalla,
-    // porque un mínimo mayor que el monitor es un mínimo imposible de cumplir.
+    // El mínimo es pequeño a propósito: el compositor puede acorralar la ventana
+    // en un mosaico, y antes que recortarse la interfaz se compacta por tramos.
+    // Se acota también contra la pantalla, porque un mínimo mayor que el monitor
+    // es imposible de cumplir.
     minimumSize: Qt.size(Math.min(Theme.dp(600), cfg._screenW),
                          Math.min(Theme.dp(400), cfg._screenH))
 
-    // Clases de tamaño de ventana de Material 3. Son los mismos cortes que usa
-    // M3 para decidir la forma de la navegación, y le dan nombre a lo que
-    // antes eran cuatro números sueltos:
+    // Clases de tamaño de ventana de Material 3, que son los cortes con los que
+    // se decide la forma de la navegación:
     //
-    //   compacta (<600)   una sola columna; la navegación se reduce al mínimo
+    //   compacta (<600)   una sola columna; la navegación al mínimo
     //   media   (600-839) riel de iconos
     //   expandida (840+)  riel con etiquetas
     //   grande  (1200+)   además, sitio de sobra en la cabecera
@@ -59,11 +52,10 @@ FloatingWindow {
     readonly property bool sizeCompact: sizeClass === 0
     readonly property bool sizeMedium: sizeClass <= 1
 
-    // Cortes propios de la cabecera, escalonados por debajo de las clases:
-    // suelta controles por orden de prioridad en vez de desbordar por la
-    // derecha — primero el texto accesorio, luego el interruptor "solo
-    // modificados", luego Restablecer. El botón de cerrar es SIEMPRE el
-    // último que queda. navCompact pasa la barra lateral a riel de iconos.
+    // Cortes propios de la cabecera, escalonados por debajo de las clases: suelta
+    // controles por orden de prioridad en vez de desbordar por la derecha, y el
+    // botón de cerrar es siempre el último que queda. navCompact pasa la barra
+    // lateral a riel de iconos.
     readonly property bool headerCompact: width < Theme.dp(1000)
     readonly property bool navCompact: sizeMedium
     readonly property bool headerTight: width < Theme.dp(720)
@@ -84,9 +76,9 @@ FloatingWindow {
     // Hueco alrededor y entre las tarjetas; deja ver el fondo de la ventana.
     readonly property int cardGap: Theme.dp(14)
     readonly property int controlHeightSm: Theme.dp(36)
-    // Padding interno de la tarjeta de la barra lateral. Lo comparten la
-    // columna de pestañas y su barra de desplazamiento, que necesita saberlo
-    // para calcular cuánto le falta para librar la esquina redondeada.
+    // Padding interno de la barra lateral. Lo comparten la columna de pestañas y
+    // su barra de desplazamiento, que necesita saberlo para calcular cuánto le
+    // falta para librar la esquina redondeada.
     readonly property int navPad: navCompact ? Theme.dp(6) : Theme.dp(10)
     readonly property int sidebarWidth: navCompact ? Theme.dp(72)
         : width < Theme.dp(1080) ? Theme.dp(240) : Theme.dp(264)
@@ -102,9 +94,9 @@ FloatingWindow {
 
     property string cat: "theme"
 
-    // Salto directo desde Spotlight: Globals deja anotados la categoría y el
-    // texto a filtrar, y esto los aplica — al construirse (primera apertura) y
-    // cada vez que se vuelve a invocar la ventana ya existente.
+    // Salto directo desde Spotlight: Globals deja anotados la categoría y el texto
+    // a filtrar, y esto los aplica al construirse y cada vez que se vuelve a
+    // invocar la ventana ya existente.
     function applyPendingJump() {
         if (Globals.settingsPendingCat !== "") {
             cfg.cat = Globals.settingsPendingCat
@@ -120,38 +112,30 @@ FloatingWindow {
         target: Globals
         function onSettingsResummon() { cfg.applyPendingJump() }
     }
-    // La que pulsas (cat) y la que está montada (shownCat) no son la misma
-    // durante la transición: la nav se ilumina al instante, pero el contenido
-    // espera a que la página vieja se haya ido.
+    // La categoría pulsada y la montada no son la misma durante la transición: la
+    // navegación se ilumina al instante, pero el contenido espera a que la página
+    // vieja se haya ido.
     property string shownCat: "theme"
 
-    // ── Resaltado de selección de la nav (una sola píldora para TODA la barra) ─
-    // La pestaña seleccionada informa aquí de su posición (en el sistema de
-    // coordenadas del contenido del Flickable) y una única píldora se DESLIZA
-    // hasta ahí, cruzando de un grupo a otro sin desaparecer. navSelAnimate se
-    // apaga al abrir para colocarla sin animar (si no, "viajaría" desde 0).
-    // Tinte de "estás aquí", en un solo sitio: lo comparten la píldora de la
-    // barra y la ficha de cuenta, que es un destino más de la navegación.
-    // Estaban en 0.26/0.32 y 0.20/0.24 respectivamente — el mismo significado
-    // pintado con dos fuerzas, y ninguna razón para la diferencia.
+    // Una sola píldora para toda la barra de navegación: la pestaña seleccionada
+    // informa de su posición y la píldora se desliza hasta ahí, cruzando de un
+    // grupo a otro sin desaparecer. El tinte de "estás aquí" vive en un solo
+    // sitio, compartido con la ficha de cuenta, que es un destino más.
     readonly property color navSelTint: SettingsPalette.selectedTint
     readonly property color navHovTint: Theme.withAlpha(Theme.accent, Theme.isDark ? 0.13 : 0.16)
     property Item navContent: null
-    // La pestaña seleccionada, NO sus coordenadas. Antes cada pestaña escribía
-    // aquí su 'y' calculado con mapToItem al cambiar su propio alto o posición;
-    // eso es una caché, y toda caché se queda vieja: al cambiar la resolución
-    // (que mueve Theme.scale y con él CADA dp) el aviso saltaba con la
-    // disposición a medio resolver, guardaba una posición intermedia y nadie
-    // volvía a mirarla — el resaltado quedaba clavado a 90 px de su pestaña.
-    // Guardando el elemento, la posición se DERIVA, y se recalcula sola ante
-    // cualquier cambio de geometría: resolución, tamaño de ventana, escala de
-    // interfaz, aparición de la barra desplazable o reflujo de la nav.
+
+    // Se guarda la pestaña, no sus coordenadas: una 'y' calculada sería una caché,
+    // y toda caché se queda vieja. Al cambiar la resolución se mueve Theme.scale y
+    // con él cada dp, así que el aviso llegaría con la disposición a medio
+    // resolver. Guardando el elemento, la posición se deriva y se recalcula sola
+    // ante cualquier cambio de geometría.
     property Item navSelItem: null
-    // Suma de 'y' desde el elemento hasta el contenedor. Se recorre a mano en
-    // vez de usar mapToItem porque QML apunta como dependencia cada propiedad
-    // que se LEE al evaluar un vínculo: al leer 'y' de cada ancestro, este
-    // vínculo se reevalúa solo cuando cualquiera de ellos se mueve. mapToItem
-    // devuelve un número suelto y no crea dependencia de nada.
+    // Suma de 'y' desde el elemento hasta el contenedor. Se recorre a mano en vez
+    // de usar mapToItem porque QML apunta como dependencia cada propiedad que se
+    // LEE al evaluar un vínculo: leyendo la 'y' de cada ancestro, esto se reevalúa
+    // cuando cualquiera de ellos se mueve. mapToItem devuelve un número suelto y
+    // no crea dependencia de nada.
     function yWithin(item, root) {
         let acc = 0
         let it = item
@@ -164,12 +148,11 @@ FloatingWindow {
     readonly property real navSelY: navSelItem && navContent
         ? yWithin(navSelItem, navContent) : 0
     readonly property real navSelH: navSelItem ? navSelItem.height : controlHeightSm
-    // La píldora se DESLIZA solo cuando eliges otra pestaña. Ante un cambio de
-    // geometría —resolución, tamaño de ventana, escala— tiene que aparecer ya
-    // colocada: animar ahí se vería como si el resaltado se hubiera soltado y
-    // fuera persiguiendo a su pestaña. Antes esto se apañaba con un plazo de
-    // 60 ms al abrir; ahora la ventana de animación la abre el propio cambio de
-    // categoría y se cierra al terminar el recorrido.
+    // La píldora se desliza solo al elegir otra pestaña. Ante un cambio de
+    // geometría tiene que aparecer ya colocada: animar ahí se vería como si el
+    // resaltado se hubiera soltado y fuera persiguiendo a su pestaña. La ventana
+    // de animación la abre el propio cambio de categoría y se cierra al terminar
+    // el recorrido.
     property bool navSelAnimate: false
     Timer {
         id: navSelSettle
@@ -178,20 +161,18 @@ FloatingWindow {
     }
     readonly property bool navSelShown: cat !== "about"
 
-    // Píldora de HOVER: también única para toda la barra. Antes cada pestaña
-    // fundía su propio resaltado y, al pasar rápido, varios parpadeaban a la
-    // vez; ahora una sola píldora persigue al cursor deslizándose. Se cuenta
-    // cuántas pestañas tienen el ratón encima (al cruzar de una a otra el
-    // "salir" y el "entrar" no llegan en orden fijo) y la píldora se ve
-    // mientras haya alguna.
+    // Píldora de hover, también única para toda la barra: con un resaltado por
+    // pestaña, al pasar rápido varios parpadean a la vez. Se cuenta cuántas
+    // pestañas tienen el ratón encima —al cruzar de una a otra, el "salir" y el
+    // "entrar" no llegan en orden fijo— y la píldora se ve mientras haya alguna.
     property Item navHovItem: null
     readonly property real navHovY: navHovItem && navContent
         ? yWithin(navHovItem, navContent) : 0
     readonly property real navHovH: navHovItem ? navHovItem.height : controlHeightSm
-    // Cuenta con suelo en 0: si una pestaña desaparece con el ratón encima
-    // (filtro, reflujo, recarga) su "he salido" no llega nunca, y un contador
-    // sin suelo se quedaba en positivo con la píldora de hover encendida sobre
-    // una pestaña que ya no está.
+    // Cuenta con suelo en 0: si una pestaña desaparece con el ratón encima —por
+    // el filtro, un reflujo o una recarga— su "he salido" no llega nunca, y un
+    // contador sin suelo dejaría la píldora encendida sobre una pestaña que ya no
+    // está.
     property int  navHovCount: 0
     function navHovEnter(tab) {
         cfg.navHovItem = tab
@@ -212,56 +193,51 @@ FloatingWindow {
             swapping = true
             shownCat = "theme"
             cat = "theme"
-            // Si no toca recargar nadie nos va a avisar: tiramos ya.
+            // Si no toca recargar, nadie va a avisar: se tira ya.
             if (already) pageReady()
-            // El filtro no sobrevive al cierre: abrirla y encontrártela filtrada
-            // de la última vez es desconcertante (parecen ajustes desaparecidos).
+            // El filtro no sobrevive al cierre: reabrir y encontrarla filtrada de
+            // la última vez parecen ajustes desaparecidos.
             search.clear()
             SettingsFilter.clear()
-            // El campo recibe el foco al abrir, salvo en ventanas tan
-            // estrechas que la cabecera ha soltado el buscador.
+            // El campo recibe el foco al abrir, salvo en ventanas tan estrechas
+            // que la cabecera ha soltado el buscador.
             if (!headerMicro) search.input.forceActiveFocus()
-            // Al abrir, la píldora se coloca sin animar: 'cat' ya se ha puesto
-            // en "theme" más arriba, así que se cancela la ventana que ese
-            // cambio acaba de abrir.
+            // Al abrir, la píldora se coloca sin animar: 'cat' ya está puesta más
+            // arriba, así que se cancela la ventana que ese cambio abrió.
             navSelSettle.stop()
             navSelAnimate = false
         }
         else if (Globals.settingsOpen) Globals.settingsOpen = false   // cerrada por Hyprland
     }
 
-    // ── Cambio de página ─────────────────────────────────────────────────────
-    // La vieja se desvanece subiendo un pelo. Cuando ya no se ve, pedimos la
-    // nueva y el Loader la construye aparte: montarla aquí mismo congelaría el
-    // hilo justo en el peor momento, y eso es el tirón que se notaba. La
-    // entrada la dispara el Loader cuando la página ya existe de verdad.
+    // La página vieja se desvanece subiendo un poco. Cuando ya no se ve se pide la
+    // nueva y el Loader la construye aparte: montarla aquí congelaría el hilo justo
+    // en el peor momento. La entrada la dispara el Loader cuando la página existe.
     property real pageOpacity: 1
     property real pageOffset: 0
     property bool swapping: false      // hay una página en camino
 
-    // Van sin 'from' a propósito: si cortas la transición a medias, se
-    // reenganchan desde donde estaban en vez de saltar a cero.
+    // Van sin 'from' a propósito: cortando la transición a medias se reenganchan
+    // desde donde estaban en vez de saltar a cero.
     ParallelAnimation {
         id: pageIn
-        // Duraciones derivadas de la velocidad de animación de Ajustes (nunca
-        // fijas): a "Sin animación" valen 0 y la página aparece de golpe, que
-        // es lo que ha pedido quien apaga las animaciones.
+        // Duraciones derivadas de la velocidad de animación y nunca fijas: a "sin
+        // animación" valen 0 y la página aparece de golpe.
         NumberAnimation {
             target: cfg; property: "pageOpacity"
             to: 1; duration: Math.round(Theme.animSlow * 0.75); easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel
         }
-        // La página sube y se asienta. Sin rebote: el rebote lo ponían antes
-        // estas dos líneas, y ahora lo pone el escalonamiento de las tarjetas
-        // (ver abajo). Dos muelles a la vez no se leen como uno más rico, se
-        // leen como un temblor.
+        // La página sube y se asienta, sin rebote: el rebote lo pone el
+        // escalonamiento de las tarjetas, y dos muelles a la vez no se leen como
+        // uno más rico sino como un temblor.
         NumberAnimation {
             target: cfg; property: "pageOffset"
             to: 0; duration: Theme.animSlow; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel
         }
-        // Reloj del escalonamiento de las tarjetas (ver SettingsMotion). Va
-        // LINEAL a propósito: la curva la pone cada tarjeta en su smoothstep,
-        // y encadenar dos suavizados deja el arranque plano. Dura más que el
-        // resto porque tiene que repartir varias entradas dentro.
+        // Reloj del escalonamiento de las tarjetas. Va lineal a propósito: la
+        // curva la pone cada tarjeta en su smoothstep, y encadenar dos suavizados
+        // deja el arranque plano. Dura más que el resto porque reparte varias
+        // entradas dentro.
         NumberAnimation {
             target: SettingsMotion; property: "pageEnter"
             to: 1; duration: Math.round(Theme.animSlow * 1.7)
@@ -290,7 +266,7 @@ FloatingWindow {
         }
     }
 
-    // Nos llama el Loader cuando la página nueva ya está en pantalla.
+    // Lo llama el Loader cuando la página nueva ya está en pantalla.
     function pageReady() {
         if (!swapping) return
         swapping = false
@@ -301,13 +277,12 @@ FloatingWindow {
     }
 
     onCatChanged: {
-        // Ventana de animación de la píldora de la nav (ver navSelAnimate).
+        // Ventana de animación de la píldora de la navegación.
         cfg.navSelAnimate = true
         navSelSettle.restart()
 
         if (cat === shownCat) {
-            // Has vuelto a la página que aún se estaba yendo: la traemos de
-            // vuelta. Si ya hay una en camino, que siga su curso.
+            // Se ha vuelto a la página que aún se estaba yendo: se trae de
             if (pageOut.running && !swapping) {
                 pageOut.stop()
                 pageIn.restart()
@@ -367,13 +342,14 @@ FloatingWindow {
         cat = key
     }
 
-    // Glifos nf-md de Nerd Font (redondeados, trazo uniforme), planos y sin
+    // Glifos nf-md de Nerd Font: redondeados, de trazo uniforme, planos y sin
     // contenedor de color.
     readonly property var groups: [
         { label: I18n.tr("Personalization"), items: [
             { key: "theme",     glyph: "󰏘", label: I18n.tr("Theme") },
             { key: "font",      glyph: "󰛖", label: I18n.tr("Typography") },
-            // La pestaña Terminal solo aparece si hay kitty/alacritty/foot instalado.
+            // La pestaña Terminal solo aparece con algún emulador soportado
+            // instalado.
             ...(Terminal.available.length > 0
                 ? [{ key: "terminal", glyph: "󰆍", label: I18n.tr("Terminal") }]
                 : []),
@@ -390,9 +366,9 @@ FloatingWindow {
             { key: "notif",    glyph: "󰂚", label: I18n.tr("Notifications") }
         ] }
     ]
-    // Índice plano key → { label, glyph, group }. Se construye UNA vez
-    // (se recalcula solo si cambian los grupos: idioma o terminales). Las
-    // props de la categoría activa son ya búsquedas O(1), sin bucles anidados.
+    // Índice plano key → { label, glyph, group }, construido una vez y recalculado
+    // solo si cambian los grupos. Las propiedades de la categoría activa son
+    // búsquedas O(1), sin bucles anidados.
     readonly property var itemIndex: {
         const idx = ({})
         for (let g = 0; g < groups.length; g++)
@@ -400,25 +376,21 @@ FloatingWindow {
                 const it = groups[g].items[i]
                 idx[it.key] = { label: it.label, glyph: it.glyph, group: groups[g].label }
             }
-        // About va suelta, sin grupo, así que se lo inventamos.
+        // "Acerca de" va suelta, sin grupo propio.
         idx["about"] = { label: I18n.tr("About"), glyph: "󰋽", group: "Quickshell" }
         return idx
     }
-    // Va con la página que se ve, no con la que has pulsado: si no, el título
-    // cambiaría antes que el contenido.
+    // Va con la página que se ve y no con la pulsada: si no, el título cambiaría
+    // antes que el contenido.
     readonly property var activeItem: itemIndex[shownCat] || ({ label: "", glyph: "󰒓", group: "" })
     readonly property string catLabel:      activeItem.label
     readonly property string catGroupLabel: activeItem.group
 
-    // ── Secciones de la página actual ────────────────────────────────────────
-    // Se leen del árbol REAL de la página montada, no de un índice aparte. Es
-    // la diferencia que importa: al filtrar, una tarjeta cuyas filas no casan
-    // se esconde, y esta lista se encoge con ella sin que haya que avisarle de
-    // nada — porque lee 'visible' de cada tarjeta y QML apunta la dependencia.
-    //
-    // Un índice paralelo habría que mantenerlo sincronizado a mano, que es
-    // justo el problema que ya tiene la referencia de la que viene esta idea:
-    // su registro exige apuntar cada archivo nuevo y lo avisa en su cabecera.
+    // Se leen del árbol real de la página montada y no de un índice aparte. Es la
+    // diferencia que importa: al filtrar, una tarjeta cuyas filas no casan se
+    // esconde y esta lista se encoge con ella, porque lee el 'visible' de cada
+    // tarjeta y QML apunta la dependencia. Un índice paralelo habría que
+    // mantenerlo sincronizado a mano.
     readonly property var pageSections: {
         const it = pageLoader.item
         if (!it)
@@ -442,8 +414,8 @@ FloatingWindow {
         jumpAnim.restart()
     }
 
-    // Se DESPLAZA, no salta. Un salto instantáneo en una página larga deja sin
-    // saber si te has movido dos secciones o siete.
+    // Se desplaza, no salta: un salto instantáneo en una página larga deja sin
+    // saber si el movimiento fue de dos secciones o de siete.
     NumberAnimation {
         id: jumpAnim
         target: flick
@@ -453,9 +425,9 @@ FloatingWindow {
     }
     readonly property string catGlyph:      activeItem.glyph
 
-    // Resultados del buscador en OTRAS categorías, agrupados — la que se ve
-    // ya se filtra sola (SettingsFilter, dentro de la página cargada); esto
-    // cubre lo que esa página no puede mostrar por no ser la activa.
+    // Resultados del buscador en otras categorías, agrupados. La categoría visible
+    // se filtra sola dentro de la página cargada; esto cubre lo que esa página no
+    // puede mostrar por no ser la activa.
     readonly property var crossResults: SettingsFilter.searching
         ? SettingsSearchIndex.search(SettingsFilter.query, cfg.shownCat) : []
     readonly property var crossGroups: {
@@ -469,22 +441,18 @@ FloatingWindow {
         return order.map(c => ({ cat: c, info: itemIndex[c] || { label: c, glyph: "" }, items: byCat[c] }))
     }
 
-    // Dos tarjetas flotantes (barra lateral | contenido) sobre el fondo de la
-    // ventana, con esquinas redondeadas y un hueco que deja ver el fondo entre
-    // y alrededor de ellas. Sin cabecera de ventana propia: el título lo pone
-    // Hyprland y el cierre vive en la cabecera del contenido.
+    // Dos tarjetas flotantes —barra lateral y contenido— sobre el fondo de la
+    // ventana, con un hueco que lo deja ver entre y alrededor de ellas. Sin
+    // cabecera propia: el título lo pone el compositor y el cierre vive en la
+    // cabecera del contenido.
     ColumnLayout {
         anchors.fill: parent
         anchors.margins: cfg.cardGap
         spacing: cfg.cardGap
 
-        // ── Cabecera global ──────────────────────────────────────────────────
-        // Cruza TODO el ancho de la ventana, por encima de las dos tarjetas:
-        // el buscador busca en todas las secciones y cerrar cierra la ventana
-        // entera, así que ninguno de los dos pertenece a una tarjeta concreta.
-        // Antes el buscador vivía dentro de la barra lateral (parecía filtrar
-        // solo la navegación) y el aspa colgaba de la tarjeta de contenido,
-        // que empieza pasada la barra: no llegaba al vértice de la ventana.
+        // Cruza todo el ancho de la ventana, por encima de las dos tarjetas: el
+        // buscador busca en todas las secciones y cerrar cierra la ventana entera,
+        // así que ninguno de los dos pertenece a una tarjeta concreta.
         RowLayout {
             Layout.fillWidth: true
             Layout.leftMargin: cfg.spaceSm
@@ -502,30 +470,29 @@ FloatingWindow {
 
             Item { Layout.fillWidth: true }
 
-            // Buscador en cabecera de la barra lateral: busca sobre
-            // todas las páginas (la activa se filtra en vivo; el resto
-            // sale en "Resultados en otras secciones").
+            // Buscador global: la página activa se filtra en vivo y el resto sale
+            // en "Resultados en otras secciones".
             SearchField {
                 id: search
-                // En la cabecera global sí hay sitio aunque la barra lateral
-                // se haya plegado a riel; solo desaparece cuando la ventana es
-                // tan estrecha que la cabecera va soltando controles.
+                // En la cabecera global hay sitio aunque la barra lateral se haya
+                // plegado a riel; solo desaparece cuando la ventana es tan
+                // estrecha que la cabecera va soltando controles.
                 visible: !cfg.headerMicro
-                // Ancho propio (no fillWidth): entre los dos huecos elásticos
-                // queda centrada en la ventana, como en la referencia. Con
-                // fillWidth se repartía el sobrante a tres bandas y su tamaño
-                // dependía de cuántas acciones hubiera visibles a la derecha.
+                // Ancho propio y no fillWidth: entre los dos huecos elásticos
+                // queda centrada en la ventana. Con fillWidth el sobrante se
+                // reparte a tres bandas y su tamaño dependería de cuántas
+                // acciones hubiera visibles a la derecha.
                 Layout.preferredWidth: Math.min(Theme.dp(380), cfg.width * 0.32)
                 Layout.preferredHeight: cfg.controlHeightSm
                 Layout.alignment: Qt.AlignVCenter
                 placeholder: I18n.tr("Search settings…")
                 textPixelSize: Theme.typeBodyLarge
                 accentIconOnFocus: true
-                // Un solo sentido (campo → filtro). Enlazar también el
-                // sentido contrario haría un bucle de bindings.
+                // Un solo sentido, campo → filtro: enlazar también el contrario
+                // haría un bucle de bindings.
                 onTextChanged: SettingsFilter.query = text
-                // Enter: si la página visible se quedó sin coincidencias
-                // pero hay resultados en otra sección, salta a la primera.
+                // Enter: si la página visible se quedó sin coincidencias pero hay
+                // resultados en otra sección, salta a la primera.
                 onAccepted: {
                     const pageEmpty = pageLoader.item
                         && pageLoader.item.implicitHeight < Theme.dp(8)
@@ -542,11 +509,10 @@ FloatingWindow {
 
             Item { Layout.fillWidth: true }
 
-            // "Solo modificados": mismo lenguaje que "Activar
-            // plantillas" (etiqueta + interruptor deslizante). En
-            // estrecho se queda solo el interruptor; en muy estrecho
-            // (headerTight) se pliega entero deslizándose bajo el
-            // recorte, en vez de empujar a los botones fuera.
+            // "Solo modificados", con el mismo lenguaje que los demás
+            // interruptores. En estrecho se queda solo el interruptor; en muy
+            // estrecho se pliega entero deslizándose bajo el recorte, en vez de
+            // empujar a los botones fuera.
             Item {
                 id: modOnlyWrap
                 readonly property bool shownCtl: !cfg.headerTight
@@ -563,9 +529,8 @@ FloatingWindow {
                 }
                 RowLayout {
                     id: modOnlyRow
-                    // Anclado a la derecha: al plegarse, la etiqueta
-                    // desaparece primero bajo el recorte y el
-                    // interruptor es lo último en irse.
+                    // Anclado a la derecha: al plegarse, la etiqueta desaparece
+                    // primero bajo el recorte y el interruptor es lo último.
                     anchors.right: parent.right
                     anchors.verticalCenter: parent.verticalCenter
                     spacing: cfg.spaceXs + Theme.dp(4)
@@ -586,17 +551,14 @@ FloatingWindow {
                 }
             }
 
-            // Restablecer TODO: sin sentido si no hay nada que
-            // restablecer. En estrecho colapsa a solo el icono (botón
-            // cuadrado), como el resto de la cabecera.
-            // Resaltado en pareja con el botón de cerrar: tinte rojo
-            // suave que funde (fondo, borde y texto a la vez), leve
-            // crecida al posarse y encogida al pulsar; la flecha de
-            // reinicio da una vuelta completa al entrar el puntero.
+            // Restablecer todo, oculto si no hay nada que restablecer. En estrecho
+            // colapsa a solo el icono, como el resto de la cabecera. El resaltado
+            // va en pareja con el botón de cerrar: tinte rojo suave que funde,
+            // leve crecida al posarse y encogida al pulsar.
             Rectangle {
                 id: resetBtn
-                // En headerMicro se pliega también: por prioridad, el
-                // último superviviente de la cabecera es Cerrar.
+                // En headerMicro se pliega también: por prioridad, el último
+                // superviviente de la cabecera es Cerrar.
                 readonly property bool shownBtn: Settings.anyModified && !cfg.headerMicro
                 visible: opacity > 0.01 || implicitWidth > 0.5
                 implicitWidth: !shownBtn ? 0
@@ -617,10 +579,10 @@ FloatingWindow {
                 Keys.onReturnPressed: Settings.reset()
                 Keys.onEnterPressed: Settings.reset()
                 Keys.onSpacePressed: Settings.reset()
-                // Restablecer CONSERVA el rojo: destruye lo que hayas
-                // configurado, y el color es la advertencia. Pero el fondo ya
-                // no se recolorea a mano en tres estados: lleva la capa de
-                // estado de M3, con la misma intensidad que el resto.
+                // Restablecer conserva el rojo, que es la advertencia de que
+                // destruye lo configurado. El fondo no se recolorea a mano en tres
+                // estados: lleva la capa de estado de M3, con la misma intensidad
+                // que el resto.
                 color: cfg.settingsControl
                 border.width: activeFocus ? Theme.focusWidth : Theme.hairline
                 border.color: activeFocus ? Theme.focusRing
@@ -667,13 +629,10 @@ FloatingWindow {
                 }
             }
 
-            // Cerrar: botón de icono de M3. NEUTRO, no rojo.
-            //
-            // Iba en rojo, a juego con Restablecer, y eso era un error de
-            // vocabulario: el rojo promete "esto destruye algo". Restablecer
-            // sí borra tu configuración; cerrar una ventana no pierde nada.
-            // Pintarlos igual enseñaba a desconfiar del aspa — o, peor, a
-            // perderle el miedo al botón que sí es peligroso.
+            // Cerrar: botón de icono neutro, no rojo. El rojo promete "esto
+            // destruye algo", y cerrar una ventana no pierde nada; pintarlo igual
+            // que Restablecer enseñaría a desconfiar del aspa o, peor, a perderle
+            // el miedo al botón que sí es peligroso.
             Rectangle {
                 id: closeBtn
                 implicitWidth: cfg.controlHeightSm
@@ -692,7 +651,7 @@ FloatingWindow {
                 Behavior on border.color { ColorAnimation { duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
                 Behavior on scale { NumberAnimation { duration: Theme.animFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
 
-                // Capa de estado neutra (ver Theme.stateHover).
+                // Capa de estado neutra.
                 Rectangle {
                     anchors.fill: parent
                     radius: parent.radius
@@ -725,7 +684,7 @@ FloatingWindow {
             Layout.fillHeight: true
             spacing: cfg.cardGap
 
-        // ── Barra lateral (tarjeta) ──────────────────────────────────────────
+        // Barra lateral (tarjeta)
         Rectangle {
             Layout.preferredWidth: cfg.sidebarWidth
             Layout.fillHeight: true
@@ -744,9 +703,8 @@ FloatingWindow {
                 anchors.margins: cfg.navPad    // padding de la nav
                 spacing: Theme.dp(2)             // gap entre pestañas
 
-                    // Tarjeta de perfil (avatar + usuario + equipo): es la
-                    // puerta a "Acerca de", que por eso ya no necesita pestaña
-                    // abajo.
+                    // Tarjeta de perfil: es la puerta a "Acerca de", que por eso no
+                    // necesita pestaña abajo.
                     Rectangle {
                         id: profileTab
                         readonly property bool sel: cfg.cat === "about"
@@ -754,12 +712,11 @@ FloatingWindow {
                         Layout.bottomMargin: cfg.spaceSm
                         implicitHeight: profileRow.implicitHeight + Theme.dp(16)
                         radius: Theme.dp(14)
-                        // Tarjeta de cuenta con superficie propia, no un bloque
+                        // Tarjeta de cuenta con superficie propia y no un bloque
                         // de acento: el acento dice "estás aquí" en la barra, y
-                        // teñir de acento media barra solo por pasar el ratón
-                        // hacía que la ficha gritara más que la navegación. Al
-                        // seleccionarse sí se tiñe (es una página más) y se
-                        // enmarca; el hover va aparte, en capa de estado.
+                        // teñir media barra solo por pasar el ratón haría que la
+                        // ficha gritara más que la navegación. Al seleccionarse sí
+                        // se tiñe, porque es una página más.
                         color: sel ? cfg.navSelTint
                                    : Theme.withAlpha(Theme.surfaceHi, Theme.isDark ? 0.45 : 0.55)
                         border.width: Theme.hairline
@@ -768,10 +725,9 @@ FloatingWindow {
                         Behavior on color { ColorAnimation { duration: Theme.animFast } }
                         Behavior on border.color { ColorAnimation { duration: Theme.animFast } }
 
-                        // Capa de estado (Material): el hover no cambia el color
-                        // de la ficha, le superpone un velo tenue. Así el mismo
-                        // gesto se lee igual sobre la ficha teñida y sobre la
-                        // ficha en reposo.
+                        // Capa de estado: el hover no cambia el color de la ficha,
+                        // le superpone un velo tenue, así que el mismo gesto se lee
+                        // igual sobre la ficha teñida y sobre la ficha en reposo.
                         Rectangle {
                             anchors.fill: parent
                             radius: parent.radius
@@ -782,8 +738,8 @@ FloatingWindow {
                             }
                         }
 
-                        // Reflejo del canto superior, igual que las tarjetas de
-                        // la derecha: barra y contenido hablan el mismo idioma.
+                        // Reflejo del canto superior, igual que las tarjetas de la
+                        // derecha: barra y contenido hablan el mismo idioma.
                         Rectangle {
                             anchors.top: parent.top
                             anchors.topMargin: Theme.hairline
@@ -810,12 +766,11 @@ FloatingWindow {
                             spacing: cfg.navCompact ? 0 : Theme.dp(10)
 
                             // En riel, un hueco elástico a cada lado centra el
-                            // avatar (que se queda solo al ocultarse el texto).
+                            // avatar, que se queda solo al ocultarse el texto.
                             Item { Layout.fillWidth: cfg.navCompact; visible: cfg.navCompact }
 
                             // Avatar: inicial del usuario en círculo tonal de
-                            // acento, como los avatares de letra de Google
-                            // (no hay ~/.face en este equipo).
+                            // acento cuando no hay imagen.
                             Avatar {
                                 Layout.alignment: Qt.AlignVCenter
                                 diameter: Theme.dp(40)
@@ -848,9 +803,8 @@ FloatingWindow {
                                 }
                             }
 
-                            // Galón: la ficha abre una página, como las
-                            // pestañas de abajo. Sin él no había nada que lo
-                            // dijera y parecía una cabecera decorativa.
+                            // Galón: la ficha abre una página, como las pestañas
+                            // de abajo. Sin él parecería una cabecera decorativa.
                             ThemedText {
                                 visible: !cfg.navCompact
                                 text: "󰅂"
@@ -889,42 +843,35 @@ FloatingWindow {
                         contentWidth: width
                         contentHeight: navCol.implicitHeight
                         boundsBehavior: Flickable.StopAtBounds
-                        // El sistema de coordenadas donde vive la píldora y al
-                        // que las pestañas mapean su posición.
+                        // El sistema de coordenadas donde vive la píldora y al que
+                        // las pestañas mapean su posición.
                         Component.onCompleted: cfg.navContent = contentItem
                         // ¿Sobra contenido para lo que cabe? Solo entonces hay
-                        // barra (y las pestañas dejan un carril para ella).
+                        // barra, y las pestañas le dejan un carril.
                         readonly property bool scrollable: contentHeight > height + 1
                         readonly property real scrollGutter: scrollable ? Theme.dp(8) : 0
 
-                        // Barra deslizable fina, del mismo lenguaje que la de
-                        // los desplegables (ver Components/DropdownRow.qml):
-                        // solo aparece cuando hace falta.
+                        // Barra deslizable fina, del mismo lenguaje que la de los
+                        // desplegables: solo aparece cuando hace falta.
                         ScrollBar.vertical: ThinScrollBar {
                             policy: navFlick.scrollable ? ScrollBar.AlwaysOn : ScrollBar.AlwaysOff
-                            // Separada del canto y, abajo, retranqueada JUSTO
-                            // lo que le falta para librar el redondeo de la
-                            // esquina de la tarjeta: en los extremos del
-                            // recorrido el tirador se metía en la curva, donde
-                            // ya no hay superficie, y parecía colgar fuera.
-                            // Sale de la resta (radio − padding de la nav), no
-                            // de un número a ojo. Arriba no hace falta tanto:
-                            // ahí no hay esquina, está la ficha de cuenta.
+                            // Separada del canto y, abajo, retranqueada justo lo
+                            // que le falta para librar el redondeo de la esquina:
+                            // en los extremos del recorrido el tirador se metería
+                            // en la curva, donde ya no hay superficie.
                             rightPadding: Theme.dp(3)
                             topPadding: Theme.dp(2)
                             bottomPadding: Math.max(Theme.dp(2), cfg.radiusCard - cfg.navPad)
                         }
 
-                        // Píldora ÚNICA de selección (detrás de las pestañas):
-                        // se desliza a la posición absoluta de la seleccionada,
-                        // de un grupo a otro sin cortes. Declarada antes que
-                        // navCol para quedar por debajo.
+                        // Píldora única de selección, detrás de las pestañas: se
+                        // desliza a la posición absoluta de la seleccionada, de un
+                        // grupo a otro sin cortes. Declarada antes que navCol para
+                        // quedar por debajo.
                         //
-                        // No se anima mientras no se ve. Al pasar por la ficha
-                        // de cuenta la píldora se apaga, y si el trayecto
-                        // siguiera corriendo por debajo, al volver a una
-                        // categoría reaparecería a medio vuelo. Debe nacer ya
-                        // puesta en su pestaña.
+                        // No se anima mientras no se ve: al pasar por la ficha de
+                        // cuenta se apaga, y si el trayecto siguiera corriendo por
+                        // debajo, al volver reaparecería a medio vuelo.
                         ElasticPill {
                             id: navSelPill
                             targetY: cfg.navSelY
@@ -934,12 +881,10 @@ FloatingWindow {
                             Behavior on opacity { NumberAnimation { duration: Theme.animFast } }
                         }
 
-                        // Píldora de HOVER (más tenue que la selección): sigue
-                        // al cursor deslizándose de pestaña en pestaña, con el
-                        // mismo elástico algo más rápido — tiene que ir con el
-                        // cursor. Cuando no se ve, la posición salta sin
-                        // animar: al reaparecer debe nacer bajo el cursor, no
-                        // "viajar" desde donde se quedó la última vez.
+                        // Píldora de hover, más tenue: sigue al cursor con el
+                        // mismo elástico algo más rápido. Cuando no se ve, la
+                        // posición salta sin animar, para que al reaparecer nazca
+                        // bajo el cursor y no viaje desde donde se quedó.
                         ElasticPill {
                             id: navHovPill
                             color: cfg.navHovTint
@@ -954,8 +899,8 @@ FloatingWindow {
 
                         ColumnLayout {
                             id: navCol
-                            // Deja un carril para la barra cuando la hay, para
-                            // que no se solape con las pestañas.
+                            // Deja un carril para la barra cuando la hay, para que
+                            // no se solape con las pestañas.
                             width: navFlick.width - navFlick.scrollGutter
                             spacing: Theme.dp(2)
                             Repeater {
@@ -971,10 +916,10 @@ FloatingWindow {
                 }
             }
 
-            // Contenido: la otra tarjeta flotante. El hueco de la fila
-            // (cardGap) hace de separador, así que ya no hace falta filete.
-            // Rectangle (no Item) para pintar el fondo de tarjeta y redondear;
-            // clip recorta la marca de agua y la página a las esquinas.
+            // Contenido: la otra tarjeta flotante. El hueco de la fila hace de
+            // separador, así que no hace falta filete. Es un Rectangle y no un
+            // Item para pintar el fondo y redondear, y 'clip' recorta la marca de
+            // agua y la página a las esquinas.
             Rectangle {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
@@ -984,22 +929,20 @@ FloatingWindow {
                 border.width: Theme.hairline
                 border.color: cfg.settingsBorder
 
-                // Luz que entra por el canto superior de la tarjeta: un halo
-                // radial muy tenue del color de acento, centrado arriba y
-                // apagándose hacia abajo. Es lo que hace que la tarjeta se lea
-                // como una superficie iluminada y no como un rectángulo de
-                // color plano — y es el único sitio de la ventana donde el
-                // acento aparece como LUZ en vez de como tinta.
+                // Luz que entra por el canto superior: un halo radial muy tenue
+                // del color de acento, que hace que la tarjeta se lea como una
+                // superficie iluminada y no como un rectángulo plano. Es el único
+                // sitio de la ventana donde el acento aparece como luz.
                 //
-                // Va en Canvas y no en un Gradient de Rectangle porque QML
-                // solo sabe hacer degradados lineales de forma declarativa;
-                // el contexto 2D sí tiene createRadialGradient. Se repinta
-                // solo cuando cambia el tamaño o el acento, no por fotograma.
+                // Va en Canvas porque QML solo sabe hacer degradados lineales de
+                // forma declarativa, y el contexto 2D sí tiene
+                // createRadialGradient. Se repinta al cambiar el tamaño o el
+                // acento, no por fotograma.
                 Canvas {
                     id: bloom
                     anchors.fill: parent
-                    // El acento se lee aquí (y no dentro de onPaint) para que
-                    // el cambio de tema dispare el repintado.
+                    // El acento se lee aquí y no dentro de onPaint, para que el
+                    // cambio de tema dispare el repintado.
                     property color tint: Theme.accent
                     onTintChanged: requestPaint()
                     onWidthChanged: requestPaint()
@@ -1022,12 +965,10 @@ FloatingWindow {
                     }
                 }
 
-                // Firma de la ventana: el glifo de la categoría activa, enorme
-                // y casi invisible, sangrando por la esquina superior derecha.
-                // Es gratis (ya tenemos cfg.catGlyph) y cambia con cada página:
-                // no decora, identifica dónde estás sin competir con el texto.
-                // Fuera en "Acerca de": esa página ya trae su propia tarjeta
-                // ilustrada (avatar + logo) y la marca de agua le hacía sombra.
+                // Firma de la ventana: el glifo de la categoría activa, enorme y
+                // casi invisible, sangrando por la esquina superior derecha. No
+                // decora: identifica dónde estás sin competir con el texto. Fuera
+                // en "Acerca de", que ya trae su propia tarjeta ilustrada.
                 ThemedText {
                     anchors.top: parent.top
                     anchors.right: parent.right
@@ -1038,12 +979,10 @@ FloatingWindow {
                     color: Theme.accent
                     opacity: cfg.pageOpacity * (Theme.isDark ? 0.07 : 0.05)
                     font.pixelSize: Theme.sp(150)
-                    // Paralaje: al desplazar la página, la marca de agua se va
-                    // más despacio que el contenido. Es lo que le da a la
-                    // tarjeta una segunda profundidad — la marca deja de ser un
-                    // dibujo pegado al cristal y pasa a estar detrás. Acotada:
-                    // pasado un punto ya se ha ido y seguir moviéndola solo
-                    // gastaría repintados.
+                    // Paralaje: al desplazar, la marca de agua se va más despacio
+                    // que el contenido, y eso le da a la tarjeta una segunda
+                    // profundidad. Acotada, porque pasado un punto ya se ha ido y
+                    // seguir moviéndola solo gastaría repintados.
                     transform: Translate {
                         y: -Math.min(Math.max(0, flick.contentY) * 0.14, Theme.dp(56))
                     }
@@ -1054,65 +993,53 @@ FloatingWindow {
                 anchors.fill: parent
                 anchors.margins: cfg.headerCompact ? cfg.spaceMd : cfg.spaceLg
                 anchors.leftMargin: cfg.headerCompact ? cfg.spaceSm : cfg.spaceMd
-                // Margen derecho corto a propósito: es el carril por el que
-                // baja la barra de desplazamiento de la página, y una barra de
-                // página va pegada al canto. La columna de texto no se descentra
-                // por esto — va centrada por 'inset', que absorbe la diferencia.
+                // Margen derecho corto a propósito: es el carril por el que baja
+                // la barra de desplazamiento, que va pegada al canto. La columna de
+                // texto no se descentra, porque va centrada por 'inset'.
                 anchors.rightMargin: cfg.spaceSm
                 spacing: cfg.spaceSm
 
                 // Medida de la columna de contenido. Un ajuste es una línea de
-                // texto seguida de su control: pasado cierto ancho, estirarla
-                // no añade nada y sí separa la etiqueta de lo que gobierna.
-                // Con la ventana maximizada en un monitor de 2560 px la fila
-                // llegaba a medir metro y medio de vacío.
-                //
-                // El tope solo entra en juego en pantalla grande: al tamaño de
-                // referencia (1280 px) la tarjeta ya mide menos que esto, así
-                // que la vista normal no cambia — lo que cambia es que
-                // maximizar deja de estropear la lectura.
+                // texto seguida de su control: pasado cierto ancho, estirarla no
+                // añade nada y sí separa la etiqueta de lo que gobierna. El tope
+                // solo entra en juego en pantalla grande, así que la vista normal
+                // no cambia y maximizar deja de estropear la lectura.
                 readonly property int inset:
                     Math.max(0, Math.round((width - Theme.dp(760)) / 2))
 
-                // Cabecera de la página: título a la izquierda y acciones
-                // globales ("solo modificados", Restablecer, cerrar) a la
-                // derecha. Cuanto más estrecho el panel, más margen derecho:
-                // así el grupo de acciones se rebaja hacia la izquierda en vez
-                // de quedarse pegado al borde.
+                // Cabecera de la página: título a la izquierda y acciones globales
+                // a la derecha. Cuanto más estrecho el panel, más margen derecho,
+                // así el grupo de acciones se rebaja hacia la izquierda en vez de
+                // quedarse pegado al borde.
                 RowLayout {
                     Layout.fillWidth: true
-                    // Mismo eje que las tarjetas de ajustes de debajo: el
-                    // título y la primera fila de la primera tarjeta arrancan
-                    // de la misma vertical.
+                    // Mismo eje que las tarjetas de debajo: el título y la primera
+                    // fila de la primera tarjeta arrancan de la misma vertical.
                     Layout.leftMargin: contentCol.inset
                     Layout.rightMargin: contentCol.inset
-                    // En compacto la cabecera respiraba menos justo cuando
-                    // menos sitio hay alrededor: un punto MÁS de aire, no menos
-                    // — es lo que separa "compacto" de "apretado".
+                    // En compacto, un punto más de aire y no menos: es lo que
+                    // separa "compacto" de "apretado".
                     Layout.topMargin: cfg.headerCompact ? cfg.spaceXs : 0
                     Layout.bottomMargin: cfg.spaceSm
                     spacing: cfg.headerCompact ? cfg.spaceXs : cfg.spaceSm
 
-                    // Título de la página. Va con la que SE VE (shownCat), no
-                    // con la pulsada: si no, cambiaría antes que el contenido.
+                    // Título de la página. Va con la categoría que se ve y no con
+                    // la pulsada, o cambiaría antes que el contenido.
                     ColumnLayout {
                         Layout.fillWidth: true
                         spacing: Theme.space2
                         opacity: cfg.pageOpacity
-                        // Baja mientras las tarjetas suben. El movimiento
-                        // contrario hace que la página se lea como algo que se
-                        // ABRE por el medio; con todo yendo en el mismo sentido
-                        // solo se ve un bloque deslizándose.
+                        // Baja mientras las tarjetas suben: el movimiento contrario
+                        // hace que la página se lea como algo que se abre por el
+                        // medio, en vez de un bloque deslizándose.
                         transform: Translate {
                             y: -Math.round((1 - SettingsMotion.reveal(0)) * Theme.dp(8))
                         }
 
-                        // Miga del grupo ("Personalización", "Sistema"). SOLO
-                        // cuando la barra se ha plegado a riel de iconos: con
-                        // las etiquetas de la nav a la vista repetirlo era
-                        // ruido (por eso se quitó el antetítulo), pero el riel
-                        // las esconde — y entonces la miga es la única pista
-                        // de en qué grupo estás.
+                        // Miga del grupo, solo cuando la barra se ha plegado a riel
+                        // de iconos: con las etiquetas de la navegación a la vista
+                        // repetirlo sería ruido, pero el riel las esconde y
+                        // entonces la miga es la única pista del grupo.
                         ThemedText {
                             visible: cfg.navCompact && cfg.catGroupLabel !== ""
                             text: cfg.catGroupLabel
@@ -1126,26 +1053,19 @@ FloatingWindow {
                             Layout.fillWidth: true
                             spacing: Theme.space10
 
-                            // El glifo de la sección, plano y de acento, como
-                            // los de la nav: ancla la identidad de la página
-                            // sin contenedor. La marca de agua ya lo insinúa
-                            // arriba a la derecha, pero casi invisible y
-                            // sangrada fuera — esto es lo que se LEE.
-                            //
-                            // Crece con el reloj de entrada de la página: nace
-                            // pequeño y se asienta con las tarjetas, sin
-                            // animación propia.
+                            // El glifo de la sección, plano y de acento como los
+                            // de la navegación: ancla la identidad de la página sin
+                            // contenedor.
                             ThemedText {
                                 text: cfg.catGlyph
                                 color: Theme.accentText
                                 font.pixelSize: cfg.headerCompact ? Theme.sp(22) : Theme.sp(26)
                                 scale: 0.6 + 0.4 * SettingsMotion.reveal(0)
                             }
-                            // Un paso más grande que antes (headline medium):
-                            // el título es la única pieza de texto grande de la
-                            // página y se quedaba corto frente a las tarjetas.
-                            // En compacto baja un escalón para no comerse el
-                            // ancho.
+                            // Headline medium: el título es la única pieza de
+                            // texto grande de la página y a menos cuerpo se
+                            // queda corto frente a las tarjetas. En compacto
+                            // baja un escalón para no comerse el ancho.
                             ThemedText {
                                 Layout.fillWidth: true
                                 text: cfg.catLabel
@@ -1161,10 +1081,8 @@ FloatingWindow {
 
                 }
 
-                // Resultados del buscador en OTRAS categorías (ver
-                // cfg.crossGroups, declarado junto a itemIndex/activeItem
-                // más arriba). Aparece/desaparece con barrido + fundido, no
-                // de golpe (ver Components/ExpandableDetail.qml).
+                // Resultados del buscador en otras categorías. Aparece y
+                // desaparece con barrido y fundido, no de golpe.
                 ExpandableDetail {
                     Layout.leftMargin: contentCol.inset
                     Layout.rightMargin: contentCol.inset
@@ -1222,9 +1140,9 @@ FloatingWindow {
                                                 anchors.margins: cfg.spaceSm
                                                 spacing: cfg.spaceSm
                                                 // Glifo plano de la categoría
-                                                // destino, igual que en la nav:
-                                                // se ve a dónde te lleva el
-                                                // resultado antes de leerlo.
+                                                // destino, igual que en la
+                                                // navegación: se ve a dónde
+                                                // lleva antes de leerlo.
                                                 ThemedText {
                                                     Layout.preferredWidth: Theme.dp(22)
                                                     horizontalAlignment: Text.AlignHCenter
@@ -1269,21 +1187,14 @@ FloatingWindow {
                     }
                 }
 
-                // ── Saltar a una sección ─────────────────────────────────
-                // Las páginas largas —Tema son ocho tarjetas— solo se recorrían
-                // a rueda, y desde arriba no había forma de saber qué hay
-                // abajo. Esta tira hace las dos cosas: dice de qué va la página
-                // de un vistazo y lleva a cada sitio.
+                // Tira de secciones: dice de qué va la página de un vistazo y lleva
+                // a cada sitio, que en una página larga es lo único que permite
+                // saber qué hay abajo sin recorrerla a rueda.
                 //
-                // Va bajo la cabecera y no en una columna propia a la izquierda
-                // (que es donde la pone la referencia) por una razón de sitio:
-                // con la barra lateral y la columna de lectura acotada a 760 dp
-                // no queda ancho para un tercer carril sin robárselo al texto,
-                // que es lo que menos conviene estrechar. En horizontal no
-                // cuesta ancho a nadie.
-                //
-                // Desde tres secciones: con dos, la lista es más trabajo de
-                // leer que bajar la rueda.
+                // Va bajo la cabecera y no en una columna propia a la izquierda por
+                // sitio: con la barra lateral y la columna de lectura acotada no
+                // queda ancho para un tercer carril sin robárselo al texto. En
+                // horizontal no cuesta ancho a nadie.
                 Item {
                     id: jumpBar
                     Layout.fillWidth: true
@@ -1351,49 +1262,40 @@ FloatingWindow {
                     contentHeight: (pageLoader.item ? pageLoader.item.implicitHeight : 0) + cfg.spaceSm * 2
                     boundsBehavior: Flickable.StopAtBounds
 
-                    // Barra de desplazamiento del contenido. La barra lateral
-                    // tenía la suya y el contenido —que es lo que de verdad se
-                    // desplaza— no tenía ninguna: en una página larga no había
-                    // forma de saber cuánto quedaba.
-                    //
-                    // Va como capa SOBRE el contenido y solo mientras se usa,
-                    // que es como la pinta ChromeOS: una barra permanente le
-                    // robaría un carril a la columna de lectura, que ya está
-                    // acotada a propósito (ver contentCol.inset).
+                    // Barra de desplazamiento del contenido, que es lo que de
+                    // verdad se desplaza. Va como capa sobre él y solo mientras se
+                    // usa: permanente le robaría un carril a la columna de lectura,
+                    // que ya está acotada a propósito.
                     ScrollBar.vertical: ThinScrollBar {
                         policy: flick.contentHeight > flick.height + 1
                             ? ScrollBar.AsNeeded : ScrollBar.AlwaysOff
-                        // A ras del canto derecho: esta es la barra que baja
-                        // TODA la página, y ese es el sitio donde se busca sin
-                        // pensar. Solo se ve mientras se usa (restOpacity 0):
-                        // permanente robaría un carril a la columna de lectura.
+                        // A ras del canto derecho, que es donde se busca sin
+                        // pensar la barra que baja toda la página.
                         rightPadding: 0
-                        // Vertical sí: abajo está la esquina redondeada de la
-                        // tarjeta de contenido (misma cuenta que en la nav).
+                        // Retranqueo vertical: abajo está la esquina redondeada de
+                        // la tarjeta de contenido.
                         topPadding: Theme.dp(2)
                         bottomPadding: Math.max(Theme.dp(2), cfg.radiusCard - cfg.spaceSm)
                         restOpacity: 0
                     }
 
-                    // Solo se instancia la página ACTIVA. Así los desplegables
-                    // pesados (p. ej. options: Fonts.list.map(...)) se evalúan
-                    // únicamente al entrar en su categoría.
+                    // Solo se instancia la página activa, así que los desplegables
+                    // pesados se evalúan únicamente al entrar en su categoría.
                     Loader {
                         id: pageLoader
-                        // Columna centrada de medida acotada (ver
-                        // contentCol.inset). Nada de anclarse a los dos
-                        // bordes: en pantalla ancha las filas se estiraban
+                        // Columna centrada de medida acotada. Nada de anclarse a
+                        // los dos bordes: en pantalla ancha las filas se estirarían
                         // hasta romper la relación etiqueta ↔ control.
                         width: Math.max(Theme.dp(200), flick.width - contentCol.inset * 2)
                         x: Math.round((flick.width - width) / 2)
                         anchors.top: parent.top
                         anchors.topMargin: cfg.spaceSm
-                        // Sin esto, montar la página congela el hilo justo cuando
-                        // está corriendo la animación y se nota el tirón.
+                        // Carga asíncrona: montar la página de forma síncrona
+                        // congela el hilo justo cuando corre la animación.
                         asynchronous: true
                         opacity: cfg.pageOpacity
                         transform: Translate { y: cfg.pageOffset }
-                        // Ya está montada (o ha petado): que entre.
+                        // Ya está montada, o ha fallado: que entre.
                         onStatusChanged: if (status === Loader.Ready || status === Loader.Error) cfg.pageReady()
                         source: {
                             switch (cfg.shownCat) {
@@ -1412,9 +1314,9 @@ FloatingWindow {
                         }
                     }
 
-                    // El filtro ha escondido toda la página. Se ancla al ancho
-                    // del Flickable (no a su contentItem, que es tan alto como
-                    // la página y descolocaba el centrado).
+                    // El filtro ha escondido toda la página. Se ancla al ancho del
+                    // Flickable y no a su contentItem, que es tan alto como la
+                    // página y descolocaría el centrado.
                     ThemedText {
                         anchors.horizontalCenter: parent.horizontalCenter
                         anchors.top: parent.top
@@ -1431,26 +1333,24 @@ FloatingWindow {
                 }
                 }   // fin ColumnLayout interna (título + Flickable)
 
-                // Filete de desplazamiento bajo la cabecera. Aparece en cuanto
-                // el contenido deja de estar arriba del todo y dice lo único
-                // que el borde superior no puede decir por sí solo: que hay
-                // algo por encima de lo que se ve. Es un detalle de ChromeOS —
-                // y de casi cualquier lista con cabecera fija— que aquí faltaba:
-                // al desplazar, las tarjetas se cortaban a media altura contra
-                // el título sin nada que marcara el corte.
+                // Filete de desplazamiento bajo la cabecera. Aparece en cuanto el
+                // contenido deja de estar arriba del todo y dice lo único que el
+                // borde superior no puede decir solo: que hay algo por encima de lo
+                // que se ve, de modo que las tarjetas no se corten a media altura
+                // contra el título sin nada que marque el corte.
                 //
-                // Se coloca por coordenadas (no por anclas) porque el Flickable
-                // vive dentro de contentCol y no es hermano de esta capa; las
-                // anclas de QML solo llegan al padre y a los hermanos.
+                // Se coloca por coordenadas y no por anclas porque el Flickable vive
+                // dentro de contentCol y no es hermano de esta capa; las anclas de
+                // QML solo llegan al padre y a los hermanos.
                 Item {
                     id: headerScrim
                     anchors.left: parent.left
                     anchors.right: parent.right
                     y: contentCol.y + flick.y
                     height: Theme.dp(10)
-                    // Un umbral, no una rampa sobre contentY: así el fundido lo
-                    // hace la animación (con la duración de Ajustes) y no el
-                    // dedo, fotograma a fotograma.
+                    // Un umbral y no una rampa sobre contentY: así el fundido lo
+                    // hace la animación, con la duración de Ajustes, y no el dedo
+                    // fotograma a fotograma.
                     opacity: flick.contentY > Theme.dp(2) ? 1 : 0
                     visible: opacity > 0.01
                     Behavior on opacity {
@@ -1464,9 +1364,9 @@ FloatingWindow {
                         height: Theme.hairline
                         color: Theme.withAlpha(Theme.overlay, Theme.isDark ? 0.7 : 0.45)
                     }
-                    // Caída de sombra muy corta bajo el filete: sin ella el
-                    // filete parece un separador dibujado, no un borde por
-                    // debajo del cual pasa el contenido.
+                    // Caída de sombra muy corta bajo el filete: sin ella parece un
+                    // separador dibujado y no un borde por debajo del cual pasa el
+                    // contenido.
                     Rectangle {
                         anchors.fill: parent
                         anchors.topMargin: Theme.hairline
@@ -1483,15 +1383,13 @@ FloatingWindow {
         }       // fin de la fila barra lateral | contenido
     }
 
-    // Componentes de la ventana. Los bloques que reutilizan las páginas
-    // (SettingsCard, SwitchRow, SegRow, Hint, MonitorCard,
-    // MonitorArrangement) viven en Panels/SettingsPages/; aquí solo la nav lateral.
+    // Componentes de la ventana. Los bloques que reutilizan las páginas viven en
+    // Panels/SettingsPages/; aquí solo la navegación lateral.
 
-    // Distintivo de "aquí estás": píldora estadio con tinte de acento suave,
-    // no un bloque sólido. Es la pieza que reutilizan tanto el indicador
-    // deslizante de cada NavSection como el estado propio de una NavTab
-    // suelta. Sin posición propia (ni anchors.fill ni x/y): cada sitio que la
-    // usa la coloca a su manera, para poder tanto deslizarla como anclarla.
+    // Distintivo de "aquí estás": píldora estadio con tinte de acento suave, no un
+    // bloque sólido. La reutilizan el indicador deslizante de cada NavSection y el
+    // estado propio de una NavTab suelta. Sin posición propia, para que cada sitio
+    // pueda tanto deslizarla como anclarla.
     component NavHighlight: Rectangle {
         radius: height / 2
         color: cfg.navSelTint

@@ -62,9 +62,7 @@ SettingsPage {
     }
 
     // Duración por urgencia: la manda la app que envía el aviso, y los tres
-    // niveles no merecen el mismo tiempo en pantalla. Es lo que hacen tanto
-    // noctalia como DankMaterialShell, y es la diferencia entre que un
-    // "canción cambiada" te estorbe cinco segundos o cuatro.
+    // niveles no merecen el mismo tiempo en pantalla.
     SettingsCard {
         title: I18n.tr("On-screen duration"); glyph: "󰔛"
 

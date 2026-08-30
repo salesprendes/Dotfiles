@@ -30,9 +30,12 @@ PanelWindow {
     // Altura ocupada por la pila en este instante (suma de ranuras animadas).
     property real contentHeight: 0
 
-    // Se ocultan con cualquier panel abierto —los popouts viven en esta misma
-    // capa y se disputarían el ratón— y con una ventana a pantalla completa.
-    // Las notificaciones siguen llegando a su centro.
+    // Se ocultan con cualquier panel abierto —los popouts viven en esta misma capa
+    // y se disputarían el ratón— y con una ventana a pantalla completa; las
+    // notificaciones siguen llegando a su centro.
+    //
+    // Se pregunta por la pantalla de esta ventana y no por la enfocada, porque esto
+    // vive una vez por monitor: un vídeo en uno no calla los avisos del otro.
     // Se pregunta por la pantalla de esta ventana y no por la enfocada, porque
     // esto vive una vez por monitor: un vídeo en uno no calla los avisos del otro.
     readonly property bool ocultoPorPantallaCompleta: Globals.hiddenByFullscreen(popups.modelData)
@@ -57,8 +60,8 @@ PanelWindow {
         stackHeight = Math.min(maxStackHeight, Math.ceil(contentHeight))
     implicitHeight: popupModel.count > 0 ? stackHeight : 1
 
-    // Solo las tarjetas reciben input: sin máscara, toda la superficie
-    // (incluida la zona vacía bajo la pila) bloqueaba los clics al escritorio.
+    // Solo las tarjetas reciben input: sin máscara, toda la superficie —incluida la
+    // zona vacía bajo la pila— bloquearía los clics al escritorio.
     mask: Region { item: maskArea }
     Item {
         id: maskArea

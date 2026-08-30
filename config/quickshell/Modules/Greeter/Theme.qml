@@ -13,7 +13,6 @@ import qs.Config as Shared
 Singleton {
     id: root
 
-    // ── Curvas de movimiento de Material 3 ───────────────────────────────────
     // LAS MISMAS que Config/Theme.qml, y repetidas a propósito: el greeter
     // corre ANTES de la sesión y tiene su propio Theme justamente para no
     // arrastrar Settings ni el resto del shell. Importar el otro por seis

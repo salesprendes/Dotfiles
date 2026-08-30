@@ -2,20 +2,16 @@ import QtQuick
 
 // Vigilante de reubicación de monitor para superficies de vida larga.
 //
-// EL PROBLEMA: Hyprland coloca una superficie layer-shell cuando la MAPEA y no
-// vuelve a moverla. Si el monitor cambia de sitio en el layout —desconectar el
-// portátil de la dock, apagar la pantalla interna, un `hyprctl keyword monitor`
-// que reordene— la superficie sigue pintando en el offset global viejo. Las
-// ventanas que se crean y destruyen (los popouts) no lo notan porque el
-// siguiente mapeo ya usa la posición nueva; las que viven toda la sesión
-// (barra, fondo, popups de notificación, OSD) se quedan descolocadas —o
-// directamente fuera de pantalla— hasta reiniciar el shell.
+// Hyprland coloca una superficie de layer-shell cuando la mapea y no vuelve a
+// moverla. Si el monitor cambia de sitio en el layout, la superficie sigue
+// pintando en el offset global viejo. Las ventanas que se crean y destruyen no
+// lo notan, porque el siguiente mapeo ya usa la posición nueva; las que viven
+// toda la sesión se quedan descolocadas, o fuera de pantalla, hasta reiniciar.
 //
-// LA CURA: desmapear y volver a mapear. Poner 'visible' a false y a true hace
-// exactamente eso, y al remapear el compositor recoloca la superficie en el
-// origen actual del monitor.
+// La cura es desmapear y volver a mapear, que es lo que consigue poner 'visible'
+// a false y a true: al remapear, el compositor recoloca la superficie.
 //
-// USO: se instancia dentro de la ventana y se dobla en su binding de visible:
+// Se instancia dentro de la ventana y se dobla en su binding de visible:
 //
 //     PanelWindow {
 //         id: win
@@ -23,11 +19,10 @@ import QtQuick
 //         ScreenMoveRemap { id: remapGuard; window: win }
 //     }
 //
-// NO se escucha 'onXChanged'/'onYChanged': en Quickshell 0.3.1 las cuatro
-// propiedades de geometría de ShellScreen (x, y, width, height) comparten un
-// único notify —'geometryChanged'—, así que los manejadores por propiedad no
-// existen como señal y un Connections a ellos no se engancharía nunca. Se
-// escucha la señal real y se compara el origen a mano.
+// No se escuchan 'onXChanged' ni 'onYChanged': las cuatro propiedades de
+// geometría de ShellScreen comparten un único notify, así que los manejadores
+// por propiedad no existen como señal y un Connections a ellos no se engancharía
+// nunca. Se escucha la señal real y se compara el origen a mano.
 Item {
     id: root
 
@@ -37,9 +32,9 @@ Item {
     // Pulso que el dueño dobla en su 'visible'.
     property bool remapping: false
 
-    // Origen conocido del monitor. 'primed' distingue "aún no medido" de
-    // "medido y está en 0,0" — sin él, el monitor principal (que suele estar
-    // justo en 0,0) provocaría un remapeo espurio en el primer arranque.
+    // Origen conocido del monitor. 'primed' distingue "aún no medido" de "medido
+    // y está en 0,0": sin él, el monitor principal provocaría un remapeo espurio
+    // en el primer arranque.
     property int lastX: 0
     property int lastY: 0
     property bool primed: false
@@ -67,9 +62,8 @@ Item {
         settleTimer.restart()
     }
 
-    // Cambiar de pantalla (o perderla) reinicia la medición: el origen de la
-    // nueva no tiene nada que ver con el de la anterior y compararlos daría un
-    // remapeo que no toca.
+    // Cambiar de pantalla, o perderla, reinicia la medición: el origen de la
+    // nueva no tiene que ver con el de la anterior.
     onScreenChanged: {
         root.primed = false
         root.sample()
@@ -83,16 +77,15 @@ Item {
         function onGeometryChanged() { root.sample() }
     }
 
-    // Una reorganización del layout puede mover el monitor varias veces antes
-    // de asentarse (Hyprland recoloca monitor a monitor). Se espera a que pare
-    // para hacer UN solo remapeo en vez de uno por paso intermedio.
+    // Una reorganización del layout puede mover el monitor varias veces antes de
+    // asentarse, así que se espera a que pare para hacer un solo remapeo.
     Timer {
         id: settleTimer
         interval: 200
         onTriggered: root.remapping = true
     }
 
-    // Se mantiene desmapeada un instante: sin esta pausa el compositor puede
+    // Se mantiene desmapeada un instante: sin la pausa, el compositor puede
     // fundir el unmap y el remap en el mismo ciclo y quedarse en nada.
     Timer {
         interval: 50

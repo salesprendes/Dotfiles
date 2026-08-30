@@ -7,10 +7,9 @@ import qs.Panels.SettingsPages
 // Barra
 SettingsPage {
 
-    // Disposición de la barra. Antes esto era una lista de ocho interruptores
-    // —uno por widget— que solo sabían encender y apagar: el ORDEN estaba
-    // cableado en el QML de la barra, así que "quiero la batería antes que el
-    // reloj" no tenía respuesta. Ahora es un editor: se arrastra.
+    // Disposición de la barra: un editor donde se arrastra, en vez de una lista
+    // de interruptores que solo sabría encender y apagar sin poder cambiar el
+    // orden.
     SettingsCard {
         title: I18n.tr("Bar widgets"); glyph: "󰕬"
         description: I18n.tr("What the bar shows, on which side and in what order.")
@@ -18,7 +17,7 @@ SettingsPage {
         BarLayoutEditor {}
     }
 
-    // ── La isla ─────────────────────────────────────────────────────────────
+    // La isla
     SettingsCard {
         title: I18n.tr("Dynamic island")
         glyph: "󰋙"

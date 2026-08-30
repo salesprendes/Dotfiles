@@ -43,15 +43,16 @@ Singleton {
         if (adapter) adapter.enabled = !adapter.enabled
     }
 
-    // Recuperación tras suspensión. Quickshell.Bluetooth no expone un re-sync
-    // manual, así que no podemos reconstruir su modelo desde fuera. El fallo
-    // real es que el adaptador despierte apagado o con soft-block de rfkill
-    // (BlueZ no siempre lo restaura). Al reactivarlo, BlueZ emite
-    // PropertiesChanged y reconecta los dispositivos de confianza: señales que
-    // Quickshell sí capta, así que su modelo se re-sincroniza solo. Corre en
-    // cada pulso de recuperación (reintento a ~0.7/3.2/7.7 s, por si el
-    // controlador tarda en volver). Idempotente: si ya está encendido no hace
-    // nada; si el BT estaba apagado antes de dormir, se respeta.
+    // Recuperación tras suspender. Quickshell.Bluetooth no expone un re-sync
+    // manual, así que su modelo no se puede reconstruir desde fuera; lo que falla
+    // de verdad es que el adaptador despierte apagado o con soft-block de rfkill.
+    // Al reactivarlo, BlueZ emite PropertiesChanged y reconecta los dispositivos
+    // de confianza, señales que Quickshell sí capta y con las que su modelo se
+    // re-sincroniza solo.
+    //
+    // Corre en cada pulso de recuperación por si el controlador tarda, y es
+    // idempotente: si ya está encendido no hace nada, y si el Bluetooth estaba
+    // apagado antes de dormir se respeta.
     property bool _wasOn: false
     Connections {
         target: Resume

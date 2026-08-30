@@ -73,7 +73,7 @@ SettingsPage {
         }
     }
 
-    // ── Disposición de la barra ──────────────────────────────────────────────
+    // Disposición de la barra
     SettingsCard {
         title: I18n.tr("Bar layout")
         glyph: "󰉺"
@@ -97,7 +97,7 @@ SettingsPage {
         }
     }
 
-    // ── Teclado ──────────────────────────────────────────────────────────────
+    // Teclado
     SettingsCard {
         title: I18n.tr("Keyboard")
         glyph: "󰌌"
@@ -112,7 +112,7 @@ SettingsPage {
         }
     }
 
-    // ── Bloqueo de pantalla ──────────────────────────────────────────────────
+    // Bloqueo de pantalla
     SettingsCard {
         title: I18n.tr("Screen lock")
         glyph: "󰌾"
@@ -164,7 +164,6 @@ SettingsPage {
         }
     }
 
-    // ── Qué enseña la pantalla de bloqueo ────────────────────────────────────
     // Solo tiene sentido con el bloqueo propio: lo que enseñe hyprlock lo
     // decide su archivo de configuración, no este panel.
     SettingsCard {
@@ -205,7 +204,7 @@ SettingsPage {
         }
     }
 
-    // ── Reloj y fecha ────────────────────────────────────────────────────────
+    // Reloj y fecha
     SettingsCard {
         title: I18n.tr("Clock and date")
         glyph: "󰥔"
@@ -218,7 +217,7 @@ SettingsPage {
             onToggled: Settings.clockShowDate = !Settings.clockShowDate }
     }
 
-    // ── Avatar del usuario ─────────────────────────────────────────────────────
+    // Avatar del usuario
     SettingsCard {
         title: I18n.tr("Avatar")
         glyph: "󰀄"

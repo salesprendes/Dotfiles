@@ -44,21 +44,20 @@ Singleton {
     readonly property int signal: Math.round((activeWifi?.signalStrength ?? 0) * 100)
     readonly property bool online: ethernet || activeWifi !== null
 
-    // Conexión prioritaria (ruta por defecto). La prioridad real la decide la
-    // tabla de rutas del kernel: gana la ruta por defecto de menor metric. Se
-    // lee /proc/net/route con FileView (QML puro, sin subprocesos) y la interfaz
-    // se mapea a su tipo con Quickshell.Networking. Así, si hay cable pero el
-    // sistema enruta por wifi (o al revés), el icono refleja lo real.
-    // Valores: "ethernet" | "wifi" | "none" | "" (sin resolver = respaldo).
+    // Conexión prioritaria. La decide la tabla de rutas del kernel: gana la ruta
+    // por defecto de menor metric. Se lee /proc/net/route con FileView y la
+    // interfaz se mapea a su tipo con Quickshell.Networking, de modo que si hay
+    // cable pero el sistema enruta por wifi, el icono refleja lo real.
+    // Valores: "ethernet" | "wifi" | "none" | "" (sin resolver).
     property string primaryType: ""
 
-    // ¿Es ethernet la conexión activa/prioritaria? Mientras no se haya resuelto
-    // la ruta (primaryType ""), cae al estado físico (hay cable conectado).
+    // ¿Es ethernet la conexión prioritaria? Mientras la ruta no esté resuelta
+    // cae al estado físico, o sea a si hay cable conectado.
     readonly property bool primaryEthernet: primaryType === "ethernet"
                                           || (primaryType === "" && ethernet)
 
-    // Recalcula releyendo /proc/net/route (con pequeño debounce: la tabla de
-    // rutas tarda un instante en asentarse tras un cambio de conexión).
+    // Recalcula releyendo /proc/net/route, con un rebote pequeño porque la tabla
+    // de rutas tarda un instante en asentarse tras un cambio de conexión.
     function refreshPrimary() { primaryDebounce.restart() }
     onEthernetChanged:   refreshPrimary()
     onActiveWifiChanged: refreshPrimary()
@@ -80,8 +79,8 @@ Singleton {
         onLoaded: net.computePrimary()
     }
 
-    // Parsea /proc/net/route para identificar el tipo de conexión prioritaria.
-    // La ruta por defecto usa Destination "00000000"; gana la de menor Metric.
+    // Parsea /proc/net/route: la ruta por defecto usa Destination "00000000" y
+    // gana la de menor Metric.
     function computePrimary() {
         const txt = routeFile.text()
         if (!txt || txt.trim() === "") {              // ilegible, respaldo físico
@@ -98,8 +97,8 @@ Singleton {
         net.primaryType = best.iface === "" ? "none" : net.ifaceType(best.iface)
     }
 
-    // Tipo de una interfaz ("wifi"|"ethernet"|"none"): vía Quickshell.Networking
-    // o, si no casa con ningún device, por el nombre (wl* = wifi).
+    // Tipo de una interfaz, vía Quickshell.Networking o, si no casa con ningún
+    // dispositivo, por el nombre.
     function ifaceType(iface) {
         const dev = (Networking.devices?.values ?? []).find(d => d.name === iface)
         if (dev)
@@ -123,9 +122,8 @@ Singleton {
     function requestPassword(n) { promptNetwork = n }
     function clearPrompt()       { promptNetwork = null }
 
-    // Ajustes IP de la conexión activa (los muestra IpSettingsModal).
-    // El modal resuelve por nmcli la conexión activa (wifi o ethernet),
-    // lee su configuración IPv4 y la aplica en NetworkManager.
+    // Ajustes IP de la conexión activa. El modal resuelve por nmcli la conexión
+    // activa, lee su configuración IPv4 y la aplica en NetworkManager.
     property bool ipConfigOpen: false
     function openIpConfig()  { ipConfigOpen = true }
     function closeIpConfig() { ipConfigOpen = false }
@@ -150,38 +148,34 @@ Singleton {
 
     function toggleWifi() { Networking.wifiEnabled = !Networking.wifiEnabled }
 
-    // Reactivación del WiFi tras suspensión. Al despertar, algunos drivers o
-    // NetworkManager dejan el WiFi sin reconectar: queda un soft-block de
-    // rfkill, o el dispositivo pasa a disconnected sin relanzar la autoconexión.
-    // shell.qml reenvía aquí la señal PrepareForSleep de logind: al dormir
-    // recordamos si estaba activo y, al despertar, si lo estaba, forzamos la
-    // reactivación de forma idempotente y sin privilegios (nmcli/rfkill del
-    // usuario, autorizados por polkit). Si el usuario lo tenía apagado, se respeta.
+    // Reactivación del WiFi tras suspender: algunos drivers dejan un soft-block
+    // de rfkill o el dispositivo en disconnected sin relanzar la autoconexión.
+    // shell.qml reenvía aquí la señal PrepareForSleep, así que al dormir se
+    // recuerda si estaba activo y al despertar se fuerza la reactivación de
+    // forma idempotente y sin privilegios. Si estaba apagado, se respeta.
     property bool _wifiWasOn: false
 
     Connections {
         target: Resume
         function onAboutToSleep() { net._wifiWasOn = net.wifiEnabled }  // estado antes de dormir
-        // Solo en el primer pulso: la propia resumeProc ya reintenta (espera,
-        // comprueba conexión y, si sigue caída, reinicia la radio). Reaccionar a
-        // cada pulso solo reprogramaría el temporizador una y otra vez.
+        // Solo en el primer pulso: resumeProc ya reintenta por su cuenta, así
+        // que reaccionar a cada uno solo reprogramaría el temporizador.
         function onResumed() {
             if (net._wifiWasOn && Resume.recoveryPulse === 1) resumeTimer.restart()
         }
     }
 
-    // Espera a que el dispositivo reaparezca tras el resume antes de actuar (el
-    // kernel/driver tarda un instante en reinicializar la radio).
+    // Espera a que el dispositivo reaparezca: el driver tarda un instante en
+    // reinicializar la radio.
     Timer {
         id: resumeTimer
         interval: 2000
         onTriggered: resumeProc.running = true
     }
 
-    // Recuperación: quita el soft-block y enciende la radio; da un margen para
-    // que NetworkManager reconecte solo y, si sigue sin haber WiFi conectado,
-    // reinicia la radio (off→on) para relanzar la autoconexión. Todo condicional
-    // e idempotente: si ya está conectado, no toca nada.
+    // Recuperación: quita el soft-block, enciende la radio, da margen para que
+    // NetworkManager reconecte solo y, si sigue sin haber WiFi, reinicia la radio
+    // para relanzar la autoconexión. Todo condicional e idempotente.
     Process {
         id: resumeProc
         command: ["sh", "-c",

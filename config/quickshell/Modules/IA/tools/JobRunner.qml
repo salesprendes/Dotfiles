@@ -5,11 +5,10 @@ import qs.Config
 
 // TRABAJOS EN SEGUNDO PLANO: comandos que no caben en una tarjeta.
 //
-// `run_command` corta a los 20 s y no tiene teclado: un `make -j8`, un
-// `npm install` o cualquier cosa que pregunte "[s/N]" quedaban fuera del
-// harness. Aquí un trabajo se lanza, SIGUE VIVO entre turnos, y el agente lo
-// vigila (job_view), le contesta (job_input) o lo mata (job_ctl) — la idea del
-// hub de oh-my-pi, a la escala de este panel.
+// `run_command` tiene un corte corto y no tiene teclado, así que un `make -j8`,
+// un `npm install` o cualquier cosa que pregunte quedan fuera. Aquí un trabajo se
+// lanza, sigue vivo entre turnos, y el agente lo vigila (job_view), le contesta
+// (job_input) o lo mata (job_ctl).
 //
 // Todo pasa por bin/job-run.py, que da el mismo NDJSON con pty y sin él, así
 // que aquí hay un único camino que auditar. Con pty el proceso cree que está en
@@ -119,7 +118,6 @@ Scope {
         }
     }
 
-    // ── Lanzar ───────────────────────────────────────────────────────────────
     // start({command, pty, label, cwd, wait}, cb). Espera una GRACIA corta antes
     // de contestar: así un comando de dos segundos se comporta como el
     // run_command de siempre (respuesta con su salida) y uno largo contesta
@@ -164,18 +162,13 @@ Scope {
         j.grace.restart()
     }
 
-    // Cuántos trabajos YA TERMINADOS se conservan. No es un número cosmético:
-    // cada trabajo retiene su Process, su Timer y hasta 'outputCap' (60 kB) de
-    // salida capturada, así que cien trabajos viejos son ~6 MB que no se
-    // sueltan nunca.
+    // Cuántos trabajos ya terminados se conservan. No es un número cosmético: cada
+    // uno retiene su Process, su Timer y hasta 'outputCap' de salida capturada, así
+    // que sin tope una sesión larga crece sin límite.
     //
-    // Conservarlos es deliberado —el modelo tiene que poder leer con job_view
-    // lo que salió de un comando que lanzó hace tres turnos— pero antes no
-    // había tope: solo se soltaban con un `job_ctl clear` a mano o al
-    // reiniciar la conversación. En una sesión larga eso crece sin límite.
-    //
-    // Veinte cubre de sobra "lo que el modelo puede querer releer" y acota la
-    // memoria. Los vivos NUNCA se tocan.
+    // Conservar algunos es deliberado, porque el modelo tiene que poder releer con
+    // job_view lo que salió de un comando de hace tres turnos. Veinte cubre eso de
+    // sobra y acota la memoria. Los vivos nunca se tocan.
     readonly property int finishedCap: 20
 
     // Suelta los terminados más antiguos que pasen del tope.
@@ -213,7 +206,7 @@ Scope {
         runner._pruneFinished()
     }
 
-    // ── El parte de un trabajo ───────────────────────────────────────────────
+    // El parte de un trabajo
     function report(j, cola) {
         const seg = ((j.state === "running" ? Date.now() - j.startedAt : j.ms)
                      / 1000).toFixed(1)
@@ -237,7 +230,7 @@ Scope {
         return out
     }
 
-    // ── Las operaciones ──────────────────────────────────────────────────────
+    // Las operaciones
     function list() {
         if (jobs.length === 0)
             return "No hay trabajos."

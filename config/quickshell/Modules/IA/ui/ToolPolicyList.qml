@@ -6,14 +6,14 @@ import qs.Config
 import qs.Panels.SettingsPages
 import qs.Modules.IA.core
 
-// Excepciones por herramienta, para cuando el modo general no basta: "que
-// pueda escribir archivos sin preguntar, pero que jamás toque systemd".
+// Excepciones por herramienta, para cuando el modo general no basta: "que pueda
+// escribir archivos sin preguntar, pero que jamás toque systemd".
 //
-// Aquí había cuarenta y una filas de tres botones, todas a la vista y todas
-// iguales. Ahora son cuarenta y una LÍNEAS, agrupadas por lo que hace cada
-// herramienta y con una sola píldora que cicla Preguntar → Auto → No. Lo que
-// coincide con el modo no se guarda (ver AiService.setToolPolicy), así que el
-// contador de excepciones dice la verdad y volver atrás limpia de verdad.
+// Una línea por herramienta, agrupadas por lo que hace cada una y con una sola
+// píldora que cicla Preguntar → Auto → No; con tres botones por fila serían
+// cuarenta filas idénticas a la vista. Lo que coincide con el modo no se guarda,
+// así que el contador de excepciones dice la verdad y volver atrás limpia de
+// verdad.
 ColumnLayout {
     id: lista
 

@@ -20,12 +20,12 @@ SettingsPage {
     Component.onCompleted: SysMon.refreshStats(false)
     Timer {
         interval: 5000
-        running: about.Window.window ? about.Window.window.visible : true
+        running: about.Window.window?.visible ?? false
         repeat: true
         onTriggered: SysMon.refreshStats(false)
     }
 
-    // ── Portada: la marca y el nombre, igual que en el arranque ──────────────
+    // Portada: la marca y el nombre, igual que en el arranque
     Rectangle {
         Layout.fillWidth: true
         radius: Theme.barRadius
@@ -69,7 +69,7 @@ SettingsPage {
         }
     }
 
-    // ── El equipo ────────────────────────────────────────────────────────────
+    // El equipo
     SettingsCard {
         title: I18n.tr("System information")
         glyph: "󰟀"
@@ -98,7 +98,7 @@ SettingsPage {
         InfoRow { glyph: "󰆍"; label: I18n.tr("Shell");          value: "Quickshell" }
     }
 
-    // ── Créditos: quién lo hizo, sobre qué corre y dónde encontrarlo ─────────
+    // Créditos: quién lo hizo, sobre qué corre y dónde encontrarlo
     SettingsCard {
         title: I18n.tr("Credits")
         glyph: "󰀄"
@@ -233,7 +233,7 @@ SettingsPage {
         }
     }
 
-    // ── Piezas de esta página ────────────────────────────────────────────────
+    // Piezas de esta página
 
     // Etiqueta a la izquierda, valor a la derecha. Si no hay valor, no aparece.
     component InfoRow: RowLayout {

@@ -8,43 +8,26 @@ import Quickshell.Io
 import qs.Config
 import qs.Services
 
-// Plantillas de apps (Ajustes → Plantillas): una parrilla de apps con
-// casillas, cada una vuelca los colores del tema en el archivo de
-// configuración de esa app. Todo en QML (FileView para leer/escribir,
-// Process solo para comandos sueltos como 'pkill'/'mkdir'/'dbus-send' con
-// argv directo) — nada de scripts .sh.
+// Plantillas de apps: una parrilla de apps con casillas; cada una vuelca los
+// colores del tema en el archivo de configuración de esa app. Todo en QML, con
+// FileView para leer y escribir y Process solo para comandos sueltos.
 //
-// Ajustes → Plantillas solo LISTA las apps detectadas en el sistema
-// (vía Services/Deps.qml, ver 'isInstalled' más abajo) — con 15 apps casi ninguna
-// instalada a la vez, mostrarlas todas era más ruido que utilidad. GTK e
-// Hyprland son la excepción: GTK porque no hay un binario que comprobar (es
-// una librería, no un programa); Hyprland porque su detección real es "es
-// el compositor activo ahora mismo" (Settings.hyprlandAvailable, por
-// variable de entorno), no un binario instalado. Ambos se dan por
-// disponibles según ese criterio propio, no 'which'.
+// La lista solo muestra las apps detectadas en el sistema (ver 'isInstalled'):
+// con quince candidatas y casi ninguna instalada, enseñarlas todas es ruido.
+// GTK e Hyprland son la excepción y usan su propio criterio: GTK porque es una
+// librería y no hay binario que comprobar, e Hyprland porque lo que importa es
+// si es el compositor activo ahora mismo.
 //
-// GTK e Hyprland viven aparte, en Config/Settings.qml
-// (gtkThemingEnabled/gtkTokens/applyGtkTheme y
-// hyprlandThemingEnabled/hyprThemeLua/applyHyprlandThemeNow): ya tenían su
-// propio mecanismo antes de que existiera este registro genérico — más
-// profundo que una plantilla de texto (Hyprland: recarga en vivo con
-// hyprctl reload; GTK: sincroniza modo claro/oscuro con gsettings). Aquí
-// solo aparecen como una entrada más de la lista para que la página se vea
+// GTK e Hyprland viven en Config/Settings.qml, con un mecanismo más profundo
+// que una plantilla de texto —recarga en vivo y sincronización de modo claro/
+// oscuro—; aquí aparecen como una entrada más para que la página se vea
 // unificada, pero delegan en Settings.
 //
-// 'category' agrupa la lista por tipo de app (sistema/terminal/editor/
-// compositor/audio/otros).
+// Los emuladores de terminal quedan fuera: Services/Terminal.qml ya los
+// regenera enteros, y meterlos aquí también pisaría ese archivo en cada cambio.
 //
-// Kitty/Alacritty/Foot quedan excluidos (a diferencia de Hyprland, sin
-// entrada siquiera): Services/Terminal.qml ya los regenera enteros (fuente,
-// opacidad, cursor...) en Ajustes → Terminal; meterlos aquí también pisaría
-// ese archivo cada vez que cambie cualquier ajuste de terminal, perdiendo
-// el include que añadiéramos nosotros.
-//
-// Nombre del tema que se escribe en cada app: 'quickshell' — es el nombre
-// de este shell (el generador), no el de la paleta de color elegida
-// (Settings.themeName); mismo criterio que ya se siguió en GTK
-// (quickshell.css).
+// 'category' agrupa la lista por tipo de app. El nombre de tema que se escribe
+// en cada app es 'quickshell', el del generador, no el de la paleta elegida.
 Singleton {
     id: root
 
@@ -70,11 +53,9 @@ Singleton {
         { id: "btop",      label: "Btop",         glyph: "󰘚", bin: "btop",      category: "misc" }
     ]
 
-    // Detección vía Deps (un único 'which' compartido al arrancar, ver
-    // Services/Deps.qml). gtk/hyprland no se detectan así: siempre usan su
-    // propio criterio. Solo decide qué se LISTA en Ajustes; activar/aplicar
-    // sigue funcionando igual sin más comprobación. Reactivo: Deps.has() lee
-    // Deps._found, así que los bindings se re-evalúan al acabar la detección.
+    // Detección vía Deps, con un único 'which' compartido al arrancar. Solo
+    // decide qué se lista: activar y aplicar funcionan sin más comprobación. Es
+    // reactivo, así que los bindings se reevalúan al acabar la detección.
     function isInstalled(id) {
         if (id === "gtk") return true
         if (id === "hyprland") return Settings.hyprlandAvailable
@@ -82,12 +63,10 @@ Singleton {
         return r ? Deps.has(r.bin) : false
     }
 
-    // Marca real, guardada en el archivo — independiente del interruptor
-    // maestro (Settings.templatesOn). Pausar el maestro NO toca esto: al
-    // reactivarlo vuelve a aplicarse exactamente lo que ya estaba marcado.
-    // Sin preferencia guardada, las apps DETECTADAS vienen activadas por
-    // defecto (mismo criterio que GTK/Hyprland, que nacen a true); un
-    // desmarcado explícito del usuario queda guardado y se respeta.
+    // Marca real guardada en el archivo, independiente del interruptor maestro:
+    // pausarlo no la toca, y al reactivar vuelve lo que ya estaba marcado. Sin
+    // preferencia guardada, las apps detectadas vienen activadas; un desmarcado
+    // explícito se guarda y se respeta.
     function isEnabled(id) {
         if (id === "gtk") return Settings.gtkThemingEnabled
         if (id === "hyprland") return Settings.hyprlandThemingEnabled
@@ -102,14 +81,13 @@ Singleton {
         cur[id] = val
         Settings.templatesEnabled = cur
     }
-    // Estado visual: la casilla solo se ve "marcada" si además el maestro
-    // está encendido — con el maestro apagado, todas se ven sin marcar aunque
-    // su preferencia real siga guardada.
+    // Estado visual: la casilla solo se ve marcada si además el maestro está
+    // encendido, aunque la preferencia real siga guardada.
     function isActive(id) {
         return Settings.templatesOn && isEnabled(id)
     }
 
-    // ── Orquestación: reaplica lo activo cuando cambia tema/acento/modo ────
+    // Reaplica lo activo cuando cambian tema, acento o modo.
     Timer {
         id: applyTimer
         interval: 400
@@ -196,22 +174,18 @@ Singleton {
         }
     }
 
-    // ── Ayudas de texto compartidas (sin shell) ─────────────────────────────
-    // reload() antes de leer: sin esto, un FileView cuyo archivo todavía no
-    // existe se queda con el 'setText' posterior sin efecto (no llega a
-    // escribir a disco) — hace falta forzar el (re)enganche con el archivo
-    // real antes de poder crearlo. De paso, recoge ediciones externas del
-    // usuario hechas entre una aplicación y la siguiente.
+    // reload() antes de leer: un FileView cuyo archivo no existe todavía se
+    // queda con el setText posterior sin efecto, así que hace falta forzar el
+    // reenganche antes de poder crearlo. De paso recoge ediciones externas.
     function readText(view) {
         view.reload()
         return view.text() || ""
     }
     function render(text) { return Settings.renderTemplate(text, Settings.materialTokens()) }
 
-    // Escribe solo si el contenido cambió de verdad (mismo patrón que
-    // Services/Terminal.qml): evita reescribir los archivos y mandar señales
-    // de recarga (pkill) a las apps en cada arranque del shell cuando nada
-    // ha cambiado. Devuelve si hubo escritura.
+    // Escribe solo si el contenido cambió de verdad, para no reescribir archivos
+    // ni mandar señales de recarga a las apps en cada arranque. Devuelve si hubo
+    // escritura.
     function _writeIfChanged(view, txt) {
         if (readText(view) === txt)
             return false
@@ -219,10 +193,9 @@ Singleton {
         return true
     }
 
-    // Si 'hasFn(contenido)' ya es verdad, no toca el archivo. Si el archivo
-    // está vacío/no existe, lo crea con 'createContent'. Si no, añade
-    // 'appendLine' al final (con una línea en blanco delante). Devuelve si
-    // hubo escritura.
+    // Si 'hasFn(contenido)' ya es verdad no toca el archivo; si está vacío o no
+    // existe lo crea con 'createContent'; si no, añade 'appendLine' al final.
+    // Devuelve si hubo escritura.
     function ensureLine(view, hasFn, appendLine, createContent) {
         const content = readText(view)
         if (content.length === 0) {
@@ -236,7 +209,7 @@ Singleton {
         return true
     }
 
-    // ═══════════════════════════════ ghostty ════════════════════════════════
+    // ghostty
     FileView { id: ghosttyTpl; path: root.tplDir + "/ghostty/ghostty"; blockLoading: true; printErrors: false }
     FileView { id: ghosttyOut; path: root.home + "/.config/ghostty/themes/quickshell"; blockLoading: true; atomicWrites: true; printErrors: false }
     FileView { id: ghosttyCfgA; path: root.home + "/.config/ghostty/config"; blockLoading: true; printErrors: false; atomicWrites: true }
@@ -263,14 +236,12 @@ Singleton {
             ghosttyReload.running = true
     }
 
-    // ═══════════════════════════════ wezterm ════════════════════════════════
+    // wezterm
     FileView { id: weztermTpl; path: root.tplDir + "/wezterm/wezterm.toml"; blockLoading: true; printErrors: false }
     FileView { id: weztermOut; path: root.home + "/.config/wezterm/colors/Quickshell.toml"; blockLoading: true; atomicWrites: true; printErrors: false }
     FileView { id: weztermCfg; path: root.home + "/.config/wezterm/wezterm.lua"; blockLoading: true; printErrors: false; atomicWrites: true }
-    // Si no hay wezterm.lua, se fabrica uno mínimo (en vez de no hacer nada:
-    // es Lua del usuario y podría preferirse no tocarlo, pero así activar la
-    // plantilla no exige ningún paso a mano). Si ya existe, se edita sin
-    // tocar el resto.
+    // Si no hay wezterm.lua se fabrica uno mínimo, para que activar la plantilla
+    // no exija ningún paso a mano. Si ya existe, se edita sin tocar el resto.
     function applyWezterm() {
         _writeIfChanged(weztermOut, render(weztermTpl.text()))
         const content = readText(weztermCfg)
@@ -290,11 +261,10 @@ Singleton {
             weztermCfg.setText(content.replace(/\s+$/, "") + "\n" + line + "\n")
     }
 
-    // ═══════════════════════════════ starship ═══════════════════════════════
+    // starship
     FileView { id: starshipTpl; path: root.tplDir + "/starship/starship.toml"; blockLoading: true; printErrors: false }
     FileView { id: starshipCfg; path: root.home + "/.config/starship.toml"; blockLoading: true; printErrors: false; atomicWrites: true }
-    // Usamos siempre ~/.config/starship.toml, sin rastrear STARSHIP_CONFIG
-    // en /proc/*/environ por si estuviera en otra ruta.
+    // Siempre ~/.config/starship.toml, sin rastrear STARSHIP_CONFIG.
     function applyStarship() {
         const markerBegin = "# >>> QUICKSHELL STARSHIP PALETTE >>>"
         const markerEnd = "# <<< QUICKSHELL STARSHIP PALETTE <<<"
@@ -317,13 +287,12 @@ Singleton {
             starshipCfg.setText(next)
     }
 
-    // ═══════════════════════════════ btop ═══════════════════════════════════
+    // btop
     FileView { id: btopTpl; path: root.tplDir + "/btop/btop.theme"; blockLoading: true; printErrors: false }
     FileView { id: btopOut; path: root.home + "/.config/btop/themes/quickshell.theme"; blockLoading: true; atomicWrites: true; printErrors: false }
     FileView { id: btopCfg; path: root.home + "/.config/btop/btop.conf"; blockLoading: true; printErrors: false; atomicWrites: true }
     Process { id: btopReload; command: ["pkill", "-SIGUSR2", "-x", "btop"] }
-    // Si btop.conf no existe todavía (no se ha arrancado btop ni una vez),
-    // no lo fabricamos.
+    // Si btop.conf no existe todavía, no se fabrica.
     function applyBtop() {
         let changed = _writeIfChanged(btopOut, render(btopTpl.text()))
         const content = readText(btopCfg)
@@ -342,7 +311,7 @@ Singleton {
             btopReload.running = true
     }
 
-    // ═══════════════════════════════ cava ═══════════════════════════════════
+    // cava
     FileView { id: cavaTpl; path: root.tplDir + "/cava/cava.ini"; blockLoading: true; printErrors: false }
     FileView { id: cavaOut; path: root.home + "/.config/cava/themes/quickshell"; blockLoading: true; atomicWrites: true; printErrors: false }
     FileView { id: cavaCfg; path: root.home + "/.config/cava/config"; blockLoading: true; printErrors: false; atomicWrites: true }
@@ -370,12 +339,12 @@ Singleton {
             cavaReload.running = true
     }
 
-    // ═══════════════════════════════ helix ══════════════════════════════════
+    // helix
     FileView { id: helixTpl; path: root.tplDir + "/helix/helix.toml"; blockLoading: true; printErrors: false }
     FileView { id: helixOut; path: root.home + "/.config/helix/themes/quickshell.toml"; blockLoading: true; atomicWrites: true; printErrors: false }
     FileView { id: helixCfg; path: root.home + "/.config/helix/config.toml"; blockLoading: true; printErrors: false; atomicWrites: true }
-    // Además de dejar el archivo de tema, edita config.toml para que quede
-    // activo sin pasos extra (en vez de dejar que el usuario lo active a mano).
+    // Además del archivo de tema, edita config.toml para que quede activo sin
+    // pasos extra.
     function applyHelix() {
         _writeIfChanged(helixOut, render(helixTpl.text()))
         const content = readText(helixCfg)
@@ -391,25 +360,23 @@ Singleton {
         }
     }
 
-    // ═══════════════════════════════ emacs ══════════════════════════════════
+    // emacs
     FileView { id: emacsTpl; path: root.tplDir + "/emacs/quickshell-theme.el"; blockLoading: true; printErrors: false }
     FileView { id: emacsOut; path: root.home + "/.emacs.d/themes/quickshell-theme.el"; blockLoading: true; atomicWrites: true; printErrors: false }
     Process { id: emacsReload; command: ["emacsclient", "-e", "(load-theme 'quickshell t)"] }
-    // Siempre ~/.emacs.d/themes, sin probar ~/.config/doom o ~/.config/emacs
-    // antes.
+    // Siempre ~/.emacs.d/themes.
     function applyEmacs() {
         if (_writeIfChanged(emacsOut, render(emacsTpl.text())))
             emacsReload.running = true
     }
 
-    // ═══════════════════════════════ qt ═════════════════════════════════════
+    // qt
     FileView { id: qtTpl; path: root.tplDir + "/qt/qtct.conf"; blockLoading: true; printErrors: false }
     FileView { id: qt5Out; path: root.home + "/.config/qt5ct/colors/quickshell.conf"; blockLoading: true; atomicWrites: true; printErrors: false }
     FileView { id: qt6Out; path: root.home + "/.config/qt6ct/colors/quickshell.conf"; blockLoading: true; atomicWrites: true; printErrors: false }
     FileView { id: qt5Cfg; path: root.home + "/.config/qt5ct/qt5ct.conf"; blockLoading: true; printErrors: false; atomicWrites: true }
     FileView { id: qt6Cfg; path: root.home + "/.config/qt6ct/qt6ct.conf"; blockLoading: true; printErrors: false; atomicWrites: true }
-    // Crea o actualiza la sección [Appearance] de qt5ct.conf/qt6ct.conf,
-    // sin tocar el resto del archivo.
+    // Crea o actualiza la sección [Appearance] sin tocar el resto del archivo.
     function ensureQtAppearance(view, colorSchemePath) {
         const content = readText(view)
         let next
@@ -434,8 +401,7 @@ Singleton {
         if (next !== content)
             view.setText(next)
     }
-    // Además de escribir los archivos de esquema, activa "quickshell" en
-    // qt5ct/qt6ct directamente (en vez de que el usuario lo elija a mano).
+    // Además de escribir los esquemas, activa "quickshell" en qt5ct/qt6ct.
     function applyQt() {
         const rendered = render(qtTpl.text())
         _writeIfChanged(qt5Out, rendered)
@@ -444,7 +410,7 @@ Singleton {
         ensureQtAppearance(qt6Cfg, root.home + "/.config/qt6ct/colors/quickshell.conf")
     }
 
-    // ═══════════════════════════════ kde / KColorScheme ═════════════════════
+    // kde / KColorScheme
     FileView { id: kdeTpl; path: root.tplDir + "/kde/kcolorscheme.colors"; blockLoading: true; printErrors: false }
     FileView { id: kdeOut; path: root.home + "/.local/share/color-schemes/Quickshell.colors"; blockLoading: true; atomicWrites: true; printErrors: false }
     Process { id: kdeNotify; command: ["dbus-send", "/KGlobalSettings", "org.kde.KGlobalSettings.notifyChange", "int32:0", "int32:0"] }
@@ -453,7 +419,7 @@ Singleton {
             kdeNotify.running = true
     }
 
-    // ═══════════════════════════════ labwc ══════════════════════════════════
+    // labwc
     FileView { id: labwcTpl; path: root.tplDir + "/labwc/labwc.conf"; blockLoading: true; printErrors: false }
     FileView { id: labwcStaging; path: root.home + "/.config/labwc/quickshell.conf"; blockLoading: true; atomicWrites: true; printErrors: false }
     FileView { id: labwcThemerc; path: root.home + "/.local/share/themes/quickshell/openbox-3/themerc"; blockLoading: true; atomicWrites: true; printErrors: false }
@@ -480,7 +446,7 @@ Singleton {
         }
     }
 
-    // ═══════════════════════════════ niri ═══════════════════════════════════
+    // niri
     FileView { id: niriTpl; path: root.tplDir + "/niri/niri.kdl"; blockLoading: true; printErrors: false }
     FileView { id: niriOut; path: root.home + "/.config/niri/quickshell.kdl"; blockLoading: true; atomicWrites: true; printErrors: false }
     FileView { id: niriCfg; path: root.home + "/.config/niri/config.kdl"; blockLoading: true; printErrors: false; atomicWrites: true }
@@ -492,7 +458,7 @@ Singleton {
             'include "quickshell.kdl"\n')
     }
 
-    // ═══════════════════════════════ mango ══════════════════════════════════
+    // mango
     FileView { id: mangoTpl; path: root.tplDir + "/mango/mango.conf"; blockLoading: true; printErrors: false }
     FileView { id: mangoOut; path: root.home + "/.config/mango/quickshell.conf"; blockLoading: true; atomicWrites: true; printErrors: false }
     FileView { id: mangoCfg; path: root.home + "/.config/mango/config.conf"; blockLoading: true; printErrors: false; atomicWrites: true }
@@ -508,7 +474,7 @@ Singleton {
             mangoReload.running = true
     }
 
-    // ═══════════════════════════════ scroll ═════════════════════════════════
+    // scroll
     FileView { id: scrollTpl; path: root.tplDir + "/scroll/scroll"; blockLoading: true; printErrors: false }
     FileView { id: scrollOut; path: root.home + "/.config/scroll/quickshell"; blockLoading: true; atomicWrites: true; printErrors: false }
     FileView { id: scrollCfg; path: root.home + "/.config/scroll/config"; blockLoading: true; printErrors: false; atomicWrites: true }
@@ -520,7 +486,7 @@ Singleton {
             "include ~/.config/scroll/quickshell\n")
     }
 
-    // ═══════════════════════════════ sway ═══════════════════════════════════
+    // sway
     FileView { id: swayTpl; path: root.tplDir + "/sway/sway"; blockLoading: true; printErrors: false }
     FileView { id: swayOut; path: root.home + "/.config/sway/quickshell"; blockLoading: true; atomicWrites: true; printErrors: false }
     FileView { id: swayCfg; path: root.home + "/.config/sway/config"; blockLoading: true; printErrors: false; atomicWrites: true }

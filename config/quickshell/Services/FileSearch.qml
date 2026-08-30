@@ -4,69 +4,47 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 
-// El índice de archivos y carpetas de Spotlight.
+// Índice de archivos y carpetas de Spotlight.
 //
-// ── POR QUÉ ÍNDICE Y NO UNA BÚSQUEDA POR CONSULTA ───────────────────────────
-// Esto lanzaba un 'fd' por consulta, con rebote de 180 ms, y solo con el
-// prefijo "/". Funcionaba, pero imponía dos cosas: los archivos llegaban TARDE
-// —en su propio carril, después de que la lista ya se hubiera dibujado— y por
-// eso no podían mezclarse con las apps en una sola lista ordenada.
+// El árbol se recorre UNA vez y la lista cruda se guarda en memoria, así que
+// buscar es filtrar cadenas. Con unos miles de archivos útiles el recorrido
+// completo cuesta unos milisegundos, de modo que lanzar un proceso por consulta
+// sería tirar un proceso por tecla para nada.
 //
-// Medido en esta máquina: 3.438 archivos y carpetas útiles, 364 KB de rutas,
-// y un recorrido completo con fd en 12 MILISEGUNDOS. A esa escala, recorrer
-// por consulta es tirar un proceso por tecla para nada.
-//
-// Así que se recorre UNA vez, se guarda la lista cruda en memoria, y buscar
-// pasa a ser filtrar cadenas. Los archivos dejan de ser una fuente asíncrona y
-// entran en el mismo puntuador que todo lo demás.
-//
-// ── POR QUÉ NO plocate ──────────────────────────────────────────────────────
-// Es el equivalente honesto al índice del kernel que usa macOS, y se descartó
-// a propósito: es una base de datos de TODO el sistema con su temporizador de
-// systemd, y no le puede ganar a 12 ms sobre tres mil archivos. Sería una
-// dependencia nueva a cambio de nada. (DankMaterialShell sí necesita la suya,
-// pero porque apunta a máquinas con millones de archivos.)
+// La consecuencia importante es que los archivos dejan de ser una fuente
+// asíncrona que llega tarde y entran en el mismo puntuador que todo lo demás,
+// en una sola lista ordenada.
 Singleton {
     id: root
 
-    // Tope de lo que se guarda en el índice. No es por memoria —364 KB— sino
-    // por sentido: si un $HOME tiene cien mil archivos, indexarlos todos no
-    // mejora ninguna búsqueda y sí empeora cada una.
+    // Tope de lo que se guarda. No es por memoria sino por sentido: si un $HOME
+    // tiene cien mil archivos, indexarlos todos no mejora ninguna búsqueda.
     readonly property int cap: 40000
 
-    // Por debajo de dos letras no se filtra. Con una, media lista coincide.
-    //
-    // Baja de tres a dos porque ya no cuesta un recorrido del disco: filtrar
-    // cadenas en memoria con una sola letra es barato, y lo único que lo
-    // desaconseja es el ruido. Con dos, el ruido ya es manejable.
+    // Por debajo de dos letras no se filtra: con una, media lista coincide.
+    // Filtrar cadenas en memoria con una sola letra es barato, así que lo único
+    // que lo desaconseja es el ruido.
     readonly property int minChars: 2
 
-    // Carpetas que NO se indexan.
+    // Carpetas que no se indexan. Las de caché son la mayor parte del $HOME y
+    // son basura regenerable que nadie busca.
     //
-    // '.cache' es la que importa: en esta máquina son 12.316 archivos de los
-    // 15.792 que hay — el 78 % del $HOME es basura regenerable que nadie busca
-    // jamás. 'node_modules', '__pycache__' y '.venv' son lo mismo en pequeño.
-    //
-    // Y LA PAPELERA, que son otros 654. Esa no es una cuestión de ruido sino de
-    // que estaría mal: un archivo que borraste no puede aparecer en una
-    // búsqueda como si siguiera ahí. Y aparecía además DUPLICANDO al vivo, con
-    // el mismo nombre y una ruta que no dice a simple vista que está en la
-    // basura.
+    // La papelera no es cuestión de ruido sino de corrección: un archivo borrado
+    // no puede aparecer en una búsqueda como si siguiera ahí, y además duplicaba
+    // al vivo con el mismo nombre y una ruta que no delata dónde está.
     readonly property var excluidas: [".git", ".cache", "node_modules",
                                       "__pycache__", ".venv",
                                       "Trash", ".Trash-1000"]
 
-    // La lista cruda: rutas absolutas, tal cual las escupe la herramienta.
-    // Crudas y no objetos a propósito — ver la nota de las dos etapas en
-    // filtrar().
+    // La lista cruda: rutas absolutas tal cual las escupe la herramienta. Crudas
+    // y no objetos a propósito; ver la nota de las dos etapas en filtrar().
     property var index: []
     property bool building: false
     property double builtAt: 0
 
     readonly property string home: Quickshell.env("HOME") || "/home"
 
-    // ── Herramienta ──────────────────────────────────────────────────────────
-    // 'fd' recorre en paralelo y entiende de exclusiones; 'find' está SIEMPRE.
+    // 'fd' recorre en paralelo y entiende de exclusiones; 'find' está siempre.
     // Sin el suelo de 'find' no habría búsqueda de archivos en media máquina, y
     // media función es peor que una función lenta.
     property string tool: ""
@@ -82,31 +60,31 @@ Singleton {
         }
     }
 
-    // El sondeo no arranca hasta que alguien toca el singleton por primera vez
-    // (así son los Singleton de Quickshell). Si la detección tarda más que la
-    // primera petición de índice, aquélla se quedaría sin herramienta y se
-    // rendiría en silencio. Al llegar, se construye lo que estuviera pendiente.
+    // El sondeo no arranca hasta que alguien toca el singleton. Si la detección
+    // tarda más que la primera petición de índice, aquélla se quedaría sin
+    // herramienta y se rendiría en silencio, así que al llegar se construye lo
+    // que hubiera pendiente.
     property bool _pendiente: false
     onToolChanged: if (root.tool !== "" && root._pendiente) root.build()
 
-    // ── Construcción del índice ──────────────────────────────────────────────
+    // Construcción del índice
     function _argv() {
         const t = root.tool
         if (t === "")
             return null
         if (t.endsWith("/fd") || t.endsWith("/fdfind")) {
-            // --hidden porque lo que este usuario busca de verdad vive en
-            // ~/.config y ~/.claude; sin él, el índice se queda en 433 archivos
-            // y no encuentra su propia configuración.
+            // --hidden porque buena parte de lo que se busca vive en carpetas
+            // ocultas de configuración; sin él, el índice no encuentra ni la
+            // configuración del propio shell.
             const argv = [t, "--type", "f", "--type", "d", "--hidden",
                           "--max-results", String(root.cap)]
             for (const e of root.excluidas)
                 argv.push("--exclude", e)
             return argv.concat(["", root.home])
         }
-        // find: las exclusiones se PODAN, para no bajar al árbol en vez de
-        // filtrarlo después. Podar .cache es lo que convierte 15.792 archivos
-        // en 3.438 sin gastar el recorrido.
+        // find: las exclusiones se podan para no bajar al árbol, en vez de
+        // filtrarlo después. Podar las cachés es lo que recorta el índice sin
+        // gastar el recorrido.
         const argv = [t, root.home]
         for (let i = 0; i < root.excluidas.length; i++) {
             argv.push(i === 0 ? "(" : "-o", "-name", root.excluidas[i])
@@ -142,9 +120,9 @@ Singleton {
     }
 
     // Reconstruye si hace más de 'frescura' que se hizo. Lo llama Spotlight al
-    // abrirse: son 12 ms, así que se paga en cada apertura y a cambio un
-    // archivo creado hace un minuto ya está. La guarda evita rehacerlo si
-    // abres y cierras dos veces seguidas.
+    // abrirse: cuesta milisegundos, así que se paga en cada apertura y a cambio
+    // un archivo creado hace un minuto ya está. La guarda evita rehacerlo al
+    // abrir y cerrar dos veces seguidas.
     readonly property int frescura: 5000
 
     function build(forzar) {
@@ -167,28 +145,23 @@ Singleton {
         crawl.running = true
     }
 
-    // ── Filtrado ─────────────────────────────────────────────────────────────
-    // DOS ETAPAS, y es lo que hace que esto sea instantáneo.
+    // Dos etapas, y es lo que hace que esto sea instantáneo.
     //
-    // El puntuador de Spotlight (Search.js) normaliza y parte en palabras cada
-    // candidato, y guarda el resultado en el propio objeto. Construir tres mil
-    // objetos por pulsación para que el puntuador los descarte casi todos sería
-    // el cuello de botella de verdad — el disco no lo era nunca.
+    // El puntuador de Spotlight normaliza y parte en palabras cada candidato, y
+    // guarda el resultado en el propio objeto. Construir miles de objetos por
+    // pulsación para descartarlos casi todos sería el cuello de botella real.
     //
-    // Así que primero se criba con indexOf sobre la cadena cruda: sin reservar
-    // memoria, sin normalizar, sin partir nada. Solo los supervivientes —
-    // decenas — llegan a construirse como objetos y a puntuarse.
-    //
-    // La criba es deliberadamente TONTA y generosa: no decide el orden, solo
-    // decide quién no tiene ninguna posibilidad. Ordenar es cosa del puntuador.
+    // Así que primero se criba con indexOf sobre la cadena cruda, sin reservar
+    // memoria ni normalizar ni partir nada, y solo los supervivientes se
+    // construyen como objetos y se puntúan. La criba es deliberadamente tonta y
+    // generosa: no decide el orden, solo quién no tiene ninguna posibilidad.
     function filtrar(q, tope) {
         const consulta = String(q || "").trim().toLowerCase()
         if (consulta.length < root.minChars)
             return []
-        // Una consulta de RUTA ("dotfiles/script") se criba contra la ruta
-        // entera; una de nombre, solo contra el último tramo. Sin esta
-        // distinción, buscar "sh" traería cualquier archivo que tuviera un
-        // "sh" en cualquier carpeta del camino.
+        // Una consulta de ruta se criba contra la ruta entera; una de nombre,
+        // solo contra el último tramo. Sin esa distinción, buscar dos letras
+        // traería cualquier archivo que las tuviera en cualquier carpeta.
         const porRuta = consulta.indexOf("/") !== -1
         const limite = tope && tope > 0 ? tope : root.cap
         const out = []
@@ -207,9 +180,9 @@ Singleton {
     }
 
     function clear() {
-        // El índice NO se tira al cerrar Spotlight: es lo único que hay que
-        // conservar para que la siguiente apertura sea instantánea, y son
-        // 364 KB. Lo que se suelta es el recorrido si estuviera a medias.
+        // El índice no se tira al cerrar Spotlight: es lo único que hay que
+        // conservar para que la siguiente apertura sea instantánea, y ocupa unos
+        // cientos de KB. Lo que se suelta es el recorrido si estuviera a medias.
         if (root.building) {
             crawl.running = false
             root._acc = []

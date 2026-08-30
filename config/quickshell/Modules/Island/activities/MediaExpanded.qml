@@ -41,7 +41,7 @@ ColumnLayout {
         return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0")
     }
 
-    // ── Cabecera: carátula + pista ───────────────────────────────────────────
+    // Cabecera: carátula + pista
     RowLayout {
         Layout.fillWidth: true
         spacing: Theme.space12
@@ -108,7 +108,6 @@ ColumnLayout {
         }
     }
 
-    // ── Posición ─────────────────────────────────────────────────────────────
     // Solo si el reproductor dice que sabe dónde está. Un navegador que informa
     // de longitud 0 dejaría una barra que no se mueve y no se puede arrastrar.
     ColumnLayout {
@@ -178,7 +177,7 @@ ColumnLayout {
         }
     }
 
-    // ── Transporte ───────────────────────────────────────────────────────────
+    // Transporte
     RowLayout {
         Layout.fillWidth: true
         spacing: Theme.space8

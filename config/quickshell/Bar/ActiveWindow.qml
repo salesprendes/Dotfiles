@@ -12,8 +12,11 @@ Pill {
 
     spacing: Theme.space4
 
-    readonly property var active: ToplevelManager.activeToplevel
-    readonly property string appId: active?.appId ?? ""
+    // No se llama 'active': Pill ya define una 'active' booleana para el punto
+    // de acento, y una propiedad que tapa la de su tipo base es una trampa
+    // silenciosa — además de que aquí no cabría, porque es de solo lectura.
+    readonly property var toplevel: ToplevelManager.activeToplevel
+    readonly property string appId: toplevel?.appId ?? ""
     readonly property var desktopEntry: appId !== "" ? DesktopEntries.heuristicLookup(appId) : null
 
     readonly property string iconSource: {
@@ -29,10 +32,10 @@ Pill {
             const shortId = appId.split(".").pop().replace(/[-_]+/g, " ")
             return shortId.charAt(0).toUpperCase() + shortId.slice(1)
         }
-        return active?.title ?? ""
+        return toplevel?.title ?? ""
     }
 
-    shown: active !== null && appName !== ""
+    shown: toplevel !== null && appName !== ""
 
     Image {
         readonly property int displaySize: Math.min(Theme.barIconSize, root.implicitHeight - Theme.space8)

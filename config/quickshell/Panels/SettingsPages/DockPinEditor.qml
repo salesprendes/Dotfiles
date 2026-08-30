@@ -5,26 +5,20 @@ import qs.Components
 import qs.Config
 import qs.Services
 
-// Las apps fijadas del dock: la lista en su orden, arrastrable, y un buscador
-// para añadir.
+// Las apps fijadas del dock: la lista en su orden, arrastrable, y un buscador para
+// añadir.
 //
-// ── EL ARRASTRE, Y POR QUÉ ASÍ ──────────────────────────────────────────────
-// Es el mismo patrón que BarLayoutEditor y por la misma razón: la ficha que se
-// arrastra NO se reparenta. Se queda en su sitio atenuada, haciendo de hueco de
-// origen, y lo que sigue al ratón es un FANTASMA dibujado aparte, por encima de
-// todo. Reparentar el delegate de un Repeater funciona hasta que el modelo
-// cambia; entonces el Repeater reclama a su hijo, se lo encuentra con otro
-// padre, y la ficha o desaparece a mitad del gesto o se queda pegada a la capa
-// de arrastre para siempre.
+// Mismo patrón que BarLayoutEditor y por la misma razón: la ficha que se arrastra
+// no se reparenta, se queda en su sitio atenuada haciendo de hueco de origen, y lo
+// que sigue al ratón es un fantasma dibujado aparte. Reparentar el delegate de un
+// Repeater funciona hasta que el modelo cambia, y entonces el Repeater reclama a
+// su hijo, se lo encuentra con otro padre, y la ficha desaparece a mitad del gesto
+// o se queda pegada a la capa de arrastre. Aquí el modelo cambia más que en la
+// barra, así que el patrón no es opcional.
 //
-// Aquí el modelo cambia MÁS que en la barra: basta con quitar una fijada o con
-// que llegue una entrada .desktop nueva. Así que el patrón no es opcional.
-//
-// ── Y POR QUÉ TODO PASA POR DockCatalog ─────────────────────────────────────
-// Este editor es el SEGUNDO sitio que escribe Settings.dockPinned; el otro es
-// arrastrar dentro del propio dock. Dos sitios con su propia idea de qué es un
-// orden válido acaban discrepando siempre, así que los dos llaman a las mismas
-// funciones del catálogo y ninguno toca el array a mano.
+// Este editor es el segundo sitio que escribe Settings.dockPinned; el otro es
+// arrastrar dentro del propio dock. Los dos llaman a las mismas funciones del
+// catálogo y ninguno toca el array a mano.
 SettingsRow {
     id: root
 
@@ -41,7 +35,7 @@ SettingsRow {
 
     readonly property var fijadas: Settings.dockPinned
 
-    // ── Estado del arrastre ──────────────────────────────────────────────────
+    // Estado del arrastre
     property int arrastrando: -1     // índice que se arrastra, -1 = ninguno
     property int destino: -1         // hueco resaltado
     property real fantasmaX: 0
@@ -67,7 +61,7 @@ SettingsRow {
         anchors.right: parent.right
         spacing: Theme.space10
 
-        // ── La lista ─────────────────────────────────────────────────────────
+        // La lista
         ThemedText {
             Layout.fillWidth: true
             visible: root.fijadas.length === 0
@@ -114,7 +108,7 @@ SettingsRow {
             }
         }
 
-        // ── Añadir ───────────────────────────────────────────────────────────
+        // Añadir
         SearchField {
             id: busca
             Layout.fillWidth: true
@@ -187,7 +181,6 @@ SettingsRow {
         }
     }
 
-    // ── El fantasma ──────────────────────────────────────────────────────────
     // Fuera de todo layout y por encima de todo, porque tiene que poder
     // dibujarse sobre cualquier parte del editor sin que ningún positioner le
     // reclame el sitio.

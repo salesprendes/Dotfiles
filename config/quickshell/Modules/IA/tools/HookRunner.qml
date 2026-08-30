@@ -4,7 +4,7 @@ import Quickshell.Io
 import qs.Config
 import "LocalTools.js" as LT
 
-// Hooks del usuario (idea de OpenHarness): comandos propios que el harness
+// Hooks del usuario: comandos propios que el harness
 // dispara en momentos concretos del ciclo de vida. Es la puerta de extensión que
 // faltaba — el usuario puede auditar, registrar o VETAR lo que haga el agente
 // sin tocar ni una línea de este código.
@@ -36,6 +36,7 @@ Scope {
     // Los hooks se leen de su archivo y se recargan solos al editarlo.
     FileView {
         path: runner.svc ? runner.svc.dataDir + "/ai-hooks.json" : ""
+        printErrors: false
         watchChanges: true
         onFileChanged: reload()
         onLoaded: {
@@ -78,7 +79,6 @@ Scope {
             })
     }
 
-    // ── El bloqueante ────────────────────────────────────────────────────────
     // Corre EN SERIE por prioridad y espera veredicto, así el que veta lo hace
     // antes de que el siguiente diga nada.
     property var _queue: []

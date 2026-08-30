@@ -4,25 +4,18 @@ import qs.Components
 import qs.Config
 import qs.Panels.SettingsPages
 
-// LA FILA DE UNA HABILIDAD. Existe porque la de interruptor genérica no le
-// hacía justicia a esta lista concreta, y se notaba:
+// La fila de una habilidad, con tres diferencias respecto de la de interruptor
+// genérica:
 //
-//   · TODAS las habilidades llevaban el MISMO glifo. La insignia de fila
-//     existe para darle a cada fila una cabeza reconocible y convertir el
-//     margen izquierdo en un riel por el que el ojo baja saltando; con diez
-//     filas idénticas hacía justo lo contrario: una columna de círculos
-//     iguales que no distingue nada. Aquí la cabeza es el MONOGRAMA de la
-//     habilidad, que sí es distinto en cada una.
-//   · Encendida, la fila no se resaltaba. Lo único que cambiaba era el tinte
-//     del disco, al otro extremo de la mirada respecto del interruptor. Saber
-//     qué hay activo obligaba a recorrer la lista dos veces. Ahora la fila
-//     ENTERA se marca como elegida, con el mismo resaltado que usa el resto
-//     del shell (Components/RowHighlight.qml), más un filo de acento a la
-//     izquierda que se lee de un vistazo desde arriba.
-//   · Las descripciones tienen largos muy distintos, así que las filas salían
-//     de alturas dispares y la lista parecía un muro irregular. Se acotan a
-//     dos líneas: la lista recupera su ritmo y la descripción larga sigue
-//     entera en su SKILL.md, que es donde se lee de verdad.
+//   · La cabeza es el monograma de la habilidad y no un glifo común: una columna
+//     de círculos iguales no distingue nada, y la insignia existe para convertir
+//     el margen izquierdo en un riel por el que el ojo baja saltando.
+//   · Encendida, se marca la fila entera con el mismo resaltado que usa el resto
+//     del shell, más un filo de acento a la izquierda. Teñir solo el disco deja el
+//     estado al otro extremo de la mirada respecto del interruptor.
+//   · La descripción se acota a dos líneas: con largos muy distintos, las filas
+//     salen de alturas dispares y la lista parece un muro irregular. La
+//     descripción larga sigue entera en su SKILL.md.
 SettingsRow {
     id: skill
 

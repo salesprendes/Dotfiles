@@ -4,39 +4,27 @@ import qs.Config
 import qs.Panels.SettingsPages
 import qs.Components
 
-// Grupo de ajustes al modo de ChromeOS: el rótulo va FUERA, encima de la
-// tarjeta, y dentro las filas se pegan unas a otras separadas por un filete.
+// Grupo de ajustes: el rótulo va fuera, encima de la tarjeta, y dentro las filas
+// se pegan unas a otras separadas por un filete.
 //
-// Antes el rótulo vivía dentro, en versalitas espaciadas y con su glifo, y las
-// filas flotaban sueltas con aire entre ellas. Se cambió por tres razones, y
-// las tres son de ChromeOS:
+// El rótulo fuera convierte la tarjeta en una superficie continua; dentro sería
+// una fila más y el bloque perdería su condición de tal. Va en caja normal y no
+// en versalitas espaciadas, que se leen peor y gritan más. Y el filete entre
+// filas separa sin dispersar, así que las filas se leen como una lista.
 //
-//   · El rótulo fuera convierte la tarjeta en UNA superficie continua. Dentro,
-//     el rótulo era una fila más y la tarjeta perdía su condición de bloque.
-//   · Las versalitas espaciadas son el gesto tipográfico del Material viejo;
-//     Google las abandonó. Un rótulo en caja normal se lee antes y grita menos.
-//   · El filete entre filas hace el trabajo que antes hacía el hueco, y lo hace
-//     mejor: separa sin dispersar, y deja las filas leerse como una lista.
-//
-// El glifo del rótulo desaparece: los rótulos de sección de ChromeOS no lo
-// llevan, y las filas ya tienen el suyo. Dos iconos por bloque era uno de más.
+// El rótulo no lleva glifo: las filas ya tienen el suyo, y dos iconos por bloque
+// eran uno de más.
 Item {
     id: cardRoot
     // Marca de tarjeta: sus hermanas la usan para contarse (ver cardIndex).
     readonly property bool isSettingsCard: true
     property string title: ""
-    // Frase que explica de qué va la sección. Va bajo el rótulo y FUERA de la
-    // tarjeta, que es donde ChromeOS pone este texto.
-    //
-    // Antes esto se escribía como un Hint dentro de la tarjeta, y ahí se veía
-    // mal por una razón concreta: dentro, un párrafo suelto es una fila más —
-    // pero sin insignia, sin control y sin filete, así que rompe la retícula de
-    // la lista justo en la primera línea. Fuera es lo que de verdad es: el
-    // subtítulo del rótulo. El Hint sigue existiendo para lo que sí es un
-    // consejo sobre UNA fila concreta.
+    // Frase que explica de qué va la sección. Va bajo el rótulo y fuera de la
+    // tarjeta: dentro sería una fila más pero sin insignia, sin control y sin
+    // filete, y rompería la retícula de la lista en la primera línea. El Hint
+    // sigue existiendo para lo que sí es un consejo sobre una fila.
     property string description: ""
-    // Se mantiene por compatibilidad con las páginas que lo pasan; ya no se
-    // pinta (ver la nota de arriba).
+    // Se mantiene por compatibilidad con las páginas que lo pasan; ya no se pinta.
     property string glyph: ""
     // Condición propia de la página (p. ej. "solo si el terminal es configurable").
     // Va aparte de 'visible' para no pisar el binding del filtro.
@@ -44,14 +32,13 @@ Item {
     default property alias content: cardCol.data
 
     Layout.fillWidth: true
-    // Aire extra sobre el rótulo. ChromeOS separa las secciones bastante más de
-    // lo que separa las filas dentro de una: es lo que hace que una página
-    // larga se lea como varios bloques y no como una lista continua. Va aquí y
-    // no en el 'spacing' de cada página porque son quince páginas.
+    // Aire extra sobre el rótulo: separar las secciones bastante más de lo que se
+    // separan las filas dentro de una es lo que hace que una página larga se lea
+    // como varios bloques y no como una lista continua. Va aquí y no en el
+    // 'spacing' de cada página porque son quince páginas.
     Layout.topMargin: hasHead ? Theme.space8 : 0
-    // Bloque de cabecera (rótulo + subtítulo) y su separación de la tarjeta.
-    // Se calcula aquí para que el alto total y el anclaje de la tarjeta salgan
-    // los dos del mismo sitio y no puedan divergir.
+    // Bloque de cabecera y su separación de la tarjeta. Se calcula aquí para que el
+    // alto total y el anclaje de la tarjeta salgan del mismo sitio.
     readonly property bool hasHead: heading.visible || subtitle.visible
     readonly property int headHeight:
         (heading.visible ? heading.implicitHeight : 0)
@@ -61,14 +48,12 @@ Item {
     readonly property int headGap: hasHead ? Theme.space8 : 0
     implicitHeight: headHeight + headGap + card.implicitHeight
 
-    // ── Entrada escalonada ───────────────────────────────────────────────────
-    // La página ya no aparece como un bloque: las tarjetas suben y se encienden
-    // una tras otra, de arriba abajo. Es lo que convierte un cambio de pestaña
-    // en un gesto con dirección — la vista se LEE en el mismo orden en que se
-    // construye — en vez de un corte de plano.
+    // Las tarjetas suben y se encienden una tras otra, de arriba abajo: es lo que
+    // convierte un cambio de pestaña en un gesto con dirección —la vista se lee en
+    // el mismo orden en que se construye— en vez de un corte de plano.
     //
-    // Su sitio en la página, contando solo tarjetas: un consejo suelto o un
-    // Process no ocupan turno.
+    // El turno lo da el sitio en la página contando solo tarjetas: un consejo suelto
+    // o un Process no ocupan uno.
     readonly property int cardIndex: {
         const sibs = parent ? parent.children : []
         let n = 0
@@ -80,12 +65,12 @@ Item {
         }
         return n
     }
-    // Sin animación propia: se deriva del reloj de la página, que es el único
-    // que se anima (ver SettingsMotion).
+    // Sin animación propia: se deriva del reloj de la página, que es el único que
+    // se anima.
     readonly property real enter: SettingsMotion.reveal(cardRoot.cardIndex)
     opacity: enter
     // Sube al entrar. El desplazamiento va en transform y no en el layout: una
-    // tarjeta que se mueve NO debe empujar a las de abajo.
+    // tarjeta que se mueve no debe empujar a las de abajo.
     transform: Translate { y: Math.round((1 - cardRoot.enter) * Theme.dp(14)) }
 
     // La tarjeta desaparece cuando el filtro ha escondido todas sus filas: si
@@ -125,26 +110,19 @@ Item {
     }
     z: anyOpen ? 5 : 0
 
-    // ── Tramos ───────────────────────────────────────────────────────────────
-    // La tarjeta deja de ser UNA superficie con filetes dentro y pasa a ser una
-    // pila de superficies pegadas: la primera redondea arriba, la última abajo,
-    // y las de en medio van casi rectas. Es el patrón de lista agrupada de
-    // Android 16 / M3 expresivo, y hace dos cosas que el filete no hacía:
+    // La tarjeta no es una superficie con filetes dentro sino una pila de
+    // superficies pegadas: la primera redondea arriba, la última abajo y las de en
+    // medio van casi rectas. Hace dos cosas que un filete no hace: cada ajuste es
+    // una pieza —lo que separa es aire, y el ojo agrupa por contorno antes que por
+    // línea—, y la forma dice dónde estás, porque los extremos se ven distintos del
+    // resto sin tener que contar filas.
     //
-    //   · Cada ajuste es una PIEZA. El filete separaba con una raya de un
-    //     píxel; aquí lo que separa es aire, y el ojo agrupa por contorno antes
-    //     que por línea. Una tarjeta de ocho filas deja de leerse como un muro.
-    //   · La forma dice dónde estás. Arriba del todo y abajo del todo se ven
-    //     distintas del resto, así que el borde del grupo se reconoce sin
-    //     contar filas.
+    // Un tramo es una fila de ajuste más lo que cuelgue de ella: el consejo tiene
+    // que ir dentro de la pieza de su ajuste, no flotando entre dos.
     //
-    // Un TRAMO es una fila de ajuste más lo que cuelgue de ella (los Hint, que
-    // llevan isSettingsRow=false a propósito): el consejo tiene que ir DENTRO
-    // de la pieza de su ajuste, no flotando entre dos.
-    //
-    // Se recalcula solo cuando una fila aparece o desaparece —y eso pasa
-    // constantemente, con el filtro y con los 'shown' de cada página—, así que
-    // los índices se derivan de los hijos VISIBLES y nunca se cablean.
+    // Se recalcula cuando una fila aparece o desaparece, que pasa constantemente
+    // con el filtro y los 'shown' de cada página, así que los índices se derivan de
+    // los hijos visibles y nunca se cablean.
     readonly property int segRadius: Theme.shapeXs
     readonly property int segGap: Theme.dp(2)
 
@@ -181,8 +159,8 @@ Item {
     Component.onCompleted: pushTitle()
     onTitleChanged: pushTitle()
 
-    // Rótulo del grupo. Caja normal, peso medio, alineado al canto izquierdo de
-    // la tarjeta: es el patrón de ChromeOS y de Material 3 actual.
+    // Rótulo del grupo: caja normal, peso medio y alineado al canto izquierdo de
+    // la tarjeta.
     ThemedText {
         id: heading
         anchors.left: parent.left

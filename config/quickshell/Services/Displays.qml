@@ -6,10 +6,10 @@ import Quickshell.Io
 import Quickshell.Hyprland
 import qs.Config
 
-// Pantallas: lee los monitores reactivamente desde Quickshell.Hyprland (sin
-// subproceso) y los aplica con `hyprctl eval 'hl.monitor{…}'`. Se usa eval +
-// API Lua porque `hyprctl keyword` no funciona con el parser Lua de Hyprland.
-// El cambio es en caliente; persistirlo es opcional.
+// Pantallas: lee los monitores reactivamente desde Quickshell.Hyprland, sin
+// subproceso, y los aplica con `hyprctl eval`. Se usa eval con la API Lua porque
+// `hyprctl keyword` no funciona con el parser Lua. El cambio es en caliente y
+// persistirlo es opcional.
 Singleton {
     id: root
 
@@ -18,15 +18,15 @@ Singleton {
 
     function refresh() { Hyprland.refreshMonitors() }
 
-    // Tras el resume, los monitores pueden re-enumerarse (DPMS/hotplug): re-lee
-    // el estado live desde Hyprland para que la UI de Pantallas quede al día.
+    // Tras el resume los monitores pueden re-enumerarse, así que se relee el
+    // estado en vivo para que la página de Pantallas quede al día.
     Connections {
         target: Resume
         function onResumed() { root.refresh() }
     }
 
-    // Último 'spec' aplicado por monitor (para persistir lo aplicado, no el
-    // estado live —que se actualiza con retardo tras el `eval`).
+    // Último 'spec' aplicado por monitor, para persistir lo aplicado y no el
+    // estado en vivo, que se actualiza con retardo tras el `eval`.
     property var _desired: ({})
 
     // Tabla Lua de un monitor: { output=…, mode=…, position=…, scale=… }.
@@ -48,10 +48,9 @@ Singleton {
                   transform: i.transform, x: i.x, y: i.y, enabled: !i.disabled })
     }
 
-    // Persistencia: escribe todos los monitores en
-    // ~/.config/hypr/conf/monitors.lua para que sobrevivan a reinicios. Usa lo
-    // aplicado (_desired) y, para los no editados, su estado actual. Lo llama
-    // apply() automáticamente.
+    // Escribe todos los monitores en conf/monitors.lua para que sobrevivan a
+    // reinicios, usando lo aplicado y, para los no editados, su estado actual.
+    // Lo llama apply() automáticamente.
     function persistAll() {
         let body = "-- ── Monitores ──────────────────────────────────────────\n"
                  + "-- Generado por Quickshell (Ajustes → Pantallas).\n\n"
@@ -102,9 +101,8 @@ Singleton {
         }, [])
     }
 
-    // Aplica config a un monitor (en caliente) vía `hyprctl eval` Y la persiste
-    // en monitors.lua, todo de una. spec: { name, res, refresh, scale,
-    // transform, x, y, enabled }.
+    // Aplica la configuración a un monitor en caliente y la persiste, todo de
+    // una. spec: { name, res, refresh, scale, transform, x, y, enabled }.
     function apply(spec) {
         const d = Object.assign({}, root._desired)
         d[spec.name] = spec

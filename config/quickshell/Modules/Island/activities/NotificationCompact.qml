@@ -7,22 +7,16 @@ import qs.Config
 import qs.Services
 
 // Una notificación en una línea: icono, app y resumen. Es la forma que toma la
-// isla cuando algo acaba de pasar, antes de que decidas si te importa.
+// isla cuando algo acaba de pasar, antes de decidir si importa.
 //
-// Una línea y con puntos suspensivos a propósito: si cupiera el cuerpo entero,
-// la isla daría un salto de tamaño por cada aviso y dejaría de ser una isla
-// para ser una ventana que aparece. Lo largo está a un clic.
+// Una línea y con puntos suspensivos a propósito: si cupiera el cuerpo entero, la
+// isla daría un salto de tamaño por cada aviso y dejaría de ser una isla para ser
+// una ventana que aparece. Lo largo está a un clic.
 //
-// ── QUIÉN MANDA EN LA LÍNEA ─────────────────────────────────────────────────
-// El resumen, y solo él. El nombre de la app iba en acento y NEGRITA, o sea
-// más fuerte que el aviso: la línea se leía «SIGNAL marta ruiz te ha…», con lo
-// que más pesa siendo lo que menos importa —ya lo dice el icono de al lado—.
-// Ahora la app va en gris pequeño, separada por un punto medio, y el resumen
-// se lleva el color del texto y el peso.
-//
-// La excepción es lo CRÍTICO: ahí el rojo del nombre sí es información, porque
-// es lo único que distingue «batería al 4 %» de cualquier otro aviso antes de
-// leerlo.
+// El peso se lo lleva el resumen: el nombre de la app va en gris pequeño, separado
+// por un punto medio, porque ya lo dice el icono de al lado. La excepción es lo
+// crítico, donde el rojo del nombre sí es información: es lo único que distingue
+// «batería al 4 %» de cualquier otro aviso antes de leerlo.
 RowLayout {
     id: root
     spacing: Theme.space8
@@ -68,7 +62,7 @@ RowLayout {
     // leyéndose como una sola frase; el punto medio dice que son dos cosas
     // distintas sin gastar ni color ni peso en decirlo.
     ThemedText {
-        visible: root.appName !== "" && root.notif?.summary
+        visible: root.appName !== "" && !!root.notif?.summary
         text: "·"
         color: Theme.fgMuted
         font.pixelSize: Theme.typeLabelSmall
@@ -76,9 +70,9 @@ RowLayout {
 
     ThemedText {
         Layout.fillWidth: true
-        // Más sitio que antes (240): el nombre de la app ya no compite por él,
-        // y un resumen cortado a la mitad obliga a abrir la hoja para saber de
-        // qué va — que es justo lo que la píldora tenía que ahorrarte.
+        // Sitio generoso: un resumen cortado a la mitad obliga a abrir la hoja
+        // para saber de qué va, que es justo lo que la píldora tenía que
+        // ahorrar.
         Layout.maximumWidth: Theme.dp(300)
         text: root.notif?.summary ?? ""
         color: Theme.fg

@@ -6,7 +6,6 @@ import qs.Services
 
 // Hoja de la grabación: el cronómetro grande y los mandos.
 //
-// ── POR QUÉ EXISTE ESTE ARCHIVO ─────────────────────────────────────────────
 // Con la isla encendida, Panels/RecordingPill.qml no se construye. Esa píldora
 // no era solo un aviso: llevaba PARAR, pausar y capturar sin cortar. Enseñar el
 // punto rojo y quedarse ahí habría dejado una grabación que solo se para por el
@@ -24,7 +23,7 @@ ColumnLayout {
 
     readonly property bool pausada: ScreenCapture.isPaused
 
-    // ── Cabecera: estado y cronómetro ────────────────────────────────────────
+    // Cabecera: estado y cronómetro
     RowLayout {
         Layout.fillWidth: true
         spacing: Theme.space10
@@ -78,7 +77,6 @@ ColumnLayout {
         }
     }
 
-    // ── Mandos ───────────────────────────────────────────────────────────────
     // Los mismos tres de la píldora y en el mismo orden, para que quien ya se
     // sabía aquello no tenga que volver a aprendérselo. El de PARAR va aparte,
     // al final y en rojo: es el único que no se puede deshacer.

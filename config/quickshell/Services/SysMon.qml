@@ -20,15 +20,12 @@ Singleton {
     property real swapTotalGB: 0
     property var  processes: []   // [{pid, name, cpu, mem, memKB, memMB}]
     property string loadAvg: ""
-    // Tareas totales del sistema (procesos MÁS sus hilos), del cuarto campo de
-    // /proc/loadavg. NO son procesos, y llamarlo así era el motivo de que el
-    // monitor se contradijera consigo mismo: la cabecera decía 598 y su propia
-    // pestaña de procesos, que cuenta la salida de `ps`, decía 342.
+    // Tareas totales del sistema —procesos más sus hilos— del cuarto campo de
+    // /proc/loadavg. No son procesos: la lista de `ps` cuenta bastantes menos.
     property int  taskCount: 0
 
-    // Procesos de verdad. Solo se saben con la lista cargada (la trae `ps`), y
-    // esa solo se pide con un panel a la vista; sin ella se cae a las tareas,
-    // que es lo que se venía enseñando — más vale un número de más que un cero.
+    // Procesos de verdad. Solo se saben con la lista de `ps` cargada, y esa solo
+    // se pide con un panel a la vista; sin ella se cae a las tareas.
     readonly property int procCount: s.processes.length > 0 ? s.processes.length
                                                             : s.taskCount
     property string uptime: ""
@@ -43,31 +40,25 @@ Singleton {
     property string cpuModel: ""
     property int cpuThreads: 1
 
-    // Disco raíz. Cambia despacio: se consulta al arrancar y al abrir
-    // el panel Resumen, sin sondeo periódico.
+    // Disco raíz. Cambia despacio: se consulta al arrancar y al abrir el panel
+    // Resumen, sin sondeo periódico.
     property real diskPercent: 0
     property real diskUsedGB: 0
     property real diskTotalGB: 0
 
-    // Sensores y red (vistas en vivo: monitor y pestaña Sistema del dashboard).
     // Temperaturas en °C desde hwmon (0 = sensor no encontrado) y tasas de red
     // en KB/s desde /proc/net/dev, calculadas por diferencia entre lecturas.
     property real cpuTemp: 0
     property real gpuTemp: 0
     property real gpuBusy: -1
     property string _gpuBusyPath: ""
-    // ── Histórico para las gráficas ──────────────────────────────────────────
-    // Sesenta puntos, uno por segundo: un minuto de historia, que es la ventana
-    // en la que una subida de CPU todavía significa algo. Más allá, para mirar
-    // tendencias, hace falta otra herramienta.
+    // Sesenta puntos, uno por segundo: un minuto de historia, que es la ventana en
+    // la que una subida de CPU todavía significa algo. Solo se muestrea con la
+    // aplicación de monitor abierta.
     //
-    // Solo se muestrea con la APLICACIÓN de monitor abierta (ver el temporizador
-    // de muestreo): un anillo creciendo en segundo plano toda la sesión es
-    // memoria y trabajo por nada, porque nadie lo va a mirar hacia atrás.
-    //
-    // Se reasignan arrays NUEVOS en vez de mutar los existentes: QML no notifica
-    // los cambios hechos dentro de un array, así que mutándolos la gráfica no se
-    // enteraría de que hay un punto más.
+    // Se reasignan arrays nuevos en vez de mutar los existentes, porque QML no
+    // notifica los cambios hechos dentro de un array y la gráfica no se enteraría
+    // de que hay un punto más.
     readonly property int historyLen: 60
     property var cpuHistory: []
     property var memHistory: []
@@ -86,8 +77,8 @@ Singleton {
     function sampleHistory() {
         s.cpuHistory = s._push(s.cpuHistory, s.cpu)
         s.memHistory = s._push(s.memHistory, s.memPercent)
-        // gpuBusy vale -1 cuando no hay sensor: se guarda 0 para no meter
-        // un valor negativo en una serie que se dibuja de 0 a 100.
+        // gpuBusy vale -1 cuando no hay sensor: se guarda 0 para no meter un
+        // valor negativo en una serie que se dibuja de 0 a 100.
         s.gpuHistory = s._push(s.gpuHistory, Math.max(0, s.gpuBusy))
         s.netDownHistory = s._push(s.netDownHistory, s.netDownKB)
         s.netUpHistory = s._push(s.netUpHistory, s.netUpKB)
@@ -103,9 +94,9 @@ Singleton {
         s.diskIoHistory = []
     }
 
-    // E/S de disco, en KB/s. Sale de /proc/diskstats por diferencia entre dos
-    // lecturas, igual que la red — 'df' da lo LLENO que está el disco, que es
-    // otra cosa y no dice nada de si algo lo está machacando ahora mismo.
+    // E/S de disco en KB/s, de /proc/diskstats por diferencia entre lecturas.
+    // 'df' diría lo lleno que está el disco, que no dice nada de si algo lo está
+    // machacando ahora mismo.
     property real diskReadKB: 0
     property real diskWriteKB: 0
     property real _prevRead: 0
@@ -124,10 +115,10 @@ Singleton {
     property real _prevTotal: 0
     property real _prevIdle: 0
 
-    // Recogida periódica. CPU/RAM/carga/uptime se releen de /proc con FileView
-    // (QML puro, sin subprocesos). Solo la lista de procesos necesita `ps`, y
-    // solo mientras el panel SystemMonitor está abierto. Carga asíncrona (sin
-    // blockLoading): onLoaded salta al terminar cada reload() sin bloquear la GUI.
+    // Recogida periódica: CPU, RAM, carga y uptime se releen de /proc con
+    // FileView, sin subprocesos. Solo la lista de procesos necesita `ps`, y solo
+    // con el panel abierto. La carga es asíncrona, así que onLoaded salta al
+    // terminar cada reload() sin bloquear la interfaz.
     FileView {
         id: statFile
         path: "/proc/stat"
@@ -192,10 +183,9 @@ Singleton {
         onLoaded: s.gpuBusy = parseInt(gpuBusyFile.text())
     }
 
-    // Localiza una vez los sensores hwmon de CPU (k10temp/coretemp/zenpower) y
-    // GPU (amdgpu/nvidia) y el contador de ocupación de GPU: los índices
-    // hwmonN/cardN cambian entre arranques, así que 'find' los descubre todos
-    // (sin límite de índice) y grep vuelca "ruta:contenido" por línea.
+    // Localiza una vez los sensores hwmon de CPU y GPU y el contador de
+    // ocupación: los índices hwmonN y cardN cambian entre arranques, así que
+    // 'find' los descubre todos y grep vuelca "ruta:contenido" por línea.
     Process {
         id: hwmonScan
         running: true
@@ -207,12 +197,17 @@ Singleton {
         }
     }
 
-    // Sondeo solo cuando alguien muestra los datos: widget de la barra
-    // (cpu/ram), panel SystemMonitor, Dashboard (anillos) o Control Center
-    // (uptime). triggeredOnStart: al abrir cualquiera refresca al momento.
+    // Sondeo solo cuando alguien muestra los datos: widget de la barra, panel
+    // del monitor, dashboard o centro de control. triggeredOnStart hace que
+    // abrir cualquiera refresque al momento.
     Timer {
         interval: 5000
-        running: BarCatalog.has(Settings.barLayout, "sysmon") || Globals.sysMonOpen
+        // El widget de la barra no cuenta si la barra está escondida por una
+        // ventana a pantalla completa: sondear para no pintar nada es trabajo
+        // invisible. Los paneles sí cuentan siempre, porque si hay uno abierto
+        // se está mirando.
+        running: (BarCatalog.has(Settings.barLayout, "sysmon")
+                  && !Globals.focusedHasFullscreen()) || Globals.sysMonOpen
                  || Globals.sysMonAppOpen
                  || Globals.dashboardOpen || Globals.controlCenterOpen
         repeat: true
@@ -220,12 +215,12 @@ Singleton {
         onTriggered: s.refreshStats(false)
     }
 
-    // Tras el resume: recalibra la base de CPU (los contadores de /proc/stat dan
-    // un salto raro al cruzar el suspend, evita un pico falso) y refresca ya.
+    // Tras el resume recalibra la base de CPU —los contadores de /proc/stat dan
+    // un salto al cruzar el suspend y saldría un pico falso— y refresca.
     Connections {
         target: Resume
-        // Solo el primer pulso: /proc está disponible de inmediato al despertar,
-        // no necesita reintentos como la red o el brillo.
+        // Solo el primer pulso: /proc está disponible de inmediato al
+        // despertar, no necesita reintentos como la red o el brillo.
         function onResumed() {
             if (Resume.recoveryPulse !== 1) return
             s._prevTotal = 0
@@ -234,22 +229,17 @@ Singleton {
         }
     }
 
-    // Quién quiere la lista de procesos: el popout de la barra, la aplicación
-    // o el dashboard. Se decide en un sitio porque son tres consumidores del
-    // MISMO dato, y antes cada uno traía su copia de la regla — con dos era
-    // discutible, con tres se rompe seguro.
-    //
-    // VIVE EN EL SERVICIO, no dentro del Connections. Escrita ahí dentro era
-    // una función del propio Connections, así que 's._verMonitor()' no existía
-    // y fallaba sin ruido: la aplicación abría con la lista de procesos vacía
-    // para siempre y no había ni un aviso que lo dijera.
+    // Quién quiere la lista de procesos: el popout de la barra, la aplicación o
+    // el dashboard. Se decide en un solo sitio porque son tres consumidores del
+    // mismo dato. Vive en el servicio y no dentro del Connections, donde sería
+    // una función del propio Connections y no se podría llamar desde fuera.
     function _verMonitor() {
         if (Globals.sysMonOpen || Globals.sysMonAppOpen)
             processRefreshTimer.restart()
         else {
             processRefreshTimer.stop()
-            // Libera la lista (cientos de objetos) si tampoco la está usando
-            // el dashboard.
+            // Libera la lista, que son cientos de objetos, si tampoco la está
+            // usando el dashboard.
             if (!Globals.dashboardOpen)
                 s.processes = []
         }
@@ -259,18 +249,15 @@ Singleton {
         target: Globals
         function onSysMonOpenChanged() { s._verMonitor() }
         // Cerrar la aplicación suelta además el minuto de historia: reabrirla
-        // debe enseñar lo que pasa AHORA, no una gráfica con un agujero en
-        // medio del tiempo que estuvo cerrada.
+        // debe enseñar lo que pasa ahora, no una gráfica con un agujero.
         function onSysMonAppOpenChanged() {
             s._verMonitor()
             if (Globals.sysMonAppOpen) {
-                // Las tasas de red y disco se calculan por DIFERENCIA con la
-                // lectura anterior, y esa puede ser de hace horas: la primera
-                // muestra salía siendo "todo lo transferido desde entonces
-                // dividido por un instante", un pico enorme que aplastaba el
-                // resto de la gráfica durante el minuto siguiente. Poniendo la
-                // marca de tiempo a cero, la primera lectura solo guarda los
-                // contadores y no publica tasa.
+                // Las tasas de red y disco se calculan por diferencia con la
+                // lectura anterior, que puede ser de hace horas: la primera
+                // muestra sería todo lo transferido desde entonces dividido por
+                // un instante. Con la marca de tiempo a cero, la primera lectura
+                // solo guarda contadores y no publica tasa.
                 s._prevNetMs = 0
                 s._prevDiskMs = 0
             } else {
@@ -292,8 +279,8 @@ Singleton {
         command: ["df", "-P", "-B1", "/"]
         stdout: StdioCollector {
             onStreamFinished: {
-                // "df -P": cabecera + una línea por fs; nos quedamos con la
-                // última no vacía (fs total usado libre capacidad montaje).
+                // "df -P": cabecera y una línea por sistema de archivos; se
+                // toma la última no vacía.
                 const lines = (this.text || "").trim().split("\n")
                 const f = (lines[lines.length - 1] || "").trim().split(/\s+/)
                 if (f.length < 5)
@@ -309,20 +296,18 @@ Singleton {
         }
     }
 
-    // Muestreo de las gráficas. Un segundo es el paso que hace legible una
-    // gráfica de CPU; el refresco general del shell va a cinco, que para una
-    // línea temporal deja escalones en vez de curva.
+    // Muestreo de las gráficas a un segundo: el refresco general del shell va a
+    // cinco, que en una línea temporal deja escalones en vez de curva.
     //
     // Reactiva 'netFile' aparte porque las tasas de red se calculan por
-    // diferencia entre dos lecturas: sin releer, netDownKB se quedaría con el
-    // valor de hace cinco segundos y la gráfica sería una recta.
+    // diferencia entre dos lecturas: sin releer, la gráfica sería una recta.
     Timer {
         interval: 1000
         running: Globals.sysMonAppOpen
         repeat: true
-        // Se muestrea ANTES de pedir el refresco: las lecturas de /proc son
-        // asíncronas, así que lo que hay ahora mismo en las propiedades es el
-        // tick anterior ya completo, no uno a medias.
+        // Se muestrea antes de pedir el refresco: las lecturas de /proc son
+        // asíncronas, así que lo que hay ahora en las propiedades es el tick
+        // anterior ya completo y no uno a medias.
         onTriggered: {
             s.sampleHistory()
             s.refreshStats(false)
@@ -337,7 +322,7 @@ Singleton {
         onTriggered: s.refreshStats(true)
     }
 
-    // Refresco periódico de la lista de procesos solo con el panel abierto.
+    // Refresco periódico de la lista de procesos, solo con el panel abierto.
     Timer {
         interval: 20000
         running: Globals.sysMonOpen || Globals.sysMonAppOpen
@@ -348,9 +333,8 @@ Singleton {
     function refreshStats(withProcesses) {
         statFile.reload()
         memFile.reload()
-        // loadavg/uptime solo se muestran en paneles (SystemMonitor, Dashboard,
-        // Control Center, Acerca de): con solo el widget de la barra (cpu/ram)
-        // no hace falta releerlos ni parsearlos en cada tick.
+        // loadavg y uptime solo se muestran en paneles: con el widget de la
+        // barra a secas no hace falta releerlos ni parsearlos en cada tick.
         if (Globals.sysMonOpen || Globals.sysMonAppOpen || Globals.dashboardOpen
                 || Globals.controlCenterOpen || Globals.settingsOpen) {
             loadFile.reload()
@@ -401,9 +385,8 @@ Singleton {
         killer.running = true
     }
 
-    // Información estática del SO (una vez): os-release, hostname, kernel y
-    // CPU se leen directamente de /etc y /proc con FileView, sin shell; solo
-    // la arquitectura necesita un proceso (uname -m, argv plano).
+    // Información estática del SO, leída una vez de /etc y /proc con FileView;
+    // solo la arquitectura necesita un proceso.
     FileView {
         id: osReleaseFile
         path: "/etc/os-release"
@@ -440,8 +423,7 @@ Singleton {
         }
     }
 
-    // Extrae ID, PRETTY_NAME y LOGO de os-release (KEY=valor, comillas
-    // opcionales).
+    // Extrae ID, PRETTY_NAME y LOGO de os-release.
     function _parseOsRelease(txt) {
         const lines = (txt || "").split("\n")
         for (let i = 0; i < lines.length; i++) {
@@ -455,7 +437,7 @@ Singleton {
         }
     }
 
-    // Modelo (primer "model name") y número de hilos (líneas "processor").
+    // Modelo y número de hilos de la CPU.
     function _parseCpuinfo(txt) {
         const lines = (txt || "").split("\n")
         let threads = 0
@@ -503,8 +485,7 @@ Singleton {
         s.swapUsedGB = Math.max(0, swapTotal - swapFree) / 1024 / 1024
     }
 
-    // Resuelve las rutas de temperatura a partir del volcado de nombres hwmon
-    // ("/sys/class/hwmon/hwmonN/name:etiqueta" por línea).
+    // Resuelve las rutas de temperatura desde el volcado de nombres hwmon.
     function _parseHwmon(txt) {
         const lines = (txt || "").split("\n")
         for (let i = 0; i < lines.length; i++) {
@@ -524,14 +505,12 @@ Singleton {
         }
     }
 
-    // Tasas de red por diferencia entre lecturas de /proc/net/dev, sumando
-    // todas las interfaces menos la de loopback.
-    // /proc/diskstats: campo 3 = nombre, 6 = sectores leídos, 10 = escritos.
-    // Un sector son 512 bytes SIEMPRE en esta interfaz, pase lo que pase con el
-    // tamaño real del sector del disco — el núcleo normaliza aquí.
-    //
-    // Se suman solo los discos ENTEROS y no sus particiones, o cada byte se
-    // contaría dos veces: nvme0n1 y nvme0n1p2 informan del mismo tráfico.
+    // Tasas de red por diferencia entre lecturas de /proc/net/dev, sumando todas
+    // las interfaces menos loopback.
+    // /proc/diskstats: campo 3 = nombre, 6 = sectores leídos, 10 = escritos. Un
+    // sector son 512 B siempre en esta interfaz, pase lo que pase con el tamaño
+    // real del disco. Se suman solo los discos enteros y no sus particiones, o
+    // cada byte se contaría dos veces.
     function _parseDiskIo(txt) {
         const now = Date.now()
         let rd = 0, wr = 0
@@ -541,9 +520,8 @@ Singleton {
             if (f.length < 10)
                 continue
             const name = f[2]
-            // Partición: termina en dígito tras 'p' (nvme0n1p2) o en dígito
-            // sobre un nombre que no acaba en dígito (sda1). Los discos base
-            // (sda, nvme0n1, vda) se quedan.
+            // Partición: dígito tras 'p' (nvme0n1p2), o dígito sobre un nombre
+            // que no acaba en dígito (sda1). Los discos base se quedan.
             if (/^nvme\d+n\d+p\d+$/.test(name) || /^(sd|vd|hd)[a-z]+\d+$/.test(name)
                     || /^mmcblk\d+p\d+$/.test(name) || /^(loop|ram|zram)/.test(name))
                 continue
@@ -597,15 +575,11 @@ Singleton {
     }
 
     function _parsePs(txt) {
-        // Si ya no hay ningún consumidor a la vista cuando termina `ps`, no
-        // retengas la lista: son cientos de objetos para nadie.
-        //
-        // LA LISTA DE CONSUMIDORES TIENE QUE ESTAR COMPLETA, y es fácil que no
-        // lo esté: esta condición vive dentro del parser, lejos de las otras
-        // cuatro compuertas del archivo, así que al añadir la aplicación se
-        // actualizaron aquellas y esta se quedó atrás. El síntoma no fue un
-        // error sino una lista vacía — `ps` corría, devolvía sus 13 KB y aquí
-        // se tiraban sin decir nada.
+        // Si al terminar `ps` ya no hay ningún consumidor a la vista, no se
+        // retiene la lista: son cientos de objetos para nadie. La lista de
+        // consumidores tiene que estar completa, y esta condición vive lejos de
+        // las otras compuertas del archivo: dejarse una da una lista vacía sin
+        // ningún error que lo explique.
         if (!Globals.sysMonOpen && !Globals.sysMonAppOpen && !Globals.dashboardOpen)
             return
         const procs = []

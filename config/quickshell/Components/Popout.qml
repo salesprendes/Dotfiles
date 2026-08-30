@@ -4,9 +4,9 @@ import Quickshell
 import Quickshell.Wayland
 import qs.Config
 
-// Ventana base para popouts anclados bajo la barra. exclusionMode=Ignore evita que
-// la zona exclusiva de la barra la empuje hacia abajo, así la tarjeta queda justo
-// bajo la barra. El contenido va a un ColumnLayout.
+// Ventana base para los popouts anclados a la barra. exclusionMode Ignore evita
+// que la zona exclusiva de la barra la empuje hacia abajo, así que la tarjeta
+// queda justo pegada a ella. El contenido va a un ColumnLayout.
 PanelWindow {
     id: win
 
@@ -23,55 +23,50 @@ PanelWindow {
     property bool alignLeft: false        // ancla la tarjeta a la izquierda
     property bool alignCenter: false      // centra la tarjeta horizontalmente
     property bool scrollable: false
-    // Un unico escalar 0→1 mueve todo. La tarjeta se despliega
-    // desde el borde anclado (la barra, arriba) recortando su contenido, en vez
-    // de escalarse y fundirse. El contenido no se deforma ni se desplaza: se va
-    // descubriendo, y funde con retardo (ver Theme.revealOpacity).
+    // Un único escalar 0→1 mueve todo: la tarjeta se despliega desde el borde
+    // anclado recortando su contenido, en vez de escalarse y fundirse. El
+    // contenido no se deforma ni se desplaza, se va descubriendo, y funde con
+    // retardo.
     property real openProgress: 0
-    // ESC cierra… salvo que el panel tenga algo que cortar primero. Es el
-    // gesto de Claude Code: la primera pulsación interrumpe lo que esté en
-    // marcha y la segunda ya cierra. Quien lo quiera declara 'escapeAction' y
-    // devuelve true si ha consumido la tecla; sin declararla, ESC cierra como
-    // siempre.
+    // ESC cierra, salvo que el panel tenga algo que interrumpir primero: la
+    // primera pulsación corta lo que esté en marcha y la segunda cierra. Quien lo
+    // quiera declara 'escapeAction' y devuelve true si ha consumido la tecla.
     property var escapeAction: null
     // ←/→ saltan al panel del widget vecino de la barra, sin cerrar y volver a
-    // abrir. Es el gesto de una barra de pestañas. Un panel que use las flechas
-    // para lo suyo lo apaga.
+    // abrir. Un panel que use las flechas para lo suyo lo apaga.
     //
     // No hace falta excluir los buscadores a mano: 'Keys' en la tarjeta solo ve
-    // lo que sus hijos NO han consumido, y un campo de texto con el foco se
-    // queda las flechas para mover el cursor.
+    // lo que sus hijos no han consumido, y un campo de texto con el foco se queda
+    // las flechas para mover el cursor.
     property bool switchWithArrows: true
     readonly property int openAnimDuration: Settings.popoutAnimationMs
-    // El cierre va un punto más ágil que la apertura: lo que entra se
-    // disfruta, lo que se despide no debe hacerse esperar.
+    // El cierre va un punto más ágil que la apertura: lo que entra se disfruta,
+    // lo que se despide no debe hacerse esperar.
     readonly property int closeAnimDuration: Math.round(Settings.popoutAnimationMs * 0.7)
     default property alias content: col.data
 
-    // Solo en el monitor con foco AL ABRIR (Globals.openedOnMonitor, fijado al
-    // abrir y no en vivo: mover el ratón a otro monitor con el panel abierto no
-    // lo teletransporta). shell.qml ya solo construye la ranura en ese monitor;
-    // esto queda como fallback para la toolbar única (sin screen) y para el
-    // caso sin Hyprland (openedOnMonitor "" → visible en todos).
+    // Solo en el monitor con foco al abrir, fijado en ese momento y no en vivo,
+    // para que mover el ratón a otro monitor no teletransporte el panel. shell.qml
+    // ya construye la ranura solo en ese monitor; esto queda como respaldo para la
+    // toolbar única y para el caso sin Hyprland, donde se ve en todos.
     readonly property bool showsHere: Globals.openedOnMonitor === "" || !screen
                                       || screen.name === Globals.openedOnMonitor
 
     visible: ((shown && showsHere) || openProgress > 0) && !remapGuard.remapping
     // La mayoría de popouts nacen y mueren con su apertura, así que verían la
-    // posición nueva por sí solos; pero los que se mantienen vivos (el panel de
-    // IA usa keepAlive) y cualquiera que estuviera abierto durante un cambio de
-    // dock sí necesitan el remapeo. Ver Components/ScreenMoveRemap.qml.
+    // posición nueva solos; los que se mantienen vivos y cualquiera que estuviera
+    // abierto durante un cambio de dock sí necesitan el remapeo.
     ScreenMoveRemap { id: remapGuard; window: win }
     color: "transparent"
-    // Ignore (no 'exclusiveZone: 0', que forzaría Normal y empujaría la ventana bajo
-    // la barra). Así cubre desde y=0 y la tarjeta queda anclada justo bajo la barra.
+    // Ignore y no 'exclusiveZone: 0', que forzaría Normal y empujaría la ventana
+    // bajo la barra. Así cubre desde y=0 y la tarjeta queda anclada a la barra.
     exclusionMode: ExclusionMode.Ignore
 
     WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.namespace: ns
-    // Exclusive (no OnDemand) incluso en paneles sin buscador: Hyprland solo da teclado
-    // a una capa OnDemand si se hace CLIC en ella, así que ESC nunca llegaba. El popout
-    // ya es modal de facto (clic fuera cierra); tomar el teclado no quita nada y ESC cierra siempre.
+    // Exclusive y no OnDemand, incluso en paneles sin buscador: a una capa
+    // OnDemand Hyprland solo le da el teclado si se hace clic en ella, y entonces
+    // ESC no llegaría nunca. El popout ya es modal de facto.
     WlrLayershell.keyboardFocus: (shown && showsHere) ? WlrKeyboardFocus.Exclusive
                                                       : WlrKeyboardFocus.None
 
@@ -110,8 +105,8 @@ PanelWindow {
         easing.type: Theme.popoutExitEasing
     }
 
-    // Velo configurable (Ajustes → Tema → Transparencia): oscurece el
-    // escritorio mientras el panel está abierto, acompasado a su apertura.
+    // Velo configurable: oscurece el escritorio mientras el panel está abierto,
+    // acompasado a su apertura.
     Rectangle {
         anchors.fill: parent
         color: "black"
@@ -119,16 +114,15 @@ PanelWindow {
         visible: opacity > 0.003
     }
 
-    // Fondo: click fuera cierra.
+    // Clic fuera cierra.
     MouseArea {
         anchors.fill: parent
         enabled: win.openProgress > 0.92
         onClicked: Globals.closeAll()
     }
 
-    // Tarjeta flotante. Se ancla al borde donde vive la barra (arriba o
-    // abajo, ver Settings.barPosition): el barrido de apertura siempre
-    // se despliega DESDE la barra.
+    // Tarjeta flotante, anclada al borde donde vive la barra: el barrido de
+    // apertura siempre se despliega desde ella.
     readonly property bool fromBottom: Settings.barPosition === "bottom"
     Rectangle {
         id: card
@@ -144,7 +138,7 @@ PanelWindow {
         anchors.rightMargin: Theme.barMargin
 
         // Altura en reposo. La tarjeta se despliega hasta aquí desde el borde
-        // anclado (arriba, bajo la barra): 'height' es el recorte del barrido.
+        // anclado, y 'height' es el recorte del barrido.
         readonly property int fullHeight: Math.min(win.cardMaxHeight,
                                                    col.implicitHeight + Theme.space16 * 2)
         height: Math.round(fullHeight * win.openProgress)
@@ -155,10 +149,10 @@ PanelWindow {
         border.color: Theme.panelBorder
         clip: true
         antialiasing: true
-        // ESC cierra el panel. Va en la tarjeta (Item), no en la ventana: Keys solo
-        // funciona sobre Items, colgado del PanelWindow nunca recibía la tecla. Con focus
-        // la tarjeta captura ESC; si un hijo tiene el foco (buscador), el evento no
-        // consumido burbujea hasta aquí.
+        // ESC cierra el panel. Va en la tarjeta y no en la ventana: Keys solo
+        // funciona sobre Items, y colgado del PanelWindow nunca recibiría la
+        // tecla. Si un hijo tiene el foco, el evento no consumido burbujea hasta
+        // aquí.
         focus: true
         Keys.onEscapePressed: {
             if (win.escapeAction && win.escapeAction())
@@ -166,9 +160,8 @@ PanelWindow {
             Globals.closeAll()
         }
 
-        // Si no hay a dónde saltar (un solo panel en la barra, o este no tiene
-        // widget) el evento se deja pasar en vez de tragárselo: quien esté
-        // debajo puede querer la flecha.
+        // Si no hay a dónde saltar, el evento se deja pasar en vez de tragárselo:
+        // quien esté debajo puede querer la flecha.
         Keys.onLeftPressed: (event) => {
             event.accepted = win.switchWithArrows && Globals.switchPanel(-1)
         }
@@ -176,37 +169,36 @@ PanelWindow {
             event.accepted = win.switchWithArrows && Globals.switchPanel(1)
         }
 
-        // Absorbe clicks para que no cierre.
+        // Absorbe los clics para que no cierren.
         MouseArea {
             anchors.fill: parent
             enabled: win.openProgress > 0.92
         }
 
-        // Contenido a altura COMPLETA y anclado arriba, aunque la tarjeta aún
-        // no haya terminado de desplegarse: así el recorte lo va descubriendo
-        // sin comprimirlo ni arrastrarlo (si el contenido siguiera a la altura
-        // animada, el layout se recalcularía en cada frame y el texto bailaría).
+        // Contenido a altura completa y anclado arriba aunque la tarjeta aún no
+        // se haya desplegado, así el recorte lo va descubriendo sin comprimirlo:
+        // siguiendo la altura animada, el layout se recalcularía en cada fotograma
+        // y el texto bailaría.
         Item {
             id: contentHost
             width: card.width
             height: card.fullHeight
-            // Fijado al borde de revelado: con la tarjeta creciendo desde
-            // abajo, el contenido se alinea al borde inferior para que el
-            // recorte lo descubra sin arrastrarlo.
+            // Fijado al borde de revelado: con la tarjeta creciendo desde abajo,
+            // el contenido se alinea al borde inferior para que el recorte lo
+            // descubra sin arrastrarlo.
             y: win.fromBottom ? card.height - card.fullHeight : 0
             opacity: Theme.revealOpacity(win.openProgress)
-            // Paralaje sutil: el contenido llega con un pelín de retraso y
-            // se asienta siguiendo el sentido del barrido. Es un transform
-            // (no 'y'): no dispara relayout y se esfuma en el mismo escalar.
+            // Paralaje sutil: el contenido llega con un poco de retraso y se
+            // asienta siguiendo el sentido del barrido. Es un transform y no 'y',
+            // así que no dispara relayout.
             transform: Translate {
                 y: (1 - Theme.revealOpacity(win.openProgress))
                    * (win.fromBottom ? 1 : -1) * Theme.dp(10)
             }
 
-            // Contenedor desplazable. Con 'scrollable' activo y contenido más alto que la
-            // tarjeta (topada en cardMaxHeight), desplaza en vez de recortar: lo de abajo
-            // nunca desaparece. Sin 'scrollable' queda no interactivo y el scroll interno
-            // propio del panel sigue funcionando.
+            // Contenedor desplazable: con 'scrollable' activo y contenido más
+            // alto que la tarjeta, desplaza en vez de recortar. Sin él queda no
+            // interactivo y el scroll propio del panel sigue funcionando.
             Flickable {
                 id: flick
                 anchors.fill: parent

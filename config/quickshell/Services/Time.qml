@@ -18,12 +18,11 @@ Singleton {
         + (Settings.clockShowSeconds ? ":ss" : "")
         + (Settings.clock24h ? "" : " AP")
 
-    // Fecha "estable": solo se reasigna al cambiar de día, para que
-    // los bindings que dependen del día (calendario, resaltado de
-    // hoy…) no se re-evalúen en cada tick del reloj.
+    // Fecha estable: solo se reasigna al cambiar de día, para que los bindings
+    // que dependen del día no se reevalúen en cada tick del reloj.
     property date today: new Date()
 
-    // Fecha larga precalculada una vez por día (no en cada tick).
+    // Fecha larga precalculada una vez por día.
     property string dateString: ""
 
     // Clave del último día formateado (aaaammdd); -1 fuerza recálculo.
@@ -35,8 +34,8 @@ Singleton {
         onDateChanged: root._refresh()
     }
 
-    // Si cambia el idioma, la fecha formateada debe regenerarse
-    // aunque el día siga siendo el mismo.
+    // Un cambio de idioma regenera la fecha formateada aunque el día sea el
+    // mismo.
     Connections {
         target: I18n
         function onLanguageChanged() { root._lastDayKey = -1; root._refresh() }

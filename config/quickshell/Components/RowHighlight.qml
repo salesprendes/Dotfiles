@@ -1,27 +1,21 @@
 import QtQuick
 import qs.Config
 
-// EL RESALTADO DE UNA FILA. Uno solo, para todo el shell.
+// El resaltado de una fila, uno solo para todo el shell: una banda que sangra
+// fuera de la fila y aparece por opacidad, con una onda de pulsación por debajo
+// del contenido.
 //
-// Existía ya —y muy trabajado— dentro de SwitchRow: una banda que sangra fuera
-// de la fila, que aparece por OPACIDAD y no cambiando de color, con curva de
-// salida, y una onda de pulsación por debajo del contenido. El problema es que
-// vivía ahí dentro, así que las listas del panel de IA se resaltaban a su
-// manera: fundiendo el color a pelo, sin curva y sin sangrado. Se notaba.
+// Por opacidad y no por color, que es la diferencia que se ve: pasar de
+// "transparent" a un tono interpola también el canal alfa de un negro invisible,
+// y el paso deja un punto turbio a mitad de camino. Subir la opacidad de un tono
+// ya compuesto aparece limpio.
 //
-// Por qué opacidad y no color, que es la diferencia que de verdad se ve: pasar
-// de "transparent" a un tono interpola también por el CANAL ALFA de un negro
-// invisible, y el paso deja un punto turbio a mitad de camino. Subir la
-// opacidad de un tono ya compuesto no tiene ese problema: aparece limpio.
-//
-// Se declara SIEMPRE como primer hijo de la fila, para que quede por debajo del
-// contenido — en Material la onda corre por la superficie, no por encima del
-// texto.
+// Se declara siempre como primer hijo de la fila para quedar por debajo del
+// contenido: la onda corre por la superficie, no por encima del texto.
 //
 //   hovered    el ratón está encima
 //   selected   es la fila elegida
-//   bleedX/Y   cuánto sobresale la banda (0 en listas estrechas; en una tarjeta
-//              de ajustes respira mejor sobresaliendo)
+//   bleedX/Y   cuánto sobresale la banda
 //   press(x,y) lanza la onda desde donde se ha pulsado
 Item {
     id: rh
@@ -31,24 +25,16 @@ Item {
     property real bleedX: 0
     property real bleedY: 0
     property real radius: Theme.dp(10)
-    // Se puede teñir de otro color cuando la fila lo pide (una fila de peligro,
-    // por ejemplo); por defecto, el del shell.
+    // Se puede teñir de otro color cuando la fila lo pide; por defecto, el del
+    // shell.
     property color tint: Theme.rowHover
     property color selectedColor: Theme.rowSelected
 
-    // Cuánto tarda la SELECCIÓN en aparecer. Hay dos casos y no uno:
-    //
-    //   · Una fila que se ELIGE —una de Ajustes, una del panel de IA— cambia
-    //     de selección una vez cada mucho, y ahí un tiempo normal se lee como
-    //     "ha pasado algo". Es el valor por defecto.
-    //
-    //   · Una lista que se RECORRE con las flechas —Spotlight— cambia de
-    //     selección diez veces por segundo. Con 200 ms, dos filas están medio
-    //     encendidas a la vez todo el rato y el resaltado va permanentemente
-    //     por detrás de las teclas. Se lee como lentitud, y lo es.
-    //
-    // Quien navega con teclado pone 0 y el resaltado va bajo el dedo en vez de
-    // persiguiéndolo.
+    // Cuánto tarda la selección en aparecer, y hay dos casos. Una fila que se
+    // elige cambia una vez cada mucho, y ahí un tiempo normal se lee como "ha
+    // pasado algo". Una lista que se recorre con las flechas cambia diez veces
+    // por segundo, y entonces dos filas quedan medio encendidas a la vez y el
+    // resaltado va permanentemente por detrás de las teclas.
     property int selectMs: Theme.animNormal
 
     anchors.fill: parent
@@ -56,9 +42,8 @@ Item {
     function press(x, y) { onda.press(x, y) }
 
     // Dos capas apiladas en vez de una que cambia de color: así los cuatro
-    // estados (nada, encima, elegida, elegida y encima) salen solos, y pasar el
-    // ratón por la fila elegida la aviva un punto en lugar de sustituir su
-    // tono por otro.
+    // estados salen solos, y pasar el ratón por la fila elegida la aviva en lugar
+    // de sustituir su tono.
     Rectangle {
         anchors.fill: parent
         anchors.leftMargin: -rh.bleedX
@@ -68,8 +53,8 @@ Item {
         radius: rh.radius
         color: rh.selectedColor
         opacity: rh.selected ? 1 : 0
-        // La SELECCIÓN no persigue al puntero: cambia cuando eliges, y ahí un
-        // tiempo normal se lee como "ha pasado algo", que es lo que quieres.
+        // La selección no persigue al puntero: cambia al elegir, y ahí un tiempo
+        // normal se lee como "ha pasado algo".
         Behavior on opacity {
             enabled: rh.selectMs > 0
             NumberAnimation { duration: rh.selectMs; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel }
@@ -84,10 +69,10 @@ Item {
         radius: rh.radius
         color: rh.tint
         opacity: rh.hovered ? (rh.selected ? 0.45 : 1) : 0
-        // El HOVER sí persigue al puntero: entra casi instantáneo (Theme.
-        // animHover) y se va con calma. La salida puede tomarse su tiempo
-        // porque, cuando ocurre, el ratón ya está en otro sitio; la entrada no,
-        // porque es lo único que le dice al usuario dónde está.
+        // El hover sí persigue al puntero: entra casi instantáneo y se va con
+        // calma. La salida puede tomarse su tiempo porque para entonces el ratón
+        // ya está en otro sitio; la entrada no, porque es lo único que dice dónde
+        // se está.
         Behavior on opacity {
             NumberAnimation {
                 duration: rh.hovered ? Theme.animHover : Theme.animHoverOut

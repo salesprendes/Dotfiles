@@ -5,22 +5,19 @@ import Quickshell
 import Quickshell.Services.UPower
 import qs.Config
 
-// Perfiles de energía. Envuelve el singleton nativo PowerProfiles
-// (Quickshell.Services.UPower), que escribe a power-profiles-daemon por D-Bus.
-// Expone perfil actual, icono, nombre traducido y funciones para fijar/ciclar,
-// así la UI solo necesita importar qs.Services.
+// Perfiles de energía: envuelve el singleton nativo PowerProfiles, que escribe
+// a power-profiles-daemon por D-Bus, y expone perfil, icono, nombre traducido y
+// funciones para fijar y ciclar.
 Singleton {
     id: power
 
-    // ¿Está instalado power-profiles-daemon? Si no, la UI (pill de la barra y
-    // tile/selector del Centro de control) se oculta por completo. El singleton
-    // nativo PowerProfiles no expone disponibilidad, así que la detectamos por
-    // el CLI que acompaña al daemon (powerprofilesctl, también con tuned-ppd),
-    // vía Deps: binding reactivo, sin proceso de detección propio.
+    // ¿Está instalado el demonio? Sin él la interfaz se oculta por completo. El
+    // singleton nativo no expone disponibilidad, así que se detecta por el CLI
+    // que lo acompaña, vía Deps, con un binding reactivo.
     readonly property bool available: Deps.has("powerprofilesctl")
 
     // Perfil activo. Se mantiene como var para no forzar conversiones del enum
-    // de QuickShell a int, que pueden romper el estado visual.
+    // que puedan romper el estado visual.
     readonly property var profile: PowerProfiles.profile
     // Performance solo está disponible en cierto hardware.
     readonly property bool hasPerformance: PowerProfiles.hasPerformanceProfile
@@ -66,8 +63,8 @@ Singleton {
     readonly property string name: labelFor(currentProfileKey)
     readonly property color color: colorFor(currentProfileKey)
 
-    // Lista para el selector. PowerSaver/Balanced siempre; Performance
-    // solo si el hardware lo soporta.
+    // Lista para el selector: ahorro y equilibrado siempre, y rendimiento solo
+    // si el hardware lo soporta.
     readonly property var profiles: {
         const arr = [
             { value: PowerProfile.PowerSaver,  icon: iconFor(PowerProfile.PowerSaver),  label: labelFor(PowerProfile.PowerSaver),  color: colorFor(PowerProfile.PowerSaver) },

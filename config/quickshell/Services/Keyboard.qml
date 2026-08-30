@@ -5,14 +5,10 @@ import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Io
 
-// Distribución de teclado activa en Hyprland.
-//
-// Dos vías, porque ninguna basta sola:
-//   · El evento `activelayout` de Hyprland avisa de CADA cambio, pero solo
-//     cuando ocurre: al arrancar el shell no se ha emitido ninguno todavía.
-//   · `hyprctl devices -j` da el estado actual, pero es una foto: hay que
-//     pedirla, no llega sola.
-// Así que se consulta una vez al arrancar y a partir de ahí manda el evento.
+// Distribución de teclado activa en Hyprland, por dos vías porque ninguna basta
+// sola: el evento `activelayout` avisa de cada cambio pero solo cuando ocurre, y
+// `hyprctl devices -j` da el estado actual pero hay que pedirlo. Se consulta una
+// vez al arrancar y a partir de ahí manda el evento.
 Singleton {
     id: root
 
@@ -21,25 +17,16 @@ Singleton {
     // Todas las distribuciones configuradas, para poder rotar entre ellas.
     property var layouts: []
 
-    // "Hay algo que enseñar": se sabe cuando se ha podido leer el teclado.
-    // No se pregunta por el socket de Hyprland (API no garantizada entre
-    // versiones); si no hay Hyprland, 'hyprctl devices' falla y esto se queda
-    // en false, que es exactamente lo que hace falta.
+    // "Hay algo que enseñar", que se sabe al poder leer el teclado. No se
+    // pregunta por el socket de Hyprland, cuya API no está garantizada entre
+    // versiones: sin Hyprland, 'hyprctl devices' falla y esto queda en false.
     readonly property bool available: layout !== ""
     readonly property bool multiple: layouts.length > 1
 
-    // Etiqueta corta para la barra y el bloqueo.
-    //
-    // Hyprland da el nombre HUMANO de la distribución ("Spanish", "English
-    // (US)"), no su código xkb, y cortar las dos primeras letras da "SP" para
-    // el español — que no es ningún código y confunde más que ayuda. Así que
-    // hay una tabla de los nombres habituales, y solo lo que no esté en ella
-    // cae al recorte de dos letras.
-    //
-    // La tabla no pretende ser completa —son cientos de distribuciones— sino
-    // acertar en las que alguien de verdad va a tener configuradas a la vez.
-    // Lo que no reconozca sigue dando una etiqueta usable, solo que menos
-    // canónica.
+    // Etiqueta corta para la barra y el bloqueo. Hyprland da el nombre humano de
+    // la distribución y no su código xkb, así que recortar dos letras da "SP"
+    // para el español, que no es ningún código. La tabla cubre las habituales y
+    // lo que no esté en ella cae al recorte, que sigue dando algo usable.
     readonly property var _codes: ({
         "english": "EN", "english (us)": "EN", "english (uk)": "GB",
         "spanish": "ES", "spanish (latin american)": "LA",
@@ -63,8 +50,8 @@ Singleton {
         const exacto = root._codes[clave]
         if (exacto)
             return exacto
-        // "English (US)" no está tal cual, pero "english" sí: se prueba también
-        // con lo que hay antes del paréntesis.
+        // "English (US)" no está tal cual pero "english" sí, así que se prueba
+        // también con lo que hay antes del paréntesis.
         const base = clave.split("(")[0].trim()
         if (root._codes[base])
             return root._codes[base]
@@ -72,22 +59,17 @@ Singleton {
     }
 
     // Teclado principal: el primero que Hyprland marque como "main". Es al que
-    // hay que dirigir el switchxkblayout; mandárselo a "all" también conmuta
-    // ratones y otros dispositivos con teclas, que no es lo que se quiere.
+    // hay que dirigir el switchxkblayout, porque mandárselo a "all" conmuta
+    // también ratones y otros dispositivos con teclas.
     property string mainDevice: ""
 
-    // ── Bloq Mayús y Bloq Núm ────────────────────────────────────────────────
-    // Se leen del LED en sysfs (/sys/class/leds/*::capslock/brightness). Es la
-    // única vía fiable: Qt no expone el estado de los modificadores fuera de un
-    // evento de tecla, y `hyprctl devices` no lo cuenta. Se leen TODOS los
-    // teclados y basta con que uno esté encendido — con un teclado externo
-    // enchufado hay varios LED y el estado es del que estés usando.
+    // Se leen del LED en sysfs, que es la única vía fiable: Qt no expone el
+    // estado de los modificadores fuera de un evento de tecla y `hyprctl
+    // devices` no lo cuenta. Se leen todos los teclados y basta con que uno esté
+    // encendido, porque con un teclado externo hay varios LED.
     //
-    // Se SONDEA, y solo mientras la pantalla de bloqueo está puesta: sysfs no
-    // avisa por inotify de un cambio de brillo de LED, así que no hay forma de
-    // que llegue solo. Fuera del bloqueo nadie lo mira, y estar leyendo un
-    // archivo cuatro veces por segundo toda la sesión para nada no tiene
-    // ninguna gracia.
+    // Se sondea, y solo con la pantalla de bloqueo puesta: sysfs no avisa por
+    // inotify de un cambio de brillo de LED, y fuera del bloqueo nadie lo mira.
     property bool capsLock: false
     property bool numLock: false
 
@@ -110,9 +92,8 @@ Singleton {
     }
 
     Timer {
-        // 250 ms: por debajo de eso no se gana nada perceptible y por encima el
-        // aviso llega tarde — pulsas Bloq Mayús, escribes, y el aviso aparece
-        // cuando ya te has equivocado.
+        // 250 ms: por debajo no se gana nada perceptible y por encima el aviso
+        // llega cuando ya se ha escrito mal.
         interval: 250
         running: root.watchLocks
         repeat: true
@@ -126,8 +107,7 @@ Singleton {
         Hyprland.dispatch(Hyprland.usingLua
             ? "hl.dsp.switchxkblayout({ device = \"" + mainDevice + "\", cmd = \"next\" })"
             : "switchxkblayout " + mainDevice + " next")
-        // El dispatch dispara 'activelayout', así que no hace falta refrescar
-        // a mano: llegará solo.
+        // El dispatch dispara 'activelayout', así que el refresco llega solo.
     }
 
     function refresh() {
@@ -153,9 +133,9 @@ Singleton {
                         return
                     root.mainDevice = String(main.name || "")
                     root.layout = String(main.active_keymap || "")
-                    // 'layout' del teclado es la lista xkb separada por comas
-                    // ("us,es"), no los nombres humanos: sirve para saber
-                    // CUÁNTAS hay, que es lo único que necesita cycle().
+                    // 'layout' es la lista xkb separada por comas ("us,es") y
+                    // no los nombres humanos: sirve para saber cuántas hay, que
+                    // es lo único que necesita cycle().
                     const configured = String(main.layout || "")
                     root.layouts = configured === "" ? [] : configured.split(",").map(s => s.trim())
                 } catch (e) {
@@ -165,14 +145,13 @@ Singleton {
         }
     }
 
-    // activelayout>>NOMBRE_DEL_TECLADO,NOMBRE_DE_LA_DISTRIBUCIÓN
-    // El nombre del teclado puede llevar comas, así que se parte por la
-    // ÚLTIMA: la distribución es lo que va detrás de la última coma.
+    // activelayout>>NOMBRE_DEL_TECLADO,NOMBRE_DE_LA_DISTRIBUCIÓN. El nombre del
+    // teclado puede llevar comas, así que se parte por la última.
     Connections {
         target: Hyprland
         function onRawEvent(event) {
-            // Una recarga de config puede cambiar la lista de distribuciones,
-            // y 'activelayout' no lo cuenta: hay que volver a preguntar.
+            // Una recarga de config puede cambiar la lista de distribuciones y
+            // 'activelayout' no lo cuenta: hay que volver a preguntar.
             if (event.name === "configreloaded") {
                 root.refresh()
                 return

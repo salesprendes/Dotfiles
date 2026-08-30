@@ -4,18 +4,16 @@ import Quickshell.Io
 import qs.Config
 import "../TextUtils.js" as TU
 
-// HABILIDADES: carpetas sueltas en Modules/IA/skills/<nombre>/SKILL.md, con el
-// mismo formato que las de Claude Code (frontmatter YAML con name/description y
-// el cuerpo en Markdown).
+// Habilidades: carpetas sueltas en Modules/IA/skills/<nombre>/SKILL.md, con
+// frontmatter YAML de name/description y el cuerpo en Markdown.
 //
-// Se cargan con REVELACIÓN PROGRESIVA — al prompt de sistema va el catálogo
-// (nombre y descripción, ordenado por lo que venga a cuento) y el texto entero
-// solo cuando hace falta. Así se pueden tener veinte habilidades sin gastar
-// contexto en las diecinueve que hoy no pintan nada.
+// Se cargan con revelación progresiva: al prompt de sistema va el catálogo
+// —nombre y descripción, ordenado por lo que venga a cuento— y el texto entero
+// solo cuando hace falta, así que se pueden tener veinte sin gastar contexto en
+// las diecinueve que hoy no pintan nada.
 //
-// Quién decide que "hace falta": el modelo con use_skill, y también el propio
-// harness (ver `update`) — que no todos los modelos se acuerdan de pedir lo que
-// necesitan.
+// Quién decide que hace falta: el modelo con use_skill y también el propio
+// harness, porque no todos los modelos se acuerdan de pedir lo que necesitan.
 Scope {
     id: store
 
@@ -47,12 +45,10 @@ Scope {
                                    || x.name.toLowerCase() === want) || null
     }
 
-    // ── El escaneo ───────────────────────────────────────────────────────────
-    // Vocabulario acotado por la habilidad en uso (allowed-tools). Vacío = sin
-    // límite. Se olvida al cambiar de conversación… y también al cambiar de
-    // TEMA (ver update): un use_skill sobre un manual de solo lectura dejaba el
-    // vocabulario recortado para todo el hilo, y tres temas después el modelo
-    // seguía sin poder pedir una escritura sin saber por qué.
+    // Vocabulario acotado por la habilidad en uso; vacío = sin límite. Se olvida al
+    // cambiar de conversación y también al cambiar de tema: si no, un use_skill
+    // sobre un manual de solo lectura dejaría el vocabulario recortado para todo el
+    // hilo sin que el modelo sepa por qué.
     property var activeSkillTools: []
     // Quién puso ese recorte. Sin dueño no se sabe cuándo caduca.
     property string toolsOwner: ""
@@ -60,9 +56,8 @@ Scope {
     // Estado del reintento tras reescanear (habilidad creada tras arrancar).
     property string _retryName: ""
     property int _retryIndex: -1
-    // Aviso de "el catálogo ya está al día": lleva la tarjeta que esperaba (o
-    // -1) para que el harness la reintente sin que aquí se sepa qué es una
-    // tarjeta.
+    // Aviso de "el catálogo ya está al día": lleva la tarjeta que esperaba, o -1,
+    // para que el harness la reintente sin que aquí se sepa qué es una tarjeta.
     signal rescanned(int pending, string want)
 
     property bool scanning: scan.running
@@ -74,11 +69,9 @@ Scope {
     Process {
         id: scan
         running: true
-        // Una sola pasada: por cada SKILL.md, un separador con su id y el
-        // archivo ENTERO (tope de 24 kB). Antes solo se leía el frontmatter y el
-        // cuerpo se iba a buscar con otro proceso al invocarla; teniéndolo ya en
-        // memoria, invocar una habilidad es instantáneo y —lo que importa— el
-        // harness puede decidir él mismo cargarla.
+        // Una sola pasada: por cada SKILL.md, un separador con su id y el archivo
+        // entero, con tope. Teniendo el cuerpo ya en memoria, invocar una habilidad
+        // es instantáneo y el harness puede decidir él mismo cargarla.
         command: ["sh", "-c",
             'for f in "$QS_DIR"/*/SKILL.md; do [ -f "$f" ] || continue; '
             + 'd=$(dirname -- "$f"); printf "===QS-SKILL===%s\\n" "$(basename -- "$d")"; '
@@ -99,9 +92,8 @@ Scope {
                 const fm = head.match(/^---\s*\n([\s\S]*?)\n---/)
                 if (fm) {
                     // allowed-tools: la habilidad puede declarar a QUÉ
-                    // herramientas se limita mientras esté en uso (formato de
-                    // Anthropic/OpenWorker). Admite lista en línea ("a, b, c") y
-                    // lista YAML de guiones.
+                    // herramientas se limita mientras esté en uso. Admite lista
+                    // en línea ("a, b, c") y lista YAML de guiones.
                     const at = fm[1].match(/^allowed[-_]tools:\s*(.*)$/m)
                     if (at) {
                         const inline = at[1].trim().replace(/^\[|\]$/g, "")
@@ -120,17 +112,15 @@ Scope {
                     if (n) name = n[1].trim().replace(/^["']|["']$/g, "")
                     if (d) desc = d[1].trim().replace(/^["']|["']$/g, "")
                     // triggers: sinónimos de disparo, en línea y separados por
-                    // comas. Puntúan como el nombre (ver rankSkills) pero no
-                    // salen en el catálogo: ahí van "502" o "se cae", que en la
-                    // descripción visible serían ruido.
+                    // comas. Puntúan como el nombre pero no salen en el catálogo:
+                    // ahí serían ruido en la descripción visible.
                     const tg = fm[1].match(/^triggers:\s*(.+)$/m)
                     if (tg)
                         trig = tg[1].trim().replace(/^\[|\]$/g, "")
                                     .replace(/["']/g, "").replace(/,/g, " ")
                 }
-                // 'text' es lo que devuelve use_skill (el archivo tal cual) y
-                // 'body' lo que se inyecta al cargarla sola: sin el frontmatter,
-                // que en el prompt no aporta nada.
+                // 'text' es lo que devuelve use_skill —el archivo tal cual— y 'body'
+                // lo que se inyecta al cargarla sola, sin el frontmatter.
                 found.push({ id: id, name: name, description: desc,
                              triggers: trig, allowedTools: allowed,
                              text: head.trim(),
@@ -142,7 +132,7 @@ Scope {
             // el hilo restaurado traía a cuento.
             if (store.stickyId === "" && store.svc && store.svc.lastUserText !== "")
                 store.update(store.svc.lastUserText)
-            // Reescaneo por fallo (regla de OpenWorker): si el modelo pidió una
+            // Reescaneo por fallo: si el modelo pidió una
             // habilidad que aún no estaba y por eso se reescaneó, se avisa para
             // que se reintente la lectura ahora que sí aparece.
             if (store._retryName !== "") {
@@ -167,9 +157,8 @@ Scope {
         return true
     }
 
-    // ── Qué habilidad hace falta AHORA ───────────────────────────────────────
-    // La revelación progresiva de Claude Code confía en que el modelo, viendo la
-    // lista, se acuerde de pedir la que toca. Un modelo grande lo hace; uno local
+    // La revelación progresiva confía en que el modelo, viendo la lista, se
+    // acuerde de pedir la que toca. Un modelo grande lo hace; uno local
     // pequeño, la mitad de las veces no — y entonces la habilidad no existe en la
     // práctica. Así que aquí el harness también mira: puntúa las habilidades
     // contra lo que acaba de pedir el usuario y, si una encaja claramente, le
@@ -188,16 +177,16 @@ Scope {
 
     // La habilidad cargada es PEGAJOSA, pero no eterna: acompaña a la
     // conversación hasta que otra le gane el puesto, el TEMA se vaya de ella
-    // (ver update y TU.decideSkill) o el hilo muera. Antes se recalculaba
-    // contra el ÚLTIMO mensaje y nada más: un "sí, hazlo" sin palabras clave la
-    // descargaba a mitad de tarea — justo cuando el agente empezaba a ejecutar
-    // lo que la habilidad enseña. De ahí la ventana de mensajes y las palabras
-    // de continuar en STOP.
+    // (ver update y TU.decideSkill) o el hilo muera. Se mira una ventana de
+    // mensajes y no solo el último, y hay palabras de continuación en STOP:
+    // decidiendo contra el último mensaje a secas, un "sí, hazlo" sin palabras
+    // clave la descargaría justo cuando el agente empieza a ejecutar lo que la
+    // habilidad enseña.
     //
-    // Que se pueda descargar es una ventaja de este harness, no una copia: en
-    // Claude Code la skill entra como resultado de herramienta, vive en el
-    // historial y de ahí ya no se la saca. Aquí las instrucciones se inyectan en
-    // cada petición, así que soltarlas libera contexto de verdad.
+    // Que se pueda descargar importa: las instrucciones se inyectan en cada
+    // petición, así que soltarlas libera contexto de verdad, cosa que no ocurre
+    // cuando una habilidad entra como resultado de herramienta y se queda en el
+    // historial.
     property string stickyId: ""
     readonly property var autoSkill:
         activeSkills.find(s => s.id === stickyId) || null
@@ -240,12 +229,11 @@ Scope {
         router.running = false
     }
 
-    // ── El desempate semántico ───────────────────────────────────────────────
     // El puntuador léxico solo ve palabras compartidas: "se me cae la página
     // cada noche" no comparte ninguna raíz con "Servidores remotos" y la
-    // habilidad se queda sin cargar. Cuando el léxico no decide, se hace lo
-    // mismo que hace Claude Code —que decida el modelo leyendo descripciones—
-    // pero sin esperar a que el turno principal se acuerde de use_skill: una
+    // habilidad se queda sin cargar. Cuando el léxico no decide, decide el modelo
+    // leyendo descripciones, pero sin esperar a que el turno principal se acuerde
+    // de use_skill: una
     // llamada mínima aparte (sin streaming, sin razonamiento, contesta un id o
     // «ninguna»). Llega en asíncrono: si aterriza después de que el turno haya
     // salido, la habilidad entra en la siguiente petición del bucle de
@@ -319,7 +307,6 @@ Scope {
         }
     }
 
-    // ── Lo que entra al prompt ───────────────────────────────────────────────
     // Presupuesto del catálogo, como todo lo demás: proporcional a la ventana del
     // modelo. Con ventana holgada caben las descripciones enteras de muchas
     // habilidades; con una modesta, entran las que vienen a cuento y el resto se

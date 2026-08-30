@@ -30,7 +30,7 @@ SettingsRow {
     signal toggled()
 
     filterText: sr.label + " " + sr.desc
-    // Alto de fila de ChromeOS: sus listas respiran más que una fila de 36.
+    // Alto de fila holgado: una lista de ajustes respira mejor que a 36.
     implicitHeight: Math.max(row.implicitHeight, Theme.dp(46))
 
     // El resaltado de fila del shell, entero (banda + onda). Estaba escrito

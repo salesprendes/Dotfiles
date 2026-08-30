@@ -6,25 +6,14 @@ import qs.Config
 import qs.Services
 
 // La hoja de notificaciones: a donde lleva pulsar un aviso. Reutiliza
-// Components/NotificationItem.qml, la misma tarjeta que pintan los popups — el
-// aviso se ve igual aquí que allí, que es justo lo que evita que el shell
-// parezca dos programas distintos.
+// Components/NotificationItem.qml, la misma tarjeta que pintan los popups, así que
+// el aviso se ve igual aquí que allí.
 //
-// ── EN MODO DENSO, Y ENSEÑANDO EL CUERPO ────────────────────────────────────
-// Esta hoja mide 360 dp y aquella tarjeta está medida para el popup, que es
-// más ancho. Sin apretarla, cada aviso salía como una caja enorme con un icono
-// de 38, un título a 16 en negrita y el nombre de la app colgando en la
-// esquina de abajo… y nada más, porque iba en 'compact' y el cuerpo no se
-// enseñaba. Cajas grandes que no dicen nada.
+// Esta hoja es estrecha y aquella tarjeta está medida para el popup, que es más
+// ancho, así que va apretada (dense) y con el cuerpo: ocupa lo mismo que sin
+// apretar y a cambio se lee quién avisa, cuándo, de qué y qué dice.
 //
-// Va al revés: apretada (dense) y CON el cuerpo. Ocupa lo mismo y ahora se lee
-// quién avisa, cuándo, de qué y qué dice.
-//
-// Aquí había un Item envolviendo a este ColumnLayout, con un implicitWidth de
-// 600 puesto a mano, para conseguir que la lista LLENARA la hoja en vez de
-// quedarse flotando en el medio. Ya no hace falta: el ancho de una hoja lo pone
-// la ranura de Island.qml, y lo pone a la hoja entera para todas por igual. Esta
-// era la única que llenaba, y lo hacía con un truco propio.
+// El ancho lo pone la ranura de Island.qml, igual para todas las hojas.
 ColumnLayout {
     id: root
     spacing: Theme.space8

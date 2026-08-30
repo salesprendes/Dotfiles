@@ -7,9 +7,8 @@ import qs.Config
 //
 // Cada servidor de Settings.aiMcpServers es un proceso hijo que habla JSON-RPC
 // línea a línea: initialize → notifications/initialized → tools/list, y sus
-// herramientas se anuncian al modelo con el prefijo mcp__<servidor>__<tool> (el
-// mismo esquema de nombres de Claude Code). Ejecutar una pasa por la MISMA
-// tarjeta de aprobación que el resto.
+// herramientas se anuncian al modelo con el prefijo mcp__<servidor>__<tool>.
+// Ejecutar una pasa por la misma tarjeta de aprobación que el resto.
 //
 // Este componente NO sabe nada de tarjetas ni de mensajes: expone `rpc` con una
 // devolución de llamada y quien la pidió decide qué hacer con la respuesta. Esa

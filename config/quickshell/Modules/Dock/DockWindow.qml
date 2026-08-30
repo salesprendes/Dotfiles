@@ -7,20 +7,15 @@ import qs.Services
 
 // La superficie del dock. Una por monitor.
 //
-// ── POR QUÉ ES MUCHO MÁS ALTA QUE EL DOCK ───────────────────────────────────
-// La vista previa y el menú contextual salen HACIA ARRIBA desde el icono. Con
-// una ventana de la altura del dock harían falta dos superficies de layer-shell
-// más por monitor, cada una con su agarre de foco, su colocación contra los
-// bordes de la pantalla y su coordinación de cierre con las otras dos.
+// La vista previa y el menú contextual salen hacia arriba desde el icono. Con una
+// ventana de la altura del dock harían falta dos superficies de layer-shell más
+// por monitor, cada una con su agarre de foco, su colocación contra los bordes y
+// su coordinación de cierre con las otras dos. Alta y enmascarada, viven dentro y
+// no hay nada que coordinar; el precio es un lienzo transparente grande, y lo paga
+// 'mask': sin ella, todo ese vacío se comería los clics al escritorio.
 //
-// Alta y enmascarada, viven dentro y no hay nada que coordinar. El precio es un
-// lienzo transparente grande, y ese precio lo paga 'mask': sin ella, todo ese
-// vacío se comería los clics al escritorio.
-//
-// ── POR QUÉ CAPA Top Y NO Overlay ───────────────────────────────────────────
-// Los paneles del shell (y la isla) viven en Overlay y tienen que quedar
-// DELANTE del dock, no detrás. Un dock en Overlay taparía la esquina inferior
-// de cualquier panel abierto.
+// Los paneles del shell y la isla viven en Overlay y tienen que quedar delante del
+// dock: uno en Overlay taparía la esquina inferior de cualquier panel abierto.
 PanelWindow {
     id: win
 
@@ -36,43 +31,46 @@ PanelWindow {
 
     WlrLayershell.layer: WlrLayer.Top
     WlrLayershell.namespace: "qs-dock"
-    // Sin teclado: el dock se maneja con el ratón. Pedir foco exclusivo se lo
-    // quitaría a la ventana en la que estás escribiendo, y esto vive en
-    // pantalla toda la sesión.
+    // Sin teclado: el dock se maneja con el ratón, y pedir foco exclusivo se lo
+    // quitaría a la ventana en la que se está escribiendo.
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
 
-    // Se esconde entero con un panel abierto, por la misma razón que la isla:
-    // los popouts cubren la pantalla con su propio captador de clics y pelearse
-    // por el ratón con ellos no lleva a nada bueno.
+    // Se esconde entero con un panel abierto, por la misma razón que la isla: los
+    // popouts cubren la pantalla con su propio captador de clics.
     visible: Globals.openPanel === "" && !remapGuard.remapping
 
     ScreenMoveRemap { id: remapGuard; window: win }
 
-    // ── Reserva de espacio ───────────────────────────────────────────────────
-    // Solo con "never". Reservar un hueco para algo que está escondido dejaría
-    // una franja vacía permanente en el borde de la pantalla, que es justo lo
-    // contrario de lo que se pide al activar el autoocultar.
+    // Solo con "never": reservar un hueco para algo escondido dejaría una franja
+    // vacía permanente en el borde, que es lo contrario de lo que se pide al
+    // activar el autoocultar.
     readonly property bool reserva: Settings.dockAutoHide === "never"
                                     && Settings.dockReserveSpace
     exclusionMode: win.reserva ? ExclusionMode.Normal : ExclusionMode.Ignore
     exclusiveZone: win.reserva ? (dock.altoDock + win.margenBorde) : 0
 
-    // ── Dónde se apoya ───────────────────────────────────────────────────────
-    // Con la barra abajo, el dock se pone JUSTO ENCIMA de ella. La barra ya
-    // reserva su zona exclusiva, así que basta con sumar su alto: no hay nada
-    // que negociar con el compositor.
+    // Con la barra abajo, el dock se pone justo encima de ella. La barra ya reserva
+    // su zona exclusiva, así que basta con sumar su alto.
     readonly property int margenBarra: win.barraAbajo
         ? (Theme.barHeight + Theme.barTopMargin) : 0
     readonly property int margenBorde: (dock.esHotseat ? 0 : Theme.dp(10))
                                        + win.margenBarra
 
-    // ── Cuándo se ve ─────────────────────────────────────────────────────────
-    // Una sola propiedad con las razones en orden. No hay condición de bloqueo
-    // de sesión a propósito: este shell bloquea con WlSessionLock
-    // (ext-session-lock), y ese protocolo hace que el compositor esconda TODAS
-    // las superficies normales, layer-shell incluida. Añadirla no escondería
-    // nada que no esté ya escondido, y a cambio destruiría y reconstruiría una
-    // ventana por monitor en cada bloqueo.
+    // Una sola propiedad con las razones en orden. No hay condición de bloqueo de
+    // sesión a propósito: ext-session-lock hace que el compositor esconda todas las
+    // superficies normales, layer-shell incluida, así que añadirla no escondería
+    // nada y a cambio destruiría y reconstruiría una ventana por monitor en cada
+    // bloqueo.
+    // Esconderse NO genera un 'salir' del ratón: el puntero no se mueve, se va el
+    // dock. Es lo que pasa al pulsar un icono —la ventana se enfoca, tapa el dock
+    // y este se retira— y sin esto el globo se queda flotando sobre el escritorio
+    // señalando un icono que ya no está. Va aquí y no en el clic porque cubre
+    // TODAS las formas de esconderse: pantalla completa, abrir un panel, DND.
+    onReveladoChanged: if (!win.revelado) {
+        globos.cerrarEtiqueta()
+        globos.cerrarVista()
+    }
+
     readonly property bool revelado: {
         if (globos.abiertos)
             return true
@@ -89,30 +87,24 @@ PanelWindow {
         return !Dock.hayVentanasEn(win.nombre)
     }
 
-    // ── La máscara ───────────────────────────────────────────────────────────
-    // Lo más delicado de este archivo: mal calculada, deja una franja del ancho
-    // de la pantalla donde el clic no llega al escritorio y no hay nada visible
-    // que explique por qué.
+    // Lo más delicado de este archivo: mal calculada deja una franja del ancho de
+    // la pantalla donde el clic no llega al escritorio, sin nada visible que lo
+    // explique.
     //
-    // Tres estados, y solo tres:
+    // Tres estados y solo tres:
     //   · menú abierto → la ventana entera, para poder cerrarlo pulsando fuera
-    //   · revelado     → el rectángulo del dock, MÁS el de la vista previa
+    //   · revelado     → el rectángulo del dock, más el de la vista previa
     //   · escondido    → una tira fina en el borde, del ancho del dock
     //
-    // La tira NO ocupa todo el ancho ni en pastilla ni en hotseat: es del ancho
-    // que tendría el dock, para no quedarse con los clics del borde inferior
-    // allí donde el dock ni siquiera aparecería.
+    // La tira no ocupa todo el ancho ni en pastilla ni en hotseat: es del ancho que
+    // tendría el dock, para no quedarse con los clics del borde allí donde el dock
+    // ni siquiera aparecería. Un menú sí se lleva la ventana entera —lo ha abierto
+    // el usuario y pulsar fuera es como se cierra—, pero un globo que sale solo al
+    // pasar por encima no puede cobrarse eso.
     //
-    // ── Y POR QUÉ LA VISTA PREVIA NO AGRANDA LA MÁSCARA A TODA LA VENTANA ────
-    // Porque entonces posar el ratón en un icono dejaría 2560×420 dp del tercio
-    // inferior de la pantalla sin recibir clics: te acercas al dock, subes el
-    // ratón, pulsas en tu editor y no pasa nada. Un menú sí se lleva la ventana
-    // entera —lo has abierto tú y pulsar fuera es como se cierra—, pero un
-    // globo que sale solo al pasar por encima no puede cobrarse eso.
-    //
-    // Las dos zonas se suman con una Region hija: es exactamente para lo que
-    // están, y evita tener que calcular a mano un rectángulo que las cubra a
-    // las dos (que además taparía todo el hueco vacío entre ellas).
+    // Las dos zonas se suman con una Region hija, que es para lo que están, y así
+    // no hay que calcular a mano un rectángulo que las cubra —y que taparía el
+    // hueco vacío entre ellas—.
     mask: Region {
         item: zonaRaton
         radius: globos.menuAbierto ? 0 : Math.round(dock.radio)
@@ -147,6 +139,7 @@ PanelWindow {
         id: dock
         onPideMenu: (r, x, y) => globos.abrirMenu(r, x)
         onHoverCambia: (r, b, dentro) => globos.hover(r, b, dentro)
+        onHoverAccion: (b, nombre, dentro) => globos.hoverEtiqueta(b, nombre, b, dentro)
         anchoPantalla: win.screen ? win.screen.width : 0
         anchors.horizontalCenter: parent.horizontalCenter
         y: win.revelado
@@ -170,7 +163,6 @@ PanelWindow {
         }
     }
 
-    // ── Los globos: vista previa y menú ──────────────────────────────────────
     // La coordinación vive AQUÍ y no en cada botón porque las dos reglas que
     // hacen usable la vista previa necesitan ver los dos botones a la vez:
     //
@@ -191,12 +183,34 @@ PanelWindow {
         property real centroMenu: 0
         property bool ratonEnGlobo: false
 
+        // Estado de la etiqueta del nombre. Va aparte del de la vista previa a
+        // propósito: son dos globos con dos tiempos y dos condiciones, y
+        // mezclarlos obligaría a que uno heredase los frenos del otro.
+        // La clave identifica QUÉ se está señalando —una ranura de app o un
+        // botón de acción— y solo sirve para saber si el 'salir' que llega es
+        // del mismo sitio. El texto va aparte porque no todo lo que lleva
+        // etiqueta tiene una app detrás.
+        property var claveEtiqueta: null
+        property string textoEtiqueta: ""
+        property var botonEtiqueta: null
+        property real centroEtiqueta: 0
+        property bool etiquetaLista: false
+
         readonly property bool vistaAbierta: globos.ranuraVista !== null
                                              && Settings.dockPreviews
         readonly property bool menuAbierto: globos.ranuraMenu !== null
+
+        // Cede el sitio a los otros dos: la vista previa ya lleva el nombre en
+        // su primera línea, y el menú tapa el icono del que hablaría.
+        readonly property bool etiquetaAbierta: globos.etiquetaLista
+                                                && globos.claveEtiqueta !== null
+                                                && !globos.vistaAbierta
+                                                && !globos.menuAbierto
         readonly property bool abiertos: globos.vistaAbierta || globos.menuAbierto
 
         function hover(ranura, boton, dentro) {
+            globos.hoverEtiqueta(ranura, Dock.nombreDe(ranura ? ranura.id : ""),
+                                 boton, dentro)
             if (!Settings.dockPreviews)
                 return
             if (dentro) {
@@ -225,6 +239,41 @@ PanelWindow {
             globos.ranuraVista = ranura
         }
 
+        // Espera corta y no medio segundo: saber cómo se llama un icono no
+        // puede costar lo mismo que abrir un globo con miniaturas. Pero alguna
+        // hay, o cruzar el dock de lado a lado encendería una etiqueta por
+        // icono en el camino.
+        function hoverEtiqueta(clave, texto, boton, dentro) {
+            if (dentro) {
+                globos.botonEtiqueta = boton
+                globos.claveEtiqueta = clave
+                globos.textoEtiqueta = texto
+                // Con una etiqueta ya puesta, pasar al vecino es inmediato.
+                if (globos.etiquetaLista)
+                    globos.colocarEtiqueta()
+                else
+                    etiquetaEntra.restart()
+                return
+            }
+            etiquetaEntra.stop()
+            if (globos.claveEtiqueta === clave)
+                globos.cerrarEtiqueta()
+        }
+
+        function cerrarEtiqueta() {
+            etiquetaEntra.stop()
+            globos.claveEtiqueta = null
+            globos.etiquetaLista = false
+        }
+
+        function colocarEtiqueta() {
+            if (!globos.botonEtiqueta)
+                return
+            const b = globos.botonEtiqueta
+            globos.centroEtiqueta = b.mapToItem(globos, b.width / 2, 0).x
+            globos.etiquetaLista = true
+        }
+
         function cerrarVista() {
             entrar.stop()
             salir.stop()
@@ -234,6 +283,7 @@ PanelWindow {
 
         function abrirMenu(ranura, xVentana) {
             globos.cerrarVista()
+            globos.cerrarEtiqueta()
             globos.centroMenu = xVentana
             globos.ranuraMenu = ranura
         }
@@ -244,6 +294,11 @@ PanelWindow {
             id: entrar
             interval: 500
             onTriggered: globos.mostrar(globos.ranuraPendiente, globos.botonVista)
+        }
+        Timer {
+            id: etiquetaEntra
+            interval: 150
+            onTriggered: globos.colocarEtiqueta()
         }
         Timer {
             id: salir
@@ -289,6 +344,18 @@ PanelWindow {
                     else salir.restart()
                 }
             }
+        }
+
+        Loader {
+            active: globos.etiquetaAbierta
+            visible: active
+            sourceComponent: DockLabel { texto: globos.textoEtiqueta }
+            // Mismo estante que la vista previa y misma sujeción a los bordes:
+            // la etiqueta de la app más a la derecha se saldría de la pantalla.
+            x: Math.max(Theme.space8,
+                        Math.min(globos.width - width - Theme.space8,
+                                 globos.centroEtiqueta - width / 2))
+            y: dock.y - height - Theme.space8
         }
 
         Loader {

@@ -26,9 +26,8 @@ Item {
     property real ms: 0
     property int tokens: 0
     property string toolName: ""
-    // El motivo por el que esta llamada concreta se considera peligrosa ("" si
-    // no lo es). Solo se pregunta mientras la tarjeta espera decisión: después
-    // ya no aporta.
+    // El motivo por el que esta llamada concreta se considera peligrosa, o "" si
+    // no lo es. Solo se pregunta mientras la tarjeta espera decisión.
     readonly property string dangerWhy:
         toolStatus === "pending" ? AiService.dangerOf(msgIndex) : ""
     property string toolArgs: ""
@@ -54,25 +53,20 @@ Item {
     readonly property bool isInfo: role === "info"
     readonly property bool isAssistant: !isUser && !isError && !isTool && !isInfo
 
-    // ── Angosto ──────────────────────────────────────────────────────────────
-    // Con el panel en su ancho mínimo (340 px) la tarjeta de herramienta se
-    // quedaba con menos de trescientos para el contenido, y lo que sobraba eran
-    // sus propios márgenes. Por debajo de este umbral todo se ciñe: márgenes,
-    // separaciones y el avatar. Se mide el ancho de ESTA burbuja, no el de la
-    // ventana — es el sitio que tiene delante lo que decide si cabe.
+    // Con el panel en su ancho mínimo, la tarjeta de herramienta se queda con
+    // poco para el contenido y lo que sobra son sus propios márgenes. Por debajo
+    // de este umbral todo se ciñe: márgenes, separaciones y avatar. Se mide el
+    // ancho de esta burbuja y no el de la ventana, porque es el sitio que tiene
+    // delante lo que decide si cabe.
     readonly property bool angosto: bubble.width > 0 && bubble.width < Theme.dp(420)
     readonly property int pad: angosto ? Theme.space8 : Theme.space12
     readonly property int hueco: angosto ? Theme.space6 : Theme.space10
 
-    // ── Herramienta EN CURSO ─────────────────────────────────────────────────
-    // Entre aprobar y ver el resultado hay un rato en el que la tarjeta no
-    // cambiaba nada: seguían puestos los botones de Aprobar y Rechazar, no había
-    // reloj, y desde fuera era imposible distinguir "el comando está corriendo"
-    // de "el modelo está pensando" o de "esto se ha quedado colgado". Un
-    // buscador que tardaba quince segundos en fallar se veía igual que un modelo
-    // razonando: por eso todo parecía "pensar".
+    // Entre aprobar y ver el resultado, sin esto la tarjeta no cambia nada: los
+    // botones siguen puestos, no hay reloj, y desde fuera no se distingue "el
+    // comando está corriendo" de "el modelo está pensando" o de "se ha colgado".
     //
-    // El estado NO vive en el mensaje sino en el ejecutor: al recargar una
+    // El estado no vive en el mensaje sino en el ejecutor: al recargar una
     // conversación no hay nada ejecutándose, y guardarlo dejaría tarjetas
     // eternamente en curso de procesos que ya no existen.
     readonly property bool toolRunning:
@@ -96,10 +90,9 @@ Item {
         try { return JSON.parse(toolArgs) } catch (e) { return ({ raw: toolArgs }) }
     }
 
-    // ── El supervisor, en la tarjeta ─────────────────────────────────────────
-    // El veredicto llega DESPUÉS de que la tarjeta esté en pantalla (la crea el
-    // streaming; el segundo modelo tarda lo suyo), así que esto va de "mirando"
-    // a un juicio sin que el usuario espere a nada.
+    // El veredicto llega después de que la tarjeta esté en pantalla —la crea el
+    // streaming y el segundo modelo tarda—, así que esto pasa de "mirando" a un
+    // juicio sin que el usuario espere.
     readonly property bool _supWatching:
         isTool && AiService.supervisorWatching === msgIndex
     readonly property var _sup: isTool ? AiService.supervisorOf(msgIndex) : null
@@ -128,10 +121,10 @@ Item {
         return t
     }
 
-    // Lo que se le CONCEDE al subagente, dicho en la tarjeta donde se aprueba.
-    // Una tarjeta que dice "delega una tarea" y se calla que va a escribir no es
-    // una aprobación informada: el permiso que se da aquí es el único que habrá
-    // para todo lo que el subagente haga después.
+    // Lo que se le concede al subagente, dicho en la tarjeta donde se aprueba: una
+    // que diga "delega una tarea" y se calle que va a escribir no es una
+    // aprobación informada, y este permiso es el único que habrá para todo lo que
+    // el subagente haga después.
     readonly property string _subGrant: {
         if (toolName !== "subagent")
             return ""
@@ -143,19 +136,18 @@ Item {
              + AiService.grantCaps(g).map(c => nombres[c] || c).join(" · ")
     }
 
-    // ── La ficha de cada herramienta ─────────────────────────────────────────
-    // Antes esto eran CUATRO cadenas de ternarios en paralelo —icono, titular,
-    // resumen y vista previa—, cada una con sus casi cuarenta ramas. Añadir una
-    // herramienta obligaba a acertar en las cuatro, y olvidarse de una no daba
-    // error: solo una tarjeta a medio pintar. Ahora cada herramienta es UNA
-    // línea con lo que tenga que decir; lo que no diga cae en el genérico.
+    // Una tabla con una línea por herramienta, en vez de cuatro cadenas de
+    // ternarios en paralelo donde añadir una obligaría a acertar en las cuatro y
+    // olvidarse de alguna daría una tarjeta a medio pintar. Lo que una herramienta
+    // no diga cae en el genérico.
     //   ico   glifo de la tarjeta
     //   di    titular ("El asistente quiere…"), ya traducido
     //   res   resumen de una línea, en la lápida de código
-    //   ver   lo que se va a cambiar, para leerlo ANTES de aprobar
-    // 'a' es un ACCESOR a los argumentos: a("path"). No es el objeto pelado a
-    // propósito — un campo que el modelo no mandó saldría como "undefined"
-    // pintado en la tarjeta; así lo que falta sale vacío y ya.
+    //   ver   lo que se va a cambiar, para leerlo antes de aprobar
+    //
+    // 'a' es un accesor a los argumentos: a("path"). No es el objeto pelado a
+    // propósito, porque un campo que el modelo no mandó saldría como "undefined"
+    // pintado en la tarjeta.
     readonly property var _toolCards: ({
         open_url:      { ico: "󰖟", di: I18n.tr("The assistant wants to open:"),
                          res: a => a("url") },
@@ -173,7 +165,8 @@ Item {
                          res: a => a("path"), ver: a => a("content") },
         edit_file:     { ico: "󰏫", di: I18n.tr("The assistant wants to edit:"),
                          res: a => a("path"),
-                         // El trozo saliente con - y el entrante con +, como un diff.
+                         // El trozo saliente con - y el entrante con +, como un
+                         // diff.
                          ver: a => ("- " + String(a("old_string")).split("\n").join("\n- ")).slice(0, 600)
                                  + "\n" + ("+ " + String(a("new_string")).split("\n").join("\n+ ")).slice(0, 600) },
         edit_patch:    { ico: "󱇧", di: I18n.tr("The assistant wants to patch (hash-anchored):"),
@@ -181,8 +174,8 @@ Item {
                                    + (Array.isArray(a("hunks")) ? a("hunks").length : "?")
                                    + " cambios"
                                    + (a("dry_run") ? "  (ensayo)" : ""),
-                         // Cada hunk como "op ancla → texto": el usuario ve
-                         // dónde toca y con qué, sin abrir el archivo.
+                         // Cada hunk como "op ancla → texto": se ve dónde toca y
+                         // con qué, sin abrir el archivo.
                          ver: a => (a("hunks") || []).map(k =>
                                 (k.op || "replace") + "  " + (k.at || "?")
                                 + (k.to ? ".." + k.to : "")
@@ -321,9 +314,9 @@ Item {
                                    + ":" + a("remote_path") }
     })
 
-    // La ficha de ESTA tarjeta. Las herramientas MCP no están en la tabla
-    // —nacen del servidor que las publica—, así que llevan la suya al vuelo, y
-    // un nombre desconocido cae en la genérica en vez de dejar la tarjeta muda.
+    // La ficha de esta tarjeta. Las herramientas MCP no están en la tabla —nacen
+    // del servidor que las publica—, así que llevan la suya al vuelo, y un nombre
+    // desconocido cae en la genérica en vez de dejar la tarjeta muda.
     readonly property var _card:
         _toolCards[toolName] ? _toolCards[toolName]
       : toolName.startsWith("mcp__")
@@ -341,26 +334,23 @@ Item {
     readonly property string toolHeadline: isTool ? _card.di : ""
     readonly property string toolPretty:
         isTool ? (_field(_card.res, 2000) || String(_args.raw || "")) : ""
-    // Lo que va a cambiar, previsualizado ANTES de aprobar: nadie firma un
-    // archivo sin verlo.
+    // Lo que va a cambiar, previsualizado antes de aprobar: nadie firma un archivo
+    // sin verlo.
     readonly property string toolPreview: isTool ? _field(_card.ver, 2000) : ""
 
-    // ── Prosa y código, separados ────────────────────────────────────────────
-    // El Markdown de Qt pinta los bloques ``` sin fondo ni forma de copiarlos.
-    // Aquí el contenido se trocea: [{code, lang, text}…]; cada trozo de código
-    // se pinta aparte. Vale también para la burbuja en vivo (una valla sin
-    // cerrar cuenta como código hasta el final).
+    // El Markdown de Qt pinta los bloques ``` sin fondo ni forma de copiarlos, así
+    // que el contenido se trocea en [{code, lang, text}…] y cada trozo de código se
+    // pinta aparte. Vale también para la burbuja en vivo: una valla sin cerrar
+    // cuenta como código hasta el final.
     readonly property var segments: {
         if (!isAssistant) return []
         let all = content
-        // EN VIVO, una fila de TABLA a medias se retiene hasta su salto de
-        // línea: el parser de Markdown, con la fila cortada a mitad de celda
-        // ("| cel"), deja de ver la tabla como tabla y la descompone en texto
-        // suelto — en cada token, o sea parpadeando. Con filas siempre
-        // completas la tabla se parsea estable. SOLO filas de tabla (la línea
-        // empieza por "|") y SOLO fuera de un cercado de código abierto (un
-        // "|" dentro de ``` es una tubería de shell, no una tabla): retener
-        // prosa normal haría la escritura a saltos de línea en vez de fluida.
+        // En vivo, una fila de tabla a medias se retiene hasta su salto de línea:
+        // con la fila cortada a mitad de celda, el parser de Markdown deja de ver
+        // la tabla como tabla y la descompone en texto suelto, en cada token. Solo
+        // filas de tabla y solo fuera de un cercado abierto —un "|" dentro de ```
+        // es una tubería de shell—, porque retener prosa normal haría la escritura
+        // a saltos de línea en vez de fluida.
         if (live) {
             const nl = all.lastIndexOf("\n")
             const cola = all.slice(nl + 1)
@@ -395,24 +385,20 @@ Item {
         return out
     }
 
-    // ── El modelo VIVO de los trozos ─────────────────────────────────────────
-    // 'segments' se recalcula entero en CADA token, y devuelve un array nuevo.
-    // Un Repeater con un array por modelo no compara nada: si la identidad del
-    // array cambia, DESTRUYE todos sus delegates y los vuelve a crear. Medido:
-    // cuarenta tokens, cuarenta reconstrucciones.
+    // 'segments' se recalcula entero en cada token y devuelve un array nuevo. Un
+    // Repeater con un array por modelo no compara nada: si la identidad del array
+    // cambia, destruye todos sus delegates y los vuelve a crear, o sea una
+    // reconstrucción completa por token.
     //
-    // Con prosa se notaba poco. Con una TABLA se ve: cada reconstrucción tira
-    // el TextEdit —y con él el documento ya analizado, con sus columnas
-    // medidas— y vuelve a interpretar el Markdown desde cero. La tabla se
-    // rehace treinta veces por segundo, que es exactamente el "no se conserva
-    // el formato y luego se borra". Y de paso el alto de la burbuja daba
-    // tumbos en cada token, que es lo que hacía saltar el desplazamiento.
+    // Con prosa se nota poco; con una tabla se ve, porque cada reconstrucción tira
+    // el TextEdit —y con él el documento ya analizado, con sus columnas medidas— y
+    // vuelve a interpretar el Markdown desde cero. Además el alto de la burbuja
+    // daría tumbos en cada token, que es lo que hace saltar el desplazamiento.
     //
-    // Aquí el modelo se SINCRONIZA en el sitio: mientras la estructura no
-    // cambie (mismo número de trozos, mismo tipo, mismo lenguaje) solo se
-    // actualiza el texto, y el TextEdit sigue vivo. Reconstruir se reserva
-    // para cuando de verdad aparece un trozo nuevo — al abrirse un cercado de
-    // código, una vez.
+    // Aquí el modelo se sincroniza en el sitio: mientras la estructura no cambie
+    // —mismo número de trozos, mismo tipo, mismo lenguaje— solo se actualiza el
+    // texto y el TextEdit sigue vivo. Reconstruir se reserva para cuando aparece un
+    // trozo nuevo.
     readonly property ListModel segModel: ListModel {}
 
     function _sincronizaSegs() {
@@ -458,22 +444,18 @@ Item {
         wrapMode: Text.WordWrap
     }
 
-    // La entrada la anima el ListView (su Transition 'add'), no la burbuja:
-    // aquí había un segundo fundido 0→1 que peleaba con aquel — dos curvas
-    // distintas escribiendo la misma opacity — y que además se re-ejecutaba
-    // cada vez que el ListView RECREABA el delegate al hacer scroll (sin
-    // reuseItems los delegates mueren al salir del cacheBuffer): los mensajes
-    // parpadeaban al desplazarse, no solo al llegar.
+    // La entrada la anima el ListView y no la burbuja: un segundo fundido aquí
+    // pelearía con aquel —dos curvas escribiendo la misma opacity— y además se
+    // re-ejecutaría cada vez que el ListView recreara el delegate al desplazar, así
+    // que los mensajes parpadearían al hacer scroll y no solo al llegar.
     //
-    // Y el modelo de segmentos se puebla EN DIFERIDO: Component.onCompleted
-    // de un delegate corre DENTRO del pase de disposición del ListView, y
-    // sincronizar ahí instanciaba los TextEdit y parseaba el Markdown de cada
-    // mensaje en pleno layout — al abrir el panel con una conversación larga,
-    // todos a la vez, con el GUI thread clavado. Un tick después, fuera del
-    // pase, cuesta lo mismo y no bloquea la disposición.
+    // Y el modelo de segmentos se puebla en diferido: Component.onCompleted de un
+    // delegate corre dentro del pase de disposición del ListView, y sincronizar ahí
+    // instanciaría los TextEdit y parsearía el Markdown de cada mensaje en pleno
+    // layout. Un tick después, fuera del pase, cuesta lo mismo y no bloquea.
     Component.onCompleted: Qt.callLater(bubble._sincronizaSegs)
 
-    // ── Usuario ──────────────────────────────────────────────────────────────
+    // Usuario
     ColumnLayout {
         id: userCol
         visible: bubble.isUser
@@ -513,9 +495,9 @@ Item {
             }
         }
 
-        // Pie del mensaje propio: adjuntos que llevaba + Editar/Eliminar.
-        // Flow por el mismo motivo que el del asistente: una fila no se
-        // envuelve, y con la etiqueta de un adjunto larga se salía.
+        // Pie del mensaje propio: adjuntos que llevaba más Editar y Eliminar. Flow
+        // por lo mismo que el del asistente: una fila no se envuelve, y con la
+        // etiqueta de un adjunto larga se saldría.
         Flow {
             id: pieUsuario
             Layout.fillWidth: true
@@ -561,7 +543,7 @@ Item {
         acceptedButtons: Qt.NoButton
     }
 
-    // ── Asistente ────────────────────────────────────────────────────────────
+    // Asistente
     RowLayout {
         id: aiRow
         visible: bubble.isAssistant
@@ -569,9 +551,9 @@ Item {
         anchors.right: parent.right
         spacing: bubble.hueco
 
-        // El avatar, con anillo. Un disco plano se leía como una mancha; el
-        // aro lo convierte en una pieza y lo separa del fondo del panel, que
-        // es translúcido y cambia con el fondo de escritorio.
+        // El avatar, con anillo: un disco plano se lee como una mancha, y el aro lo
+        // convierte en una pieza separada del fondo del panel, que es translúcido y
+        // cambia con el fondo de escritorio.
         Rectangle {
             Layout.alignment: Qt.AlignTop
             Layout.topMargin: Theme.space6
@@ -589,9 +571,8 @@ Item {
                 color: Theme.accentText
                 font.pixelSize: Theme.sp(13)
             }
-            // Mientras escribe, el aro respira. Es la única señal de "sigue
-            // trabajando" que no ocupa sitio ni mueve nada de lo que ya está
-            // escrito — los puntos suspensivos empujaban la lista.
+            // Mientras escribe, el aro respira: es la única señal de "sigue
+            // trabajando" que no ocupa sitio ni mueve lo ya escrito.
             SequentialAnimation on scale {
                 running: bubble.live
                 loops: Animation.Infinite
@@ -602,11 +583,10 @@ Item {
             }
         }
 
-        // LA SUPERFICIE DE LA RESPUESTA. Antes no había ninguna: el mensaje del
-        // usuario iba en una píldora teñida y el del asistente era texto suelto
-        // sobre el fondo del panel. Con el fondo translúcido y un escritorio
-        // detrás, la respuesta —que es lo que uno viene a leer— era lo único
-        // sin sitio propio.
+        // La superficie de la respuesta. Sin ella, con el mensaje del usuario en
+        // una píldora teñida y el del asistente como texto suelto sobre un fondo
+        // translúcido con escritorio detrás, la respuesta —que es lo que se
+        // viene a leer— sería lo único sin sitio propio.
         //
         // La esquina de arriba a la izquierda va más cerrada que las demás:
         // es la que mira al avatar, y esa asimetría es lo que hace que un
@@ -621,14 +601,13 @@ Item {
             border.width: Theme.hairline
             border.color: SettingsPalette.settingsBorder
 
-            // MIENTRAS ESCRIBE: un filo que RECORRE el borde izquierdo, no un
-            // punto que parpadea. Un parpadeo dice "hay algo"; un recorrido
-            // dice "está pasando ahora", que es lo que uno quiere saber. Y va
-            // por el borde, fuera del texto, así que no compite con lo que
-            // estás leyendo — que es justo lo que hacían los tres puntitos.
+            // Mientras escribe, un filo recorre el borde izquierdo en vez de un
+            // punto que parpadea: un parpadeo dice "hay algo" y un recorrido dice
+            // "está pasando ahora". Va por el borde, fuera del texto, así que no
+            // compite con lo que se está leyendo.
             //
-            // El carril tenue queda de fondo para que el filo no aparezca de
-            // la nada en cada vuelta: se ve el camino que recorre.
+            // El carril tenue queda de fondo para que el filo no aparezca de la nada
+            // en cada vuelta: se ve el camino que recorre.
             Rectangle {
                 id: carril
                 anchors.left: parent.left
@@ -645,17 +624,16 @@ Item {
                 Rectangle {
                     id: viajero
                     width: parent.width
-                    // Un tercio del alto, con un mínimo: en una respuesta corta
-                    // un tercio serían cuatro píxeles y no se vería viajar.
+                    // Un tercio del alto, con un mínimo: en una respuesta corta un
+                    // tercio serían unos pocos píxeles y no se vería viajar.
                     height: Math.max(Theme.dp(18), Math.round(carril.height * 0.34))
                     radius: width
                     color: Theme.accent
                     // Se anima un escalar 0→1 y la 'y' sale por vínculo: una
-                    // NumberAnimation captura from/to AL ARRANCAR y los bucles
-                    // no los reevalúan, así que animando 'y' directamente el
-                    // recorrido se quedaba congelado en el alto que la burbuja
-                    // tenía en el primer token (unos píxeles), mientras el
-                    // carril real crecía a cientos.
+                    // NumberAnimation captura from y to al arrancar y los bucles no
+                    // los reevalúan, así que animando 'y' directamente el recorrido
+                    // se quedaría congelado en el alto del primer token mientras el
+                    // carril real crece.
                     property real t: 0
                     y: Math.round((carril.height + height) * t) - height
 
@@ -734,29 +712,27 @@ Item {
                 model: bubble.segModel
                 delegate: Loader {
                     id: seg
-                    // Del modelo vivo, por roles: así cambiar el texto NO
-                    // cambia 'sourceComponent' y el TextEdit de dentro
-                    // sobrevive al token siguiente con su tabla ya medida.
+                    // Del modelo vivo, por roles: así cambiar el texto no cambia
+                    // 'sourceComponent' y el TextEdit de dentro sobrevive al token
+                    // siguiente con su tabla ya medida.
                     required property bool code
                     required property string lang
                     required property string text
                     Layout.fillWidth: true
-                    // EL LOADER PIDE POCO. Sin esto, el ancho que el Loader
-                    // le pide a la columna es el implicitWidth de su hijo — y
-                    // el de un TextEdit es el que tendría SIN ajustar, o sea
-                    // el de la línea más larga de un tirón. Una respuesta con
-                    // una ruta larga o una palabra sin espacios pedía dos mil
-                    // píxeles, la columna se los daba, y el texto se salía de
-                    // la tarjeta por la derecha. Pidiendo uno, manda el sitio
-                    // disponible; el hijo se ata abajo al ancho ya resuelto.
+                    // El Loader pide poco a propósito. Sin esto, el ancho que le
+                    // pide a la columna es el implicitWidth de su hijo, y el de un
+                    // TextEdit es el que tendría sin ajustar: una ruta larga o una
+                    // palabra sin espacios pediría miles de píxeles, la columna se
+                    // los daría y el texto se saldría por la derecha. Pidiendo uno,
+                    // manda el sitio disponible y el hijo se ata al ancho resuelto.
                     Layout.preferredWidth: 1
                     sourceComponent: code ? codeComp : proseComp
 
                     Component {
                         id: proseComp
                         TextEdit {
-                            // Atado al ancho YA resuelto del Loader: es lo que
-                            // hace que el ajuste tenga contra qué ajustar.
+                            // Atado al ancho ya resuelto del Loader: es lo que hace
+                            // que el ajuste tenga contra qué ajustar.
                             width: seg.width
                             text: seg.text
                             textFormat: TextEdit.MarkdownText
@@ -826,14 +802,11 @@ Item {
                 }
             }
 
-            // Pie: modelo · tiempo · tokens + acciones, al posarse.
-            //
-            // Flow y no RowLayout: una fila no se envuelve, así que con el
-            // panel estrecho "qwen3:32b · 14:22 · 3,4 s · 812 tok" más Copiar,
-            // Regenerar y Eliminar sumaban más ancho que la tarjeta y se salían
-            // por la derecha. Envolviendo, lo que no cabe baja a la línea
-            // siguiente; y la metainformación —lo único que puede crecer— se
-            // recorta antes de empujar a nadie.
+            // Pie con la metainformación y las acciones, al posarse. Flow y no
+            // RowLayout: una fila no se envuelve, así que con el panel estrecho
+            // todo junto sumaría más ancho que la tarjeta. Envolviendo, lo que no
+            // cabe baja de línea, y la metainformación —lo único que puede crecer—
+            // se recorta antes de empujar a nadie.
             Flow {
                 id: pieIA
                 Layout.fillWidth: true
@@ -844,8 +817,7 @@ Item {
 
                 ThemedText {
                     // Nunca negativo: con un ancho negativo el elide no recorta
-                    // nada y el texto se pinta entero (ver la nota de las
-                    // píldoras de opción).
+                    // nada y el texto se pinta entero.
                     width: Math.max(0, Math.min(implicitWidth, pieIA.width))
                     elide: Text.ElideRight
                     text: {
@@ -890,7 +862,7 @@ Item {
         acceptedButtons: Qt.NoButton
     }
 
-    // ── Herramienta: la tarjeta de aprobación ────────────────────────────────
+    // Herramienta: la tarjeta de aprobación
     Rectangle {
         id: toolBox
         visible: bubble.isTool
@@ -933,9 +905,8 @@ Item {
                 ThemedText {
                     Layout.fillWidth: true
                     text: bubble.toolHeadline
-                    // Se ajusta: un titular largo ("El asistente quiere leer
-                    // archivos:") no cabe en el panel estrecho, y sin esto se
-                    // salía de la tarjeta en vez de pasar a la línea siguiente.
+                    // Se ajusta: un titular largo no cabe en el panel estrecho, y
+                    // sin esto se saldría de la tarjeta en vez de pasar de línea.
                     wrapMode: Text.WordWrap
                     color: Theme.fgDim
                     font.pixelSize: Theme.typeLabelLarge
@@ -964,10 +935,9 @@ Item {
                 }
             }
 
-            // COMANDO DESTRUCTIVO: el guardarraíl de encima de la política. No
-            // se prohíbe (a veces borrar es justo lo que toca) pero se dice qué
-            // se ha visto y esta llamada nunca se auto-aprueba, por muy suelta
-            // que esté la correa.
+            // Comando destructivo: el guardarraíl por encima de la política. No se
+            // prohíbe —a veces borrar es justo lo que toca— pero se dice qué se ha
+            // visto, y esta llamada nunca se auto-aprueba.
             RowLayout {
                 Layout.fillWidth: true
                 spacing: Theme.space6
@@ -987,11 +957,11 @@ Item {
                 }
             }
 
-            // EL SUPERVISOR. Banda propia, separada del aviso destructivo de
-            // arriba, porque dicen cosas distintas: aquel es una regla local
-            // sobre el comando, esto es la opinión de un segundo modelo sobre
-            // esta llamada en este encargo. Mientras piensa se dice que está
-            // pensando: un supervisor callado no puede parecer conforme.
+            // El supervisor, con banda propia y separada del aviso destructivo,
+            // porque dicen cosas distintas: aquel es una regla local sobre el
+            // comando y esto la opinión de un segundo modelo sobre esta llamada.
+            // Mientras piensa se dice que está pensando: un supervisor callado no
+            // puede parecer conforme.
             RowLayout {
                 Layout.fillWidth: true
                 spacing: Theme.space6
@@ -1019,10 +989,9 @@ Item {
                 }
             }
 
-            // Un enlace simbólico que se va fuera de la carpeta personal: se
-            // dice adónde apunta DE VERDAD. No se prohíbe (perderías rutas
-            // legítimas como ~/datos → /mnt/almacen), pero esta llamada no se
-            // auto-aprueba nunca: la decides tú, viendo el destino.
+            // Un enlace simbólico que sale de la carpeta personal: se dice adónde
+            // apunta de verdad. No se prohíbe, porque se perderían rutas legítimas,
+            // pero esta llamada no se auto-aprueba nunca.
             RowLayout {
                 Layout.fillWidth: true
                 spacing: Theme.space6
@@ -1051,9 +1020,9 @@ Item {
                 text: bubble.toolPreview
             }
 
-            // write_file sobre un archivo EXISTENTE: diff real contra lo que
-            // hay en disco, a un clic y ANTES de aprobar — lo que enseñan
-            // aider y Claude Code. Con archivo nuevo lo dice y ya.
+            // write_file sobre un archivo existente: diff real contra lo que hay
+            // en disco, a un clic y antes de aprobar. Con archivo nuevo lo dice
+            // y ya.
             RowLayout {
                 visible: bubble.toolName === "write_file" && bubble.toolStatus === "pending"
                 spacing: Theme.space8
@@ -1093,9 +1062,8 @@ Item {
                 text: bubble._diffOut
             }
 
-            // ── Plan propuesto (propose_plan) ────────────────────────────
-            // No es aprobar una acción: es dar el visto bueno a un rumbo.
-            // Aprobar saca del solo-lectura; rechazar devuelve tu crítica.
+            // No es aprobar una acción sino dar el visto bueno a un rumbo: aprobar
+            // saca del solo-lectura y rechazar devuelve la crítica.
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: Theme.space8
@@ -1127,9 +1095,8 @@ Item {
                 }
             }
 
-            // ── Pregunta al usuario (ask_user) ───────────────────────────
-            // No hay nada que aprobar: hay algo que contestar. Opciones como
-            // chips y, siempre, la puerta del texto libre.
+            // No hay nada que aprobar sino algo que contestar: opciones como chips
+            // y, siempre, la puerta del texto libre.
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: Theme.space8
@@ -1144,25 +1111,18 @@ Item {
                         delegate: Rectangle {
                             id: optChip
                             required property var modelData
-                            // CON TOPE. Aquí la píldora se hacía tan ancha como
-                            // su texto y punto: una opción larga —"Sí, borra los
-                            // tres y vuelve a compilar"— se salía de la tarjeta
-                            // por la derecha, y en un panel estrecho eso es casi
-                            // cualquier opción. El Flow tampoco podía ayudar:
-                            // envuelve entre hijos, pero no encoge a uno que ya
-                            // no cabe.
-                            //
-                            // Nunca más ancha que el sitio que hay, y si no
-                            // cabe, el texto elide. El valor que se contesta es
-                            // el entero, no el recortado.
+                            // Con tope: sin él la píldora se hace tan ancha como su
+                            // texto, y una opción larga se sale de la tarjeta. El
+                            // Flow no ayuda, porque envuelve entre hijos pero no
+                            // encoge a uno que ya no cabe. Si no cabe, el texto
+                            // elide; el valor que se contesta es el entero.
                             readonly property real natural:
                                 optText.implicitWidth + Theme.space12 * 2
-                            // El tope solo cuando el Flow YA tiene ancho. En el
+                            // El tope solo cuando el Flow ya tiene ancho: en el
                             // primer pase de disposición vale 0, y un Math.min
-                            // contra 0 deja la píldora en nada y el hueco del
-                            // texto en NEGATIVO — y con ancho negativo el elide
-                            // no recorta: pinta la frase entera, que es
-                            // exactamente el texto saliéndose de la píldora.
+                            // contra 0 deja la píldora en nada y el hueco del texto
+                            // en negativo, con lo que el elide no recorta y pinta la
+                            // frase entera fuera de la píldora.
                             width: opciones.width > 0
                                    ? Math.min(natural, opciones.width) : natural
                             height: Theme.dp(30)
@@ -1222,11 +1182,10 @@ Item {
                 }
             }
 
-            // EN CURSO. Ocupa el sitio de los botones —que desaparecen en cuanto
-            // algo empieza a correr— y dice lo único que hace falta saber
-            // mientras se espera: que esto está pasando de verdad, y desde hace
-            // cuánto. Los segundos son el dato que convierte "se ha colgado" en
-            // "lleva cuatro segundos", que son cosas muy distintas.
+            // En curso: ocupa el sitio de los botones, que desaparecen en cuanto
+            // algo empieza a correr, y dice lo único que hace falta saber mientras
+            // se espera. Los segundos convierten "se ha colgado" en "lleva cuatro
+            // segundos".
             RowLayout {
                 Layout.fillWidth: true
                 spacing: Theme.space6
@@ -1236,8 +1195,8 @@ Item {
                     color: Theme.accentText
                     font.pixelSize: Theme.sp(13)
                     // Late en vez de girar: una rotación continua pide la mirada
-                    // todo el rato, y esto pasa DENTRO de una conversación que
-                    // se está leyendo.
+                    // todo el rato, y esto pasa dentro de una conversación que se
+                    // está leyendo.
                     SequentialAnimation on opacity {
                         running: bubble.toolRunning
                         loops: Animation.Infinite
@@ -1255,18 +1214,13 @@ Item {
                 }
             }
 
-            // Pendiente: las dos decisiones. Resuelta: el veredicto + salida.
-            // LAS DECISIONES, Y QUE QUEPAN. Esto era un RowLayout, y un
-            // RowLayout no se envuelve: cuando el panel se estrecha aprieta a
-            // sus hijos por debajo de su ancho natural, así que "Rechazar",
-            // "Siempre" y "Aprobar" se salían de la tarjeta con las etiquetas
-            // cortadas. Justo los tres botones que hay que poder leer ANTES de
-            // pulsar uno.
+            // Pendiente, las dos decisiones; resuelta, el veredicto y la salida.
             //
-            // Un Flow sí se envuelve: caben en una línea mientras quepan, y si
-            // no, bajan a la siguiente. De derecha a izquierda para que
-            // "Aprobar" siga siendo el de la esquina, que es donde la mano ya
-            // lo busca.
+            // Flow y no RowLayout: un RowLayout no se envuelve y, al estrecharse el
+            // panel, aprieta a sus hijos por debajo de su ancho natural, cortando
+            // las etiquetas de los tres botones que hay que poder leer antes de
+            // pulsar uno. De derecha a izquierda, para que "Aprobar" siga siendo el
+            // de la esquina.
             Flow {
                 Layout.fillWidth: true
                 spacing: Theme.space8
@@ -1280,19 +1234,16 @@ Item {
                     primary: true
                     onClicked: AiService.approveToolByUser(bubble.msgIndex)
                 }
-                // "Siempre" (esta conversación): solo donde se puede permitir
-                // en firme — leer y externos benignos; lo que ejecuta o
-                // escribe no lo ofrece (siempre pregunta).
+                // "Siempre", para esta conversación: solo donde se puede permitir
+                // en firme. Lo que ejecuta o escribe no lo ofrece.
                 TextButton {
                     visible: AiService.canStandingAllow(bubble.toolName)
                     text: I18n.tr("Always")
                     onClicked: AiService.approveToolAlways(bubble.msgIndex)
                 }
-                // La RÁFAGA: un diagnóstico son treinta comandos de mirar
-                // contra la misma máquina, y eran treinta tarjetas. Solo
-                // aparece cuando esta llamada concreta es de solo lectura
-                // reconocida, y vale para las iguales de ESTE turno — no es
-                // el "siempre" de arriba, que ssh_exec no admite.
+                // La ráfaga: un diagnóstico son decenas de comandos de mirar contra
+                // la misma máquina. Solo aparece cuando esta llamada es de solo
+                // lectura reconocida, y vale para las iguales de este turno.
                 TextButton {
                     visible: AiService.canBurstCall(bubble.toolName, bubble.toolArgs)
                              && !AiService.canStandingAllow(bubble.toolName)
@@ -1305,9 +1256,8 @@ Item {
                 }
             }
 
-            // El veredicto y sus acciones. Flow por lo mismo que los pies: con
-            // "Ejecutada · Ocultar salida · Deshacer" en un panel estrecho, una
-            // fila rígida se sale por la derecha.
+            // El veredicto y sus acciones. Flow por lo mismo que los pies: en un
+            // panel estrecho, una fila rígida se sale por la derecha.
             Flow {
                 Layout.fillWidth: true
                 visible: bubble.toolStatus !== "pending" && bubble.toolStatus !== ""
@@ -1345,7 +1295,7 @@ Item {
         }
     }
 
-    // ── Error ────────────────────────────────────────────────────────────────
+    // Error
     Rectangle {
         id: errBox
         visible: bubble.isError
@@ -1385,10 +1335,10 @@ Item {
         }
     }
 
-    // ── Piezas ───────────────────────────────────────────────────────────────
+    // Piezas
 
-    // Acción de pie: texto pequeño que se enciende al pasar. 'onDo' es una
-    // función (flecha) que se ejecuta al pulsar.
+    // Acción de pie: texto pequeño que se enciende al pasar. 'onDo' es una función
+    // que se ejecuta al pulsar.
     component FootAction: Text {
         id: act
         property string label: ""
@@ -1409,8 +1359,8 @@ Item {
         }
     }
 
-    // Nota al margen: texto atenuado con filete de acento al costado. La usan
-    // el razonamiento desplegado y la salida de una herramienta.
+    // Nota al margen: texto atenuado con filete de acento al costado. La usan el
+    // razonamiento desplegado y la salida de una herramienta.
     component QuoteBlock: Rectangle {
         property alias text: qbText.text
         property bool mono: false

@@ -4,33 +4,31 @@ import Quickshell.Io
 import qs.Config
 import "../TextUtils.js" as TU
 
-// LSP: lo que sabe el IDE, lo sabe el agente (la idea de oh-my-pi).
+// LSP: lo que sabe el IDE, lo sabe el agente.
 //
-// Un pool de servidores de lenguaje VIVOS, uno por (lenguaje, raíz de
-// proyecto), hablando LSP a través del puente de framing (bin/jsonrpc-bridge.py
-// traduce las cabeceras Content-Length a líneas NDJSON que SplitParser sí sabe
-// trocear). Antes de cada operación el archivo se reabre desde disco (didClose
-// + didOpen en el puente), así que el agente siempre pregunta sobre lo que hay
-// AHORA — editar con edit_file y pedir diagnósticos a continuación funciona.
+// Un pool de servidores de lenguaje vivos, uno por lenguaje y raíz de proyecto,
+// hablando LSP a través de un puente de framing que traduce las cabeceras
+// Content-Length a líneas NDJSON, que es lo que SplitParser sabe trocear. Antes de
+// cada operación el archivo se reabre desde disco, así que el agente siempre
+// pregunta sobre lo que hay ahora: editar y pedir diagnósticos a continuación
+// funciona.
 //
-// Qué expone: una sola operación `request({op, path, line, col, ...}, cb)` con
-// ops de lectura (diagnostics, hover, definition, references, symbols) y el
-// rename, que es escritura (aplica un WorkspaceEdit con copias previas, en el
-// puente, con la misma jaula de $HOME).
+// Expone una sola operación `request({op, path, line, col, ...}, cb)` con ops de
+// lectura y el rename, que es escritura y aplica un WorkspaceEdit con copias
+// previas, en el puente y con la misma jaula de $HOME.
 //
 // Los servidores se autodetectan al arrancar: si falta el de un lenguaje, la
-// respuesta es el paquete que hay que instalar, no un fallo mudo.
+// respuesta es el paquete que hay que instalar y no un fallo mudo.
 Scope {
     id: lsp
 
     property var svc
-    // Dónde dejar las copias previas de un rename (lo pone el orquestador con
-    // la misma carpeta de deshacer del ejecutor).
+    // Dónde dejar las copias previas de un rename; lo pone el orquestador con la
+    // misma carpeta de deshacer del ejecutor.
     property string backupDir: ""
 
-    // ── Registro de servidores ───────────────────────────────────────────────
-    // Por lenguaje: candidatos en orden de preferencia (el primero instalado
-    // gana) y el paquete de Arch que lo trae, para poder decirlo.
+    // Por lenguaje: candidatos en orden de preferencia —el primero instalado gana—
+    // y el paquete que lo trae, para poder decirlo.
     readonly property var registry: ({
         qml:    { cands: [["/usr/lib/qt6/bin/qmlls"], ["qmlls"]],
                   pkg: "qt6-declarative (trae qmlls)" },
@@ -54,7 +52,7 @@ Scope {
         ".lua": "lua"
     })
 
-    // ── Autodetección ────────────────────────────────────────────────────────
+    // Autodetección
     property var available: ({})       // binario → true
     property bool detected: false
     property var _bootQueue: []        // peticiones llegadas antes de detectar
@@ -92,7 +90,6 @@ Scope {
         return null
     }
 
-    // ── El pool ──────────────────────────────────────────────────────────────
     // clave (lang|raíz) → { proc, ready, seq, pending, waitReady, diag,
     //                       diagWait, lastUse }
     property var _pool: ({})
@@ -111,14 +108,13 @@ Scope {
             property var diag: ({})        // path → diagnósticos ya publicados
             property var diagWait: ({})    // path → {cb, deadline}
             property double lastUse: Date.now()
-            // El open y el apply son de UNO EN UNO por servidor: su respuesta
-            // (que el puente manda con _qs, sin id que la case) llega a un solo
-            // hueco. Con varias peticiones en paralelo —que el harness fomenta—
-            // se pisarían, así que se encolan y se sirven en fila.
+            // El open y el apply van de uno en uno por servidor: su respuesta llega
+            // a un solo hueco, sin id que la case, así que varias peticiones en
+            // paralelo se pisarían. Se encolan y se sirven en fila.
             property var openWait: null
             property var applyWait: null
-            // Quien espera el resultado de un comando del servidor: si sus
-            // cambios llegan por workspace/applyEdit, se le contesta ahí.
+            // Quien espera el resultado de un comando del servidor: si sus cambios
+            // llegan por workspace/applyEdit, se le contesta ahí.
             property var pendingApplyCb: null
             property var queue: []         // [{path, args, cb}] esperando turno
             property bool draining: false
@@ -268,7 +264,7 @@ Scope {
         }
     }
 
-    // ── Arranque de un servidor ──────────────────────────────────────────────
+    // Arranque de un servidor
     function _ensure(lang, root, cb) {
         const key = lang + "|" + root
         const got = _pool[key]
@@ -330,7 +326,6 @@ Scope {
         }, 20000)
     }
 
-    // ── La operación pública ─────────────────────────────────────────────────
     // request({op, path, line, col, name, new_name}, cb) — cb(textoResultado).
     // line y col llegan en base 1 (como los enseña read_file); LSP cuenta en
     // base 0 y la traducción vive solo aquí.
@@ -640,7 +635,7 @@ Scope {
         }, 15000)
     }
 
-    // ── Formato de las respuestas ────────────────────────────────────────────
+    // Formato de las respuestas
     readonly property var _sev: ({ 1: "error", 2: "aviso", 3: "info", 4: "pista" })
     function _fmtDiags(path, diags) {
         if (!diags || diags.length === 0)

@@ -6,23 +6,17 @@ import qs.Components
 import qs.Config
 import qs.Services
 
-// Monitor de sistema como APLICACIÓN: ventana XDG real, no un popout.
+// Monitor de sistema como aplicación: ventana XDG real, no un popout.
 //
-// ── POR QUÉ ADEMÁS DEL POPOUT DE LA BARRA ───────────────────────────────────
-// No sustituye a Panels/SystemMonitor.qml, y esa es la idea. Son dos gestos
-// distintos y quererlos resolver con una sola cosa estropea los dos:
+// No sustituye a Panels/SystemMonitor.qml, y esa es la idea: el popout es un
+// vistazo que se abre sobre lo que se está haciendo y se cierra, sin historia ni
+// pestañas porque no hay tiempo de leerlas; la aplicación es sentarse a mirar,
+// vive en su ventana, la gestiona el compositor como a cualquier programa y tiene
+// un minuto de historia, porque cuando algo va mal lo que importa no es el número
+// de ahora sino cómo llegó ahí.
 //
-//   · El POPOUT es un vistazo. Se abre sobre lo que estás haciendo, dice cómo
-//     va la máquina y se cierra. No tiene historia ni pestañas porque no hay
-//     tiempo de leerlas.
-//   · La APLICACIÓN es sentarse a mirar. Vive en su ventana, la gestiona el
-//     compositor como a cualquier programa (mosaico, otro escritorio, a un
-//     lado mientras compilas) y tiene minuto de historia, porque cuando algo
-//     va mal lo que importa no es el número de ahora sino cómo llegó ahí.
-//
-// ── LO QUE CUESTA, Y CUÁNDO ─────────────────────────────────────────────────
 // Cerrada no cuesta nada: el muestreo por segundo, la lista de procesos y el
-// histórico están atados a Globals.sysMonAppOpen (ver Services/SysMon.qml).
+// histórico están atados a Globals.sysMonAppOpen.
 FloatingWindow {
     id: app
 
@@ -30,9 +24,8 @@ FloatingWindow {
     color: Theme.bg
     visible: Globals.sysMonAppOpen
 
-    // Misma lección que la ventana de Ajustes: nunca más grande que la
-    // pantalla. Una ventana que nace más ancha que el monitor solo se salva
-    // porque el compositor la recorta.
+    // Nunca más grande que la pantalla: una ventana que nace más ancha que el
+    // monitor solo se salva porque el compositor la recorta.
     readonly property int _screenW: app.screen ? app.screen.width : 1920
     readonly property int _screenH: app.screen ? app.screen.height : 1080
     implicitWidth: Math.min(Theme.dp(1080), Math.round(app._screenW * 0.85))
@@ -40,17 +33,16 @@ FloatingWindow {
     minimumSize: Qt.size(Math.min(Theme.dp(560), app._screenW),
                          Math.min(Theme.dp(400), app._screenH))
 
-    // Reabrir con la ventana ya abierta la cierra. Ajustes sabe además traerse
-    // la suya desde otro escritorio, pero eso son treinta líneas de la API Lua
-    // de Hyprland y aquí no compensan.
+    // Reabrir con la ventana ya abierta la cierra. Ajustes sabe además traerse la
+    // suya desde otro escritorio, pero eso son treinta líneas de la API Lua de
+    // Hyprland y aquí no compensan.
     Connections {
         target: Globals
         function onSysMonAppResummon() { Globals.sysMonAppOpen = false }
     }
 
-    // ── Navegación ───────────────────────────────────────────────────────────
-    // La batería solo si la hay: una pestaña vacía en un sobremesa es una
-    // promesa incumplida.
+    // La batería solo si la hay: una pestaña vacía en un sobremesa es una promesa
+    // incumplida.
     property string page: "perf"
     readonly property var pages: {
         const out = [{ key: "perf", glyph: "󰕒", label: I18n.tr("Performance") }]
@@ -60,17 +52,16 @@ FloatingWindow {
         return out
     }
     onPagesChanged: {
-        // Si desaparece la página en la que estabas (quitas la batería de un
-        // portátil en dock), no dejarla en blanco.
+        // Si desaparece la página en la que se estaba, no dejarla en blanco.
         for (let i = 0; i < app.pages.length; i++)
             if (app.pages[i].key === app.page)
                 return
         app.page = "perf"
     }
 
-    // Sub-pestañas de Rendimiento. 'over' enseña todo junto; las demás son la
-    // MISMA vista de detalle parametrizada por métrica, no cinco páginas
-    // parecidas — cambia el dato, no la forma.
+    // Sub-pestañas de Rendimiento: 'over' enseña todo junto y las demás son la
+    // misma vista de detalle parametrizada por métrica. Cambia el dato, no la
+    // forma.
     property string metric: "over"
     readonly property bool hasGpu: SysMon.gpuBusy >= 0 || SysMon.gpuTemp > 0
     readonly property var metrics: {
@@ -106,8 +97,8 @@ FloatingWindow {
         return h > 0 ? h + " h " + m + " min" : m + " min"
     }
 
-    // Todo lo de cada métrica en UN sitio: la rejilla del resumen y la vista de
-    // detalle leen de aquí, así una no puede enseñar algo distinto de la otra.
+    // Todo lo de cada métrica en un sitio: la rejilla del resumen y la vista de
+    // detalle leen de aquí, así que una no puede enseñar algo distinto de la otra.
     function metricInfo(k) {
         if (k === "gpu")
             return { title: I18n.tr("GPU usage"),
@@ -149,7 +140,7 @@ FloatingWindow {
         anchors.fill: parent
         spacing: 0
 
-        // ── Cabecera ─────────────────────────────────────────────────────────
+        // Cabecera
         RowLayout {
             Layout.fillWidth: true
             Layout.margins: Theme.space16
@@ -181,15 +172,15 @@ FloatingWindow {
             Layout.bottomMargin: Theme.space16
             spacing: Theme.space16
 
-            // ── Carril ───────────────────────────────────────────────────────
+            // Carril
             ColumnLayout {
                 Layout.fillHeight: true
                 Layout.preferredWidth: Theme.dp(184)
-                // EXPLÍCITO, y no sobra: en un RowLayout 'fillWidth' vale false
-                // por defecto para un ítem cualquiera pero TRUE para un layout,
-                // así que este carril se quedaba con todo el ancho y empujaba el
-                // contenido fuera de la ventana. El preferredWidth no lo sujeta:
-                // es lo que pide, no un tope.
+                // Explícito, y no sobra: en un RowLayout 'fillWidth' vale false por
+                // defecto para un ítem cualquiera pero true para un layout, así que
+                // este carril se quedaría con todo el ancho y empujaría el contenido
+                // fuera de la ventana. El preferredWidth no lo sujeta: es lo que
+                // pide, no un tope.
                 Layout.fillWidth: false
                 spacing: Theme.space2
 
@@ -237,8 +228,8 @@ FloatingWindow {
 
                 Item { Layout.fillHeight: true }
 
-                // Ficha del equipo al pie: quién eres y desde cuándo está en
-                // pie. Mires la pestaña que mires, sigue a la vista.
+                // Ficha del equipo al pie: quién eres y desde cuándo está en pie.
+                // Sigue a la vista mires la pestaña que mires.
                 RowLayout {
                     Layout.fillWidth: true
                     Layout.leftMargin: Theme.space6
@@ -251,9 +242,9 @@ FloatingWindow {
                         color: Theme.withAlpha(Theme.accent, 0.18)
                         clip: true
 
-                        // La inicial se queda DEBAJO del retrato en vez de
-                        // alternarse con él: así el avatar puede tardar en
-                        // cargar (o no existir) sin dejar un hueco vacío.
+                        // La inicial se queda debajo del retrato en vez de
+                        // alternarse con él, así el avatar puede tardar en cargar —o
+                        // no existir— sin dejar un hueco vacío.
                         ThemedText {
                             anchors.centerIn: parent
                             text: (SysMon.hostname || "?").charAt(0).toUpperCase()
@@ -293,7 +284,7 @@ FloatingWindow {
                 }
             }
 
-            // ── Contenido ────────────────────────────────────────────────────
+            // Contenido
             Rectangle {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
@@ -301,16 +292,16 @@ FloatingWindow {
                 // Contenedor de M3: la caja donde vive el contenido.
                 color: Theme.surfaceContainerLow
 
-                // ── Rendimiento ──────────────────────────────────────────────
+                // Rendimiento
                 ColumnLayout {
                     anchors.fill: parent
                     anchors.margins: Theme.space16
                     visible: app.page === "perf"
                     spacing: Theme.space14
 
-                    // Sub-pestañas. Se desplazan en horizontal: en una ventana
-                    // estrecha son seis y no caben, y cortarlas sin poder llegar
-                    // a la última es peor que hacerlas arrastrables.
+                    // Sub-pestañas, desplazables en horizontal: en una ventana
+                    // estrecha no caben, y cortarlas sin poder llegar a la última es
+                    // peor que hacerlas arrastrables.
                     Flickable {
                         id: tabFlick
                         Layout.fillWidth: true
@@ -321,17 +312,11 @@ FloatingWindow {
                         boundsBehavior: Flickable.StopAtBounds
                         flickableDirection: Flickable.HorizontalFlick
 
-                        // Las fichas SE REPARTEN el ancho hasta el canto
-                        // derecho en vez de amontonarse a la izquierda: son la
-                        // navegación de esta página, y una barra de navegación
-                        // que ocupa un tercio de la fila deja el resto como un
-                        // vacío que no dice nada.
-                        //
-                        // El ancho es el mayor entre lo que piden y lo que hay:
-                        // cuando cabe, se estiran; cuando la ventana se estrecha
-                        // y no caben, la fila conserva su ancho natural y el
-                        // Flickable la deja arrastrar. Sin ese máximo, en
-                        // estrecho se apretarían hasta cortar el texto.
+                        // Las fichas se reparten el ancho hasta el canto derecho en
+                        // vez de amontonarse a la izquierda: son la navegación de
+                        // esta página, y una barra que ocupa un tercio de la fila
+                        // deja el resto como un vacío que no dice nada. El ancho es
+                        // el mayor entre lo que piden y lo que hay:
                         RowLayout {
                             id: tabRow
                             width: Math.max(implicitWidth, tabFlick.width)
@@ -490,7 +475,7 @@ FloatingWindow {
                     }
                 }
 
-                // ── Procesos ─────────────────────────────────────────────────
+                // Procesos
                 ColumnLayout {
                     anchors.fill: parent
                     anchors.margins: Theme.space16
@@ -679,7 +664,7 @@ FloatingWindow {
                     }
                 }
 
-                // ── Batería ──────────────────────────────────────────────────
+                // Batería
                 ColumnLayout {
                     anchors.fill: parent
                     anchors.margins: Theme.space16
@@ -751,7 +736,7 @@ FloatingWindow {
         }
     }
 
-    // ── Procesos: anchos, filtro y orden ─────────────────────────────────────
+    // Procesos: anchos, filtro y orden
     readonly property int colPid: Theme.dp(64)
     readonly property int colCpu: Theme.dp(62)
     readonly property int colMem: Theme.dp(86)
@@ -794,7 +779,6 @@ FloatingWindow {
         return out
     }
 
-    // ── Piezas ───────────────────────────────────────────────────────────────
     // Cabecera de columna, con orden opcional. Los nombres de propiedad llevan
     // prefijo (headText, colKey) a propósito: 'text' y 'sortKey' chocarían con
     // los del propio Item y con los de la ventana.

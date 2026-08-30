@@ -7,26 +7,23 @@ import "../tools/ToolPolicy.js" as TP
 import "../core/Schema.js" as SC
 import "Supervisor.js" as SV
 
-// UN SEGUNDO MODELO MIRANDO AL PRIMERO. Dos papeles distintos, y separarlos es
-// la mitad del diseño:
+// Un segundo modelo mirando al primero, en dos papeles cuya separación es la
+// mitad del diseño:
 //
-//   GUARDIÁN (síncrono, puede frenar). Mira UNA llamada antes de que corra.
-//     Solo se le molesta cuando hay algo que mirar —nivel de riesgo 2 o más, un
-//     comando marcado como destructivo, un enlace que se va de la carpeta
-//     personal—, porque supervisar cada read_file con un modelo local es
-//     duplicar la latencia de todo a cambio de nada.
-//   CONSEJERO (asíncrono, no frena nada). Mira la RONDA y puede decir una cosa,
+//   GUARDIÁN (síncrono, puede frenar). Mira una llamada antes de que corra, y
+//     solo se le molesta cuando hay algo que mirar —riesgo 2 o más, un comando
+//     destructivo, un enlace que sale de la carpeta personal—, porque supervisar
+//     cada lectura con un modelo local duplica la latencia a cambio de nada.
+//   CONSEJERO (asíncrono, no frena nada). Mira la ronda y puede decir una cosa,
 //     que viaja al modelo principal antes de su siguiente paso. Es la mitad que
-//     caza "llevas tres intentos con lo mismo" y "cambiaste algo y no lo
-//     comprobaste", que ninguna política puede ver.
+//     caza "llevas tres intentos con lo mismo", que ninguna política puede ver.
 //
-// Y la invariante que lo sostiene todo: SOLO PUEDE ENDURECER. Su "ok" no
-// aprueba nada — la tarjeta que tocaba se enseña igual. Ver Supervisor.js.
+// Y la invariante que lo sostiene: solo puede endurecer. Su "ok" no aprueba nada,
+// y la tarjeta que tocaba se enseña igual.
 //
-// La tarjeta ya está en pantalla mientras el guardián piensa (la crea el
-// streaming, no el coordinador), así que para el usuario no hay espera: ve
-// "mirándolo…" y luego el veredicto. El único que espera de verdad es lo que
-// iba a ejecutarse solo, que es precisamente lo que interesa retener.
+// La tarjeta ya está en pantalla mientras el guardián piensa, así que para el
+// usuario no hay espera: ve "mirándolo…" y luego el veredicto. El único que espera
+// de verdad es lo que iba a ejecutarse solo.
 Scope {
     id: sup
 
@@ -39,11 +36,10 @@ Scope {
     readonly property string modo:
         ["off", "risky", "all"].indexOf(Settings.aiSupervisor) !== -1
             ? Settings.aiSupervisor : "risky"
-    // Otro modelo DEL MISMO SERVIDOR (vacío = el mismo que el agente). Que sea
-    // del mismo servidor no es una limitación técnica que no supe resolver: un
-    // supervisor en otro proveedor significaría mandar trozos de tus archivos a
-    // una tercera empresa para que opine. Lo útil de verdad —uno pequeño y
-    // rápido vigilando a uno grande— se hace en el mismo sitio.
+    // Otro modelo del mismo servidor; vacío = el mismo que el agente. Que sea del
+    // mismo servidor no es una limitación técnica: uno en otro proveedor
+    // significaría mandar trozos de los archivos del usuario a una tercera empresa
+    // para que opine.
     readonly property string modelo:
         String(Settings.aiSupervisorModel || "").trim() !== ""
             ? String(Settings.aiSupervisorModel).trim()
@@ -51,34 +47,31 @@ Scope {
     readonly property bool activo:
         modo !== "off" && !!svc && svc.agentMode && !svc.notConfigured
 
-    // Presupuesto de frenazos por turno. Un supervisor que bloquea todo es peor
-    // que no tener supervisor: el asistente deja de servir y se apaga entero.
-    // Pasado el tope, deja de decidir el segundo modelo y decide el humano.
+    // Presupuesto de frenazos por turno. Un supervisor que bloquea todo es peor que
+    // no tenerlo, así que pasado el tope deja de decidir el segundo modelo y decide
+    // el humano.
     property int bloqueos: 0
     readonly property int topeBloqueos: 2
     // Índice de la tarjeta que está mirando ahora mismo, para pintarlo.
     property int reviewing: -1
-    // Veredictos ya emitidos en este turno, por firma (herramienta+argumentos):
-    // el modelo repite llamadas, y pagar dos veces por la misma opinión es
-    // tirar tiempo.
+    // Veredictos ya emitidos en este turno, por firma: el modelo repite llamadas, y
+    // pagar dos veces por la misma opinión es tirar tiempo.
     property var _cache: ({})
     property bool _aconsejado: false
 
-    // ── El guardián ──────────────────────────────────────────────────────────
     // ¿Merece esta llamada que se moleste a un segundo modelo?
     function wants(name, argsJson, danger, escapa) {
         if (!activo)
             return false
-        // Preguntar y proponer plan ya son la pausa: supervisarlas es supervisar
-        // al usuario.
+        // Preguntar y proponer plan ya son la pausa: supervisarlas es supervisar al
+        // usuario.
         if (name === "ask_user" || name === "propose_plan")
             return false
         if (modo === "all")
             return true
-        // Delegar es clase external (nivel 1) y se colaría por debajo del corte,
-        // pero un subagente CON ESCRITURA es de lo más gordo que puede pasar en
-        // un turno: se aprueba una vez y después escribe sin más tarjetas. Ese
-        // sí se mira.
+        // Delegar es de clase externa y se colaría por debajo del corte, pero un
+        // subagente con escritura es de lo más gordo que puede pasar en un turno: se
+        // aprueba una vez y después escribe sin más tarjetas. Ese
         if (name === "subagent")
             return TP.grantNeedsApproval(
                 svc.subagentGrantFor(TU.repairJson(argsJson) || ({})))
@@ -96,8 +89,8 @@ Scope {
         // treinta `kubectl get` distintos que merecen exactamente el mismo
         // veredicto. Cae a la firma exacta para todo lo demas: si
         // TP.verdictKey no reconoce el comando como de solo lectura devuelve
-        // null y aqui no cambia nada. Medido: 21 veredictos identicos en una
-        // sola sesion, con esperas de hasta 90 s cada uno.
+        // null y aqui no cambia nada. Sin la cache, una sola sesion repite
+        // decenas de veredictos identicos con esperas de hasta minuto y medio.
         const firma = TP.verdictKey(m.toolName, m.toolArgs)
                    || (String(m.toolName) + "\u0000" + String(m.toolArgs || ""))
         if (sup._cache[firma] !== undefined) {
@@ -186,7 +179,6 @@ Scope {
         }
     }
 
-    // ── El consejero ─────────────────────────────────────────────────────────
     // Una vez por turno, y solo en turnos que ya se han hecho largos: dar
     // vueltas es un problema de la ronda tres, no de la primera, y en un turno
     // corto la llamada extra solo añadiría latencia.
@@ -243,7 +235,6 @@ Scope {
         }
     }
 
-    // ── Común ────────────────────────────────────────────────────────────────
     // Una respuesta del servidor → el objeto, o null si no hubo manera. Sin
     // bucle de reparación a propósito: aquí la latencia es el coste, y un
     // supervisor que no acierta a la primera falla abierto y queda anotado.

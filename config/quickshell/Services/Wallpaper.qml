@@ -227,7 +227,7 @@ for f in "$@"; do
   key=$(printf "%s:%s:v2" "$f" "$(stat -c %Y "$f")" | md5sum | cut -d" " -f1)
   out="$T/$key.jpg"
   if [ ! -s "$out" ]; then
-    ffmpeg -loglevel error -y -i "$f" -frames:v 1 -vf "scale=\'if(gt(a,1),-2,540)\':\'if(gt(a,1),540,-2)\'" -q:v 4 "$out" </dev/null || continue
+    nice -n 19 ionice -c3 ffmpeg -loglevel error -y -i "$f" -frames:v 1 -vf "scale=\'if(gt(a,1),-2,540)\':\'if(gt(a,1),540,-2)\'" -q:v 4 "$out" </dev/null || continue
   fi
   keep="$keep $key.jpg"
   printf "%s\\t%s\\n" "$f" "$out"
@@ -252,6 +252,11 @@ done'
 
     // Genera las copias que falten, poda las huérfanas y emite
     // "original<TAB>copia" por cada fondo que tenga copia.
+    //
+    // Todo va con 'nice' e 'ionice': en régimen normal esto no lanza ni un
+    // ffmpeg —el bucle comprueba antes si la copia ya está—, pero al añadir
+    // fondos son varios segundos de CPU y disco que no tienen ninguna prisa y
+    // no deben competir con el compositor.
     //
     // El orden del bucle es deliberado: comprueba si la copia ya está antes de
     // sondear dimensiones, porque sondear la carpeta entera cuesta más de un
@@ -282,7 +287,7 @@ for f in "$@"; do
     keep="$keep $key.igual"
     continue
   fi
-  d=$(ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=p=0 "$f" </dev/null 2>/dev/null) || continue
+  d=$(nice -n 19 ionice -c3 ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=p=0 "$f" </dev/null 2>/dev/null) || continue
   w=${d%%,*}; r=${d#*,}; h=${r%%,*}
   case "$w$h" in ""|*[!0-9]*) continue ;; esac
   if [ "$w" -le "$MW" ] && [ "$h" -le "$MH" ]; then
@@ -290,7 +295,7 @@ for f in "$@"; do
     keep="$keep $key.igual"
     continue
   fi
-  ffmpeg -loglevel error -y -i "$f" -frames:v 1 \\
+  nice -n 19 ionice -c3 ffmpeg -loglevel error -y -i "$f" -frames:v 1 \\
     -vf "format=rgb24,scale=$MW:$MH:force_original_aspect_ratio=decrease" \\
     "$out" </dev/null || continue
   keep="$keep $key.png"

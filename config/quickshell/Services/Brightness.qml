@@ -5,12 +5,13 @@ import Quickshell
 import Quickshell.Io
 import qs.Config
 
-// Brillo híbrido: brightnessctl (backlight eDP) o ddcutil (DDC/CI en monitor
-// externo, VCP 0x10). Se detecta cuál al arrancar; si no hay ninguno,
-// available queda false y el slider se oculta.
-// DDC/CI necesita el paquete ddcutil, el módulo i2c-dev y RW sobre
-// /dev/i2c-* (grupo i2c). brightnessctl sin clase coge por error los LEDs del
-// teclado, por eso filtramos siempre por backlight.
+// Brillo híbrido: brightnessctl para el backlight interno o ddcutil por DDC/CI
+// para un monitor externo. Se detecta cuál al arrancar, y sin ninguno de los dos
+// 'available' queda en false y el slider se oculta.
+//
+// DDC/CI necesita el paquete ddcutil, el módulo i2c-dev y permisos de lectura y
+// escritura sobre /dev/i2c-*. brightnessctl sin clase coge por error los LED del
+// teclado, así que se filtra siempre por backlight.
 Singleton {
     id: bright
 
@@ -24,12 +25,13 @@ Singleton {
     property int _pending: -1           // valor DDC pendiente (debounce)
     property int _pendingPct: -1        // % backlight pendiente (throttle)
 
-    // Detección del método + lectura inicial. El bus i2c del monitor se cachea
-    // en disco: el primer arranque hace `ddcutil detect` (~0.4 s) y guarda el
-    // bus; luego va directo a él (~0.08 s). Si el bus cacheado falla (cambió el
-    // monitor), reintenta detect y re-cachea.
-    // Arranca cuando Deps termina, porque la mitad DDC del script solo se
-    // incluye si hay ddcutil. Hasta entonces available sigue en false.
+    // Detección del método y lectura inicial. El bus i2c del monitor se cachea en
+    // disco: el primer arranque hace `ddcutil detect` y guarda el bus, y luego va
+    // directo a él. Si el bus cacheado falla porque cambió el monitor, reintenta
+    // y re-cachea.
+    //
+    // Arranca cuando Deps termina, porque la mitad DDC del script solo se incluye
+    // si hay ddcutil; hasta entonces 'available' sigue en false.
     Component.onCompleted: if (Deps.ready) detect.running = true
     Connections {
         target: Deps
@@ -57,10 +59,9 @@ Singleton {
         }
     }
 
-    // Tras el resume un monitor DDC/CI puede re-enumerarse (cambia el bus i2c
-    // cacheado y el control dejaría de responder) o el backlight puede haber
-    // cambiado de valor: re-lanzar la detección re-cachea el bus y re-lee el
-    // brillo. Solo si ya había un método disponible.
+    // Tras el resume un monitor DDC/CI puede re-enumerarse, cambiando el bus i2c
+    // cacheado, o el backlight puede haber cambiado de valor. Relanzar la
+    // detección re-cachea el bus y relee el brillo; solo si ya había método.
     Connections {
         target: Resume
         function onResumed() { if (bright.method !== "none") detect.running = true }
@@ -75,8 +76,8 @@ Singleton {
             return
         }
         bright.method = f[0]
-        // Marca de tiempo de la última lectura DDC válida (para el enfriamiento
-        // de la relectura al abrir el Centro de control).
+        // Marca de tiempo de la última lectura DDC válida, para el enfriamiento
+        // de la relectura.
         if (f[0] === "ddc") {
             bright._lastDdcRead = Date.now()
             bright._backlightPath = ""
@@ -92,9 +93,8 @@ Singleton {
     }
 
     // Relectura DDC al abrir el Centro de control: los botones físicos del
-    // monitor cambian el brillo por fuera y el slider quedaría desfasado. Al
-    // abrir re-lanzamos detect (actualiza percent sin escribir). Enfriamiento
-    // de 10 s porque ddcutil tarda ~1 s y no queremos lag al reabrir seguido.
+    // monitor cambian el brillo por fuera y el slider quedaría desfasado. Con
+    // enfriamiento, porque ddcutil tarda alrededor de un segundo.
     property double _lastDdcRead: 0
     Connections {
         target: Globals
@@ -107,9 +107,9 @@ Singleton {
         }
     }
 
-    // El kernel notifica cambios del backlight por sysfs. FileView mantiene un
-    // inotify y evita lanzar brightnessctl cada cinco segundos mientras el
-    // Centro de control está abierto.
+    // El kernel notifica los cambios del backlight por sysfs, así que un
+    // FileView con inotify evita lanzar brightnessctl cada pocos segundos
+    // mientras el Centro de control está abierto.
     FileView {
         id: backlightFile
         path: bright.method === "backlight" ? bright._backlightPath : ""
@@ -129,13 +129,12 @@ Singleton {
         p = Math.max(1, Math.min(100, Math.round(p)))
         bright.percent = p   // feedback inmediato en la UI
         if (bright.method === "backlight") {
-            // Throttle: aplica el primero al instante y luego como mucho uno
-            // cada 40 ms mientras se arrastra, en vez de lanzar un brightnessctl
-            // por cada pixel de movimiento (menos fork+exec, menos picos de CPU).
+            // Aplica el primero al instante y luego como mucho uno cada 40 ms
+            // mientras se arrastra, en vez de lanzar un proceso por píxel.
             bright._applyBacklight(p)
         } else if (bright.method === "ddc") {
-            // DDC/CI es lento (~100-300 ms): debounce para no saturar el bus
-            // i2c mientras se arrastra el slider. Solo se escribe el último valor.
+            // DDC/CI es lento, así que se rebota para no saturar el bus i2c
+            // mientras se arrastra: solo se escribe el último valor.
             bright._pending = Math.round(p / 100 * bright._ddcMax)
             ddcWrite.restart()
         }
@@ -147,7 +146,7 @@ Singleton {
         repeat: false
         onTriggered: {
             if (bright._pending >= 0 && bright._ddcBus >= 0) {
-                // --noverify: no re-lee tras escribir, así responde más rápido.
+                // --noverify: no relee tras escribir, así responde antes.
                 Quickshell.execDetached(["ddcutil", "--bus", String(bright._ddcBus),
                                          "--noverify", "setvcp", "10", String(bright._pending)])
                 bright._pending = -1
@@ -155,9 +154,8 @@ Singleton {
         }
     }
 
-    // Throttle del backlight: el primer valor se aplica al instante; mientras
-    // la ventana de 40 ms está abierta los siguientes solo guardan el último,
-    // que se escribe al cerrarse. Máx ~25 escrituras/s sin perder el valor final.
+    // El primer valor se aplica al instante y, mientras la ventana está abierta,
+    // los siguientes solo guardan el último, que se escribe al cerrarse.
     function _applyBacklight(p) {
         if (blWrite.running) {
             bright._pendingPct = p

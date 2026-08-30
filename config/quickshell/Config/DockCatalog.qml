@@ -3,56 +3,42 @@ pragma Singleton
 import QtQuick
 import Quickshell
 
-// Catálogo del dock: SOLO funciones puras sobre arrays. Entra un array, sale
-// un array; ninguna lee estado global ni toca nada vivo.
+// Catálogo del dock: solo funciones puras sobre arrays. Entra un array, sale un
+// array; ninguna lee estado global ni toca nada vivo.
 //
-// ── POR QUÉ ESTO EXISTE SEPARADO DE Services/Dock.qml ───────────────────────
-// La pregunta que decide la partición es cuál de las dos mitades se puede
-// equivocar SIN QUE SE VEA. La respuesta es esta: fusionar la lista de apps
-// fijadas con la de apps abiertas. Una fijada que además está abierta saliendo
-// dos veces, un orden que se pierde al cerrar una ventana, un settings.json
-// editado a mano con basura dentro — nada de eso da un error, solo un dock
-// ligeramente mal que se tarda semanas en notar.
+// La partición con Services/Dock.qml sigue una pregunta: cuál de las dos mitades
+// puede equivocarse sin que se vea. Es esta. Una app fijada que además está
+// abierta saliendo dos veces, un orden que se pierde al cerrar una ventana, un
+// settings.json editado a mano con basura dentro: nada de eso da error, solo un
+// dock ligeramente mal que se tarda semanas en notar. Lo vivo —toplevels de
+// Wayland, iconos, Hyprland— vive en Services/Dock.qml, que necesita sesión.
 //
-// Aquí no hace falta ni pantalla ni compositor para probarlo, así que
-// tests/logica.qml lo cubre entero. Lo vivo —toplevels de Wayland, iconos,
-// Hyprland— vive en Services/Dock.qml, que sí necesita sesión gráfica.
-//
-// Es el mismo reparto que BarCatalog hace para los tres carriles de la barra.
-//
-// ── Y POR QUÉ ESTÁ EN Config/ Y NO EN Services/ ─────────────────────────────
-// Config NO IMPORTA qs.Services: es la regla que mantiene cortado el ciclo de
-// importaciones (ver la cabecera de Config/Globals.qml). Config/Settings.qml
-// necesita sanitize() para limpiar 'dockPinned' al cargar el archivo, así que
-// el catálogo tiene que estar de este lado. De ahí que aquí no se mencione ni
-// a Services/Dock ni a NotifService.
+// Está en Config y no en Services porque Config no importa qs.Services, que es
+// la regla que mantiene cortado el ciclo de importaciones, y Config/Settings.qml
+// necesita sanitize() para limpiar 'dockPinned' al cargar el archivo.
 Singleton {
     id: cat
 
-    // Tope de apps fijadas. No es una cifra mágica de adorno: sin tope, un
-    // settings.json con diez mil entradas construye diez mil delegates al
-    // arrancar el shell.
+    // Tope de apps fijadas: sin él, un settings.json con diez mil entradas
+    // construye diez mil delegates al arrancar.
     readonly property int maxPinned: 32
 
-    // ── La clave de una app ──────────────────────────────────────────────────
-    // LA función de este archivo. Fijar guarda el id de un .desktop
-    // ("firefox.desktop"), pero una ventana de Wayland solo trae su appId
-    // ("Firefox", "firefox", según la app). Sin llevar ambos a la misma clave,
-    // un Firefox fijado y una ventana de Firefox son DOS iconos en el dock.
+    // Fijar guarda el id de un .desktop, pero una ventana de Wayland solo trae
+    // su appId, con mayúsculas o sin ellas según la app. Sin plegar los dos a la
+    // misma clave, una app fijada y su ventana son dos iconos en el dock.
     //
-    // Quien traduce appId → entrada .desktop es Services/Dock.qml con
-    // heuristicLookup; esto es solo el último plegado, y va aquí porque tiene
-    // que ser idéntico a los dos lados y probable sin sesión gráfica.
+    // Quien traduce appId → entrada .desktop es Services/Dock.qml; esto es solo
+    // el último plegado, y vive aquí porque tiene que ser idéntico a los dos
+    // lados y comprobable sin sesión gráfica.
     function normalizeId(bruto) {
         if (typeof bruto !== "string")
             return ""
         return bruto.trim().toLowerCase().replace(/\.desktop$/, "")
     }
 
-    // ── Saneado de lo que venga de settings.json ─────────────────────────────
-    // Es un archivo del usuario y se puede editar a mano. Lo que no sea una
-    // cadena aprovechable se descarta en silencio y se conserva el resto: un
-    // id corrupto no debe llevarse por delante la lista entera.
+    // settings.json es del usuario y se puede editar a mano: lo que no sea una
+    // cadena aprovechable se descarta en silencio y se conserva el resto, para
+    // que un id corrupto no se lleve la lista entera.
     function sanitize(fijadas) {
         if (!Array.isArray(fijadas))
             return []
@@ -70,11 +56,9 @@ Singleton {
         return out
     }
 
-    // ── Edición de la lista ──────────────────────────────────────────────────
-    // Todas devuelven un array NUEVO en vez de mutar el recibido, por lo mismo
-    // que BarCatalog: Settings guarda la lista en una 'property var', y mutar
-    // el array in situ no emite el cambio — ni el dock se enteraría ni se
-    // guardaría nada en disco.
+    // Todas devuelven un array nuevo en vez de mutar el recibido: Settings
+    // guarda la lista en una 'property var', y mutar el array in situ no emite
+    // el cambio, así que ni el dock se entera ni se guarda nada en disco.
 
     function has(fijadas, id) {
         if (!Array.isArray(fijadas))
@@ -97,9 +81,8 @@ Singleton {
         return cat.sanitize(fijadas).filter(x => x !== clave)
     }
 
-    // 'hasta' se interpreta sobre la lista YA sin el elemento movido, que es lo
-    // que hace que arrastrar un icono dos puestos a la derecha caiga donde el
-    // usuario ve el hueco.
+    // 'hasta' se interpreta sobre la lista ya sin el elemento movido, que es lo
+    // que hace que arrastrar un icono caiga donde se ve el hueco.
     function move(fijadas, desde, hasta) {
         const next = cat.sanitize(fijadas)
         if (desde < 0 || desde >= next.length || hasta < 0 || hasta >= next.length)
@@ -108,24 +91,22 @@ Singleton {
         return next
     }
 
-    // ── La fusión ────────────────────────────────────────────────────────────
     // abiertas: [{ id, ventanas: [obj], activa: bool }]
     // devuelve: [{ id, fijada: bool, ventanas: [obj], activa: bool }]
     //
-    // Las fijadas van primero EN SU ORDEN (es el orden que el usuario ha
-    // elegido arrastrando, y no puede reordenarse solo porque abra una app), y
-    // detrás las abiertas que no estén ya fijadas.
+    // Las fijadas van primero en su orden, que es el que el usuario ha elegido
+    // arrastrando y no puede cambiar solo porque abra una app; detrás, las
+    // abiertas que no estén ya fijadas.
     //
-    // Una app fijada que se ha desinstalado NO se descarta: la puso el usuario
-    // a propósito, y quitársela sola sería perderle un ajuste sin avisar. Se
-    // queda como ranura sin ventanas, con el icono de respaldo.
+    // Una fijada desinstalada no se descarta —quitarla sería perderle un ajuste
+    // sin avisar— y se queda como ranura sin ventanas, con el icono de respaldo.
     function merge(fijadas, abiertas, verAbiertas) {
         const limpias = cat.sanitize(fijadas)
         const lista = Array.isArray(abiertas) ? abiertas : []
 
-        // Índice id → abierta. Con 32 fijadas y 30 ventanas, buscar en línea
-        // por cada fijada son casi mil comparaciones en un binding que se
-        // reevalúa CADA VEZ que se abre o se cierra una ventana.
+        // Índice id → abierta: buscar en línea por cada fijada son casi mil
+        // comparaciones en un binding que se reevalúa con cada ventana que se
+        // abre o se cierra.
         const porId = {}
         for (const a of lista) {
             const id = cat.normalizeId(a ? a.id : "")
@@ -160,9 +141,9 @@ Singleton {
         return out
     }
 
-    // Dónde va la rayita que separa las fijadas de las abiertas: justo tras las
-    // fijadas. Devuelve -1 cuando no habría nada detrás (o nada delante), para
-    // que no quede una rayita suelta en la punta del dock.
+    // Dónde va la rayita que separa fijadas de abiertas: justo tras las fijadas.
+    // Devuelve -1 cuando no habría nada a un lado, para no dejarla suelta en la
+    // punta del dock.
     function separatorIndex(ranuras) {
         if (!Array.isArray(ranuras))
             return -1

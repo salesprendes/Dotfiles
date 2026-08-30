@@ -21,10 +21,29 @@ Item {
     readonly property int iconSize: Theme.dp(Settings.dockIconSize)
     readonly property int caja: root.iconSize + Theme.dp(16)
 
+    // Las pone DockRow desde la posición del cursor sobre la fila entera.
+    // 'empujeLupa' va como transform y NO como 'x': cambiar la x movería la
+    // disposición del Row, que es justo de donde sale el centro de reposo con
+    // el que se calcula esto — el bucle de vínculos que hay que evitar.
+    property real escalaLupa: 1.0
+    property real empujeLupa: 0
+    transform: Translate {
+        x: root.empujeLupa
+        Behavior on x {
+            enabled: Theme.animNormal > 0
+            NumberAnimation { duration: Theme.animFast; easing.type: Easing.OutCubic }
+        }
+    }
+
     implicitWidth: root.caja
     implicitHeight: root.caja
 
     signal activada()
+
+    // Estos dos botones también dicen cómo se llaman: media fila de iconos muda
+    // frente a la otra media que se presenta sería peor que ninguna.
+    property string nombre: ""
+    signal hoverCambia(var boton, bool dentro)
 
     Item {
         id: lienzo
@@ -40,8 +59,12 @@ Item {
         // curva va muy cargada al principio. Lo que no se veía era el COLOR del
         // disco (ver ahí abajo). Aquí la entrada instantánea se queda porque es
         // lo correcto, no porque arreglara nada.
-        scale: zona.pressed ? 0.92
-             : (zona.containsMouse ? Settings.dockMagnify : 1.0)
+        // La ampliación la calcula DockRow para toda la fila a la vez (ver la
+        // nota de la ola allí): aquí solo se aplica. Crece desde el borde de
+        // ABAJO, no desde el centro, para que el icono suba y asome por encima
+        // de la píldora en vez de empujar también hacia el canto inferior.
+        transformOrigin: Item.Bottom
+        scale: zona.pressed ? 0.92 : root.escalaLupa
         Behavior on scale {
             enabled: Theme.animNormal > 0
             NumberAnimation {
@@ -91,6 +114,11 @@ Item {
         hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
         onPressed: (ev) => onda.press(ev.x, ev.y)
-        onClicked: root.activada()
+        onClicked: {
+            root.hoverCambia(root, false)
+            root.activada()
+        }
+        onEntered: root.hoverCambia(root, true)
+        onExited: root.hoverCambia(root, false)
     }
 }

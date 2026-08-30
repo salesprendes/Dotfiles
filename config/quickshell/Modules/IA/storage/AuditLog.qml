@@ -4,20 +4,17 @@ import Quickshell.Io
 import qs.Config
 import "../TextUtils.js" as TU
 
-// REGISTRO DE AUDITORÍA: qué ejecutó el agente, cuándo, por qué se le dejó y
-// quién lo pidió.
+// Registro de auditoría: qué ejecutó el agente, cuándo, por qué se le dejó y quién
+// lo pidió.
 //
 // Con un harness que alcanza shell, archivos, git, MCP, LSP, depurador, Python,
-// trabajos y red, la pregunta "¿qué ha hecho esto en mi equipo?" tiene que
-// tener UNA respuesta, y no puede ser el historial de la conversación (que se
-// compacta, se borra y se puede limpiar). Va a un JSONL aparte, en la misma
-// carpeta de estado, y sobrevive a /limpiar y a cambiar de conversación.
+// trabajos y red, la pregunta "¿qué ha hecho esto en mi equipo?" tiene que tener
+// una respuesta, y no puede ser el historial de la conversación, que se compacta,
+// se borra y se puede limpiar. Va a un JSONL aparte en la misma carpeta de estado.
 //
-// Se registra TODO lo que llega a ejecutarse, venga de donde venga: la tarjeta
-// del agente principal, un subagente autónomo, la celda de Python por el
-// loopback, o un veto de un hook. Lo que NO se registra: el contenido de los
-// resultados (solo su tamaño) — el registro dice qué se hizo, no vuelve a
-// guardar lo que se leyó.
+// Se registra todo lo que llega a ejecutarse, venga de donde venga, incluido un
+// veto de un hook. No se registra el contenido de los resultados, solo su tamaño:
+// el registro dice qué se hizo, no vuelve a guardar lo que se leyó.
 //
 // Los argumentos van truncados y pasados por el mismo tapado de secretos que el
 // resto: un registro de seguridad que filtre contraseñas sería el colmo.

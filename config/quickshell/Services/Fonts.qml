@@ -4,8 +4,8 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 
-// Familias tipográficas instaladas (vía fc-list). Prioriza monoespaciadas y
-// Nerd Font (las que llevan iconos), que van bien para barra/paneles.
+// Familias tipográficas instaladas, vía fc-list. Prioriza monoespaciadas y Nerd
+// Font, que son las que van bien para barra y paneles.
 Singleton {
     id: root
 
@@ -13,8 +13,8 @@ Singleton {
     property var monoList: []
     property bool _loaded: false
 
-    // Carga perezosa: fc-list solo se ejecuta al entrar en una página de
-    // ajustes que lo necesite. Con force se re-escanea aunque ya esté cargado.
+    // Carga perezosa: fc-list solo se ejecuta al entrar en una página de ajustes
+    // que lo necesite. Con force se reescanea aunque ya esté cargado.
     function refresh(force) {
         if (_loaded && !force)
             return
@@ -22,9 +22,8 @@ Singleton {
         proc.running = true
     }
 
-    // Dos listados planos de fc-list; el recorte de la primera coma, la
-    // deduplicación, el orden y el añadido de las "Nerd Font" a la lista mono
-    // se hacen aquí, sin sed/sort/grep.
+    // Dos listados planos de fc-list; el recorte, la deduplicación, el orden y
+    // el añadido de las Nerd Font a la lista mono se hacen aquí.
     property var _allRaw: null
     property var _monoRaw: null
 
@@ -61,8 +60,7 @@ Singleton {
     Process {
         id: proc
         // El ':' es el patrón "todas las fuentes"; sin él, "family" se
-        // interpreta como patrón de búsqueda y la lista sale vacía (bug que
-        // arrastraba también la versión con shell).
+        // interpreta como patrón de búsqueda y la lista sale vacía.
         command: ["fc-list", ":", "family"]
         onRunningChanged: if (running) monoProc.running = true
         stdout: StdioCollector {

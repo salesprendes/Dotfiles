@@ -89,9 +89,8 @@ Singleton {
         || (validIp(ip4addr) && maskToPrefix(ip4mask) >= 0
             && (ip4gw === "" || validIp(ip4gw)))
 
-    // Sin refreshAll() al arrancar: los datos (interfaces/wifis guardadas)
-    // solo se usan en los modales de configuración IP, y IpSettingsModal ya
-    // llama a refreshAll() en cada apertura. Ahorra 2 nmcli por arranque.
+    // Sin refreshAll() al arrancar: los datos solo se usan en los modales de
+    // configuración IP, y IpSettingsModal ya llama a refreshAll() al abrirse.
     function refreshAll() { ifaceProc.running = true; wifiProc.running = true }
 
     // Interfaz seleccionada
@@ -103,8 +102,8 @@ Singleton {
         readSelected()
     }
 
-    // Selecciona automáticamente la interfaz "activa" (la conectada; si hay
-    // varias, prioriza ethernet). La usa el engranaje del centro rápido.
+    // Selecciona la interfaz activa —la conectada, priorizando ethernet si hay
+    // varias—. La usa el engranaje del centro rápido.
     function selectActive() {
         const conns = root.interfaces.filter(i => i.connection !== "")
         const pick = conns.find(i => i.type === "ethernet") || conns[0]
@@ -114,7 +113,7 @@ Singleton {
 
     function readSelected() {
         if (root.ifaceConn === "") {
-            // Interfaz sin perfil activo: nada que leer/editar.
+            // Interfaz sin perfil activo: nada que leer ni editar.
             root.ip4method = "auto"; root.ip4addr = ""; root.ip4mask = ""; root.ip4gw = ""; root.ip4dns = ""
             root.ip6method = "auto"; root.autoconnect = true; root.priority = 0; root.mac = "default"; root.mtu = ""
             return
@@ -139,15 +138,15 @@ Singleton {
         const dns = root.ip4dns.trim().replace(/[\s,]+/g, ",")
         const mtu = (root.mtu === "" || root.mtu.toLowerCase() === "auto") ? "0" : root.mtu
 
-        // Pares propiedad/valor para `nmcli connection modify`. Se citan todos
-        // de forma uniforme, así "" se convierte en '' (limpiar la propiedad).
+        // Pares propiedad/valor para `nmcli connection modify`, citados de forma
+        // uniforme para que "" se convierta en '' y limpie la propiedad.
         const args = manual
             ? ["ipv4.method", "manual",
                "ipv4.addresses", root.ip4addr + "/" + root.maskToPrefix(root.ip4mask),
                "ipv4.gateway", root.ip4gw]
             : ["ipv4.method", "auto", "ipv4.addresses", "", "ipv4.gateway", ""]
-        // DNS en AMBOS métodos: vacío = automático (DHCP). En auto con DNS
-        // propio, ignoramos los del DHCP para que prevalezca.
+        // DNS en ambos métodos: vacío = automático. En auto con DNS propio se
+        // ignoran los del DHCP para que prevalezca.
         args.push("ipv4.dns", dns,
                   "ipv4.ignore-auto-dns", (dns !== "" && !manual) ? "yes" : "no",
                   "ipv6.method", root.ip6method,
@@ -163,8 +162,8 @@ Singleton {
     }
 
     // Gestión de wifis guardadas
-    // Comandos en forma de array: nmcli recibe los argumentos tal cual,
-    // sin shell intermedio ni necesidad de citar/escapar.
+    // Comandos en forma de array: nmcli recibe los argumentos tal cual, sin
+    // shell intermedio y sin necesidad de citar ni escapar.
     function forgetWifi(name)  { wifiOp(["connection", "delete", name]) }
     function connectWifi(name) { wifiOp(["connection", "up", name]) }
     function setWifiPriority(name, val) {
@@ -189,8 +188,8 @@ Singleton {
                                   connection: conn === "--" ? "" : conn })
                     })
                 root.interfaces = out
-                // Autoselección con la lista ya cargada (selectActive() desde
-                // fuera llega antes de que nmcli termine y no ve nada).
+                // Autoselección con la lista ya cargada: selectActive() desde
+                // fuera llega antes de que nmcli termine y no vería nada.
                 if (out.length > 0 && (root.selectedIface === "" || !out.find(i => i.device === root.selectedIface)))
                     root.selectActive()
                 else if (out.length === 0) {
@@ -215,7 +214,7 @@ Singleton {
                         active: p[4] === "yes",
                         name: root.unesc(p.slice(5).join(":"))
                     }))
-                // Orden: activa primero, luego por prioridad desc, luego nombre.
+                // Activa primero, luego por prioridad descendente y por nombre.
                 out.sort((a, b) => (b.active - a.active) || (b.priority - a.priority) || a.name.localeCompare(b.name))
                 root.savedWifis = out
             }
@@ -250,8 +249,8 @@ Singleton {
                     else if (key.endsWith("cloned-mac-address")) root.mac = (val === "") ? "default" : val
                     else if (key.endsWith(".mtu")) root.mtu = (val === "auto" || val === "0") ? "" : val
                 })
-                // En el campo: los DNS propios del perfil; si no hay, los que el
-                // sistema usa ahora (DHCP) para que se vean los configurados por defecto.
+                // Los DNS propios del perfil o, si no hay, los que el sistema
+                // usa ahora, para que se vean los configurados por defecto.
                 root.ip4dns = cfgDns !== "" ? cfgDns : activeDns.join(", ")
                 root.loading = false
             }

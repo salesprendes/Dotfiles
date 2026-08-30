@@ -31,16 +31,11 @@ Rectangle {
 
     // Crece un punto al pasar el ratón y se hunde al pulsar.
     //
-    // EL REBOTE NO PUEDE IR EN LA PULSACIÓN, y ahí estaba el "achafado": la
-    // curva OutBack se PASA del destino antes de asentarse, que es justo lo
-    // que la hace agradable al crecer… y lo que la arruina al encoger, porque
-    // pasarse hacia abajo de 0,92 es bajar a ~0,85 y el botón se ve aplastado
-    // durante un instante. Encima iba con la duración larga, así que el
-    // aplastamiento se veía entero.
-    //
-    // Un clic quiere lo contrario que un hover: acuse INMEDIATO y sin adorno.
-    // Así que la curva depende de hacia dónde va — al pulsar, corta y sin
-    // rebote; al soltar y al pasar el ratón, la de siempre.
+    // La curva depende de hacia dónde va. El rebote no puede ir en la pulsación:
+    // OutBack se pasa del destino antes de asentarse, que es lo que la hace
+    // agradable al crecer y lo que la arruina al encoger, porque pasarse hacia
+    // abajo deja el botón visiblemente aplastado. Un clic quiere lo contrario que
+    // un hover: acuse inmediato y sin adorno.
     scale: ma.pressed ? 0.96 : (hovered ? 1.05 : 1.0)
     Behavior on scale {
         NumberAnimation {

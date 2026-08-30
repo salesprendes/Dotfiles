@@ -5,11 +5,10 @@ import Quickshell
 import Quickshell.Io
 import qs.Config
 
-// Terminal: detecta los emuladores instalados y, para el seleccionado
-// (Settings.terminalApp), genera su config. La paleta viene del tema de
-// Quickshell; el resto (fuente, tamaño, opacidad, padding, cursor…) de
-// Ajustes → Terminal. Sabe kitty, alacritty y foot. Se regenera al cambiar
-// parámetros o tema y recarga la terminal en caliente.
+// Detecta los emuladores de terminal instalados y genera la configuración del
+// seleccionado. La paleta viene del tema y el resto —fuente, tamaño, opacidad,
+// relleno, cursor— de Ajustes. Se regenera al cambiar parámetros o tema y
+// recarga la terminal en caliente.
 Singleton {
     id: root
 
@@ -23,8 +22,8 @@ Singleton {
     function installed(app) { return root.available.some(t => t.value === app) }
     function canConfigure(app) { return root.configurable.indexOf(app) !== -1 }
 
-    // La detección de binarios viene de Deps (un solo proceso compartido al
-    // arrancar). Si Deps aún no terminó, available queda [] y apply() no hace
+    // La detección de binarios viene de Deps, con un solo proceso compartido al
+    // arrancar. Si aún no ha terminado, 'available' queda vacío y apply() no hace
     // nada; al dispararse Deps.loaded se recomputa y se aplica una vez.
     Component.onCompleted: refresh()
     function refresh() {
@@ -184,9 +183,8 @@ Singleton {
     }
 
     // Aplicar
-    // Escribe solo si el contenido cambió de verdad: así evitamos reescribir
-    // las configs y lanzar pkill -USR1 (recarga con parpadeo de las kitty
-    // abiertas) en cada arranque cuando nada ha cambiado.
+    // Escribe solo si el contenido cambió de verdad, para no reescribir las
+    // configuraciones ni recargar las terminales abiertas en cada arranque.
     function _writeIfChanged(view, txt) {
         if ((view.text() || "") === txt)
             return false
@@ -210,7 +208,7 @@ Singleton {
         }
     }
 
-    // Regenera (debounce) al cambiar parámetros o el tema/acento.
+    // Regenera con rebote al cambiar parámetros, tema o acento.
     readonly property var _watch: [
         Settings.terminalApp, Settings.terminalFont, Settings.terminalFontSize, Settings.terminalOpacity,
         Settings.terminalPadding, Settings.terminalCursorShape, Settings.terminalCursorBlink,
@@ -220,10 +218,9 @@ Singleton {
     on_WatchChanged: applyDebounce.restart()
     Timer { id: applyDebounce; interval: 250; onTriggered: root.apply() }
 
-    // Archivos y recargas
-    //  blockLoading: necesario para que text() tenga el contenido actual en el
-    //  primer apply() y la comparación "solo si cambió" funcione (son archivos
-    //  pequeños leídos una vez al crear el singleton).
+    // blockLoading es necesario para que text() tenga el contenido actual en el
+    // primer apply() y funcione la comparación "solo si cambió". Son archivos
+    // pequeños leídos una vez al crear el singleton.
     FileView { id: kittyConfFile;  path: root.home + "/.config/kitty/kitty.conf";        blockLoading: true; printErrors: false; atomicWrites: true }
     FileView { id: kittyThemeFile; path: root.home + "/.config/kitty/theme.conf";        blockLoading: true; printErrors: false; atomicWrites: true }
     FileView { id: alacrittyFile;  path: root.home + "/.config/alacritty/alacritty.toml"; blockLoading: true; printErrors: false; atomicWrites: true }

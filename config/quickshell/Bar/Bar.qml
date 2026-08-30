@@ -63,7 +63,6 @@ PanelWindow {
     visible: !remapGuard.remapping
     ScreenMoveRemap { id: remapGuard; window: bar }
 
-    // ── Extractor de paleta dinámica ─────────────────────────────────────────
     // Solo con el tema base "dynamic" y solo en la barra del monitor
     // principal: un Canvas fuera del viewport (su búfer pinta igual) reduce el
     // fondo de pantalla a 64×36 px, y Settings vota el tono dominante y deriva
@@ -139,13 +138,10 @@ PanelWindow {
         }
         Behavior on opacity { NumberAnimation { duration: 300; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveEmphasizedDecel } }
 
-        // ── Las tres secciones ───────────────────────────────────────────────
-        // Qué widget va en cuál y en qué orden lo dice Settings.barLayout, no
-        // este archivo. Antes estaban cableados aquí y cada uno llevaba colgado
-        // un `visible: Settings.showLoQueSea`: siete booleanos sueltos que solo
-        // servían para simular un orden que en realidad no se podía cambiar.
-        // Ahora la presencia en el layout ES la visibilidad, y reordenar,
-        // mover de sección o duplicar un separador se hace desde Ajustes.
+        // Qué widget va en cuál sección y en qué orden lo dice
+        // Settings.barLayout, no este archivo: la presencia en el layout ES la
+        // visibilidad, así que reordenar, mover de sección o duplicar un
+        // separador se hace desde Ajustes.
 
         RowLayout {
             anchors {

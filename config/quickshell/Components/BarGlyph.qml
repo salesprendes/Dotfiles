@@ -1,28 +1,21 @@
 import QtQuick
 import qs.Config
 
-// Glifo de icono de la barra: fuente y tamaño unificados para todos los
-// widgets. 'sizeDelta' permite ajustes puntuales (p. ej. el lanzador).
+// Glifo de icono de la barra: fuente y tamaño unificados para todos los widgets.
+// 'sizeDelta' permite ajustes puntuales.
 //
-// ── CENTRADO ÓPTICO ─────────────────────────────────────────────────────────
-// Una Nerd Font no es una fuente de texto: sus glifos vienen de una docena de
-// colecciones distintas (Material, Font Awesome, Devicons, Powerline…) y cada
-// una tiene su propia idea de cuánto aire dejar a los lados. El resultado es
-// que la TINTA de un glifo casi nunca está en el centro de su caja de avance:
-// unos aparecen pegados a la izquierda y otros a la derecha. Dentro de una
-// píldora, que sí está centrada, eso se ve — sobre todo en las píldoras de un
-// solo icono, donde no hay nada más con lo que compararlo, y en una fila de
-// píldoras seguidas, donde los iconos bailan respecto a un eje que debería ser
-// el mismo.
+// Los glifos de una Nerd Font vienen de una docena de colecciones distintas y cada
+// una tiene su propia idea de cuánto aire dejar a los lados, así que la tinta casi
+// nunca está en el centro de su caja de avance. Dentro de una píldora centrada eso
+// se ve, sobre todo en las de un solo icono y en una fila de píldoras seguidas.
 //
-// Aquí se mide la caja de tinta real (tightBoundingRect) y se compensa la
-// diferencia con relleno a un lado. No se toca la vertical a propósito: todos
-// los glifos comparten la línea base, y corregirla por glifo los descuadraría
-// entre sí, que es justo lo contrario de lo que se busca.
+// Aquí se mide la caja de tinta real y se compensa la diferencia con relleno a un
+// lado. No se toca la vertical a propósito: todos los glifos comparten la línea
+// base, y corregirla por glifo los descuadraría entre sí.
 //
-// El cálculo depende SOLO de TextMetrics —una medición aparte, no del propio
-// Text— así que no hay realimentación: el relleno no depende del ancho que el
-// relleno produce.
+// El cálculo depende solo de TextMetrics, una medición aparte y no del propio
+// Text, así que no hay realimentación: el relleno no depende del ancho que
+// produce.
 ThemedText {
     id: glyph
 

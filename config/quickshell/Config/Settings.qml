@@ -4,9 +4,8 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 
-// Almacén de ajustes persistente (fuente de verdad). Se guarda en
-// ~/.config/quickshell/settings.json; los demás módulos (Theme, Weather,
-// Wallpaper, reloj) leen de aquí.
+// Almacén de ajustes persistente y fuente de verdad. Se guarda en
+// ~/.config/quickshell/settings.json; los demás módulos leen de aquí.
 Singleton {
     id: s
 
@@ -17,32 +16,26 @@ Singleton {
     property string accentName: "theme"
     property color  accentColor: resolvedAccent
     property bool   darkMode: true      // false = variante clara de Solitude
-    // ¿Hyprland es el compositor ACTIVO ahora mismo? Vía la variable de
-    // entorno que pone al arrancar (no 'which': eso solo diría si el
-    // paquete está instalado, no si es el que corre).
+    // ¿Hyprland es el compositor activo ahora mismo? Se mira la variable de
+    // entorno que pone al arrancar, no 'which': eso solo diría si el paquete
+    // está instalado.
     readonly property bool hyprlandAvailable: (Quickshell.env("HYPRLAND_INSTANCE_SIGNATURE") ?? "") !== ""
-    // Interruptor maestro de Ajustes → Plantillas: pausa TODO el sistema de
-    // plantillas (GTK/Hyprland incluidos) sin tocar qué apps tenía marcadas
-    // cada uno — 'gtkThemingEnabled'/'hyprlandThemingEnabled'/
-    // 'templatesEnabled' de abajo no se tocan al pausar, así que al
-    // reactivar vuelve exactamente a lo que ya estaba.
+    // Interruptor maestro de plantillas: pausa el sistema entero sin tocar qué
+    // apps tenía marcadas cada una, así que al reactivar vuelve a lo que había.
     property bool   templatesOn: true
     // Tematizado GTK (ver Ajustes → Plantillas y Templates/gtk/).
     property bool   gtkThemingEnabled: true
     // Tematizado Hyprland (ver Ajustes → Plantillas y applyHyprlandThemeNow).
     property bool   hyprlandThemingEnabled: true
-    // Bloq Núm encendido: se aplica al arrancar el shell y al conmutarlo,
-    // vía la opción numlock_by_default de Hyprland (API Lua).
+    // Bloq Núm encendido: se aplica al arrancar el shell y al conmutarlo, vía
+    // la opción numlock_by_default de Hyprland (API Lua).
     property bool   numlockOn: false
-    // Resto de plantillas (ver Ajustes → Plantillas y Config/AppTemplates.qml):
-    // mapa id → activada/no, todas apagadas por defecto (cada plantilla se
-    // activa a mano). GTK/Hyprland quedan aparte, arriba: ya tenían su
-    // propio interruptor antes de que existiera este mecanismo.
+    // Resto de plantillas: mapa id → activada, todas apagadas por defecto. GTK
+    // y Hyprland quedan aparte, arriba, con su propio interruptor.
     property var    templatesEnabled: ({})
-    // ── Asistente IA (Modules/IA) ────────────────────────────────────────────
-    // Proveedor activo ("gemini" | "openrouter" | "ollama") y, por proveedor,
-    // el modelo y su credencial. Las claves se guardan en settings.json en
-    // claro, como el resto de ajustes: es un archivo local del usuario.
+    // Proveedor activo del asistente y, por proveedor, el modelo y su
+    // credencial. Las claves se guardan en claro como el resto de ajustes: es
+    // un archivo local del usuario.
     property string aiProvider: "gemini"
     property string aiModelGemini: "gemini-2.5-flash"
     property string aiModelOpenrouter: "qwen/qwen3-30b-a3b:free"
@@ -50,125 +43,106 @@ Singleton {
     property string aiKeyGemini: ""
     property string aiKeyOpenrouter: ""
     property string aiOllamaUrl: "http://127.0.0.1:11434"
-    // Proveedor "Servidor": cualquier servidor OpenAI-compatible, pensado
-    // ante todo para uno REMOTO (vLLM, TGI, LiteLLM, Ollama tras un proxy,
-    // LM Studio publicado…). La URL es la base /v1 —se normaliza, admite
-    // host a secas— y la clave es opcional (la mayoría de los remotos la
-    // piden, los caseros no).
+    // Proveedor "Servidor": cualquier servidor compatible con la API de OpenAI,
+    // pensado ante todo para uno remoto. La URL es la base /v1 —se normaliza y
+    // admite host a secas— y la clave es opcional.
     property string aiCustomUrl: ""
     property string aiModelCustom: ""
     property string aiKeyCustom: ""
-    // Cabecera HTTP extra para servidores tras una pasarela ("Nombre: valor"):
-    // CF-Access, api-key de Azure, el token de un proxy inverso…
+    // Cabecera HTTP extra para servidores tras una pasarela ("Nombre: valor").
     property string aiCustomHeader: ""
-    // Aceptar certificados TLS que no se pueden verificar (servidor propio con
-    // certificado autofirmado). Solo afecta a Servidor y Ollama.
+    // Aceptar certificados TLS no verificables (servidor propio con certificado
+    // autofirmado). Solo afecta a Servidor y Ollama.
     property bool   aiInsecureTls: false
     // Panel ancho: más sitio para leer código y respuestas largas.
     property bool   aiWide: false
     // Estilo de respuesta: "normal" | "concise" | "teacher" | "reviewer".
     property string aiPersona: "normal"
-    // Modo del asistente: "chat" (solo conversación) | "agent" (herramientas
-    // con aprobación). No hay modo "plan": planificar lo decide el agente al
-    // leer el encargo, proponiendo con propose_plan cuando la tarea lo merece.
+    // Modo del asistente: "chat" (solo conversación) o "agent" (herramientas
+    // con aprobación). Planificar no es un modo: lo decide el agente al leer el
+    // encargo, proponiendo con propose_plan cuando la tarea lo merece.
     property string aiMode: "chat"
     // Instrucciones extra del usuario, añadidas al prompt de sistema.
     property string aiCustomPrompt: ""
-    // Auto-aprobar las herramientas de SOLO LECTURA (leer archivo, listar
-    // carpeta). Las que escriben o ejecutan siempre piden aprobación.
-    // Heredado: hoy lo decide aiApproval, y este valor solo sirve para migrar.
+    // Heredado: hoy la aprobación la decide aiApproval y este valor solo sirve
+    // para migrar.
     property bool   aiAutoRead: false
-    // Cuánta correa lleva el agente, en UN control (como los modos de permiso
-    // de Claude Code o los de aprobación de Codex). De la clase de riesgo de
-    // cada herramienta sale su aprobación, así que no hay que decidir cuarenta
-    // veces lo mismo:
+    // Cuánta correa lleva el agente, en un solo control. La aprobación de cada
+    // herramienta sale de su clase de riesgo, así que no hay que decidir lo
+    // mismo cuarenta veces:
     //   "careful"  pregunta siempre, incluso para leer
     //   "normal"   lee y consulta sola; escribir y ejecutar preguntan
     //   "auto"     actúa sin preguntar (menos ask_user, que es una pausa)
     property string aiApproval: "normal"
-    // Registro de auditoría: qué ejecutó el agente y por qué se le dejó, en
-    // data/ai-audit.jsonl. Sobrevive a /limpiar y a cambiar de conversación —
-    // es la respuesta a "¿qué ha hecho esto en mi equipo?", que el historial
-    // del chat no puede dar porque se compacta y se borra.
+    // Registro de auditoría en data/ai-audit.jsonl: qué ejecutó el agente y por
+    // qué se le dejó. Sobrevive a /limpiar y a cambiar de conversación, cosa que
+    // el historial del chat no puede hacer porque se compacta y se borra.
     property bool aiAudit: true
-    // SUPERVISOR: un segundo modelo mirando al agente.
+    // Supervisor: un segundo modelo mirando al agente.
     //   "off"    nadie mira
-    //   "risky"  solo lo que puede hacer daño (riesgo 2+, comandos marcados
-    //            como destructivos, enlaces que salen de la carpeta personal)
-    //   "all"    todas las llamadas — solo tiene sentido con un modelo rápido
-    // El coste es una llamada extra por cada cosa supervisada, así que "risky"
-    // es el reparto sensato con un servidor propio.
+    //   "risky"  solo lo que puede hacer daño (riesgo 2+, comandos destructivos,
+    //            enlaces que salen de la carpeta personal)
+    //   "all"    todas las llamadas — solo con un modelo rápido
+    // Cuesta una llamada extra por cada cosa supervisada.
     property string aiSupervisor: "risky"
-    // Qué modelo supervisa. Vacío = el mismo que el agente. Lo interesante es
-    // poner aquí uno PEQUEÑO y rápido del mismo servidor: vigilar es una tarea
-    // más fácil que trabajar, y así el segundo par de ojos casi no cuesta.
+    // Qué modelo supervisa; vacío = el mismo que el agente. Lo interesante es
+    // uno pequeño y rápido del mismo servidor: vigilar es más fácil que
+    // trabajar, y así el segundo par de ojos casi no cuesta.
     property string aiSupervisorModel: ""
-    // Excepciones POR herramienta, encima del modo (estilo aisuite): mapa
-    // nombre → "ask" (pedir aprobación) | "auto" (sin preguntar) | "off" (el
-    // modelo ni la ve). Vacío = manda el modo, que es lo normal.
+    // Excepciones por herramienta, por encima del modo: mapa nombre → "ask"
+    // (pedir aprobación) | "auto" (sin preguntar) | "off" (el modelo ni la ve).
+    // Vacío = manda el modo.
     property var    aiToolPolicies: ({})
-    // Habilidades (Modules/IA/skills/<nombre>/SKILL.md): mapa
-    // nombre → false para apagar una. Lo que no esté en el mapa cuenta como
-    // encendida — instalar la carpeta ya es decir que la quieres.
+    // Habilidades: mapa nombre → false para apagar una. Lo que no esté en el
+    // mapa cuenta como encendida, porque instalar la carpeta ya es quererla.
     property var    aiSkills: ({})
-    // Servidores MCP (Model Context Protocol, transporte stdio): lista de
-    // {name, command}. Cada uno es un proceso hijo que publica herramientas;
-    // el modelo las ve como mcp__<name>__<tool> y su ejecución pasa por la
-    // misma tarjeta de aprobación que las nativas.
+    // Servidores MCP (transporte stdio): lista de {name, command}. Cada uno es
+    // un proceso hijo que publica herramientas; el modelo las ve como
+    // mcp__<name>__<tool> y pasan por la misma tarjeta de aprobación que las
+    // nativas.
     property var    aiMcpServers: []
-    // ── Búsqueda web ─────────────────────────────────────────────────────────
-    // A quién se le pregunta: "searxng" (el propio, o uno local que se detecta
-    // solo), "brave" o "tavily" (APIs con clave). Sea cual sea el elegido, si
-    // falla se prueban los demás que estén configurados.
+    // A quién se le pregunta: "searxng" (propio o local detectado), "brave" o
+    // "tavily". Si el elegido falla se prueban los demás configurados.
     //
-    // Por qué hay que elegir algo: las instancias PÚBLICAS de SearXNG ya no
-    // sirven format=json a un cliente sin navegador, y DuckDuckGo y Mojeek
-    // responden con un captcha. Un buscador "que funciona siempre" dejó de
-    // existir, y fingir lo contrario solo conseguía que el asistente se pasara
-    // los turnos reintentando.
+    // Hay que elegir algo porque las instancias públicas de SearXNG ya no
+    // sirven format=json a un cliente sin navegador, y los buscadores generales
+    // responden con un captcha.
     property string aiSearchBackend: "searxng"
-    // La URL de tu SearXNG con la API JSON activa (formats: [json] en su
+    // URL de un SearXNG con la API JSON activa (formats: [json] en su
     // settings.yml). Vacío = solo se prueban las instancias locales.
     property string aiSearchUrl: ""
-    // Clave del buscador de API elegido. Respaldo en claro: la de verdad vive
-    // en el llavero del sistema, igual que las de los proveedores de modelos.
+    // Clave del buscador elegido. Respaldo en claro: la de verdad vive en el
+    // llavero del sistema, igual que las de los proveedores de modelos.
     property string aiKeySearch: ""
     // Servidores remotos de confianza (lista blanca para SSH/SFTP/hosting):
     // lista de {name, host, user, port}. El modelo solo puede conectarse a los
-    // registrados aquí, por su nombre. Las contraseñas van al llavero; SIN
-    // llavero caen a aiSshPasswords, abajo — antes se quedaban solo en memoria
-    // de sesión y morían con el shell: el servidor "guardado" dejaba de entrar
-    // al siguiente arranque.
+    // registrados aquí, por su nombre. Las contraseñas van al llavero y, sin
+    // llavero, al mapa de abajo.
     property var    aiSshHosts: []
-    // Respaldo en claro de las contraseñas SSH (mapa nombre → contraseña),
-    // solo cuando no hay llavero o falló: el mismo trato que las claves de
-    // proveedor (aiKeyGemini y compañía), que ya viven aquí en claro en esa
-    // situación. Es un archivo local del usuario; con llavero funcional este
-    // mapa se queda vacío.
+    // Respaldo en claro de las contraseñas SSH, solo cuando no hay llavero o
+    // falló; con llavero funcional este mapa se queda vacío.
     property var    aiSshPasswords: ({})
     // Temperatura del modelo (parámetro universal del contrato).
     property real   aiTemperature: 0.7
-    // Ventana de contexto del modelo, en tokens. 0 = automático (32k si el
-    // servidor es propio, 128k en la nube). De aquí salen el recorte del
-    // historial, el tope de cada resultado de herramienta y el medidor: con un
-    // modelo local pequeño conviene declararla para no desbordarlo.
+    // Ventana de contexto del modelo, en tokens; 0 = automático (32k con
+    // servidor propio, 128k en la nube). De aquí salen el recorte del historial,
+    // el tope de cada resultado de herramienta y el medidor.
     property int    aiContextTokens: 0
-    // Razonamiento del modelo (interruptor suave de Qwen3): "auto" no toca
-    // nada, "think"/"no_think" se añaden al mensaje del usuario. Un servidor
-    // que no lo entienda simplemente lo ignora.
+    // Interruptor suave de razonamiento: "auto" no toca nada y "think"/
+    // "no_think" se añaden al mensaje del usuario. Un servidor que no lo
+    // entienda lo ignora.
     property string aiThink: "auto"
-    // ── Lo que depende del MODELO que haya delante (ver ModelProfile.js) ──
-    // Estos tres solo hacen algo si el modelo está reconocido; con cualquier
-    // otro, el harness se comporta igual que antes de que existieran.
-    // Esfuerzo de razonamiento: "auto" deja que el harness lo reparta por tarea
-    // (a fondo donde se decide, ligero donde el trabajo es mecánico), o se fija
-    // a mano en low | medium | xhigh.
+    // Los tres ajustes siguientes solo hacen algo si el modelo está reconocido
+    // en ModelProfile.js; con cualquier otro son inertes.
+    //
+    // Esfuerzo de razonamiento: "auto" deja que el harness lo reparta por tarea,
+    // o se fija a mano en low | medium | xhigh.
     property string aiEffort: "auto"
-    // Usar los parámetros de muestreo que recomiendan los autores del modelo.
-    // En un Qwen no es un detalle: con la temperatura equivocada el mismo
-    // modelo pasa de resolver la tarea a irse por las ramas.
+    // Usar los parámetros de muestreo que recomiendan los autores del modelo:
+    // con la temperatura equivocada, el mismo modelo pasa de resolver la tarea a
+    // irse por las ramas.
     property bool   aiModelTuning: true
-    // Reenviarle su propio razonamiento de turnos anteriores, en los modelos que
+    // Reenviar al modelo su propio razonamiento de turnos anteriores, en los que
     // saben aprovecharlo: es lo que le permite retomar una tarea larga donde la
     // dejó en vez de volver a razonarla entera.
     property bool   aiKeepThinking: true
@@ -179,10 +153,8 @@ Singleton {
     property int    aiCompactKeep: 1
 
     property real   uiScale: 1.0
-    // Zoom automático: deriva la densidad de la resolución del monitor (lado
-    // corto respecto a 1080p; ver Config/Scale.qml). Apagado, manda solo
-    // uiScale — para quien prefiere que un 100% sea un 100% en cualquier
-    // pantalla.
+    // Zoom automático: deriva la densidad de la resolución del monitor (ver
+    // Config/Scale.qml). Apagado, manda solo uiScale.
     property bool   autoDensity: true
     property int    animationSpeed: 2   // 0 none | 1 short | 2 medium | 3 long | 4 custom
     property int    customAnimationDuration: 500
@@ -190,8 +162,8 @@ Singleton {
     property real   popupOpacity: 0.85
     property real   widgetOpacity: 0.55
 
-    // Opacidad efectiva. Se conservan los nombres eff*/set* (los usan Theme y
-    // los sliders de Ajustes) aunque ya no haya un tema con opacidades propias.
+    // Opacidad efectiva. Los nombres eff*/set* los usan Theme y los sliders de
+    // Ajustes.
     readonly property real effBarOpacity:    barOpacity
     readonly property real effPopupOpacity:  popupOpacity
     readonly property real effWidgetOpacity: widgetOpacity
@@ -218,8 +190,8 @@ Singleton {
     property bool   fontEmbeddedbitmap: false
     property string language: "es"
 
-    // Terminal. La paleta de color la genera el servicio Terminal a partir
-    // del tema (no editable aquí); aquí van los parámetros no-color.
+    // Terminal: aquí van los parámetros no-color. La paleta la genera el
+    // servicio Terminal a partir del tema.
     property string terminalApp: "kitty"        // kitty | alacritty | foot | …
     property string terminalFont: ""            // "" = usar fontFamily
     property real   terminalFontSize: 11.5
@@ -232,13 +204,11 @@ Singleton {
     property bool   terminalLigatures: true
 
     readonly property var themePresets: ({
-        // Paletas de temas/editores conocidos.
-        // Los tonos intermedios (bgAlt/surfaceHi/fgMuted) y
-        // el naranja no existen en las paletas originales: se derivan. Los
-        // colores semanticos salen de la paleta ANSI de terminal de cada
-        // una, corregidos para garantizar contraste WCAG sobre el fondo de
-        // cada modo (algunos acentos claros son ilegibles sobre fondo claro
-        // en el original: alli se usan como relleno, aqui van encima).
+        // Paletas de temas conocidos. Los tonos intermedios
+        // (bgAlt/surfaceHi/fgMuted) y el naranja se derivan, porque no existen
+        // en las originales. Los colores semánticos salen de la paleta ANSI de
+        // terminal de cada una, corregidos para garantizar contraste WCAG sobre
+        // el fondo de cada modo.
         "ayu": {
             "label": "Ayu",
             "bg": "#0b0e14", "bgAlt": "#14181f", "surface": "#1e222a", "surfaceHi": "#2e323b", "overlay": "#565b66",
@@ -378,18 +348,16 @@ Singleton {
         { name: "amber", color: "#e0af68", label: "Amber" },
         { name: "red", color: "#de6145", label: "Red" }
     ]
-    // Con el tema "dynamic", la paleta viene del extractor del fondo (si ya
-    // hay una calculada); mientras no la haya, se pinta con el preset base.
-    // Respaldo mientras el extractor del fondo aún no ha calculado nada (o
-    // ante un nombre inválido): Tokyo-Night, la paleta de referencia.
+    // Con el tema "dynamic" la paleta viene del extractor del fondo. Mientras no
+    // haya una calculada, o ante un nombre inválido, se pinta con el preset base.
     readonly property var currentPalette:
         themeName === "dynamic" && dynamicPalette.bg !== undefined ? dynamicPalette
         : themePresets[themeName] || themePresets["tokyo-night"]
     readonly property color resolvedAccent: accentFor(accentName)
 
     // Base de las tres velocidades: 100 / 200 / 400 ms, moduladas por un
-    // multiplicador continuo (duracion / speed) en vez de tres valores
-    // sueltos por paso. El paso "Medium" es speed = 1.0, sin modular.
+    // multiplicador continuo en vez de tres valores sueltos por paso. El paso
+    // "Medium" es speed = 1.0, sin modular.
     readonly property int animBaseFast: 100
     readonly property int animBaseNormal: 200
     readonly property int animBaseSlow: 400
@@ -406,64 +374,45 @@ Singleton {
     readonly property int animSlowMs: normalizedAnimationSpeed === 4
         ? customAnimationDuration * 2
         : (_speedFactor === 0 ? 0 : Math.round(animBaseSlow / _speedFactor))
-    // Los paneles recorren mucha distancia (toda la tarjeta se despliega):
-    // con la duracion "normal" (200 ms) el barrido pasaba tan rapido que no
-    // llegaba a verse. Base propia de 360 ms, modulada por la misma velocidad
-    // global; en modo custom se respeta la duracion elegida tal cual.
+    // Los paneles recorren mucha distancia —se despliega la tarjeta entera— y
+    // con la duración normal el barrido no llega a verse. Base propia de 360 ms
+    // modulada por la misma velocidad global; en modo custom manda la duración
+    // elegida tal cual.
     readonly property int animBasePopout: 360
     readonly property int popoutAnimationMs: normalizedAnimationSpeed === 4
         ? customAnimationDuration
         : (_speedFactor === 0 ? 0 : Math.round(animBasePopout / _speedFactor))
 
-    // Cafeína: inhibe la inactividad (no se suspende ni bloquea). Vive aquí, y
-    // no en Globals, para que sobreviva a los reinicios del shell: si lo dejaste
-    // puesto, sigue puesto. El proceso inhibidor lo levanta shell.qml leyendo
-    // este estado.
+    // Cafeína: inhibe la inactividad, así que no se suspende ni se bloquea.
+    // Vive aquí y no en Globals para sobrevivir a los reinicios del shell. El
+    // proceso inhibidor lo levanta shell.qml leyendo este estado.
     property bool   caffeine: false
 
-    // "No molestar": silencia los avisos. Vive aquí por los dos motivos de
-    // 'caffeine' y por uno más.
+    // "No molestar": silencia los avisos y sobrevive a los reinicios, como
+    // 'caffeine'. El precio de que persista es que se puede olvidar encendido,
+    // y lo paga el icono de la campana de la barra, que se ve tachado mientras
+    // lo esté.
     //
-    // Sobrevive a los reinicios: si lo dejaste puesto, sigue puesto. Es lo que
-    // se espera de un silencio que has pedido tú —no lo rompe reiniciar el
-    // shell— y lo que hacen los demás escritorios. El precio es que se puede
-    // olvidar encendido, y lo paga el icono de la campana de la barra, que se
-    // ve tachado mientras lo esté (Bar/NotificationsWidget).
-    //
-    // Y el motivo de más: estaba en Globals, donde obligaba a IslandState —que
-    // lo consulta antes de encolar un aviso— a importar el singleton de los
-    // paneles, que no pinta nada en esto. Eso cerraba un ciclo: Globals mandaba
-    // sobre IslandState e IslandState leía de Globals. Aquí no hay ciclo,
-    // porque Settings no conoce a nadie.
+    // Vive en Settings y no en Globals para que IslandState pueda consultarlo
+    // antes de encolar un aviso sin importar el singleton de los paneles, que no
+    // pinta nada en esto y cerraría un ciclo entre los dos.
     property bool   dnd: false
 
-    // ── La isla ──────────────────────────────────────────────────────────────
-    // La píldora del centro de la barra que se transforma según lo que pasa
-    // (notificación, volumen, música) y se abre en hoja al pulsarla.
-    //
-    // Con la isla encendida, la sección CENTRAL de la barra no se dibuja: la
-    // isla ocupa ese sitio y enseña lo mismo (reloj, fecha, tiempo). No se
-    // borra del layout ni se migra nada — apagando la isla vuelve tu barra
-    // exactamente como estaba.
-    // Impide que la pantalla se apague mientras suena algo. Usa el inhibidor
-    // de reposo de Wayland (Quickshell 0.3), así que lo respeta quien gestione
-    // el reposo —hypridle, swayidle— sin que el shell tenga que saber cuál es.
+    // La píldora del centro de la barra que se transforma según lo que pasa y se
+    // abre en hoja al pulsarla. Con ella encendida la sección central de la barra
+    // no se dibuja, pero no se borra del layout: apagándola vuelve como estaba.
     property bool   keepAwakeOnMedia: true
     property bool   islandEnabled: true
     property bool   islandShowWeather: true
-    // Apartarse cuando una ventana se queda con la pantalla entera. Afecta a lo
-    // que vive en la capa Overlay y NO es urgente: la isla y, con la isla
-    // apagada, los avisos clásicos que la sustituyen. Se quedan a propósito el
-    // OSD de volumen (lo subes MIENTRAS ves el vídeo: esconderlo es esconder
-    // justo lo que pediste) y la píldora de grabación (que estés grabando no
-    // puede dejar de verse porque haya un vídeo delante).
+    // Apartarse cuando una ventana ocupa la pantalla entera. Afecta a lo que vive
+    // en la capa Overlay y no es urgente: la isla y, con la isla apagada, los
+    // avisos clásicos que la sustituyen. Se quedan a propósito el OSD de volumen
+    // —se sube mientras se ve el vídeo— y la píldora de grabación.
     property bool   hideOnFullscreen: true
 
-    // ── Dock (Modules/Dock) ──────────────────────────────────────────────────
-    // Dos formas: "pill" es la barra de tareas de tableta Android —pastilla
-    // flotante, centrada, del ancho de su contenido— y "hotseat" es la del
-    // Pixel Launcher —barra ancha pegada al borde—. Cambian SOLO en geometría:
-    // la fila, el botón, la vista previa y el menú son los mismos.
+    // Dos formas de dock: "pill" es una pastilla flotante y centrada, del ancho
+    // de su contenido, y "hotseat" una barra ancha pegada al borde. Cambian solo
+    // en geometría: la fila, el botón, la vista previa y el menú son los mismos.
     property bool   dockEnabled: true
     property string dockStyle: "pill"            // pill | hotseat
     // Ids de .desktop, en el orden elegido arrastrando. Lo sanea DockCatalog.
@@ -478,27 +427,23 @@ Singleton {
     property bool   dockReserveSpace: false
     // Nombres de conector ("DP-1"). Vacío = todos los monitores.
     property var    dockOnlyMonitors: []
-    // 32 y no 48: es la proporción de nandoroid, donde el dock tiene más aire
-    // que icono. Con 48 la pastilla queda apretada y parece una barra de
-    // herramientas en vez de un dock.
+    // 32 y no 48: con iconos mayores la pastilla queda apretada y se lee como una
+    // barra de herramientas en vez de como un dock.
     property int    dockIconSize: 32
     property int    dockSpacing: 8
     property int    dockPadding: 8
     property real   dockOpacity: 0.78
-    // -1 = lo decide el estilo (pastilla entera en "pill", shapeXl arriba en
-    // "hotseat"). UNA clave para las dos formas y no dos, para que cambiar de
-    // estilo no te arrastre un radio pensado para el otro.
+    // -1 = lo decide el estilo. Una sola clave para las dos formas, para que
+    // cambiar de estilo no arrastre un radio pensado para el otro.
     property int    dockRadius: -1
     property real   dockMagnify: 1.12            // 1.0 = sin lupa
-    // "auto" es lo que hace nandoroid: rayita cuando hay UNA ventana y puntos
-    // cuando hay varias. Es la que más información da por píxel — el resto
-    // están para quien prefiera una sola forma siempre.
+    // "auto" es rayita con una ventana y puntos con varias, que es lo que más
+    // información da por píxel; el resto son formas fijas.
     property string dockRunningIndicator: "auto" // auto | line | dots | count | none
-    // ── El aspecto de nandoroid ──────────────────────────────────────────────
-    // "mono" es su seña: cada icono dentro de un círculo de acento y teñido del
-    // mismo color. Queda coherente y muy Material, y el precio es real —
-    // pierdes el color de marca de cada app, así que con doce fijadas hay que
-    // distinguirlas por la silueta. "color" deja los iconos como son.
+    // "mono" mete cada icono en un círculo de acento y lo tiñe del mismo color:
+    // queda coherente, y el precio es perder el color de marca de cada app, así
+    // que con muchas fijadas hay que distinguirlas por la silueta. "color" deja
+    // los iconos como son.
     property string dockIconStyle: "mono"        // mono | color
     property bool   dockShadow: true
     property bool   dockShowLauncher: true
@@ -506,50 +451,36 @@ Singleton {
     property bool   dockNotifBadges: true
     property bool   dockPreviews: true
 
-    // Emojis usados últimamente, los más recientes primero. Se guardan porque
-    // la gracia de un selector de emojis es no tener que buscar dos veces el
-    // mismo: casi todo el uso real son las mismas veinte caras.
+    // Emojis usados últimamente, los más recientes primero: casi todo el uso real
+    // son las mismas veinte caras.
     property var emojiRecent: []
 
-    // ── Bloqueo de pantalla ──────────────────────────────────────────────────
-    // "shell"    → la pantalla de bloqueo propia (Services/Lock.qml), con el
-    //              mismo tema, paleta e idioma que el resto.
-    // "hyprlock" → delegar en hyprlock, como se hacía antes.
-    // Si el servicio PAM elegido no existe, el shell cae a hyprlock por su
-    // cuenta aunque aquí ponga "shell": ver Services/Lock.qml.
+    // "shell" usa la pantalla de bloqueo propia (Services/Lock.qml), con el mismo
+    // tema, paleta e idioma que el resto; "hyprlock" delega en hyprlock. Si el
+    // servicio PAM elegido no existe, el shell cae a hyprlock por su cuenta aunque
+    // aquí ponga "shell".
     property string lockBackend: "shell"
     // Servicio de /etc/pam.d/ con el que autenticar. Vacío = automático
     // (hyprlock si está, si no login).
     property string lockPamService: ""
 
     // Qué enseña la pantalla de bloqueo además del campo de contraseña. Cada
-    // bloque se puede apagar por separado: una pantalla de bloqueo es lo que
-    // ve quien pase por delante de tu mesa, y no todo el mundo quiere que ahí
-    // salga qué está escuchando o dónde vive.
+    // bloque se apaga por separado: es lo que ve quien pase por delante de la
+    // mesa, y no todo el mundo quiere que ahí salga qué está escuchando.
     property bool   lockShowMedia: true          // reproductor y sus controles
     property bool   lockShowWeather: true        // ciudad y temperatura
     property bool   lockShowStatus: true         // red y batería
     property bool   lockShowSessionButtons: true // suspender, reiniciar, apagar
-    // Desenfoque del fondo, 0 = nítido. Es un multiplicador sobre el radio
-    // máximo, no píxeles: así se ve igual en 1080p que en 4K.
+    // Desenfoque del fondo, 0 = nítido. Es un multiplicador sobre el radio máximo
+    // y no píxeles, así que se ve igual en 1080p que en 4K.
     property real   lockBlur: 0.75
     // Oscurecido del fondo por encima del desenfoque.
     property real   lockDim: 0.45
 
-    // ── Disposición de la barra ──────────────────────────────────────────────
-    // Qué widgets se ven, en qué sección y en qué orden. Forma:
+    // Qué widgets se ven, en qué sección y en qué orden:
     //   { "left": [{"id":"launcher"}, …], "center": [...], "right": [...] }
-    // El catálogo de ids vive en Config/BarCatalog.qml.
-    //
-    // Sustituye a siete booleanos sueltos (showTray, showSysmon, showBattery,
-    // showClipboard, showNotifications, showPowerProfile, showCaffeine) más
-    // showAi y weatherShowInBar. Aquellos solo podían encender y apagar: el
-    // ORDEN estaba cableado en el QML de la barra, así que "quiero la batería
-    // antes que el reloj" no tenía respuesta posible. Y al ser ajustes
-    // independientes del componente que gobernaban, era fácil que uno se
-    // quedara sin su interruptor (el clima acabó con el suyo en otra página).
-    // La migración v2 convierte los valores viejos, así que nadie pierde su
-    // configuración al actualizar.
+    // El catálogo de ids vive en Config/BarCatalog.qml, y la migración v2
+    // convierte los booleanos de visibilidad que había antes.
     property var    barLayout: BarCatalog.defaultLayout()
 
     // Reloj
@@ -571,95 +502,83 @@ Singleton {
 
     // Notificaciones
     property bool   notifPopupsEnabled: true
-    // Duración en pantalla por urgencia. Las tres apps que envían avisos no
-    // pesan lo mismo: un "canción cambiada" (baja) estorba si dura lo mismo
-    // que un "batería crítica". notifTimeout es la urgencia NORMAL — conserva
-    // el nombre viejo para no invalidar los settings.json ya guardados.
+    // Duración en pantalla por urgencia: un aviso de urgencia baja no debe durar
+    // lo mismo que uno crítico. notifTimeout es la urgencia normal y conserva el
+    // nombre para no invalidar los settings.json ya guardados.
     property int    notifTimeoutLow: 4          // segundos
     property int    notifTimeout: 5             // segundos (urgencia normal)
-    // 0 = no expira: se queda hasta que la descartes. Es el comportamiento
-    // que espera la especificación de freedesktop para lo crítico.
+    // 0 = no expira: se queda hasta descartarlo, como espera la especificación de
+    // freedesktop para lo crítico.
     property int    notifTimeoutCritical: 0     // segundos (0 = nunca)
     property int    notifMaxVisible: 4
-    // Esquina donde salen los popups CLÁSICOS. Solo se usa con la isla apagada:
-    // la isla vive donde vive la barra y no tiene esquina que elegir.
+    // Esquina de los popups clásicos. Solo se usa con la isla apagada: la isla
+    // vive donde vive la barra y no tiene esquina que elegir.
     property string notifPosition: "tr"        // tr | tl | br | bl
-    // Barra de cuenta atrás en el popup: enseña cuánto le queda antes de
-    // irse solo. Con timeouts largos ayuda; a algunos les parece ruido.
+    // Barra de cuenta atrás en el popup: enseña cuánto le queda antes de irse.
     property bool   notifShowProgress: true
     // Modo compacto: solo el título, sin el cuerpo del mensaje.
     property bool   notifCompact: false
     property var    mutedNotificationApps: []
 
-    // Avisos de batería (Services/Battery.qml). Los umbrales estaban fijos en
-    // 15% y 5%; con una batería grande eso son horas, y con una gastada,
-    // minutos, así que quien lo sufre debe poder moverlos.
+    // Avisos de batería. Los umbrales son configurables porque un porcentaje fijo
+    // son horas con una batería grande y minutos con una gastada.
     property bool   batteryNotifyLow: true
     property int    batteryLowThreshold: 15      // %
     property bool   batteryNotifyCritical: true
     property int    batteryCriticalThreshold: 5  // %
 
-    // OSD: el aviso flotante de volumen.
+    // El aviso flotante de volumen.
     property bool   osdEnabled: true
-    // Igual que notifPosition: solo manda con la isla apagada.
+    // Como notifPosition: solo manda con la isla apagada.
     property string osdPosition: "bottom"      // top | bottom
     property real   osdTimeout: 1.6            // segundos en pantalla
 
-    // Fondos
-    // Transición visual que aplica Background/Backdrop.qml al cambiar de fondo:
+    // Transición que aplica Background/Backdrop.qml al cambiar de fondo:
     // fade | zoom | slide | push | wipe.
     property string wallpaperTransition: "fade"
     property real   wallpaperTransitionDuration: 1.0
-    // Carpetas de fondos. La de imágenes se resuelve con `xdg-user-dir PICTURES`
-    // (localizada, p. ej. ~/Imágenes) al arrancar; no se persiste ni se edita.
+    // Carpetas de fondos. La de imágenes se resuelve con `xdg-user-dir
+    // PICTURES` al arrancar; no se persiste ni se edita.
     property var    wallpaperDirs: [home + "/.config/wallpapers"]
     property string wallpaperCurrent: ""  // último fondo aplicado (ruta absoluta)
-    // Rotación automática: minutos entre cambios de fondo (0 = apagada) y
-    // orden aleatorio o secuencial. La ejecuta Services/Wallpaper.qml.
+    // Rotación automática: minutos entre cambios (0 = apagada) y orden aleatorio
+    // o secuencial. La ejecuta Services/Wallpaper.qml.
     property int    wallpaperAutoMin: 0
     property bool   wallpaperRandom: true
-    // Encaje de la imagen en la pantalla cuando su proporción no coincide:
-    // crop recorta lo que sobra (por defecto), fit deja franjas y muestra la
-    // imagen entera, stretch la deforma hasta llenar.
+    // Encaje cuando la proporción de la imagen no coincide con la pantalla:
+    // crop recorta lo que sobra, fit deja franjas y stretch deforma.
     property string wallpaperFillMode: "crop"   // crop | fit | stretch
 
-    // Paleta dinámica generada desde el fondo de pantalla activo (tema base
-    // "dynamic"). La calcula el extractor de la barra (ver Bar.qml) y se
-    // persiste para que un arranque nuevo pinte con ella al instante, sin
-    // esperar al análisis de imagen.
+    // Paleta dinámica calculada desde el fondo activo por el extractor de la
+    // barra. Se persiste para que un arranque nuevo pinte con ella al instante
+    // sin esperar al análisis de imagen.
     property var dynamicPalette: ({})
 
-    // Última respuesta buena del clima (con su marca de tiempo): al arrancar
-    // o recargar, el panel pinta al instante desde aquí y solo consulta la
-    // API si el dato ya caducó.
+    // Última respuesta buena del clima con su marca de tiempo: al arrancar, el
+    // panel pinta desde aquí y solo consulta la API si el dato ya caducó.
     property var weatherCache: ({})
 
-    // Avatar del usuario: ruta absoluta a una imagen (vacío = inicial en
-    // círculo tonal). Se muestra recortado en círculo en el perfil de Ajustes,
-    // en "Acerca de" y, si se copia al greeter, en la pantalla de bloqueo.
+    // Avatar del usuario: ruta absoluta a una imagen, o vacío para la inicial en
+    // un círculo tonal.
     property string avatarPath: ""
 
     // Captura de pantalla / grabación
-    // Sub-objeto con todos los ajustes del servicio ScreenCapture, unificados
-    // aquí para tener una única fuente de verdad (settings.json). El servicio
-    // los sanea con sus rangos/enums al aplicarlos; aquí solo validamos que sea
-    // un objeto JSON para no corromper el archivo.
+    // Ajustes del servicio ScreenCapture. Él los sanea con sus rangos y enums al
+    // aplicarlos; aquí solo se valida que sea un objeto JSON.
     property var screenCapture: ({})
 
     // Persistencia
     property bool _loaded: false
 
-    // Claves persistidas: las de _defaults más accentColor, que no tiene
-    // default estático (se deriva de accentName; ver comentario de _defaults).
+    // Claves persistidas: las de _defaults más accentColor, que no tiene default
+    // estático porque se deriva de accentName.
     readonly property var _keys: Object.keys(_defaults).concat(["accentColor"])
 
-    // Valores por defecto de todas las claves persistidas — la única lista a
-    // mantener: _keys se deriva de aquí y el guardado automático se conecta en
-    // Component.onCompleted recorriéndola. Copiados de las declaraciones de
-    // arriba (no capturados en runtime: tras load() las propiedades ya tienen
-    // los valores del JSON). reset() itera este mapa; al añadir un ajuste,
-    // añádelo a la declaración y aquí. accentColor no aparece: su default es
-    // resolvedAccent y reset() lo recalcula al final.
+    // Valores por defecto de todas las claves persistidas: la única lista que
+    // hay que mantener, porque _keys se deriva de aquí y el guardado automático
+    // se conecta recorriéndola. Al añadir un ajuste hay que añadirlo también
+    // aquí. accentColor no aparece: su default es resolvedAccent y reset() lo
+    // recalcula al final.
     readonly property var _defaults: ({
         "themeName": "dynamic", "accentName": "theme", "darkMode": true,
         "aiProvider": "gemini", "aiModelGemini": "gemini-2.5-flash",
@@ -722,9 +641,8 @@ Singleton {
         "screenCapture": {}
     })
 
-    // Saneamiento de valores cargados
-    // Rangos numéricos (se recortan a [min,max]) y conjuntos válidos (enums).
-    // Lo que no encaje se ignora y se conserva el default.
+    // Saneamiento de lo cargado: rangos numéricos que se recortan a [min,max] y
+    // conjuntos válidos. Lo que no encaje se ignora y conserva su default.
     readonly property var _numBounds: ({
         "uiScale": [0.5, 2.0], "animationSpeed": [0, 4],
         "customAnimationDuration": [50, 3000], "barOpacity": [0.0, 1.0],
@@ -763,8 +681,8 @@ Singleton {
         "wallpaperAutoMin",
         "dockIconSize", "dockSpacing", "dockPadding", "dockRadius"]
 
-    // Devuelve un valor válido para 'k', o 'undefined' si hay que descartarlo
-    // (se conserva el valor por defecto). Infiere el tipo esperado del default.
+    // Devuelve un valor válido para 'k', o undefined si hay que descartarlo y
+    // conservar el default. Infiere el tipo esperado del propio default.
     function sanitize(k, val) {
         // Enums: solo valores de la lista.
         if (_enums[k] !== undefined)
@@ -780,21 +698,21 @@ Singleton {
             if (!Array.isArray(val)) return undefined
             return val.every(x => typeof x === "string") ? val : undefined
         }
-        // La disposición de la barra la sanea su catálogo: descarta ids que
-        // ya no existen y duplicados de widgets que solo admiten una instancia,
-        // y garantiza las tres secciones. Es lo que protege de un settings.json
-        // editado a mano o traído de una versión con otros widgets.
+        // La disposición de la barra la sanea su catálogo: descarta ids que ya
+        // no existen y duplicados de widgets de instancia única, y garantiza las
+        // tres secciones. Es lo que protege de un settings.json editado a mano o
+        // traído de una versión con otros widgets.
         if (k === "barLayout") {
             if (!val || typeof val !== "object" || Array.isArray(val)) return undefined
             return BarCatalog.sanitize(val)
         }
-        // Las fijadas del dock, por el mismo motivo y con el mismo reparto:
-        // normaliza claves, quita duplicados y basura, y corta en el tope.
+        // Las fijadas del dock, con el mismo reparto: normaliza claves, quita
+        // duplicados y basura, y corta en el tope.
         if (k === "dockPinned")
             return Array.isArray(val) ? DockCatalog.sanitize(val) : undefined
-        // Nombres de conector de monitor. No hay forma de validar que existan
-        // —un monitor desenchufado sigue siendo una elección válida—, así que
-        // solo se comprueba que sean cadenas con algo dentro.
+        // Nombres de conector de monitor. No se puede validar que existan —un
+        // monitor desenchufado sigue siendo una elección válida—, así que solo se
+        // comprueba que sean cadenas con algo dentro.
         if (k === "dockOnlyMonitors") {
             if (!Array.isArray(val)) return undefined
             return val.filter(x => typeof x === "string" && x !== "")
@@ -817,29 +735,22 @@ Singleton {
         return val
     }
 
-    // ── Versionado del archivo ───────────────────────────────────────────────
-    //
     // settings.json lleva "_version". Sin él, cambiar la FORMA de un ajuste
-    // rompe en silencio las configuraciones ya guardadas: load() lee clave a
-    // clave y lo que no reconoce simplemente lo ignora, así que el ajuste
-    // vuelve a su valor de fábrica sin avisar y el save() del final borra el
-    // rastro del valor viejo. El usuario ve "se me han reseteado cosas" y no
-    // hay forma de saber cuáles.
-    //
-    // Con versión y migraciones, un cambio de forma se declara UNA vez y las
-    // configuraciones antiguas se convierten al cargar.
+    // rompe en silencio las configuraciones guardadas: load() lee clave a clave,
+    // ignora lo que no reconoce y el save() del final borra el rastro del valor
+    // viejo. Con versión y migraciones, un cambio de forma se declara una vez y
+    // lo antiguo se convierte al cargar.
     readonly property int schemaVersion: 3
 
-    // Cada entrada transforma el objeto JSON CRUDO —antes del saneado por
+    // Cada entrada transforma el objeto JSON crudo —antes del saneado por
     // clave— desde la versión anterior hasta 'to'. Se aplican en orden, así que
-    // un archivo de v0 pasa por todas. Mutan el objeto que reciben.
+    // un archivo de v0 pasa por todas, y mutan el objeto que reciben.
     readonly property var _migrations: [
         {
             to: 2,
-            // Los siete booleanos de visibilidad de la barra, más showAi y
-            // weatherShowInBar, pasan a ser presencia en barLayout. Se respeta
-            // lo que el usuario tenía apagado; el ORDEN es el de fábrica,
-            // porque en v1 no había orden que preservar.
+            // Los booleanos de visibilidad de la barra pasan a ser presencia en
+            // barLayout. Se respeta lo que estuviera apagado; el orden es el de
+            // fábrica, porque en v1 no había orden que preservar.
             apply: function (o) {
                 if (o.barLayout !== undefined)
                     return                       // ya migrado a mano
@@ -857,10 +768,8 @@ Singleton {
                 if (!on("showAi", true))            drop.push("ai")
                 for (const sec of BarCatalog.sections)
                     layout[sec] = layout[sec].filter(e => drop.indexOf(e.id) === -1)
-                // Estos dos venían apagados de fábrica y NO están en el layout
-                // por defecto: se añaden solo si el usuario los había encendido.
-                // El clima iba entre el reproductor y el reloj, que es donde lo
-                // ponía el QML de la barra.
+                // Estos dos vienen apagados de fábrica y no están en el layout
+                // por defecto: se añaden solo si estaban encendidos.
                 if (on("showCaffeine", false))
                     layout.right.splice(Math.max(0, layout.right.length - 3), 0,
                                         { id: "caffeine" })
@@ -872,25 +781,16 @@ Singleton {
         },
         {
             to: 3,
-            // v3 llegó a borrar 'osdPosition' y 'notifPosition' dando por hecho
-            // que la isla se quedaba con el OSD y los popups para siempre. Fue
-            // un error: la isla es un INTERRUPTOR, no un reemplazo. Con ella
-            // apagada vuelven los popups clásicos, y entonces esos dos ajustes
-            // sí significan algo — la esquina donde salen.
-            //
-            // La entrada se queda (quitarla dejaría un hueco en la numeración y
-            // a quien ya migró con el shell viejo en una versión que no existe)
-            // pero no toca nada. Quien perdiera los dos valores se los encuentra
-            // en su valor de fábrica, que es donde estaban.
+            // Entrada inerte. Se conserva para no dejar un hueco en la
+            // numeración ni dejar a quien ya migró en una versión inexistente.
             apply: function (o) {}
         }
     ]
 
-    // Lleva el objeto crudo a la versión actual. Devuelve la versión de la que
+    // Lleva el objeto crudo a la versión actual y devuelve la versión de la que
     // venía, para poder avisar de lo que se ha hecho.
     function migrate(o) {
-        // Sin marca de versión es un archivo anterior al versionado (v0/v1:
-        // misma forma, el versionado llegó después).
+        // Sin marca de versión es un archivo anterior al versionado.
         let from = (typeof o._version === "number" && isFinite(o._version))
                  ? Math.floor(o._version) : 1
         if (from >= schemaVersion)
@@ -909,21 +809,15 @@ Singleton {
         return from
     }
 
-    // ── Siembra del dock ─────────────────────────────────────────────────────
-    // El dock viene encendido, y con autoocultar inteligente se ve JUSTO
-    // cuando no hay ninguna ventana abierta. Con 'dockPinned' vacío, eso
-    // significa estrenarlo mirando una pastilla vacía: la primera impresión
-    // del dock sería que está roto.
+    // El dock viene encendido y, con autoocultar inteligente, se ve justo cuando
+    // no hay ninguna ventana abierta. Con 'dockPinned' vacío eso sería estrenarlo
+    // mirando una pastilla vacía, así que la primera vez se siembra.
     //
-    // Así que la primera vez se siembra. Dos cosas importan:
-    //
-    //   · Se siembra con lo que DE VERDAD esté instalado, comprobado contra
-    //     DesktopEntries. Una lista fija de ids sería un puñado de iconos rotos
-    //     en cualquier máquina que no sea la de quien la escribió.
-    //
-    //   · La marca de "ya sembrado" es que la clave EXISTA en el archivo, no un
-    //     booleano aparte. Quien vacíe la lista a propósito no debe
-    //     encontrársela repoblada en el siguiente arranque.
+    // Se siembra con lo que de verdad esté instalado, comprobado contra
+    // DesktopEntries: una lista fija de ids serían iconos rotos en cualquier
+    // máquina ajena. Y la marca de "ya sembrado" es que la clave exista en el
+    // archivo, no un booleano aparte, para que quien vacíe la lista a propósito
+    // no se la encuentre repoblada al arrancar.
     property bool _dockNeedsSeed: true
 
     readonly property var _dockSeedRoles: [
@@ -941,8 +835,8 @@ Singleton {
     function _sembrarDock() {
         if (!_dockNeedsSeed || !_loaded)
             return
-        // DesktopEntries se puebla de forma asíncrona: sin entradas todavía,
-        // sembrar daría una lista vacía y la marca se gastaría para nada.
+        // DesktopEntries se puebla de forma asíncrona: sin entradas todavía, la
+        // siembra daría una lista vacía y gastaría su única oportunidad.
         if ((DesktopEntries.applications?.values ?? []).length === 0)
             return
         _dockNeedsSeed = false
@@ -960,11 +854,9 @@ Singleton {
         save()
     }
 
-    // DesktopEntries se puebla en ráfagas al arrancar. Sin rebote, la siembra
-    // se dispararía con la PRIMERA entrada que llegue y se gastaría su única
-    // oportunidad sobre una lista a medio hacer: el navegador que aún no había
-    // aparecido no se fijaría nunca. Es el mismo rebote que ya usa
-    // Services/AppCatalog.qml sobre esta misma señal, y por lo mismo.
+    // DesktopEntries se puebla en ráfagas. Sin rebote, la siembra se dispararía
+    // con la primera entrada que llegue y gastaría su única oportunidad sobre una
+    // lista a medio hacer.
     readonly property Timer _dockSeedDebounce: Timer {
         interval: 400
         onTriggered: s._sembrarDock()
@@ -980,11 +872,10 @@ Singleton {
         if (t && t.trim() !== "") {
             try {
                 const o = JSON.parse(t)
-                // Un archivo MÁS NUEVO que este shell (se volvió a una versión
-                // anterior) se carga igual —el saneado por clave protege de
-                // valores raros— pero el save() del final lo reescribiría con
-                // la forma vieja, perdiendo lo que aquí no se entiende. Se
-                // guarda una copia antes de tocarlo.
+                // Un archivo más nuevo que este shell se carga igual —el saneado
+                // por clave protege de valores raros— pero el save() del final lo
+                // reescribiría con la forma vieja, perdiendo lo que aquí no se
+                // entiende. Se guarda una copia antes de tocarlo.
                 if (typeof o._version === "number" && o._version > schemaVersion) {
                     console.warn("Settings: el archivo es de v" + o._version
                                  + " y este shell entiende hasta v" + schemaVersion
@@ -992,9 +883,8 @@ Singleton {
                     Quickshell.execDetached(["cp", "--", file.path, file.path + ".bak"])
                 }
                 migrate(o)
-                // Si el archivo ya trae 'dockPinned', el usuario ya ha pasado
-                // por aquí y su lista manda — aunque esté vacía. Ver
-                // _sembrarDock().
+                // Si el archivo ya trae 'dockPinned', su lista manda aunque esté
+                // vacía. Ver _sembrarDock().
                 if (o.dockPinned !== undefined)
                     _dockNeedsSeed = false
                 for (const k of _keys) {
@@ -1008,23 +898,19 @@ Singleton {
             }
         }
         _loaded = true
-        // Bloq Núm: la opción de Hyprland no persiste entre sesiones por sí
-        // sola — se re-aplica en cada arranque del shell. Solo si el usuario
-        // lo pidió: con el ajuste apagado no se toca nada (quizá lo gestiona
-        // él en su config de Hyprland).
+        // La opción de Hyprland no persiste entre sesiones, así que se re-aplica
+        // en cada arranque. Solo si se ha pedido: con el ajuste apagado no se
+        // toca nada, por si lo gestiona la config de Hyprland.
         if (numlockOn)
             applyNumlock()
-        // Si DesktopEntries ya está poblado, siembra en cuanto se estabilice;
-        // si aún no lo está, lo hará el Connections de arriba.
+        // Si DesktopEntries ya está poblado, siembra en cuanto se estabilice; si
+        // no, lo hará el Connections de arriba.
         _dockSeedDebounce.restart()
         // Reescribe siempre tras cargar. normalizeSavedSettings() corrige en
-        // memoria lo que ya no existe (un tema retirado, p.ej.), pero corre con
-        // _loaded aún en false, así que su scheduleSave() se descarta y el
-        // archivo se quedaba con el valor muerto y con claves de ajustes ya
-        // eliminados. Al guardar aquí, el archivo queda saneado (save() escribe
-        // solo las claves de _keys) sin esperar a que se toque un ajuste.
-        // También cubre el caso de que no hubiera archivo válido (ausente o
-        // corrupto): queda creado con los valores por defecto.
+        // memoria lo que ya no existe, pero corre con _loaded todavía en false y
+        // su scheduleSave() se descarta, así que el archivo se quedaría con el
+        // valor muerto y con claves de ajustes eliminados. Guardar aquí lo deja
+        // saneado, y también cubre que no hubiera archivo válido.
         save()
     }
 
@@ -1036,20 +922,19 @@ Singleton {
     function save() {
         if (!_loaded) return
         const o = {}
-        // Primera clave del archivo a propósito: quien lo abra a mano ve de
-        // qué versión es sin bucear.
+        // Primera clave del archivo a propósito: quien lo abra a mano ve de qué
+        // versión es sin bucear.
         o._version = schemaVersion
         for (const k of _keys) o[k] = s[k]
         // accentColor es un QColor: serializado tal cual sería un objeto que
-        // sanitize() rechaza al cargar. Se persiste como "#rrggbb".
+        // sanitize() rechaza al cargar, así que se persiste como "#rrggbb".
         o.accentColor = colorHex(accentColor)
         file.setText(JSON.stringify(o, null, 2))
     }
 
-    // Restaura cada clave persistida a su valor de declaración (_defaults).
-    // Arrays/objetos se copian para no compartir la referencia del mapa (si
-    // algo los mutara in situ, corrompería los defaults); accentColor se
-    // recalcula aparte porque no vive en _defaults (se deriva de accentName).
+    // Restaura cada clave persistida a su valor de declaración. Arrays y objetos
+    // se copian para no compartir la referencia del mapa de defaults, y
+    // accentColor se recalcula aparte porque se deriva de accentName.
     function reset() {
         for (const k in _defaults) {
             const v = _defaults[k]
@@ -1058,33 +943,23 @@ Singleton {
                  : v
         }
         accentColor = resolvedAccent
-        // Aparte del bucle: la copia de arriba es superficial y compartiría
-        // los ARRAYS de secciones con el mapa de defaults. Hoy nadie los muta
-        // in situ (BarCatalog siempre devuelve objetos nuevos), pero un
-        // descuido futuro corrompería los valores de fábrica de forma
-        // silenciosa y para toda la sesión.
+        // Aparte del bucle: la copia de arriba es superficial y compartiría los
+        // arrays de secciones con el mapa de defaults, de modo que mutarlos in
+        // situ corrompería los valores de fábrica para toda la sesión.
         barLayout = BarCatalog.defaultLayout()
     }
 
-    // Claves que casi siempre difieren de su "valor por defecto" recién
-    // arrancado sin que el usuario haya tocado nada: screenCapture se
-    // autorrellena con sus propios valores la primera vez que se lee
-    // (ver ScreenCapture.applyFromSettings, así el JSON queda editable a
-    // mano), y wallpaperCurrent parte vacío pero siempre acaba con un fondo
-    // puesto (elegido o auto-asignado). Comparar cualquiera de las dos
-    // contra su default literal siempre da "modificado", así que no cuentan
-    // para "solo modificados" / mostrar "Restablecer" — pero 'reset()' sí
-    // las restaura (vía _defaults) si de verdad se pulsa el botón.
-    // weatherCache y dynamicPalette son cachés de runtime: se rellenan solos
-    // nada más arrancar (el clima al primer refresco, la paleta al analizar el
-    // fondo), así que compararlos contra su default vacío siempre daría
-    // "modificado" y el botón Restablecer quedaba visible permanentemente.
+    // Claves que difieren de su default sin que nadie las haya tocado, porque se
+    // autorrellenan al arrancar: screenCapture con sus propios valores,
+    // wallpaperCurrent con el fondo elegido o asignado, y weatherCache y
+    // dynamicPalette como cachés de runtime. Compararlas siempre daría
+    // "modificado" y dejaría el botón Restablecer visible en permanencia. reset()
+    // sí las restaura si de verdad se pulsa.
     readonly property var _volatileKeys: ({ "screenCapture": true, "wallpaperCurrent": true,
                                             "weatherCache": true, "dynamicPalette": true })
 
     // ¿Difiere esta clave de su valor por defecto? Lo usa el filtro "solo
-    // modificados" de la ventana de Ajustes. accentColor queda fuera a
-    // propósito: no está en _defaults (se deriva de accentName).
+    // modificados". accentColor queda fuera porque no está en _defaults.
     function isModified(key) {
         if (_volatileKeys[key])
             return false
@@ -1092,19 +967,19 @@ Singleton {
         if (def === undefined)
             return false
         const cur = s[key]
-        // Arrays y objetos (mutedNotificationApps, screenCapture): comparación
-        // estructural; comparar por referencia daría siempre "modificado".
+        // Arrays y objetos: comparación estructural, porque por referencia daría
+        // siempre "modificado".
         if (def !== null && typeof def === "object")
             return JSON.stringify(cur) !== JSON.stringify(def)
-        // Los reales llevan coma flotante (uiScale, opacidades…): un == exacto
-        // marcaría como modificado un 0.78 que ha ido y vuelto por un slider.
+        // Los reales llevan coma flotante: un == exacto marcaría como modificado
+        // un valor que ha ido y vuelto por un slider.
         if (typeof def === "number" && typeof cur === "number")
             return Math.abs(cur - def) > 1e-6
         return cur !== def
     }
 
-    // ¿Hay algo que restablecer? Gatea el botón "Restablecer" de Ajustes:
-    // no tiene sentido mostrarlo si no cambiaría nada.
+    // ¿Hay algo que restablecer? Gatea el botón de Ajustes, que no tiene sentido
+    // si no cambiaría nada.
     readonly property bool anyModified: {
         for (let i = 0; i < _keys.length; i++)
             if (isModified(_keys[i]))
@@ -1146,15 +1021,17 @@ Singleton {
         return false
     }
 
-    // ── Paleta dinámica ──────────────────────────────────────────────────────
+    // La matemática de color (OKLab y derivación de la paleta) vive en
+    // Config/DynamicPalette.qml, porque el greeter necesita la misma fórmula y no
+    // puede depender de este singleton. Aquí solo se cachea el resultado.
 
     // La matemática de color (OKLab + derivación de la paleta) vive en
     // Config/DynamicPalette.qml: el greeter necesita la MISMA fórmula y no
     // puede depender de este singleton. Aquí solo se cachea el resultado.
     readonly property DynamicPalette _paletteMath: DynamicPalette {}
 
-    // Recibe los píxeles RGBA de una miniatura del fondo (la reduce el
-    // extractor de Bar.qml) y guarda la paleta que sale de ellos.
+    // Recibe los píxeles RGBA de una miniatura del fondo y guarda la paleta que
+    // sale de ellos.
     function computeDynamicPalette(data) {
         setDynamicPalette(_paletteMath.fromPixels(data))
     }
@@ -1168,24 +1045,22 @@ Singleton {
         return name === "dynamic" || themePresets[name] !== undefined
     }
 
-    // Corrige un tema/acento guardado que ya no exista (renombrado o
-    // quitado de themePresets/accentSwatches), volviendo al valor por
+    // Corrige un tema o acento guardado que ya no exista, volviendo al valor por
     // defecto en vez de dejar la app con una paleta inválida.
     function normalizeSavedSettings() {
         if (!hasThemePreset(themeName))
             themeName = "dynamic"
         if (!hasAccentPreset(accentName))
             accentName = "theme"
-        // El proveedor "Servidor" del panel de IA nació apuntando a un
-        // localhost de ejemplo. Ahora es remoto de primeras: si esos valores
-        // siguen intactos (nadie escribió su servidor), se vacían para que el
-        // campo pida la URL en vez de heredar un servidor local inexistente.
+        // Si los valores del proveedor "Servidor" siguen siendo los de ejemplo,
+        // se vacían para que el campo pida la URL en vez de heredar un servidor
+        // local inexistente.
         if (aiCustomUrl === "http://127.0.0.1:8080/v1")
             aiCustomUrl = ""
         if (aiModelCustom === "local")
             aiModelCustom = ""
-        // El modo "plan" se retiró: quien lo tuviera guardado pasa a "agent",
-        // que es donde el agente propone el plan por su cuenta.
+        // El modo "plan" ya no existe: pasa a "agent", donde el agente propone
+        // el plan por su cuenta.
         if (aiMode === "plan")
             aiMode = "agent"
     }
@@ -1219,14 +1094,10 @@ Singleton {
             hyprSyncTimer.restart()
     }
 
-    // Tabla Lua con los colores del tema, para que el hyprland.lua del
-    // usuario haga require() de este archivo y los aplique con hl.config().
-    // Además de accent/accent2/inactive/shadow (bordes de ventana normales,
-    // ya existían), añade los colores de GRUPO de ventanas (border_active/
-    // inactive/locked_active/locked_inactive + su groupbar), que Hyprland
-    // usa al agrupar pestañas — antes se quedaban en el valor por defecto de
-    // Hyprland, sin seguir el tema. accent2 hace de color secundario del
-    // grupo activo, y rojo fijo para el estado bloqueado.
+    // Tabla Lua con los colores del tema, para que el hyprland.lua del usuario
+    // haga require() de este archivo y los aplique con hl.config(). Incluye los
+    // colores de grupo de ventanas además de los bordes normales, con accent2
+    // como secundario del grupo activo y rojo fijo para el estado bloqueado.
     function hyprThemeLua() {
         const p = currentPalette
         const accent = stripHex(resolvedAccent)
@@ -1267,9 +1138,9 @@ Singleton {
         ].join("\n")
     }
 
-    // Vuelca hyprThemeLua() en theme.lua y recarga Hyprland — no hace nada
-    // si Hyprland no está corriendo, el maestro de plantillas está en pausa,
-    // o esta plantilla está desactivada.
+    // Vuelca hyprThemeLua() en theme.lua y recarga Hyprland. No hace nada si
+    // Hyprland no está corriendo, el maestro de plantillas está en pausa o esta
+    // plantilla está desactivada.
     function applyHyprlandThemeNow() {
         if (!hyprlandAvailable || !templatesOn || !hyprlandThemingEnabled)
             return
@@ -1278,11 +1149,10 @@ Singleton {
             hyprReload.running = true
     }
 
-    // Al APAGAR la plantilla (o el maestro) no basta con dejar de
-    // sincronizar: se escribe theme.lua una última vez —con animations=false—
-    // y se recarga, para que las animaciones de la plantilla se quiten al
-    // momento. Los colores conservan su último valor: volver de golpe a los
-    // de fábrica de Hyprland a mitad de sesión sería mucho más brusco.
+    // Al apagar la plantilla, o el maestro, no basta con dejar de sincronizar: se
+    // escribe theme.lua una última vez con animations=false y se recarga, para
+    // que las animaciones se quiten al momento. Los colores conservan su último
+    // valor, porque volver a los de fábrica a mitad de sesión sería más brusco.
     function hyprTemplateOffSync() {
         if (!_loaded || !hyprlandAvailable)
             return
@@ -1291,12 +1161,10 @@ Singleton {
             hyprReload.running = true
     }
 
-    // Blanco o casi-negro según la claridad del color, para roles sin
-    // convención previa en el shell (destructive/error/warning/success): el
-    // acento y la paleta ya tienen su fg pensado a mano, pero red/yellow/green
-    // sueltos no. Usa la claridad PERCIBIDA (OKLab), no la luminancia Rec.709:
-    // esa pondera tanto el verde que ponía texto negro sobre verdes y cianes
-    // medios donde el blanco se lee mejor.
+    // Blanco o casi-negro según la claridad del color, para los roles sin
+    // convención previa en el shell. Usa la claridad percibida (OKLab) y no la
+    // luminancia Rec.709, que pondera tanto el verde que pone texto negro sobre
+    // verdes y cianes medios donde el blanco se lee mejor.
     function readableOn(hex) {
         hex = String(hex).replace("#", "")
         const r = parseInt(hex.substring(0, 2), 16) / 255
@@ -1305,8 +1173,8 @@ Singleton {
         return _paletteMath.rgbToOklab(r, g, b).L > 0.62 ? "#1a1a1a" : "#ffffff"
     }
 
-    // Mezcla lineal de dos colores hex (t=0 → a, t=1 → b). Para derivar los
-    // niveles que la paleta no tiene explícitos (contenedores, variantes).
+    // Mezcla lineal de dos colores hex (t=0 → a, t=1 → b), para derivar los
+    // niveles que la paleta no tiene explícitos.
     function mix(hexA, hexB, t) {
         const a = String(hexA).replace("#", ""), b = String(hexB).replace("#", "")
         const ar = parseInt(a.substring(0, 2), 16), ag = parseInt(a.substring(2, 4), 16), ab = parseInt(a.substring(4, 6), 16)
@@ -1316,12 +1184,10 @@ Singleton {
         return "#" + h(r) + h(g) + h(bl)
     }
 
-    // Tokens "Material-ish" para las plantillas de apps (Templates/<app>/):
-    // aproximan los ~35 roles de Material 3 (primary/surface/outline/...
-    // con variantes on*/*Container) a partir de nuestra paleta, que solo
-    // tiene ~15 campos. No es un motor HCT real: es una derivación
-    // razonable (mismo espíritu que gtkTokens/readableOn) para que las
-    // plantillas de cada app tengan de dónde sacar cada rol sin reescribirlas.
+    // Aproximación de los roles de Material 3 a partir de la paleta del shell,
+    // que tiene bastantes menos campos. No es un motor HCT: es una derivación
+    // razonable para que las plantillas de cada app tengan de dónde sacar cada
+    // rol sin reescribirlas.
     function materialTokens() {
         const p = currentPalette
         const pick = (dk, lt) => darkMode ? dk : (lt || dk)
@@ -1403,9 +1269,8 @@ Singleton {
                 legacy_border: p.overlay
             }
         }
-        // 'view' (listas/entradas de Nautilus, campos de texto): se iguala al
-        // color de la barra (headerbar = lightBgAlt), más apagado, para un
-        // blanco que no deslumbra en modo claro.
+        // 'view' se iguala al color de la barra, más apagado, para un blanco que
+        // no deslumbre en modo claro.
         return {
             accent: (p.lightAccent || accent), accent_fg: "#ffffff",
             destructive: destructive, destructive_fg: readableOn(destructive),
@@ -1425,19 +1290,18 @@ Singleton {
         }
     }
 
-    // Motor de plantillas mínimo: sustituye {{clave}} por tokens[clave]. Deja
-    // intacto cualquier {{...}} sin correspondencia (para detectar erratas
-    // a simple vista en vez de borrarlas en silencio).
+    // Motor de plantillas mínimo: sustituye {{clave}} por tokens[clave] y deja
+    // intacto lo que no tenga correspondencia, para que una errata se vea en vez
+    // de borrarse en silencio.
     function renderTemplate(text, tokens) {
         return String(text).replace(/\{\{(\w+)\}\}/g, function (whole, key) {
             return tokens[key] !== undefined ? tokens[key] : whole
         })
     }
 
-    // Asegura que gtk.css importe quickshell.css, sin pisar nada que ya
-    // hubiera ahí: si el import ya está, no toca el archivo; si no, lo añade
-    // al final (o crea el archivo si no existía). 'view' es el FileView que
-    // apunta al gtk.css real del usuario.
+    // Asegura que gtk.css importe quickshell.css sin pisar nada de lo que ya
+    // hubiera: si el import está, no toca el archivo; si no, lo añade al final o
+    // crea el archivo. 'view' es el FileView del gtk.css real del usuario.
     function ensureGtkImport(view) {
         const content = view.text() || ""
         if (content.indexOf("@import") !== -1 && content.indexOf("quickshell.css") !== -1)
@@ -1448,16 +1312,13 @@ Singleton {
     }
 
     property bool _gtkPendingRefresh: false
-    // Tematiza apps GTK3/GTK4/libadwaita (Nautilus, GNOME apps…): renderiza
-    // las plantillas de Templates/gtk/ e inyecta el @import en gtk.css SIN
-    // pisar lo que ya hubiera ahí (ensureGtkImport, FileView puro). El
-    // refresco (refresh=true) se dispara en gtk4CssFile.onSaved, así que la
-    // marca se pone antes de escribir — reinicia Nautilus reabriendo su
-    // carpeta, porque GTK4/libadwaita no recarga CSS en caliente; en el
-    // arranque se llama con false para no reiniciar nada. El modo
-    // claro/oscuro se sincroniza aparte vía gsettings, directo (un binario
-    // con sus argumentos, no un script). El tema base GTK3 (adw-gtk3) no se
-    // toca: queda a mano del usuario, vía nwg-look.
+    // Tematiza apps GTK3/GTK4/libadwaita: renderiza las plantillas de
+    // Templates/gtk/ e inyecta el @import en gtk.css sin pisar lo que hubiera.
+    //
+    // El refresco reinicia Nautilus reabriendo su carpeta, porque GTK4 no recarga
+    // CSS en caliente; se dispara en gtk4CssFile.onSaved, así que la marca se
+    // pone antes de escribir, y en el arranque se llama con false para no
+    // reiniciar nada. El modo claro/oscuro se sincroniza aparte vía gsettings.
     function applyGtkTheme(refresh) {
         if (!templatesOn || !gtkThemingEnabled)
             return
@@ -1478,10 +1339,8 @@ Singleton {
             gtkSyncTimer.restart()
     }
 
-    // fontconfig (~/.config/fontconfig/fonts.conf)
-    // Gestionado desde Tipografía: combina la fuente elegida (fontFamily /
-    // monoFontFamily) como familia preferida + los ajustes de render (subpíxel
-    // RGB, hinting). Afecta a Brave, Discord, GTK, Qt.
+    // fontconfig: combina la fuente elegida como familia preferida con los
+    // ajustes de render (subpíxel RGB, hinting). Afecta a las apps GTK y Qt.
     function xmlEsc(t) {
         return String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
     }
@@ -1509,18 +1368,18 @@ Singleton {
             ''
         ].join("\n")
     }
-    // Traduce los ajustes de render del panel Tipografía a las claves de
-    // gsettings que leen las apps GTK (GTK4/libadwaita las toma de aquí, no de
-    // fontconfig). Así el subpíxel/hinting elegido sí llega a GTK. No tocamos
-    // font-name: la fuente de UI de GTK se deja como esté (p. ej. Adwaita Sans).
+    // Traduce los ajustes de render a las claves de gsettings que leen las apps
+    // GTK, que las toman de ahí y no de fontconfig. No se toca font-name: la
+    // fuente de UI de GTK se deja como esté.
     function gtkFontRenderCmds() {
-        // antialiasing: sin AA → none; con AA y orden subpíxel → rgba; si no → grayscale.
+        // antialiasing: sin AA → none; con AA y orden subpíxel → rgba; si no,
+        // grayscale.
         const aa = !fontAntialias ? "none" : (fontRgba !== "none" ? "rgba" : "grayscale")
         // hinting: apagado → none; si no, mapea el hintstyle de fontconfig.
         const hintMap = { "hintnone": "none", "hintslight": "slight",
                           "hintmedium": "medium", "hintfull": "full" }
         const hint = !fontHinting ? "none" : (hintMap[fontHintstyle] || "slight")
-        // orden subpíxel: solo valores válidos de gsettings; 'none' → rgb (neutro).
+        // orden subpíxel: solo valores válidos de gsettings; 'none' → rgb.
         const order = (fontRgba === "bgr" || fontRgba === "vrgb" || fontRgba === "vbgr")
                         ? fontRgba : "rgb"
         const g = "gsettings set org.gnome.desktop.interface "
@@ -1530,7 +1389,7 @@ Singleton {
     }
     function applyFontsConf() {
         fontsConfFile.setText(fontsConfXml())
-        // Process solo para asegurar la carpeta y aplicar el render en gsettings.
+        // Asegura la carpeta y aplica el render en gsettings.
         const dir = home + "/.config/fontconfig"
         fontsApply.command = ["sh", "-c",
             "mkdir -p '" + dir + "' ; " + gtkFontRenderCmds() + " || true"]
@@ -1542,18 +1401,13 @@ Singleton {
             fontSyncTimer.restart()
     }
 
-    // Guardado automático: en vez de un handler onXChanged por clave (75
-    // declaraciones que había que mantener a mano, y donde faltar una —pasó
-    // con avatarPath y dynamicPalette— significa un ajuste que no se guarda),
-    // Component.onCompleted conecta la señal <clave>Changed de TODAS las
-    // claves persistidas a este despachador. El caso por defecto es guardar;
+    // Guardado automático: Component.onCompleted conecta la señal <clave>Changed
+    // de todas las claves persistidas a este despachador, en vez de un handler
+    // por clave que hubiera que mantener a mano. El caso por defecto es guardar;
     // aquí solo se enumeran las claves con efectos adicionales.
-    // Las opacidades solo afectan al shell (el CSS de GTK va siempre opaco),
-    // así que no disparan scheduleGtkSync: reescribiría gtk.css idéntico y
-    // reiniciaría Nautilus sin efecto visible.
-    // Enciende/apaga Bloq Núm vía Hyprland (numlock_by_default por la API
-    // Lua: el `hyprctl keyword` clásico no funciona con el parser Lua).
-    // Cambiarla en caliente re-aplica el estado del LED a los teclados.
+    //
+    // Las opacidades no disparan scheduleGtkSync porque solo afectan al shell:
+    // reescribirían gtk.css idéntico y reiniciarían Nautilus sin efecto visible.
     function applyNumlock() {
         Quickshell.execDetached(["hyprctl", "eval",
             'hl.config({ input = { numlock_by_default = '
@@ -1621,10 +1475,9 @@ Singleton {
         atomicWrites: true
     }
 
-    // Plantillas GTK (Templates/gtk/): se LEEN en cada aplicación, no solo al
-    // arrancar, para que un cambio a mano en el archivo se note sin reiniciar
-    // el shell. blockLoading: lectura síncrona, como el resto de plantillas
-    // de este archivo (son pocos KB).
+    // Plantillas GTK: se leen en cada aplicación y no solo al arrancar, para que
+    // un cambio a mano en el archivo se note sin reiniciar el shell. Lectura
+    // síncrona como el resto de plantillas: son pocos KB.
     FileView {
         id: gtk4Template
         path: s.home + "/.config/quickshell/Templates/gtk/gtk4.css"
@@ -1638,19 +1491,16 @@ Singleton {
         printErrors: false
     }
 
-    // Salida YA renderizada de las plantillas de arriba. Vive en un archivo
-    // PROPIO (quickshell.css), no en gtk.css: gtk.css es del usuario y
-    // ensureGtkImport() solo le asegura un @import a este, sin pisar nada
-    // más que hubiera ahí.
+    // Salida ya renderizada de las plantillas. Vive en un archivo propio y no en
+    // gtk.css, que es del usuario y solo recibe el @import.
     FileView {
         id: gtk4CssFile
         path: s.home + "/.config/gtk-4.0/quickshell.css"
         atomicWrites: true
         printErrors: false
     }
-    // gtk.css real del usuario: solo se le añade el @import si falta
-    // (ensureGtkImport). watchChanges (activo por defecto) recarga __text
-    // solo si lo tocas a mano fuera del shell.
+    // gtk.css real del usuario: solo se le añade el @import si falta.
+    // watchChanges recarga __text si se toca a mano fuera del shell.
     FileView {
         id: gtk4RealCssFile
         path: s.home + "/.config/gtk-4.0/gtk.css"
@@ -1658,8 +1508,8 @@ Singleton {
         printErrors: false
         atomicWrites: true
     }
-    // Al guardar el CSS de GTK4 tras un cambio del usuario, refresca las apps GTK
-    // abiertas (reinicio de Nautilus). Nautilus lee GTK4, así que basta este.
+    // Al guardar el CSS de GTK4 refresca las apps GTK abiertas. Nautilus lee
+    // GTK4, así que basta con este.
     Connections {
         target: gtk4CssFile
         function onSaved() {
@@ -1696,17 +1546,13 @@ Singleton {
         onTriggered: s.applyHyprlandThemeNow()
     }
 
-    // Crea la carpeta de destino de theme.lua una sola vez al arrancar (si
-    // Hyprland está activo): FileView no crea directorios por sí solo, y
-    // sin esto el primer setText() a hyprThemeFile fallaría en silencio si
-    // el usuario nunca ha tenido nada en conf/. La escritura espera a que
-    // termine (onExited), no se dispara en paralelo.
+    // Crea la carpeta de destino de theme.lua una vez al arrancar, si Hyprland
+    // está activo: FileView no crea directorios y el primer setText() fallaría en
+    // silencio. La escritura espera a que termine, no va en paralelo.
     //
-    // Se escribe con la plantilla en AMBOS estados: si está apagada y
-    // theme.lua no existe (instalación limpia con la plantilla ya
-    // desactivada en settings.json), el respaldo de conf/animations.lua
-    // aplicaría las animaciones personalizadas igualmente — la escritura
-    // con animations=false mantiene la regla "sin plantilla, sin ellas".
+    // Se escribe con la plantilla en ambos estados: si está apagada y theme.lua
+    // no existe, el respaldo de conf/animations.lua aplicaría las animaciones
+    // igualmente, y la escritura con animations=false mantiene la regla.
     Process {
         id: hyprConfDirMkdir
         command: ["mkdir", "-p", s.home + "/.config/hypr/conf"]
@@ -1718,13 +1564,10 @@ Singleton {
         }
     }
 
-    // Cinturón del Bloq Núm: ráfaga de re-applies tras el arranque (a los
-    // 3, 6, 9 y 12 s). El apply de load() pierde la carrera contra el
-    // hyprctl reload de la plantilla, y el listener de configreloaded
-    // (shell.qml) puede perderse el evento si cae antes de que el socket de
-    // eventos conecte — medido: un solo disparo tardío no bastaba. Cuatro
-    // tiros idempotentes cubren toda la ventana y luego se callan; a partir
-    // de ahí manda el listener.
+    // Ráfaga de re-aplicaciones de Bloq Núm tras el arranque. El apply de load()
+    // pierde la carrera contra el hyprctl reload de la plantilla, y el listener
+    // de configreloaded puede caer antes de que conecte el socket de eventos.
+    // Cuatro disparos idempotentes cubren la ventana y luego se callan.
     property int _numlockShots: 0
     Timer {
         interval: 3000
@@ -1739,10 +1582,9 @@ Singleton {
     Process {
         id: hyprReload
         command: ["hyprctl", "reload"]
-        // La recarga relee la config Lua y PISA las opciones puestas en
-        // caliente; lo que dependa de ellas se re-aplica al terminar. En el
-        // arranque, el listener de 'configreloaded' (shell.qml) aún no
-        // existe cuando esta recarga dispara — este onExited sí.
+        // La recarga relee la config Lua y pisa las opciones puestas en caliente,
+        // así que lo que dependa de ellas se re-aplica al terminar. En el arranque
+        // el listener de 'configreloaded' aún no existe, pero este onExited sí.
         onExited: if (s.numlockOn) s.applyNumlock()
     }
 
@@ -1752,17 +1594,15 @@ Singleton {
         onTriggered: s.applyGtkTheme(true)
     }
 
-    // Sincroniza modo claro/oscuro + tema base GTK3 por gsettings/dconf
-    // (comando armado en applyGtkTheme). El @import en gtk.css y la escritura
-    // de los CSS (quickshell.css) van por los FileView de arriba, sin shell.
+    // Sincroniza modo claro/oscuro y tema base GTK3 por gsettings. El @import en
+    // gtk.css y la escritura de los CSS van por los FileView de arriba.
     Process {
         id: gtkAppearanceSync
     }
 
-    // Reinicia Nautilus reabriendo la(s) misma(s) carpeta(s): detecta sus
-    // ventanas por la clase en Hyprland y resuelve la carpeta desde el título
-    // (cae a la carpeta personal si no la puede resolver). En Python para
-    // evitar problemas de escapado en shell.
+    // Reinicia Nautilus reabriendo las mismas carpetas: detecta sus ventanas por
+    // la clase en Hyprland y resuelve la carpeta desde el título, cayendo a la
+    // carpeta personal si no puede. En Python para evitar problemas de escapado.
     Process {
         id: nautilusRefresh
         command: ["python3", "-c", [
@@ -1798,10 +1638,9 @@ Singleton {
         id: fontsApply
     }
 
-    // Carpetas XDG del usuario (localizadas), resueltas UNA vez para todo el
-    // shell: aquí componen wallpaperDirs (<imágenes>/Wallpapers +
-    // ~/.config/wallpapers) y Services/ScreenCapture.qml las consume por
-    // binding para capturas/grabaciones (antes cada uno lanzaba su proceso).
+    // Carpetas XDG del usuario, localizadas y resueltas una sola vez para todo el
+    // shell: aquí componen wallpaperDirs y Services/ScreenCapture.qml las consume
+    // por binding.
     property string xdgPicturesDir: home + "/Pictures"
     property string xdgVideosDir: home + "/Videos"
     // Las usa el selector de imágenes para su lista de sitios.
@@ -1833,10 +1672,8 @@ Singleton {
     }
 
     Component.onCompleted: {
-        // Conecta el guardado automático de cada clave persistida ANTES de
-        // load(): mismo comportamiento que tenían los handlers declarativos
-        // (durante la carga scheduleSave/schedule*Sync se descartan por
-        // _loaded aún false).
+        // Conecta el guardado automático antes de load(): durante la carga,
+        // scheduleSave y los scheduleSync se descartan porque _loaded es false.
         for (const k of _keys)
             s[k + "Changed"].connect(() => s._settingChanged(k))
         load()

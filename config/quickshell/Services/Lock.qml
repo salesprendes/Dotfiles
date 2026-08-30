@@ -7,71 +7,55 @@ import Quickshell.Services.Pam
 import qs.Config
 
 // Bloqueo de sesión servido por el propio shell, con el protocolo
-// ext-session-lock de Wayland (WlSessionLock) y autenticación por PAM.
+// ext-session-lock de Wayland (WlSessionLock) y autenticación por PAM. Al vivir
+// dentro del shell comparte tema e idioma con el resto, y el compositor le da el
+// foco a la capa de bloqueo por protocolo, sin carreras con el teclado
+// exclusivo de un panel abierto.
 //
-// POR QUÉ NO SEGUIR DELEGANDO EN HYPRLOCK. Tres razones concretas:
-//   · Tema. hyprlock tiene su propia configuración y su propia paleta: al
-//     cambiar de tema en Ajustes, la pantalla de bloqueo se quedaba con los
-//     colores viejos hasta regenerar su archivo.
-//   · Idioma. No hablaba el idioma del shell.
-//   · Y una carrera fea: había que dormir 0,25 s antes de lanzarlo para que el
-//     popout abierto soltara el teclado exclusivo, porque si no hyprlock
-//     aparecía con el panel encima. Al vivir dentro del shell, eso desaparece:
-//     el compositor da el foco a la capa de bloqueo por protocolo.
+// SEGURIDAD. Una pantalla de bloqueo que no se puede desbloquear es peor que no
+// tener ninguna, así que antes de bloquear se comprueba que el servicio PAM
+// elegido existe y es legible; si no, se cae a hyprlock sin llegar a mostrar
+// nada propio. No hay ventana de carrera: o se bloquea sabiendo que se puede
+// autenticar, o no se bloquea aquí en absoluto.
 //
-// SEGURIDAD. Una pantalla de bloqueo que no se puede desbloquear es peor que
-// no tener ninguna. Por eso, ANTES de bloquear se comprueba que el servicio
-// PAM elegido existe y es legible; si no, se cae a hyprlock sin llegar a
-// mostrar nada nuestro. No hay ventana de carrera: o bloqueamos nosotros
-// sabiendo que podemos autenticar, o no bloqueamos nosotros en absoluto.
-//
-// Si PAM falla DESPUÉS (start() devuelve false con el archivo presente) no se
-// desbloquea por las buenas: eso convertiría "romper PAM" en un método para
-// saltarse el bloqueo. Se muestra el error y se recuerda que sigue habiendo
-// TTYs (Ctrl+Alt+F2).
+// Si PAM falla después, con el archivo presente, no se desbloquea por las
+// buenas: eso convertiría "romper PAM" en un método para saltarse el bloqueo. Se
+// muestra el error y se recuerda que siguen existiendo los TTY.
 Singleton {
     id: root
 
-    // ── Servicio PAM ─────────────────────────────────────────────────────────
-    // 'hyprlock' es el mejor de los habituales cuando está: es el que las
-    // distribuciones ya escriben pensando en un bloqueador (auth por
-    // contraseña y, si hay, huella, sin el pam_securetty ni el resto del
-    // aparato de un inicio de sesión de consola). 'login' es el respaldo
+    // Preferencia de servicio PAM. El de hyprlock es el que las distribuciones
+    // escriben pensando en un bloqueador —contraseña y, si hay, huella, sin el
+    // aparato de un inicio de sesión de consola—; 'login' es el respaldo
     // universal.
     readonly property string pamService: Settings.lockPamService !== ""
                                          ? Settings.lockPamService
                                          : (_hasHyprlockPam ? "hyprlock" : "login")
     property bool _hasHyprlockPam: false
     property bool _pamProbed: false
-    // ¿Existe el archivo del servicio que vamos a usar? Es la comprobación que
-    // decide si nos atrevemos a bloquear.
+    // ¿Existe el archivo del servicio que se va a usar? Es la comprobación que
+    // decide si se puede bloquear.
     property bool pamReady: false
 
-    // ── Qué bloqueador se usa DE VERDAD ──────────────────────────────────────
-    // No es lo mismo que Settings.lockBackend, y esa diferencia importa: si el
-    // ajuste dice "hyprlock" y hyprlock no está instalado, honrarlo a ciegas
-    // manda el bloqueo a _fallback(), que acaba en 'loginctl lock-session' — o
-    // sea una sesión marcada como bloqueada SIN NINGUNA PANTALLA que pida la
-    // contraseña. Y desde Ajustes no se podía volver, porque la opción elegida
-    // seguía siendo válida a ojos del selector.
+    // Backend efectivo, distinto del ajuste: si el ajuste dice "hyprlock" y
+    // hyprlock no está instalado, honrarlo a ciegas mandaría el bloqueo a
+    // 'loginctl lock-session', o sea una sesión marcada como bloqueada sin
+    // ninguna pantalla que pida la contraseña, y desde Ajustes no habría vuelta
+    // porque la opción elegida seguiría siendo válida.
     //
-    // Con el backend efectivo derivado aquí, desinstalar hyprlock devuelve el
-    // bloqueo propio solo, sin tocar el ajuste: si lo vuelves a instalar,
-    // vuelve a valer lo que elegiste.
+    // Derivándolo aquí, desinstalar hyprlock devuelve el bloqueo propio sin
+    // tocar el ajuste, y volver a instalarlo restaura lo elegido.
     readonly property bool hyprlockAvailable: Deps.has("hyprlock")
     readonly property string backend: (Settings.lockBackend === "hyprlock"
                                        && root.hyprlockAvailable) ? "hyprlock" : "shell"
 
-    // "Quiero estar bloqueado". La superficie de verdad (WlSessionLock) vive en
-    // Panels/LockScreen.qml y se ata a esto.
-    //
-    // El servicio NO instancia la ventana: Services está por debajo de Panels
-    // en la pila de importaciones (Panels importa qs.Services), y montar aquí
-    // un tipo de Panels cerraría el círculo. Así que el servicio guarda el
-    // estado y la autenticación, y la capa de arriba pone la superficie.
+    // "Quiero estar bloqueado". La superficie real vive en Panels/LockScreen.qml
+    // y se ata a esto: el servicio no la instancia porque Services está por
+    // debajo de Panels en la pila de importaciones, y montar aquí un tipo de
+    // Panels cerraría el círculo.
     property bool locked: false
     // Pantalla donde se pidió el bloqueo. Vacío = sin Hyprland, y entonces la
-    // tarjeta cae en la primera pantalla, que es lo único que se puede hacer.
+    // tarjeta cae en la primera pantalla.
     property string lockedOnMonitor: ""
     // Autenticando: la interfaz bloquea el campo y enseña el indicador.
     property bool busy: false
@@ -94,21 +78,19 @@ Singleton {
         root.messageIsError = false
         root.failures = 0
         root.busy = false
-        // En qué pantalla estabas al bloquear. La tarjeta de contraseña va ahí
-        // y no en Quickshell.screens[0], que es simplemente la primera que
-        // enumeró el compositor: con dos monitores, eso ponía la contraseña en
-        // el otro la mitad de las veces, y con tres, dos de cada tres.
+        // En qué pantalla se estaba al bloquear. La tarjeta de contraseña va
+        // ahí y no en la primera que enumeró el compositor, que con varios
+        // monitores la pondría en el equivocado la mayoría de las veces.
         root.lockedOnMonitor = Globals.focusedMonitorName()
         root.locked = true
     }
 
-    // Salida de emergencia y opción explícita del usuario: el bloqueador de
-    // fuera. Si tampoco está, al menos se pide a logind que bloquee la sesión,
-    // que es lo que hará que el siguiente bloqueador registrado actúe.
+    // Salida de emergencia, y también opción explícita: el bloqueador externo.
+    // Si tampoco está, al menos se pide a logind que bloquee la sesión, que es
+    // lo que hará actuar al siguiente bloqueador registrado.
     function _fallback() {
-        // El `pidof` no es adorno: la señal Lock de logind puede llegar varias
-        // veces (hypridle al inactivarse y systemd antes de suspender), y sin
-        // el guardia cada una lanzaría otro hyprlock encima del anterior.
+        // El `pidof` es necesario: la señal Lock de logind puede llegar varias
+        // veces, y sin el guardia cada una lanzaría otro hyprlock encima.
         Quickshell.execDetached(["sh", "-c",
             "pidof hyprlock >/dev/null && exit 0; "
             + "command -v hyprlock >/dev/null && exec hyprlock || exec loginctl lock-session"])
@@ -122,8 +104,8 @@ Singleton {
         root.message = ""
         root.messageIsError = false
         // Un contexto por intento: PAM no permite reutilizar una conversación
-        // ya cerrada, y dejar el anterior 'active' haría que start() fallara
-        // por una razón que no tiene nada que ver con la contraseña.
+        // ya cerrada, y dejar el anterior activo haría fallar start() por una
+        // razón que no tiene que ver con la contraseña.
         if (pam.active)
             pam.abort()
         if (!pam.start()) {
@@ -135,15 +117,15 @@ Singleton {
         return true
     }
 
-    // ── Contexto PAM ─────────────────────────────────────────────────────────
+    // Contexto PAM
     PamContext {
         id: pam
         config: root.pamService
         user: Quickshell.env("USER") ?? ""
 
-        // PAM pide la contraseña con un mensaje ("Password: "). Se contesta con
-        // lo que el usuario escribió. Los mensajes que NO piden respuesta
-        // (avisos del módulo de huella, caducidad de contraseña) se enseñan.
+        // PAM pide la contraseña con un mensaje y se contesta con lo que se
+        // escribió. Los mensajes que no piden respuesta —avisos del módulo de
+        // huella, caducidad— se enseñan.
         onPamMessage: {
             if (pam.responseRequired) {
                 pam.respond(root._pending)
@@ -182,9 +164,8 @@ Singleton {
         }
     }
 
-    // ── Sondeo del servicio PAM ──────────────────────────────────────────────
-    // Se hace una vez al arrancar y no en cada bloqueo: en el momento de
-    // bloquear hay que decidir YA, sin esperar a un proceso.
+    // Se hace una vez al arrancar y no en cada bloqueo: al bloquear hay que
+    // decidir ya, sin esperar a un proceso.
     Process {
         running: true
         command: ["sh", "-c",
@@ -205,8 +186,8 @@ Singleton {
         }
     }
 
-    // Un servicio PAM escrito a mano en Ajustes hay que volver a comprobarlo:
-    // si no existe, más vale saberlo ahora que al bloquear.
+    // Un servicio PAM escrito a mano hay que volver a comprobarlo: si no existe,
+    // más vale saberlo ahora que al bloquear.
     Connections {
         target: Settings
         function onLockPamServiceChanged() {
@@ -221,8 +202,7 @@ Singleton {
     }
 
     // Petición de bloqueo desde el menú de energía. Llega por señal y no por
-    // llamada directa porque Config no puede importar qs.Services (ver
-    // Config/PowerActions.qml).
+    // llamada directa porque Config no puede importar qs.Services.
     Connections {
         target: PowerActions
         function onLockRequested() { root.lock() }

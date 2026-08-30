@@ -18,19 +18,17 @@ Popout {
     cardWidth: Settings.aiWide ? 660 : 480
     cardMinWidth: 340
     shown: Globals.aiOpen
-    // El contenido puede superar el alto máximo de la tarjeta (primer arranque
-    // con la lámina de configuración abierta, p.ej.): sin esto se recortaba en
-    // silencio y el cajetín de entrada quedaba fuera, inalcanzable.
+    // El contenido puede superar el alto máximo de la tarjeta —primer arranque con
+    // la lámina de configuración abierta, por ejemplo—, y sin esto se recorta en
+    // silencio dejando el cajetín de entrada fuera de alcance.
     scrollable: true
-    // SIN Behavior sobre cardWidth, a propósito: animar el ancho re-maqueta la
-    // conversación ENTERA fotograma a fotograma (cada burbuja re-envuelve su
-    // Markdown) — la misma pelea que el carril de la barra evita midiendo en
-    // diferido. El cambio de ancho es un salto seco, y así debe quedarse.
+    // Sin Behavior sobre cardWidth a propósito: animar el ancho re-maqueta la
+    // conversación entera fotograma a fotograma, porque cada burbuja re-envuelve su
+    // Markdown. El cambio de ancho es un salto seco.
 
-    // ESC: primero PARA, después cierra. Con el agente trabajando, cerrar el
-    // panel no era lo que se pedía —el turno seguía por detrás—, y era el
-    // único gesto que la mano busca sin pensar. Segunda pulsación (ya sin nada
-    // que cortar) cierra como siempre.
+    // ESC primero para y después cierra: con el agente trabajando, cerrar el panel
+    // dejaría el turno corriendo por detrás, y es el gesto que la mano busca sin
+    // pensar. La segunda pulsación, ya sin nada que cortar, cierra.
     escapeAction: () => AiService.interrupt()
 
     property bool configOpen: AiService.notConfigured && AiService.messages.count === 0
@@ -53,7 +51,7 @@ Popout {
         }
     }
 
-    // ── Cabecera ─────────────────────────────────────────────────────────────
+    // Cabecera
     RowLayout {
         Layout.fillWidth: true
         spacing: Theme.space10
@@ -64,8 +62,8 @@ Popout {
             implicitHeight: Theme.dp(34)
             radius: width / 2
             color: SettingsPalette.accentSoft
-            // Respira mientras el modelo trabaja: la vida del panel se ve
-            // desde la primera mirada, sin leer nada.
+            // Respira mientras el modelo trabaja: la vida del panel se ve desde
+            // la primera mirada, sin leer nada.
             SequentialAnimation on scale {
                 running: AiService.busy
                 loops: Animation.Infinite
@@ -92,9 +90,8 @@ Popout {
                 font.bold: true
                 elide: Text.ElideRight
             }
-            // Selector de modelo: cambiar de cerebro sin abrir la config.
-            // Enseña el nombre, el proveedor y el semáforo de la conexión; la
-            // lista con buscador se despliega bajo la cabecera.
+            // Selector de modelo: enseña el nombre, el proveedor y el semáforo de
+            // la conexión, y la lista con buscador se despliega bajo la cabecera.
             ModelChip {
                 Layout.alignment: Qt.AlignLeft
                 Layout.maximumWidth: parent.width
@@ -111,8 +108,7 @@ Popout {
         }
 
         // Modo: Chat (solo conversación) ↔ Agente (herramientas con
-        // aprobación). Tab en la entrada también lo conmuta, como el
-        // plan/build de opencode.
+        // aprobación). Tab en la entrada también lo conmuta.
         Rectangle {
             Layout.alignment: Qt.AlignTop
             width: modeRow.implicitWidth + Theme.space10 * 2
@@ -154,8 +150,8 @@ Popout {
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
                 onPressed: (e) => modeRipple.press(e.x, e.y)
-                // Dos estados: charlar o actuar. Planificar no es un modo — lo
-                // decide el agente al leer el encargo (propose_plan).
+                // Dos estados: charlar o actuar. Planificar no es un modo, lo
+                // decide el agente al leer el encargo.
                 onClicked: panel.cycleMode()
             }
         }
@@ -193,8 +189,8 @@ Popout {
             visible: AiService.messages.count > 0
             onClicked: AiService.newConversation()
         }
-        // Configuración de proveedores. Se tiñe de rojo cuando la conexión
-        // falla: el problema se ve desde la cabecera, sin abrir nada.
+        // Configuración de proveedores. Se tiñe de rojo cuando la conexión falla,
+        // así que el problema se ve desde la cabecera sin abrir nada.
         IconButton {
             Layout.alignment: Qt.AlignTop
             icon: "󰒓"
@@ -214,8 +210,7 @@ Popout {
 
     // Filete bajo la cabecera + medidor de contexto: la línea se va tiñendo
     // de acento según se llena el presupuesto que viaja al modelo, y avisa en
-    // rojo cerca del tope — el momento de /compactar (el medidor de contexto
-    // de Claude Code, reducido a un hilo de luz).
+    // rojo cerca del tope, que es el momento de /compactar.
     Item {
         Layout.fillWidth: true
         implicitHeight: Theme.hairline * 2
@@ -236,7 +231,7 @@ Popout {
         }
     }
 
-    // ── Selector de modelo (lámina) ──────────────────────────────────────────
+    // Selector de modelo (lámina)
     ExpandableDetail {
         open: panel.modelOpen
         sourceComponent: modelComp
@@ -261,7 +256,7 @@ Popout {
         }
     }
 
-    // ── Conversaciones (lámina) ──────────────────────────────────────────────
+    // Conversaciones (lámina)
     ExpandableDetail {
         open: panel.convOpen
         sourceComponent: convComp
@@ -283,8 +278,8 @@ Popout {
                 anchors.margins: Theme.space10
                 spacing: Theme.space2
 
-                // Acciones sobre la conversación ACTUAL: exportarla como
-                // Markdown (entregable) o compactarla en un resumen.
+                // Acciones sobre la conversación actual: exportarla como Markdown
+                // o compactarla en un resumen.
                 RowLayout {
                     Layout.fillWidth: true
                     Layout.bottomMargin: Theme.space6
@@ -307,7 +302,7 @@ Popout {
                         }
                     }
                     Item { Layout.fillWidth: true }
-                    // Lo que lleva gastado esta conversación (estilo aider).
+                    // Lo que lleva gastado esta conversación.
                     ThemedText {
                         visible: AiService.convTokens > 0 || AiService.convMs > 0
                         text: (AiService.convTokens > 0 ? AiService.convTokens + " tok · " : "")
@@ -339,8 +334,8 @@ Popout {
                             selected: convRow.current
                         }
 
-                        // Debajo de la fila entera; el botón de borrar,
-                        // declarado después, gana los clics que le caen.
+                        // Debajo de la fila entera; el botón de borrar, declarado
+                        // después, gana los clics que le caen.
                         MouseArea {
                             id: convMa
                             anchors.fill: parent
@@ -400,10 +395,9 @@ Popout {
         }
     }
 
-    // ── Configuración (lámina) ───────────────────────────────────────────────
-    // Vive entera en AiSettings.qml: la lámina se hizo tan larga como el resto
-    // del panel junto, y mezclar "cómo se ve una conversación" con "qué
-    // permisos tiene el agente" en un solo archivo ya no ayudaba a nadie.
+    // Vive entera en AiSettings.qml: la lámina es tan larga como el resto del
+    // panel junto, y mezclar "cómo se ve una conversación" con "qué permisos tiene
+    // el agente" en un solo archivo no ayuda.
     ExpandableDetail {
         open: panel.configOpen
         sourceComponent: configComp
@@ -415,58 +409,47 @@ Popout {
     }
 
 
-    // ── Conversación ─────────────────────────────────────────────────────────
+    // Conversación
     ListView {
         id: chat
         Layout.fillWidth: true
-        // Alto ADAPTATIVO: se ciñe a la conversación y crece con ella hasta
-        // el tope, donde empieza a desplazar.
-        // Con el panel ancho también se estira a lo alto: quien lo abre para
-        // leer código quiere ver más de cinco líneas.
-        // Sin conversación manda la INVITACIÓN: el saludo, el icono y los
-        // arranques piden lo que pidan, y se les da. Con 250 px fijos, el
-        // tercer chip quedaba cortado por la mitad — la primera impresión del
-        // panel era una lista recortada.
+        // Alto adaptativo: se ciñe a la conversación y crece con ella hasta el
+        // tope, donde empieza a desplazar. Con el panel ancho se estira también a
+        // lo alto, porque quien lo abre para leer código quiere ver más. Sin
+        // conversación manda la invitación, cuyos chips piden lo que piden: con un
+        // alto fijo, el último quedaría cortado por la mitad.
         //
-        // A SALTOS, no al píxel. Mientras el modelo escribe, contentHeight
-        // cambia en CADA token; con un vínculo exacto, cada token forzaba una
-        // redisposición de la columna entera —y la lista, cuyo alto sale de ahí,
-        // volvía a medirse—. Redondear hacia arriba a múltiplos de ocho corta
-        // ese trabajo por ocho y en pantalla no se nota: el salto es menor que
-        // el interlineado.
+        // Va a saltos y no al píxel: mientras el modelo escribe, contentHeight
+        // cambia en cada token, y con un vínculo exacto cada token forzaría una
+        // redisposición de la columna entera. Redondear hacia arriba a múltiplos de
+        // ocho corta ese trabajo por ocho, y el salto es menor que el interlineado.
         Layout.preferredHeight: AiService.messages.count === 0 && !AiService.busy
             ? Math.max(Theme.dp(250), emptyCol.implicitHeight + Theme.space16 * 2)
             : Math.max(Theme.dp(250), Math.ceil(
                 Math.min(Settings.aiWide ? Theme.dp(560) : Theme.dp(460),
                          contentHeight + Theme.space8) / 8) * 8)
-        // SIN Behavior sobre este alto, y no por falta de ganas: se probó a
-        // interpolar los saltos de ocho píxeles para que el crecimiento se
-        // leyera continuo, y el remedio fue peor. El alto de la lista entra en
-        // la cuenta del final (_finY = contentHeight - height), así que
-        // animarlo mueve el destino del seguimiento en CADA fotograma
-        // mientras el modelo escribe: el pegado persigue un blanco que no
-        // para, y eso en pantalla es exactamente el temblor que se veía. El
-        // escalón de ocho píxeles es menor que un interlineado; el temblor no.
+        // Sin Behavior sobre este alto: el alto de la lista entra en la cuenta del
+        // final (_finY = contentHeight - height), así que animarlo movería el
+        // destino del seguimiento en cada fotograma mientras el modelo escribe, y
+        // el pegado perseguiría un blanco que no para. El escalón de ocho píxeles
+        // es menor que un interlineado; el temblor no.
         clip: true
         spacing: Theme.space12
         model: AiService.messages
         boundsBehavior: Flickable.StopAtBounds
 
-        // Los mensajes ENTRAN: funden y se asientan desde un pelín más
-        // pequeños. Aparecían de golpe, ya colocados, y en una conversación
-        // con herramientas —donde cada ronda añade varias tarjetas seguidas—
-        // el efecto era el de una lista que da tirones.
-        // Y ENTRAN EN FILA, NO EN MONTÓN. Antes las varias tarjetas de una
-        // misma ronda arrancaban su animación a la vez: aparecían fundidas
-        // pero simultáneas, que se lee como un bloque que aparece de golpe y
-        // no como cosas que van llegando. Ahora cada una espera un pelín más
-        // que la anterior DENTRO de su lote (targetIndexes son las que entran
-        // en este mismo movimiento), así que una ronda de tres herramientas
-        // cae en cascada.
+        // Los mensajes entran fundiendo y asentándose desde un poco más
+        // pequeños: apareciendo de golpe ya colocados, una conversación con
+        // herramientas —donde cada ronda añade varias tarjetas seguidas— se lee
+        // como una lista que da tirones.
         //
-        // El retardo se acota a tres: con seis tarjetas, esperar seis turnos
-        // haría que la última llegara cuando ya no la miras. Después de la
-        // tercera entran todas juntas y el ojo no lo distingue.
+        // Y entran en fila, no en montón: cada una espera un poco más que la
+        // anterior dentro de su lote (targetIndexes son las que entran en este
+        // mismo movimiento), así que una ronda de tres herramientas cae en
+        // cascada en vez de aparecer como un bloque.
+        //
+        // El retardo se acota a tres: con seis tarjetas, esperar seis turnos haría
+        // que la última llegara cuando ya no se mira.
         add: Transition {
             id: entrada
             SequentialAnimation {
@@ -487,10 +470,10 @@ Popout {
                         property: "scale"; from: 0.96; to: 1
                         duration: Theme.animNormal; easing.type: Theme.enterEasing
                     }
-                    // Y SUBEN A SU SITIO. Un fundido a secas no tiene
-                    // dirección: la tarjeta simplemente está. Naciendo doce
-                    // píxeles más abajo se lee como algo que llega por el pie
-                    // de la conversación, que es de donde llega de verdad.
+                    // Y suben a su sitio: un fundido a secas no tiene dirección,
+                    // la tarjeta simplemente está. Naciendo unos píxeles más abajo
+                    // se lee como algo que llega por el pie de la conversación, que
+                    // es de donde llega.
                     NumberAnimation {
                         property: "y"
                         from: entrada.ViewTransition.destination.y + Theme.dp(12)
@@ -499,8 +482,7 @@ Popout {
                 }
             }
         }
-        // Y los de al lado se APARTAN en vez de teletransportarse (al borrar
-        // una tarjeta, al rehacer una respuesta).
+        // Y los de al lado se apartan en vez de teletransportarse.
         displaced: Transition {
             NumberAnimation {
                 properties: "x,y"
@@ -508,8 +490,8 @@ Popout {
             }
         }
 
-        // Volver abajo es un viaje, no un corte: el botón flotante desliza
-        // hasta el final para que se vea DE DÓNDE venías.
+        // Volver abajo es un viaje y no un corte: el botón flotante desliza hasta
+        // el final para que se vea de dónde se venía.
         NumberAnimation {
             id: scrollToEnd
             target: chat
@@ -517,14 +499,8 @@ Popout {
             duration: Theme.animNormal
             easing.type: Theme.reflowEasing
             // Al llegar, el remate exacto: durante el viaje el contenido puede
-            // haber crecido (el modelo sigue escribiendo), así que el destino
-            // que se calculó al salir ya no es el final. Sin esto, el botón
-            // dejaba la vista a unos píxeles del fondo y volvía a aparecer.
-            //
-            // SOLO si el parón es por llegada: onMovementStarted también
-            // dispara stop(), y rematar ahí escribía contentY contra el gesto
-            // del usuario — el primer toque de rueda durante el viaje te
-            // devolvía al fondo de un tirón.
+            // haber crecido, así que el destino calculado al salir ya no es el
+            // final. Sin esto, el botón
             onStopped: {
                 if (chat.moving || chat.dragging)
                     return
@@ -538,29 +514,20 @@ Popout {
             }
         }
 
-        // Visible en reposo (no solo al usarla): con conversación larga, la
-        // barra dice de un vistazo cuánto hay por encima.
-        // ── El carril de la barra ────────────────────────────────────────────
-        // La barra se dibuja ENCIMA del contenido (es un decorado del
-        // Flickable, no ocupa sitio), y con rightPadding a cero quedaba pegada
-        // al borde derecho. Mientras las respuestas eran texto suelto no se
-        // notaba; desde que tienen superficie propia con filete, la barra
-        // aterriza justo sobre ese filete y se ven chocar.
+        // Visible en reposo y no solo al usarla: con conversación larga, la barra
+        // dice de un vistazo cuánto hay por encima.
         //
-        // Se le reserva su carril y las tarjetas se ciñen a él — solo cuando la
-        // barra está, para que sin desplazamiento se aproveche todo el ancho.
-        // Sin Behavior: animarlo cambiaría el ancho de TODAS las tarjetas
-        // fotograma a fotograma, que es rehacer la maqueta de la conversación
-        // entera.
+        // Se dibuja encima del contenido —es un decorado del Flickable y no ocupa
+        // sitio—, así que se le reserva un carril y las tarjetas se ciñen a él,
+        // solo cuando la barra está, para que sin desplazamiento se aproveche todo
+        // el ancho. Sin Behavior: animarlo cambiaría el ancho de todas las tarjetas
+        // fotograma a fotograma, que es rehacer la maqueta entera.
         //
-        // Y MEDIDO, no vinculado: el vínculo directo era un bucle en toda
-        // regla (contentHeight → carril → ancho de tarjetas → alturas →
-        // contentHeight) que Qt denunciaba en cada carga del panel y se
-        // pagaba en pasadas de maquetación de más. Converge solo —añadir
-        // carril estrecha, estrechar solo puede ALARGAR el contenido, así
-        // que la condición no se deshace—, pero el motor no lo sabe: se
-        // mide DESPUÉS del pase de disposición (Qt.callLater, abajo con
-        // _pegarAbajo) y el ciclo desaparece.
+        // Y medido, no vinculado: el vínculo directo es un bucle (contentHeight →
+        // carril → ancho de tarjetas → alturas → contentHeight) que Qt denuncia en
+        // cada carga. Converge solo —añadir carril estrecha, y estrechar solo puede
+        // alargar el contenido—, pero el motor no lo sabe, así que se mide después
+        // del pase de disposición con Qt.callLater y el ciclo desaparece.
         property int carril: 0
         function _mideCarril() {
             const quiere = contentHeight > height + 1 ? Theme.dp(5) + Theme.space6 : 0
@@ -576,100 +543,75 @@ Popout {
             restOpacity: 0.35
         }
 
-        // ── Quién escribe contentY ───────────────────────────────────────────
-        // UNO SOLO, Y NUNCA DURANTE LA DISPOSICIÓN. Aquí había dos escritores
-        // sobre la misma propiedad: el seguimiento automático (que pegaba la
-        // vista abajo en cuanto el contenido crecía) y la animación del botón
-        // flotante. Con el modelo escribiendo —que hace crecer contentHeight en
-        // CADA token— pulsar el botón ponía a los dos a pelearse dentro del
-        // mismo pase de disposición, y como el alto de la lista depende a su
-        // vez de contentHeight, la cosa se realimentaba. El panel se quedaba
-        // clavado, y como Quickshell ES el escritorio, se lo llevaba por
-        // delante: de ahí el "hay que reiniciar".
+        // Un solo escritor de contentY, y nunca durante la disposición. Con dos
+        // —el seguimiento automático que pega la vista abajo y la animación del
+        // botón flotante— y el modelo escribiendo, ambos se pelean dentro del mismo
+        // pase de disposición; y como el alto de la lista depende de contentHeight,
+        // la cosa se realimenta hasta colgar el hilo gráfico.
         //
-        // Dos reglas y se acabó:
-        //   · Mientras el viaje del botón está en marcha, el seguimiento NO
-        //     escribe. El que manda es el que empezó.
-        //   · La escritura se aplaza con Qt.callLater, así ocurre DESPUÉS del
-        //     pase de disposición en curso y no dentro de él. Es lo que rompe
-        //     la reentrada.
+        // Dos reglas:
+        //   · Mientras el viaje del botón está en marcha, el seguimiento no
+        //     escribe. Manda el que empezó.
+        //   · La escritura se aplaza con Qt.callLater, así ocurre después del pase
+        //     de disposición en curso y no dentro de él.
         property bool follow: true
-        // EL FINAL DE VERDAD LLEVA 'originY'. Una lista de alturas variables no
-        // guarda su contenido en el intervalo [0, contentHeight]: lo que aún no
-        // se ha creado se estima por la media de lo que sí, y el motor absorbe
-        // esa corrección moviendo el ORIGEN del contenido. El tope real de
-        // contentY es 'originY + contentHeight - height'.
+        // El final de verdad lleva 'originY'. Una lista de alturas variables no
+        // guarda su contenido en el intervalo [0, contentHeight]: lo que aún no se
+        // ha creado se estima por la media de lo que sí, y el motor absorbe esa
+        // corrección moviendo el origen. El tope real de contentY es
+        // 'originY + contentHeight - height'.
         //
-        // Faltando ese sumando fallaban las dos cosas a la vez, y con el mismo
-        // origen:
-        //   · Origen POSITIVO → el pegado se quedaba corto y la vista dejaba de
-        //     bajar aunque la conversación siguiera creciendo. Se notaba justo
-        //     cuando entran dos tarjetas de golpe, que es cuando la media —y
-        //     con ella el origen— pega el salto más gordo.
-        //   · Origen NEGATIVO → el pegado se pasaba de largo. Y escribir
-        //     contentY a mano NO recorta contra los límites (eso solo lo hace
-        //     el gesto), así que la vista se quedaba clavada en el vacío de
-        //     debajo del último mensaje: el "limbo" sin nada que mirar.
+        // Sin ese sumando fallan las dos direcciones: con origen positivo el pegado
+        // se queda corto y la vista deja de bajar aunque la conversación crezca; con
+        // origen negativo se pasa de largo, y como escribir contentY a mano no
+        // recorta contra los límites, la vista queda clavada en el vacío de debajo
+        // del último mensaje.
         readonly property real _finY: originY + Math.max(0, contentHeight - height)
         readonly property bool atBottom: contentY >= _finY - Theme.dp(48)
 
-        // ¿SE HA MOVIDO ALGUIEN, O SE HA MOVIDO LA MAQUETA? El contenedor solo
-        // marca estas banderas cuando el movimiento viene de fuera —rueda,
-        // arrastre, tirador de la barra—; una recolocación por cambio de
-        // contenido no las levanta. Es la diferencia que el umbral en píxeles
-        // nunca supo hacer solo.
+        // ¿Se ha movido alguien o se ha movido la maqueta? El contenedor solo marca
+        // estas banderas cuando el movimiento viene de fuera —rueda, arrastre,
+        // tirador—; una recolocación por cambio de contenido no las levanta, que es
+        // la diferencia que un umbral en píxeles no sabe hacer.
         readonly property bool _gesto: dragging || flicking || moving || barra.pressed
 
-        // Al engancharse se toma la foto de dónde está la vista y dónde el
-        // final: es el punto de partida con el que compara onContentYChanged.
+        // Al engancharse se toma la foto de dónde está la vista y dónde el final:
+        // es el punto de partida con el que compara onContentYChanged.
         onFollowChanged: if (follow) { _prevY = contentY; _prevFin = _finY }
 
-        // LA VENTANA DEL TRASPASO. Al acabar el turno pasan dos cosas seguidas:
-        // el pie se vacía (la respuesta deja de estar ahí) y la tarjeta entra
-        // en la lista. Entre medias el contenido encoge y el contenedor sube la
-        // vista él solo para no salirse.
+        // La ventana del traspaso. Al acabar el turno pasan dos cosas seguidas: el
+        // pie se vacía y la tarjeta entra en la lista. Entre medias el contenido
+        // encoge y el contenedor sube la vista solo para no salirse.
         //
-        // Y las dos ocurren en el MISMO ciclo, así que el pegado —que va en
-        // diferido y se funde en una sola pasada— no llega a ver el encogido:
-        // solo ve el resultado, "la vista está más arriba", que es idéntico a
-        // haber subido con la rueda. De ahí que el enganche se soltara justo al
-        // aparecer la respuesta.
-        //
-        // Mientras dura el traspaso no se suelta por nada: cualquier movimiento
-        // de aquí es de la maqueta, no del usuario.
+        // Las dos ocurren en el mismo ciclo, así que el pegado —que va en diferido y
+        // funde varias notificaciones en una pasada— no llega a ver el encogido:
+        // solo ve "la vista está más arriba", indistinguible de haber subido con la
+        // rueda. Mientras dura el traspaso no se suelta el enganche por nada.
         property bool _traspaso: false
 
-        // CERROJO DE REENTRADA. Escribir contentY notifica, y notificar puede
-        // acabar llamando aquí otra vez: sin este pestillo, una sola pasada
-        // que no converja se convierte en un bucle que se come el hilo
-        // gráfico — y como Quickshell ES el escritorio, se lo lleva por
-        // delante. Ya pasó una vez; no se vuelve a tocar este archivo sin él.
+        // Cerrojo de reentrada. Escribir contentY notifica, y notificar puede acabar
+        // llamando aquí otra vez: sin el pestillo, una pasada que no converja se
+        // convierte en un bucle que se come el hilo gráfico.
         property bool _pegando: false
 
-        // QUIÉN SUELTA EL ENGANCHE, y por qué se decide AQUÍ y no en el pegado.
+        // Quién suelta el enganche, y por qué se decide aquí y no en el pegado. El
+        // pegado va en diferido y funde varias notificaciones del mismo ciclo en una
+        // pasada, así que cuando se ejecuta el encogido y el recrecido ya han pasado
+        // y lo único visible es "la vista está más arriba".
         //
-        // El pegado va en diferido (Qt.callLater) y varias notificaciones del
-        // mismo ciclo se funden en UNA pasada: cuando se ejecuta, el encogido
-        // del fin de turno y el recrecido posterior ya han pasado los dos, y
-        // lo único que se ve es "la vista está más arriba" — indistinguible de
-        // haber subido con la rueda. Por eso el enganche se soltaba justo al
-        // aparecer la respuesta por más vueltas que le diera al heurístico.
+        // Esta señal llega en el momento de cada cambio, con el estado de al lado
+        // todavía en su valor anterior, así que las tres situaciones se distinguen:
         //
-        // Esta señal, en cambio, llega en el MOMENTO de cada cambio, así que
-        // el estado de al lado todavía es el de antes y las tres situaciones se
-        // distinguen sin ambigüedad:
+        //   · Lo ha escrito el propio pegado (_pegando) → no es gesto de nadie.
+        //   · El contenido encoge y el contenedor recoloca para no salirse (fin de
+        //     turno) → tampoco.
+        //   · La vista sube sin que el final se mueva → eso sí es el usuario.
         //
-        //   · Lo hemos escrito nosotros (_pegando) → no es gesto de nadie.
-        //   · El contenido ENCOGE y el contenedor recoloca la vista para no
-        //     salirse (fin de turno) → tampoco.
-        //   · La vista sube sin que el final se mueva → ese SÍ eres tú.
+        // Y además tiene que ser un gesto (_gesto): el umbral en píxeles no
+        // distingue una rueda hacia arriba de un reajuste del origen, que mueve la
+        // vista sin que nadie la toque.
         property real _prevY: 0
         property real _prevFin: 0
-        //
-        // Y ADEMÁS TIENE QUE SER UN GESTO (_gesto). El umbral en píxeles por sí
-        // solo no distinguía una rueda hacia arriba de un reajuste del origen
-        // —que mueve la vista sin que nadie la toque—, y cada reajuste soltaba
-        // el enganche a media respuesta.
         onContentYChanged: {
             if (!_pegando && follow && !_traspaso && _gesto
                     && _prevY - contentY > Theme.dp(4)
@@ -682,13 +624,8 @@ Popout {
         function _pegarAbajo() {
             if (_pegando || scrollToEnd.running)
                 return
-            // RESCATE DEL LIMBO, antes que nada y con el enganche puesto o no.
+            // Rescate del limbo, antes que nada y con el enganche puesto o no.
             // Escribir contentY a mano no pasa por los límites del contenedor,
-            // así que basta con que la estimación del final se acorte DESPUÉS
-            // de haber escrito para que la vista se quede colgada en el vacío
-            // de debajo del último mensaje, sin nada que mirar y sin nadie que
-            // la devuelva. Solo si no hay gesto en marcha: recortar contra el
-            // dedo del usuario es peor que el limbo.
             if (!_gesto && (contentY > _finY + Theme.dp(4)
                             || contentY < originY - Theme.dp(4))) {
                 _pegando = true
@@ -698,20 +635,16 @@ Popout {
             if (!follow)
                 return
             // Sin heurísticos: si el enganche sigue puesto, al fondo. Quién lo
-            // quita se decide arriba, en el instante del gesto.
-            // Media décima de píxel no es un movimiento: escribirla solo
-            // dispara otra vuelta de notificaciones.
+            // quita se decide arriba, en el instante del gesto. Media décima de
+            // píxel no es un movimiento: escribirla solo dispara otra vuelta de
+            // notificaciones.
             //
-            // Y se escribe contentY A SECAS, que es la operación que no
-            // sorprende a nadie: fija un número y termina. Aquí llegó a
-            // llamarse a positionViewAtEnd() en cada cambio de contenido y
-            // eso CONGELÓ el escritorio: crea los delegates que le faltan
-            // para medir el final de verdad, con lo que la altura vuelve a
-            // cambiar, lo que llama otra vez a este pegado… y como el sitio
-            // donde aterriza no es exactamente el 'contentHeight - height'
-            // estimado, la condición de arriba nunca se apagaba. Bucle
-            // infinito en el hilo gráfico. El posicionado exacto se reserva
-            // para el botón de bajar, que se pulsa una vez y no se realimenta.
+            // Se escribe contentY a secas y no positionViewAtEnd(): ese crea los
+            // delegates que le faltan para medir el final de verdad, con lo que la
+            // altura vuelve a cambiar y se llama otra vez a este pegado, y como el
+            // sitio donde aterriza no es el 'contentHeight - height' estimado, la
+            // condición nunca se apaga. El posicionado exacto se reserva para el
+            // botón de bajar, que se pulsa una vez y no se realimenta.
             if (Math.abs(contentY - _finY) > 0.5) {
                 _pegando = true
                 contentY = _finY
@@ -719,16 +652,14 @@ Popout {
             }
         }
 
-        // EL FINAL EXACTO, SOLO BAJO PETICIÓN. 'contentHeight' en una lista de
-        // alturas variables es una ESTIMACIÓN: los delegates que aún no se han
-        // creado se cuentan por la media de los que sí, y con mensajes muy
-        // desiguales (una tarjeta de tres líneas y un informe de cien) se pasa
-        // de largo — el "limbo" por debajo del último mensaje.
+        // El final exacto, solo bajo petición. 'contentHeight' en una lista de
+        // alturas variables es una estimación: los delegates aún no creados se
+        // cuentan por la media de los que sí, y con mensajes muy desiguales se pasa
+        // de largo, dejando el limbo por debajo del último mensaje.
         //
-        // positionViewAtEnd() no estima: crea lo que haga falta y coloca el
-        // final real —footer incluido— al pie de la vista. Cuesta esa creación
-        // de delegates, así que se usa UNA vez al aterrizar el botón, jamás en
-        // el camino caliente del seguimiento (ver arriba por qué).
+        // positionViewAtEnd() no estima: crea lo que haga falta y coloca el final
+        // real al pie de la vista. Cuesta esa creación de delegates, así que se usa
+        // una vez al aterrizar el botón y jamás en el camino caliente.
         function _alFinal() {
             if (_pegando)
                 return
@@ -742,66 +673,52 @@ Popout {
         }
         onContentHeightChanged: { Qt.callLater(_pegarAbajo); Qt.callLater(_mideCarril) }
         onHeightChanged: { Qt.callLater(_pegarAbajo); Qt.callLater(_mideCarril) }
-        // EL ORIGEN TAMBIÉN MUEVE EL FINAL, y lo hace sin tocar contentHeight:
-        // la lista reajusta su media al crear o soltar tarjetas y desplaza el
-        // contenido entero. Sin escuchar esto, el pegado se enteraba del nuevo
-        // final solo cuando llegaba el siguiente token — o nunca, si el turno
-        // ya había acabado.
+        // El origen también mueve el final, y lo hace sin tocar contentHeight: la
+        // lista reajusta su media al crear o soltar tarjetas y desplaza el contenido
+        // entero. Sin escuchar esto, el pegado se enteraría del nuevo final solo al
+        // llegar el siguiente token, o nunca si el turno ya acabó.
         onOriginYChanged: Qt.callLater(_pegarAbajo)
-        // UNA TARJETA NUEVA ES CONTENIDO NUEVO, y de eso trata seguir la
+        // Una tarjeta nueva es contenido nuevo, y de eso trata seguir la
         // conversación. No basta con contentHeight: una tarjeta entra con su
-        // animación de entrada, así que su altura llega a plazos y el pegado
-        // de aquel momento se quedaba corto — la conversación avanzaba y la
-        // vista se iba quedando atrás tarjeta a tarjeta. Al terminar la
-        // transición se vuelve a pegar, que es cuando el sitio ya es el
-        // definitivo.
+        // animación, así que su altura llega a plazos y el pegado de ese momento se
+        // queda corto. Al terminar la transición se vuelve a pegar.
         onCountChanged: { Qt.callLater(_pegarAbajo); repegar.restart() }
         Timer {
             id: repegar
-            // Lo bastante para que la tarjeta nueva haya terminado de entrar
-            // (su animación, más el retardo escalonado de las que llegan en
-            // lote): antes de eso su altura aún no es la definitiva.
+            // Lo bastante para que la tarjeta nueva haya terminado de entrar, con
+            // su animación y el retardo escalonado de las que llegan en lote.
             interval: Theme.animNormal * 2 + 80
             onTriggered: {
                 chat._pegarAbajo()
-                // Se cierra la ventana DESPUÉS del último pegado: a partir de
-                // aquí, si la vista se aleja del fondo es que la has movido tú.
+                // Se cierra la ventana después del último pegado: a partir de aquí,
+                // si la vista se aleja del fondo es que la ha movido el usuario.
                 chat._traspaso = false
             }
         }
-        // Soltar el enganche es cosa del USUARIO, no de cualquier meneo. Al
-        // acabar el turno, la respuesta pasa del footer a la lista: por un
-        // instante el contenido ENCOGE, el Flickable se recoloca dentro de sus
-        // límites solo, y ese movimiento —que nadie ha pedido— llegaba aquí
-        // como "ya no está abajo" y apagaba el seguimiento. Resultado: la
-        // vista se quedaba arriba justo al aparecer la tarjeta de la
-        // respuesta. Solo cuenta como marcharse si de verdad se ha SUBIDO
-        // respecto al último pegado.
-        // Llegar al fondo por tu propio pie vuelve a enganchar: es lo que uno
-        // hace cuando quiere volver a ver lo que va saliendo. Soltarlo ya no
-        // se decide aquí (ver onContentYChanged): este aviso llega cuando el
-        // movimiento ha terminado, y para entonces la maqueta puede haberse
-        // movido por su cuenta.
+        // Soltar el enganche es cosa del usuario y no de cualquier meneo: al acabar
+        // el turno la respuesta pasa del footer a la lista, el contenido encoge por
+        // un instante y el Flickable se recoloca solo. Solo cuenta como marcharse si
+        // de verdad se ha subido respecto al último pegado.
+        //
+        // Llegar al fondo por su propio pie vuelve a enganchar. Soltarlo ya no se
+        // decide aquí (ver onContentYChanged): este aviso llega cuando el movimiento
+        // ha terminado, y para entonces la maqueta puede haberse movido sola.
         onMovementEnded: if (atBottom) follow = true
-        // Arrastrar con el dedo o la rueda cancela el viaje: si no, el botón
-        // seguiría tirando de la vista mientras el usuario intenta subir.
+        // Arrastrar o usar la rueda cancela el viaje: si no, el botón seguiría
+        // tirando de la vista mientras el usuario intenta subir.
         onMovementStarted: scrollToEnd.stop()
 
-        // PREGUNTAR ES QUERER VER LA RESPUESTA. Si te habías ido a leer algo de
-        // más arriba, el seguimiento se había soltado (y eso está bien: nadie
-        // quiere que la vista le dé un tirón mientras lee). Pero en cuanto
-        // arranca un turno nuevo, lo que quieres es lo que va a llegar: se
-        // vuelve a enganchar solo, sin tener que buscar el botón.
+        // Preguntar es querer ver la respuesta: si el usuario se había ido a leer
+        // algo de más arriba el seguimiento se soltó, pero en cuanto arranca un
+        // turno nuevo se vuelve a enganchar solo.
         Connections {
             target: AiService
             function onBusyChanged() {
-                // FIN DE TURNO: el traspaso. Lo que se estaba escribiendo vivía
-                // en el footer y ahora nace como tarjeta de la lista, con su
-                // animación de entrada — o sea que la altura definitiva llega
-                // unos fotogramas después. Un solo pegado en este instante mide
-                // el hueco intermedio y deja la vista arriba, que es justo el
-                // salto que se veía al aparecer la respuesta. Se pega ahora y
-                // otra vez cuando la entrada ha terminado.
+                // Fin de turno: lo que se estaba escribiendo vivía en el footer y
+                // nace como tarjeta de la lista con su animación, así que la altura
+                // definitiva llega unos fotogramas después. Un solo pegado aquí
+                // mediría el hueco intermedio, así que se pega ahora y otra vez
+                // cuando la entrada ha terminado.
                 if (!AiService.busy) {
                     if (chat.follow) {
                         chat._traspaso = true
@@ -811,28 +728,22 @@ Popout {
                     return
                 }
                 scrollToEnd.stop()
-                // 'follow' NO se toca aquí. Se probó a re-engancharlo con
-                // atBottom y era justo lo contrario de lo que parece: cuando
-                // el turno arranca, el mensaje del usuario YA está puesto y el
-                // contenido ya ha crecido, así que atBottom daba falso y el
-                // seguimiento se apagaba para todo el turno — el modelo
-                // escribía y la vista no se movía.
-                //
-                // Quien decide es el usuario y ya lo ha dicho antes: al enviar
-                // se engancha (ver submit()), y al subir a leer se suelta. Una
-                // vuelta más de herramientas dentro del mismo turno no cambia
-                // ninguna de las dos cosas.
+                // 'follow' no se toca aquí: re-engancharlo con atBottom haría lo
+                // contrario de lo que parece, porque al arrancar el turno el mensaje
+                // del usuario ya está puesto y el contenido ya ha crecido, así que
+                // atBottom daría falso y el seguimiento se apagaría para todo el
+                // turno. Quien decide es el usuario, y ya lo ha dicho al enviar.
                 Qt.callLater(chat._pegarAbajo)
             }
         }
 
-        // ── Estado vacío: la invitación ──────────────────────────────────────
+        // Estado vacío: la invitación
         Item {
             // Un Item declarado dentro de un Flickable se reparenta a su
-            // contentItem, cuyo alto es contentHeight — que con cero mensajes
-            // vale CERO: la invitación quedaba centrada en y=0, medio cortada
-            // por el clip. Se re-cuelga del propio ListView para que las
-            // anclas midan contra el viewport, que es lo que se ve.
+            // contentItem, cuyo alto es contentHeight y con cero mensajes vale
+            // cero: la invitación quedaría centrada en y=0, medio cortada por el
+            // clip. Se re-cuelga del propio ListView para que las anclas midan
+            // contra el viewport.
             parent: chat
             anchors.fill: parent
             visible: AiService.messages.count === 0 && !AiService.busy
@@ -941,14 +852,11 @@ Popout {
             isLast: model.index === chat.count - 1
         }
 
-        // Burbuja EN VIVO en el footer: no reconstruye la lista por token.
+        // Burbuja en vivo en el footer: no reconstruye la lista por token.
         //
-        // El 'spacing' del ListView separa DELEGATES; al footer no le llega, y
-        // el hueco que se reservaba aquí abajo dejaba la respuesta naciendo
-        // pegada al último mensaje —renglón contra renglón— hasta que la lista
-        // se rehacía y saltaba a su sitio. El hueco va ARRIBA, que es donde
-        // hace falta, y así la burbuja viva nace ya separada y no se mueve
-        // después.
+        // El 'spacing' del ListView separa delegates y al footer no le llega, así
+        // que el hueco va arriba: reservado abajo, la respuesta nacería pegada al
+        // último mensaje hasta que la lista se rehiciera.
         footer: Item {
             width: chat.width - chat.carril
             height: AiService.busy ? liveCol.implicitHeight + Theme.space12 : 0
@@ -963,11 +871,9 @@ Popout {
                 MessageBubble {
                     Layout.fillWidth: true
                     visible: AiService.liveText !== ""
-                    // 'busy', no 'true': con live fijo, sus animaciones de
-                    // "sigue trabajando" (el aro que respira, el filo viajero)
-                    // giraban en bucle infinito desde que el panel se construía
-                    // — y con keepAlive el panel ya no muere al cerrarse, así
-                    // que giraban PARA SIEMPRE, panel oculto incluido.
+                    // 'busy' y no 'true': con live fijo, sus animaciones de "sigue
+                    // trabajando" girarían en bucle desde que el panel se
+                    // construye, y con keepAlive el panel no muere al cerrarse.
                     live: AiService.busy
                     role: "assistant"
                     content: AiService.liveText
@@ -1052,10 +958,10 @@ Popout {
 
         // Botón de "volver abajo".
         IconButton {
-            // Mismo caso que la invitación: dentro del Flickable acababa en el
-            // contentItem, o sea anclado al fondo del CONTENIDO — fuera de
-            // pantalla justo cuando toca verlo, y bajando con cada token. Del
-            // viewport, como corresponde a un control flotante.
+            // Mismo caso que la invitación: dentro del Flickable acabaría en el
+            // contentItem, anclado al fondo del contenido y por tanto fuera de
+            // pantalla justo cuando toca verlo. Del viewport, como corresponde a un
+            // control flotante.
             parent: chat
             anchors.horizontalCenter: parent.horizontalCenter
             anchors.bottom: parent.bottom
@@ -1064,31 +970,28 @@ Popout {
             diameter: Theme.dp(30)
             baseColor: SettingsPalette.accentSoft
             iconColor: Theme.accentText
-            // Durante el viaje se queda: si desapareciera al cruzar el umbral
-            // de "abajo", se esfumaría bajo el puntero a mitad de pulsación.
+            // Durante el viaje se queda: desapareciendo al cruzar el umbral de
+            // "abajo" se esfumaría bajo el puntero a mitad de pulsación.
             visible: chat.contentHeight > chat.height
                      && (!chat.atBottom || scrollToEnd.running)
             onClicked: {
-                // Se corta cualquier inercia y cualquier viaje anterior ANTES
-                // de empezar el nuevo: dos animaciones sobre contentY, o una
-                // animación contra un flick, es justo la pelea que colgaba
-                // el panel.
+                // Se corta cualquier inercia y cualquier viaje anterior antes de
+                // empezar el nuevo: dos animaciones sobre contentY, o una animación
+                // contra un flick, es la pelea que cuelga el panel.
                 chat.cancelFlick()
                 scrollToEnd.stop()
                 chat.follow = true
                 scrollToEnd.from = chat.contentY
-                // El destino es la ESTIMACIÓN, y por eso el viaje se remata
-                // con _alFinal() al llegar (ver onStopped): así el trayecto se
-                // ve, pero quien decide dónde para es el contenido medido, no
-                // una media. Sin el remate, una estimación larga dejaba el
-                // viaje en el vacío de debajo del último mensaje.
+                // El destino es la estimación, y por eso el viaje se remata con
+                // _alFinal() al llegar: el trayecto se ve, pero quien decide dónde
+                // para es el contenido medido y no una media.
                 scrollToEnd.to = chat._finY
                 scrollToEnd.start()
             }
         }
     }
 
-    // ── Adjuntos: acciones + chips de lo pendiente ───────────────────────────
+    // Adjuntos: acciones + chips de lo pendiente
     RowLayout {
         Layout.fillWidth: true
         spacing: Theme.space8
@@ -1114,11 +1017,9 @@ Popout {
                     id: attChip
                     required property var modelData
                     required property int index
-                    // Con tope: una etiqueta larga (el nombre de un archivo
-                    // adjuntado) hacía la píldora más ancha que el panel.
-                    // Solo con el Flow ya medido: contra un ancho 0 la píldora
-                    // se quedaría en nada (ver la nota de las opciones en
-                    // MessageBubble).
+                    // Con tope: una etiqueta larga haría la píldora más ancha que
+                    // el panel. Solo con el Flow ya medido, porque contra un ancho
+                    // 0 la píldora se quedaría en nada.
                     readonly property real natural:
                         attRow.implicitWidth + Theme.space10 * 2
                     width: attFlow.width > 0
@@ -1126,9 +1027,9 @@ Popout {
                     height: Theme.dp(26)
                     radius: height / 2
                     color: SettingsPalette.accentSoft
-                    // Entra creciendo: pegar el portapapeles o una captura es
-                    // una acción a ciegas (el contenido no se ve), así que el
-                    // chip tiene que ACUSAR el golpe para confirmarla.
+                    // Entra creciendo: pegar el portapapeles o una captura es una
+                    // acción a ciegas, así que el chip tiene que acusar el golpe
+                    // para confirmarla.
                     ParallelAnimation {
                         running: true
                         NumberAnimation {
@@ -1151,11 +1052,10 @@ Popout {
                             font.pixelSize: Theme.sp(12)
                         }
                         ThemedText {
-                            // La etiqueta es lo único que puede crecer aquí (un
-                            // nombre de archivo largo), así que es lo único que
-                            // se recorta. Nunca por debajo de cero: con un ancho
-                            // negativo el elide no recorta nada y el texto se
-                            // sale por los dos lados.
+                            // La etiqueta es lo único que puede crecer aquí, así
+                            // que es lo único que se recorta. Nunca por debajo de
+                            // cero: con un ancho negativo el elide no recorta y el
+                            // texto se sale por los dos lados.
                             Layout.maximumWidth: Math.max(0, attFlow.width
                                 - Theme.space10 * 2 - Theme.dp(38))
                             elide: Text.ElideMiddle
@@ -1181,9 +1081,8 @@ Popout {
         }
     }
 
-    // ── Subagente en marcha ──────────────────────────────────────────────────
-    // Mientras un subagente investiga, el principal está callado: esta línea
-    // dice qué está pasando y ofrece el freno de mano.
+    // Mientras un subagente investiga, el principal está callado: esta línea dice
+    // qué está pasando y ofrece el freno de mano.
     RevealBar {
         id: subBar
         want: AiService.activeSub !== null
@@ -1215,8 +1114,8 @@ Popout {
             }
             ThemedText {
                 Layout.fillWidth: true
-                // Uno: su etiqueta y su ronda. Varios (fan-out en paralelo):
-                // cuántos y qué hacen, que no caben tres líneas de detalle.
+                // Uno: su etiqueta y su ronda. Varios: cuántos y qué hacen, que no
+                // caben tres líneas de detalle.
                 text: AiService.activeSubs.length > 1
                     ? I18n.tr("%1 subagents working…").arg(AiService.activeSubs.length)
                       + "  " + AiService.activeSubs.map(s => s.label).join(" · ")
@@ -1225,9 +1124,9 @@ Popout {
                               .arg(AiService.activeSub.label)
                               .arg(AiService.activeSub.rounds)
                               .arg(AiService.activeSub.maxRounds)
-                          // Qué está haciendo AHORA. Un subagente corre sin
-                          // tarjetas: si la barra solo cuenta rondas, lo que
-                          // hace es invisible mientras lo hace.
+                          // Qué está haciendo ahora. Un subagente corre sin
+                          // tarjetas: si la barra solo cuenta rondas, lo que hace
+                          // es invisible mientras lo hace.
                           + (AiService.activeSub.lastTool !== ""
                              ? "  ·  " + AiService.activeSub.lastTool : "")
                         : ""
@@ -1252,9 +1151,8 @@ Popout {
         }
     }
 
-    // ── Trabajos en segundo plano ────────────────────────────────────────────
-    // Un `make` corriendo no puede ser invisible: si algo sigue vivo detrás de
-    // la conversación, aquí se ve y desde aquí se corta.
+    // Un trabajo largo corriendo no puede ser invisible: si algo sigue vivo detrás
+    // de la conversación, aquí se ve y desde aquí se corta.
     RevealBar {
         id: jobBar
         want: AiService.runningJobs.length > 0
@@ -1281,9 +1179,9 @@ Popout {
                     duration: Theme.animLoop * 3
                     loops: Animation.Infinite
                 }
-                // El mismo reset que su gemelo del supervisor: al acabar el
-                // último trabajo la animación se corta donde esté y el glifo
-                // se quedaba torcido en un ángulo arbitrario.
+                // El mismo reset que su gemelo del supervisor: al acabar el último
+                // trabajo la animación se corta donde esté y el glifo se quedaría
+                // torcido en un ángulo arbitrario.
                 onRotationChanged: if (AiService.runningJobs.length === 0 && rotation !== 0) rotation = 0
             }
             ThemedText {
@@ -1312,9 +1210,8 @@ Popout {
         }
     }
 
-    // ── Habilidad cargada sola ───────────────────────────────────────────────
-    // El harness ha decidido que estas instrucciones vienen a cuento y se las
-    // ha dado al modelo sin que las pidiera. Se dice: una ayuda invisible es
+    // El harness ha decidido que estas instrucciones vienen a cuento y se las ha
+    // dado al modelo sin que las pidiera. Se dice: una ayuda invisible es
     // indistinguible de un modelo que se comporta raro.
     RevealBar {
         id: skillBar
@@ -1348,7 +1245,6 @@ Popout {
         }
     }
 
-    // ── El plan del agente ───────────────────────────────────────────────────
     // La lista de todo_write, pintada donde se ve el trabajo: encima de la
     // entrada. Se actualiza sola con cada llamada del modelo y desaparece al
     // cambiar o limpiar la conversación.
@@ -1421,14 +1317,12 @@ Popout {
         }
     }
 
-    // ── Paleta de comandos ───────────────────────────────────────────────────
-    // Al escribir "/" el panel ENSEÑA lo que hay en vez de esconderlo en un
-    // mensaje de ayuda que solo aparece cuando te equivocas. Se filtra según
-    // tecleas; Tab completa el primero y el clic lo lanza.
-    // Cada comando, entero, en una línea: cómo se llama, cómo se llama en
-    // inglés, qué icono lleva, qué dice de sí mismo y QUÉ HACE. Antes la lista
-    // que se pinta y el switch que ejecuta eran dos, y ya se habían
-    // desincronizado: la paleta ofrecía /limpiar y la ayuda hablaba de /clear.
+    // Al escribir "/" el panel enseña lo que hay, en vez de esconderlo en un
+    // mensaje de ayuda que solo aparece al equivocarse. Se filtra al teclear, Tab
+    // completa el primero y el clic lo lanza.
+    // Cada comando entero en una línea: cómo se llama, su alias en inglés, qué
+    // icono lleva, qué dice de sí mismo y qué hace. Una sola tabla para lo que
+    // se pinta y lo que se ejecuta, para que no puedan desincronizarse.
     readonly property var slashCommands: [
         { cmd: "/nueva", alias: "/new", glyph: "󰐕", arg: false,
           desc: I18n.tr("New conversation"),
@@ -1465,8 +1359,8 @@ Popout {
         const t = input.text.trim().toLowerCase()
         if (!t.startsWith("/") || t.indexOf(" ") !== -1)
             return []
-        // También por el nombre en inglés: quien escribe /clear encuentra
-        // /limpiar en vez de quedarse mirando una lista vacía.
+        // También por el nombre en inglés: quien escribe /clear encuentra /limpiar
+        // en vez de quedarse mirando una lista vacía.
         return panel.slashCommands.filter(c => c.cmd.startsWith(t)
                                             || c.alias.startsWith(t))
     }
@@ -1555,7 +1449,7 @@ Popout {
         }
     }
 
-    // ── Entrada ──────────────────────────────────────────────────────────────
+    // Entrada
     RowLayout {
         Layout.fillWidth: true
         spacing: Theme.space8
@@ -1606,7 +1500,7 @@ Popout {
                             e.accepted = false
                     }
                     // Tab completa el comando resaltado si la paleta está
-                    // abierta; si no, conmuta Chat ↔ Agente (como opencode).
+                    // abierta; si no, conmuta Chat ↔ Agente.
                     Keys.onTabPressed: {
                         if (panel.slashMatches.length > 0)
                             panel.runSlash(panel.slashMatches[0])
@@ -1695,7 +1589,7 @@ Popout {
         input.forceActiveFocus()
     }
 
-    // Comandos slash, al estilo opencode: acciones de sesión sin soltar el
+    // Comandos slash: acciones de sesión sin soltar el
     // teclado. La entrada los intercepta ANTES de enviar nada al modelo. La
     // ayuda se escribe sola con lo que hay, así que no puede mentir.
     function handleSlash(t) {
@@ -1710,7 +1604,6 @@ Popout {
         c.run(parts.slice(1).join(" ").trim())
     }
 
-    // ── Piezas propias del panel ─────────────────────────────────────────────
     // Barra que entra y sale SIN dar un salto. Es el mismo escalar 0→1 que
     // despliega las láminas (ver Components/ExpandableDetail.qml), aplicado a
     // una barra de alto fijo: el alto hace de barrido y la opacidad se deriva

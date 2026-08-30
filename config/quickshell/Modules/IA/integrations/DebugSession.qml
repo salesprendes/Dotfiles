@@ -4,31 +4,28 @@ import Quickshell.Io
 import qs.Config
 import "Debuggers.js" as DBG
 
-// DEPURADOR: el agente habla DAP (Debug Adapter Protocol) con los adaptadores
-// de verdad, a través del mismo puente de framing que el LSP. Una sesión cada
-// vez, como el subagente: el estado de una depuración es demasiado delicado
-// para llevar dos a medias.
+// Depurador: el agente habla DAP con los adaptadores de verdad, a través del
+// mismo puente de framing que el LSP. Una sesión cada vez, como el subagente: el
+// estado de una depuración es demasiado delicado para llevar dos a medias.
 //
-// Qué adaptador para qué lenguaje sale del catálogo (Debuggers.js), no de aquí:
-// trece adaptadores que cubren C, C++, Rust, Zig, Swift, Objective-C, Python,
-// Go, JavaScript, TypeScript, C#, F#, Ruby, PHP, Kotlin, Dart, Elixir y Bash.
-// Añadir un lenguaje es añadir una fila allí, incluida su detección y el "te
-// falta esto, instálalo así".
+// Qué adaptador para qué lenguaje sale del catálogo (Debuggers.js) y no de aquí,
+// así que añadir un lenguaje es añadir una fila allí, incluida su detección y el
+// aviso de qué falta instalar.
 //
 // El reparto de herramientas sigue la clase de riesgo del harness:
-//   debug_start   exec      arranca TU programa bajo el depurador
+//   debug_start   exec      arranca el programa bajo el depurador
 //   debug_ctl     external  continuar, pasos, puntos de ruptura, parar
 //   debug_view    read      pila, variables, hilos, estado (no toca nada)
 //   debug_eval    external  evalúa una expresión en el marco parado
 //
-// delve no habla DAP por stdio (solo TCP): el puente lo arranca y se conecta
-// él, y aquí no se nota la diferencia.
+// Algún adaptador no habla DAP por stdio sino por TCP: el puente lo arranca y se
+// conecta él, y aquí no se nota la diferencia.
 Scope {
     id: dbg
 
     property var svc
 
-    // ── Estado de la sesión ──────────────────────────────────────────────────
+    // Estado de la sesión
     property string state: "idle"      // idle|starting|running|stopped|exited
     property string adapterName: ""
     property string program: ""
@@ -124,7 +121,7 @@ Scope {
         }
     }
 
-    // ── Mensajes del adaptador ───────────────────────────────────────────────
+    // Mensajes del adaptador
     property var _onInitialized: null   // qué hacer cuando el adaptador esté listo
 
     function _onMessage(j) {
@@ -157,8 +154,8 @@ Scope {
             state = "stopped"
             stoppedThread = (j.body && j.body.threadId) || stoppedThread
             stopReason = (j.body && j.body.reason) || ""
-            // La pila del hilo parado se pide ya: es lo primero que se quiere
-            // ver, y deja los frameId listos para vars y eval.
+            // La pila del hilo parado se pide ya: es lo primero que se quiere ver,
+            // y deja los frameId listos para vars y eval.
             _request("stackTrace", { threadId: stoppedThread, levels: 20 },
                 (body) => {
                     dbg.lastStack = (body && body.stackFrames) || []
@@ -199,7 +196,6 @@ Scope {
         }
     }
 
-    // ── Arrancar ─────────────────────────────────────────────────────────────
     // start({program, args, lang, stop_on_entry, breakpoints}, cb)
     function start(args, cb) {
         if (!detected) {
@@ -211,13 +207,11 @@ Scope {
                + "debug_ctl action=stop antes de abrir otra.")
             return
         }
-        // ENGANCHARSE A UN PROCESO QUE YA CORRE. Es la otra mitad de depurar:
-        // un servicio que lleva horas mal, un cuelgue que solo pasa en
-        // producción, algo que no se puede relanzar. No hay `program` que valga
-        // —el programa ya está en marcha—, así que la jaula de rutas no aplica y
-        // lo que se comprueba es que el proceso exista y sea TUYO (ver
-        // ToolRunner: engancharse a un proceso ajeno no lo permite el sistema, y
-        // pedirlo sin más devolvería un error del adaptador imposible de leer).
+        // Engancharse a un proceso que ya corre es la otra mitad de depurar: un
+        // servicio que lleva horas mal, un cuelgue que solo pasa en producción, algo
+        // que no se puede relanzar. No hay `program` que valga, así que la jaula de
+        // rutas no aplica y lo que se comprueba es que el proceso exista y sea del
+        // propio usuario (ver
         const pid = parseInt(args.attach_pid)
         const esAdjuntar = !isNaN(pid) && pid > 0
         let prog = ""
@@ -434,7 +428,7 @@ Scope {
         return out
     }
 
-    // ── Control ──────────────────────────────────────────────────────────────
+    // Control
     function ctl(args, cb) {
         const action = String(args.action || "")
         if (state === "idle") {
@@ -539,7 +533,7 @@ Scope {
         onTriggered: proc.running = false
     }
 
-    // ── Inspección ───────────────────────────────────────────────────────────
+    // Inspección
     function view(args, cb) {
         const what = String(args.what || "status")
         if (state === "idle") {
@@ -626,18 +620,15 @@ Scope {
         }
         const idx = parseInt(args.frame) || 0
         const frame = lastStack[idx]
-        // context "watch" y NO "repl", y la diferencia no es cosmética.
+        // context "watch" y no "repl", y la diferencia no es cosmética: "repl"
+        // significa "esto lo ha tecleado alguien en la consola del depurador", y
+        // gdb lo trata como tal, ejecutando comandos suyos en vez de evaluar
+        // expresiones —"x + 1" se interpreta como su comando de examinar memoria—,
+        // y por ese camino pasarían también `shell`, `set` o `file`.
         //
-        // "repl" significa "esto lo ha tecleado alguien en la consola del
-        // depurador", y gdb lo trata como tal: ejecuta COMANDOS DE GDB, no
-        // expresiones. Comprobado en vivo — evaluar "x + 1" con context repl
-        // devuelve «Cannot access memory at address 0x1», porque gdb entendió su
-        // comando `x` de examinar memoria. Y por ese mismo camino pasarían
-        // `shell`, `set` o `file`, que no son evaluar nada.
-        //
-        // "watch" es evaluar una expresión en un marco, que es exactamente lo
-        // que promete esta herramienta. Con debugpy y lldb-dap se comporta igual
-        // que antes; con gdb es la diferencia entre funcionar y no.
+        // "watch" es evaluar una expresión en un marco, que es lo que promete esta
+        // herramienta. Con algunos adaptadores da igual; con gdb es la diferencia
+        // entre funcionar y no.
         _request("evaluate", {
             expression: expr, context: "watch",
             frameId: frame ? frame.id : undefined

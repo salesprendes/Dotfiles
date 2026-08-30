@@ -5,21 +5,17 @@ import QtQuick.Layouts
 import qs.Components
 import qs.Config
 
-// Plantillas: el interruptor maestro (Settings.templatesOn) vive en su propia
-// tarjeta, separado de la parrilla de casillas — así queda claro que es un
-// control aparte, no una fila más de la lista. Con el maestro apagado, la
-// tarjeta de la parrilla entera desaparece (vía ExpandableDetail: barrido de
-// recorte + fundido animados, no un corte en seco) y por tanto no se puede
-// activar/desactivar nada; con el maestro encendido, reaparece completa y
-// cada casilla se activa/desactiva a mano. El maestro NO toca qué
-// apps tenía marcadas cada uno (Settings.templatesEnabled/gtkThemingEnabled
-// siguen intactos apagado o no) — al reactivar, vuelve exactamente a lo que
-// ya estaba. Nada de plantillas de comunidad (esas se descargan de una API
-// externa y no las traemos). Solo se listan las apps detectadas en el
-// sistema (AppTemplates.installed) — GTK es la excepción, siempre cuenta
-// como instalado y aparece como una casilla más en "Sistema". Cada plantilla
-// activa se aplica sin pasos manuales: el archivo de config de la app se
-// edita solo (ver Config/AppTemplates.qml).
+// Plantillas: el interruptor maestro vive en su propia tarjeta, separado de la
+// parrilla de casillas, para que quede claro que es un control aparte y no una
+// fila más de la lista.
+//
+// Con el maestro apagado, la tarjeta de la parrilla desaparece con barrido y
+// fundido, no de golpe. El maestro no toca qué apps tenía marcadas cada una, así
+// que al reactivar vuelve exactamente lo que ya estaba.
+//
+// Solo se listan las apps detectadas en el sistema, con GTK como excepción porque
+// siempre cuenta como instalado. Cada plantilla activa se aplica sin pasos
+// manuales: el archivo de configuración de la app se edita solo.
 SettingsPage {
     id: page
 

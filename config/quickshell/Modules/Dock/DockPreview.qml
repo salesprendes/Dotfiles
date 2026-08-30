@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Effects
 import QtQuick.Layouts
 import qs.Components
 import qs.Config
@@ -17,12 +18,33 @@ import qs.Services
 Rectangle {
     id: root
 
+    // La misma sombra que el dock y la etiqueta. Va como hermana anclada a este
+    // rectángulo y no como hija, porque una hija se recortaría con sus esquinas.
+    RectangularShadow {
+        anchors.fill: root
+        visible: Settings.dockShadow
+        radius: root.radius
+        blur: Theme.dp(18)
+        spread: Theme.dp(1)
+        offset: Qt.vector2d(0, Theme.dp(3))
+        color: Theme.withAlpha("#000000", Theme.isDark ? 0.45 : 0.22)
+        cached: true
+        z: -1
+    }
+
     property var ranura: null
     readonly property var ventanas: root.ranura ? (root.ranura.ventanas || []) : []
 
     signal pideCerrar()
 
-    implicitWidth: Theme.dp(320)
+    // El ancho lo pone el contenido, entre un suelo y un techo. Clavado a 320
+    // dp, el globo de una app con un nombre corto y sin ventanas era una losa
+    // medio vacía junto a un icono pequeño; y el techo sigue haciendo falta,
+    // porque los títulos de ventana de un navegador no tienen final.
+    readonly property int anchoMin: Theme.dp(170)
+    readonly property int anchoMax: Theme.dp(320)
+    implicitWidth: Math.max(root.anchoMin,
+                            Math.min(root.anchoMax, col.implicitWidth + Theme.space12 * 2))
     implicitHeight: col.implicitHeight + Theme.space12 * 2
 
     radius: Theme.shapeLg
@@ -30,6 +52,20 @@ Rectangle {
     border.width: 1
     border.color: Theme.outlineVariant
     antialiasing: true
+
+    // La misma luz de canto que la pastilla del dock y la etiqueta: las tres
+    // superficies que salen del dock tienen que leerse como el mismo material.
+    Rectangle {
+        anchors.fill: parent
+        radius: parent.radius
+        gradient: Gradient {
+            GradientStop {
+                position: 0.0
+                color: Theme.withAlpha("#ffffff", Theme.isDark ? 0.06 : 0.26)
+            }
+            GradientStop { position: 0.45; color: "transparent" }
+        }
+    }
 
     ColumnLayout {
         id: col
@@ -46,6 +82,10 @@ Rectangle {
             font.pixelSize: Theme.sp(13)
             font.weight: Font.Medium
             elide: Text.ElideRight
+            // Centrado: es el título del globo, no la primera fila de la lista.
+            // Las filas de ventanas SÍ van a la izquierda, que es como se lee
+            // una lista, y el contraste entre las dos cosas las separa.
+            horizontalAlignment: Text.AlignHCenter
         }
 
         // Una app fijada sin ventanas también enseña globo: decir "no hay nada
@@ -58,6 +98,7 @@ Rectangle {
             color: Theme.fgMuted
             font.pixelSize: Theme.sp(12)
             elide: Text.ElideRight
+            horizontalAlignment: Text.AlignHCenter
         }
 
         Repeater {
@@ -66,12 +107,17 @@ Rectangle {
                 id: filaV
                 required property var modelData
                 Layout.fillWidth: true
+                // Sin esto el título no entra en el ancho natural de la columna
+                // —el Text va anclado, no en el layout— y el globo se quedaría
+                // en el mínimo aunque el título pidiera más.
+                implicitWidth: titulo.implicitWidth + Theme.space8 * 2
                 implicitHeight: Theme.dp(26)
                 radius: Theme.shapeSm
                 color: zona.containsMouse ? Theme.withAlpha(Theme.accent, 0.16)
                                           : "transparent"
 
                 ThemedText {
+                    id: titulo
                     anchors.left: parent.left
                     anchors.right: parent.right
                     anchors.verticalCenter: parent.verticalCenter

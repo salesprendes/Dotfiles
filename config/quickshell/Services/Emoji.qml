@@ -5,17 +5,12 @@ import Quickshell
 import Quickshell.Io
 import qs.Config
 
-// Catálogo de emojis y su búsqueda.
+// Catálogo de emojis y su búsqueda. El catálogo se genera a partir de la base
+// de datos Unicode del sistema —cada entrada es {c: carácter, n: nombre, g:
+// grupo}— y no se escribe a mano ni se descarga.
 //
-// El catálogo (Modules/Emoji/emoji.json) se genera a partir de la base de datos
-// Unicode del sistema, no se escribe a mano ni se descarga: cada entrada es
-// {c: carácter, n: nombre en minúsculas, g: grupo}. Ver tests/emoji.py, que es
-// el guion que lo regenera cuando Unicode saca una versión nueva.
-//
-// Se carga PEREZOSAMENTE, la primera vez que se abre el selector: son 136 kB de
-// JSON y 2.500 objetos, y la inmensa mayoría de las sesiones no abren el
-// selector ni una vez. Cargarlo al arrancar sería pagarlo siempre para el caso
-// raro.
+// Se carga perezosamente, la primera vez que se abre el selector: son más de cien
+// kB de JSON y miles de objetos, y la mayoría de las sesiones no lo abren nunca.
 Singleton {
     id: root
 
@@ -34,9 +29,9 @@ Singleton {
         return out
     }
 
-    // Recientes: se guardan en settings.json, así que sobreviven al reinicio
-    // del shell. Es lo que convierte el selector en útil de verdad — la
-    // mayoría de la gente usa las mismas veinte caras.
+    // Recientes, guardados en settings.json para que sobrevivan al reinicio del
+    // shell: es lo que convierte el selector en útil, porque casi todo el uso son
+    // las mismas veinte caras.
     readonly property var recent: Settings.emojiRecent
 
     readonly property var filtered: {
@@ -45,8 +40,7 @@ Singleton {
         const q = root.query.trim().toLowerCase()
         const g = root.group
 
-        // Sin búsqueda ni grupo, los recientes van primero: es lo que se busca
-        // el 90 % de las veces.
+        // Sin búsqueda ni grupo, los recientes van primero.
         if (q === "" && g === "") {
             if (root.recent.length === 0)
                 return root.all
@@ -82,10 +76,9 @@ Singleton {
         root.loading = false
     }
 
-    // Copia al portapapeles y lo apunta como reciente. Se usa wl-copy directo
-    // y no Clipboard.copy(): aquello decodifica una entrada de cliphist, que es
-    // otra cosa. El emoji entra en el historial igual, porque el vigilante de
-    // cliphist ve el cambio de selección.
+    // Copia al portapapeles y lo apunta como reciente. Usa wl-copy directo y no
+    // Clipboard.copy(), que decodifica una entrada de cliphist. El emoji entra
+    // en el historial igual, porque el vigilante ve el cambio de selección.
     function copy(character) {
         if (!character)
             return
@@ -104,10 +97,9 @@ Singleton {
     FileView {
         id: catalogue
         path: Quickshell.shellPath("Modules/Emoji/emoji.json")
-        // Lectura BLOQUEANTE, y a propósito: son 136 kB leídos UNA vez en toda
-        // la sesión, la primera que se abre el selector. Un cuarto de
-        // milisegundo de disco a cambio de que el panel abra ya poblado, en
-        // lugar de aparecer vacío y rellenarse un fotograma después.
+        // Lectura bloqueante a propósito: se leen una vez en toda la sesión, la
+        // primera que se abre el selector, y a cambio el panel abre ya poblado en
+        // vez de aparecer vacío y rellenarse un fotograma después.
         blockLoading: true
         printErrors: false
     }

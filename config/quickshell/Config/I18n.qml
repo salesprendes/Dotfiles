@@ -59,7 +59,7 @@ Singleton {
             "%1 key": "Clave de %1",
             "Optional: without a key Brave is read from its public page, which already works. With one it answers through its API, with dates and no markup surprises.": "Opcional: sin clave, Brave se lee de su página pública, que ya funciona. Con clave contesta por su API, con fechas y sin sorpresas de marcado.",
             "The last search failed in every source. Change something here and it will try again.": "La última búsqueda falló en todas las fuentes. Cambia algo aquí y volverá a intentarlo.",
-            // ── Búsqueda web y herramientas en curso ──────────────────
+            // Búsqueda web y herramientas en curso
             "Running…": "Ejecutando…",
             "Running… %1 s": "Ejecutando… %1 s",
             "Web search": "Búsqueda web",
@@ -691,7 +691,7 @@ Singleton {
             "Player": "Reproductor",
             "Recording": "Grabando",
             "Paused": "Pausada",
-            // ── Dock (Modules/Dock, Panels/SettingsPages/DockPage) ───────────
+            // Dock (Modules/Dock, Panels/SettingsPages/DockPage)
             "Dock": "Dock",
             "Dock style": "Estilo del dock",
             "Pill": "Pastilla",
@@ -832,7 +832,7 @@ Singleton {
             "Disk": "Disco",
             "%1 threads": "%1 hilos",
             "Window manager": "Gestor de ventanas",
-            // ── Barra: catálogo de widgets y editor de disposición ────
+            // Barra: catálogo de widgets y editor de disposición
             "Launcher": "Lanzador",
             "Workspaces": "Escritorios",
             "Active window": "Ventana activa",
@@ -853,7 +853,7 @@ Singleton {
             "Drag to reorder or move between sides. Drag one from Available to add it.": "Arrastra para reordenar o cambiar de lado. Arrastra uno de «Disponibles» para añadirlo.",
             "Restore default layout": "Restaurar la disposición de fábrica",
             "To show the weather in the bar, add its widget from Settings ▸ Bar.": "Para ver el clima en la barra, añade su widget desde Ajustes ▸ Barra.",
-            // ── Bloqueo de pantalla ───────────────────────────────────
+            // Bloqueo de pantalla
             "Screen lock": "Bloqueo de pantalla",
             "Lock screen": "Pantalla de bloqueo",
             "This shell": "Este shell",
@@ -867,7 +867,7 @@ Singleton {
             "Could not start authentication (%1).": "No se pudo iniciar la autenticación (%1).",
             "Authentication error (%1).": "Error de autenticación (%1).",
             "If authentication cannot start, switch to a TTY with Ctrl+Alt+F2.": "Si la autenticación no arranca, cambia a un TTY con Ctrl+Alt+F2.",
-            // ── Selector de emojis ────────────────────────────────────
+            // Selector de emojis
             "Emoji": "Emojis",
             "Search emoji…": "Buscar emoji…",
             "All": "Todos",
@@ -884,7 +884,7 @@ Singleton {
             "Background blur": "Desenfoque del fondo",
             "Background dim": "Oscurecido del fondo",
             "Off": "Apagado",
-            // ── La isla ───────────────────────────────────────────────
+            // La isla
             "Clear all": "Vaciar todo",
             "Nothing pending": "Nada pendiente",
             "Dynamic island": "Isla dinámica",
@@ -966,7 +966,7 @@ Singleton {
             "%1 key": "Clau de %1",
             "Optional: without a key Brave is read from its public page, which already works. With one it answers through its API, with dates and no markup surprises.": "Opcional: sense clau, Brave es llegeix de la seva pàgina pública, que ja funciona. Amb clau contesta per la seva API, amb dates i sense sorpreses de marcatge.",
             "The last search failed in every source. Change something here and it will try again.": "La darrera cerca ha fallat a totes les fonts. Canvia alguna cosa aquí i ho tornarà a provar.",
-            // ── Búsqueda web y herramientas en curso ──────────────────
+            // Búsqueda web y herramientas en curso
             "Running…": "Executant…",
             "Running… %1 s": "Executant… %1 s",
             "Web search": "Cerca web",
@@ -1575,7 +1575,7 @@ Singleton {
             "Player": "Reproductor",
             "Recording": "Gravant",
             "Paused": "Pausada",
-            // ── Dock (Modules/Dock, Panels/SettingsPages/DockPage) ───────────
+            // Dock (Modules/Dock, Panels/SettingsPages/DockPage)
             "Dock": "Dock",
             "Dock style": "Estil del dock",
             "Pill": "Píndola",
@@ -1716,7 +1716,7 @@ Singleton {
             "Disk": "Disc",
             "%1 threads": "%1 fils",
             "Window manager": "Gestor de finestres",
-            // ── Barra: catàleg de ginys i editor de disposició ────────
+            // Barra: catàleg de ginys i editor de disposició
             "Launcher": "Llançador",
             "Workspaces": "Escriptoris",
             "Active window": "Finestra activa",
@@ -1737,7 +1737,7 @@ Singleton {
             "Drag to reorder or move between sides. Drag one from Available to add it.": "Arrossega per reordenar o canviar de costat. Arrossega'n un de «Disponibles» per afegir-lo.",
             "Restore default layout": "Restaura la disposició de fàbrica",
             "To show the weather in the bar, add its widget from Settings ▸ Bar.": "Per veure el clima a la barra, afegeix el seu giny des d'Ajustos ▸ Barra.",
-            // ── Bloqueig de pantalla ──────────────────────────────────
+            // Bloqueig de pantalla
             "Screen lock": "Bloqueig de pantalla",
             "Lock screen": "Pantalla de bloqueig",
             "This shell": "Aquest shell",
@@ -1751,7 +1751,7 @@ Singleton {
             "Could not start authentication (%1).": "No s'ha pogut iniciar l'autenticació (%1).",
             "Authentication error (%1).": "Error d'autenticació (%1).",
             "If authentication cannot start, switch to a TTY with Ctrl+Alt+F2.": "Si l'autenticació no arrenca, canvia a un TTY amb Ctrl+Alt+F2.",
-            // ── Selector d'emojis ─────────────────────────────────────
+            // Selector d'emojis
             "Emoji": "Emojis",
             "Search emoji…": "Cerca emoji…",
             "All": "Tots",
@@ -1768,7 +1768,7 @@ Singleton {
             "Background blur": "Desenfocament del fons",
             "Background dim": "Enfosquiment del fons",
             "Off": "Apagat",
-            // ── L'illa ────────────────────────────────────────────────
+            // L'illa
             "Clear all": "Buida-ho tot",
             "Nothing pending": "Res pendent",
             "Dynamic island": "Illa dinàmica",

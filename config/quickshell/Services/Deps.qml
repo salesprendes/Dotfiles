@@ -18,8 +18,8 @@ Singleton {
         "kitty", "alacritty", "foot",
         "powerprofilesctl", "brightnessctl", "ddcutil", "xdg-user-dir",
         "hyprsunset", "pacman", "checkupdates", "paru", "yay",
-        // Apps de las plantillas (Config/AppTemplates.qml): detectarlas aquí
-        // evita el Instantiator que lanzaba un 'which' por app al arrancar.
+        // Apps de las plantillas: detectarlas aquí evita un 'which' por app al
+        // arrancar.
         "qt6ct", "plasmashell", "ghostty", "wezterm", "starship", "hx",
         "emacs", "labwc", "niri", "mango", "scroll", "sway", "cava", "btop"
     ]
@@ -27,15 +27,15 @@ Singleton {
     property bool ready: false
     signal loaded()
 
-    // Reactivo: depende de _found, así que los bindings que llamen a has()
-    // se re-evalúan al terminar la detección.
+    // Reactivo: depende de _found, así que los bindings que llamen a has() se
+    // reevalúan al terminar la detección.
     function has(name) { return _found[name] === true }
 
     Process {
         running: true
-        // 'which' imprime por stdout la ruta de cada binario encontrado (los
-        // ausentes solo van a stderr): el nombre base de cada ruta identifica
-        // el binario, sin necesidad de shell.
+        // 'which' imprime por stdout la ruta de cada binario encontrado y los
+        // ausentes solo van a stderr, así que el nombre base de cada ruta
+        // identifica el binario sin necesidad de shell.
         command: ["which"].concat(root._bins)
         stdout: StdioCollector {
             onStreamFinished: {

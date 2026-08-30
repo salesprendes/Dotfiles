@@ -1,24 +1,20 @@
 import QtQuick
 import qs.Config
 
-// Interruptor Material 3.
+// Interruptor Material 3. Lo que lo distingue es que la bolita cambia de tamaño
+// con el estado:
 //
-// Lo que lo distingue de un interruptor cualquiera —y la razón de copiarlo—
-// es que la bolita CAMBIA DE TAMAÑO con el estado:
+//   · apagado   → pequeña, del color del borde y holgada dentro de la pista, así
+//                 que se lee como un hueco vacío.
+//   · encendido → grande y sólida, casi llenando la pista, con una marca dentro.
+//   · pulsando  → todavía más grande, mientras el dedo está encima.
 //
-//   · apagado  → bolita pequeña, del color del borde, holgada dentro de la
-//                pista. Se lee como un hueco vacío.
-//   · encendido→ bolita grande y sólida que casi llena la pista, con una
-//                marca de verificación dentro.
-//   · pulsando → todavía más grande, mientras el dedo está encima.
+// Eso hace dos cosas: el estado se nota sin depender del color, porque en una fila
+// de veinte interruptores se distinguen los encendidos por la masa de la bolita, y
+// el gesto tiene respuesta física.
 //
-// Eso hace dos cosas. Una, que el estado se note sin depender del color: en
-// una fila con veinte interruptores distingues los encendidos por la MASA de
-// la bolita aunque no distingas bien los tonos. Y dos, que el gesto tenga
-// respuesta física — la bolita crece bajo el dedo y se asienta al soltar.
-//
-// onColor: acento de la pista encendida (BT usa accent2). offColor: pista
-// apagada. offBorderColor: borde cuando está apagado.
+// onColor: acento de la pista encendida. offColor: pista apagada.
+// offBorderColor: borde cuando está apagado.
 Rectangle {
     id: sw
 

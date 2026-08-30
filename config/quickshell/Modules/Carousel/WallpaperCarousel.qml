@@ -465,13 +465,12 @@ Scope {
                                 anchors.horizontalCenterOffset: -Theme.dp(50)
                                 width: parent.width + (parent.height * Math.abs(view.skewFactor)) + Theme.dp(50)
                                 height: parent.height
-                                // La MINIATURA, no el fondo original: son los
-                                // mismos píxeles en pantalla —manda sourceSize—
-                                // con 12 veces menos disco que descomprimir
-                                // (486 KB de media contra 40 KB). Wallpaper.thumb
-                                // devuelve el original si aún no hay miniatura,
-                                // así que la primera vez tras escanear no falla
-                                // nada: se ve igual y ya se verá mejor.
+                                // La miniatura y no el fondo original: son los
+                                // mismos píxeles en pantalla, porque manda
+                                // sourceSize, con un orden de magnitud menos de
+                                // disco que descomprimir. Wallpaper.thumb devuelve
+                                // el original si aún no hay miniatura, así que la
+                                // primera vez tras escanear se ve igual.
                                 source: plugin._imageUrl(Wallpaper.thumb(card.modelData))
                                 sourceSize: Qt.size(Math.ceil(view.cardW * view.dpr), Math.ceil(view.cardH * view.dpr))
                                 fillMode: Image.PreserveAspectCrop

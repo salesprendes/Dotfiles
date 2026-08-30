@@ -7,10 +7,9 @@ import qs.Config
 //
 // Una sola llamada resuelve las dos preguntas que importan con un servidor
 // REMOTO: ¿contesta y me acepta la credencial?, ¿qué modelos sirve? Es un GET
-// al catálogo del proveedor midiendo código HTTP y latencia. Antes los modelos
-// de Ollama salían de `ollama list` (solo servía para el Ollama de esta
-// máquina); ahora se piden por HTTP, así que un Ollama remoto se descubre igual
-// que uno local.
+// al catálogo del proveedor midiendo código HTTP y latencia. Los modelos se
+// piden siempre por HTTP y nunca por un CLI local, así que un servidor remoto
+// se descubre igual que uno de esta máquina.
 Scope {
     id: probe
 

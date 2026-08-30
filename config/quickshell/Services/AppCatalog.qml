@@ -4,8 +4,8 @@ import QtQuick
 import Quickshell
 
 // Catálogo preparado una sola vez y compartido entre las distintas vidas del
-// lanzador. El panel se destruye al cerrarse para ahorrar memoria, pero ordenar
-// y normalizar todas las entradas en cada apertura era trabajo desperdiciado.
+// lanzador, que se destruye al cerrarse para ahorrar memoria: ordenar y
+// normalizar todas las entradas en cada apertura sería trabajo desperdiciado.
 Singleton {
     id: root
 
@@ -28,8 +28,8 @@ Singleton {
         root.ready = true
     }
 
-    // Los paquetes pueden instalar o quitar .desktop en ráfagas. Agrupamos
-    // esos avisos y reconstruimos una sola vez cuando el modelo se estabiliza.
+    // Los paquetes instalan o quitan .desktop en ráfagas, así que los avisos se
+    // agrupan y se reconstruye una sola vez cuando el modelo se estabiliza.
     Timer {
         id: rebuildDebounce
         interval: 200

@@ -1,20 +1,17 @@
 import QtQuick
 import qs.Config
 
-// Insignia circular que abre una fila de ajuste: un glifo dentro de un
-// círculo, a la izquierda de la etiqueta.
+// Insignia circular que abre una fila de ajuste: un glifo dentro de un círculo, a
+// la izquierda de la etiqueta.
 //
-// Por qué existe: sin ella todas las filas de una página arrancan con texto
-// en la misma vertical y la columna izquierda es una pared plana de palabras.
-// La insignia le da a cada fila una cabeza reconocible y convierte el margen
-// izquierdo en un riel de formas por el que el ojo baja saltando.
+// Sin ella, todas las filas de una página arrancan con texto en la misma vertical
+// y la columna izquierda es una pared plana de palabras; la insignia le da a cada
+// fila una cabeza reconocible y convierte el margen en un riel por el que el ojo
+// baja saltando.
 //
-// Y no es solo decoración. En las filas que tienen estado (un interruptor)
-// se enciende con él: encendida va teñida de acento, apagada queda neutra.
-// Así la columna de insignias RESUME de un vistazo qué hay activo en la
-// página, sin recorrer los interruptores uno a uno hasta el borde derecho.
-// En las filas sin estado (elegir un valor) se queda siempre neutra: no hay
-// un "encendido" que enseñar.
+// En las filas con estado se enciende con él, así que la columna de insignias
+// resume de un vistazo qué hay activo en la página. En las que solo eligen un
+// valor se queda neutra: no hay un "encendido" que enseñar.
 Rectangle {
     id: badge
 
@@ -32,10 +29,9 @@ Rectangle {
     implicitHeight: Theme.dp(28)
     radius: height / 2
 
-    // Disco tonal PLANO, sin filete. ChromeOS mete sus iconos de fila en un
-    // contenedor de color sin contorno; el borde de antes era un tercer trazo
-    // por fila (círculo + glifo + aro) que en una lista larga se lee como ruido.
-    // Encendida sube el tinte de acento, que es lo único que tiene que decir.
+    // Disco tonal plano, sin filete: un contorno sería un tercer trazo por fila
+    // —círculo, glifo y aro— que en una lista larga se lee como ruido. Encendida
+    // sube el tinte de acento, que es lo único que tiene que decir.
     color: active ? Theme.withAlpha(Theme.accent, Theme.isDark ? 0.22 : 0.28)
                   : Theme.withAlpha(Theme.fg, Theme.isDark ? 0.07 : 0.06)
     border.width: 0

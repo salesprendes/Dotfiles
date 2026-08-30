@@ -5,8 +5,8 @@ import Quickshell
 import Quickshell.Io
 import qs.Config
 
-// Capturas y grabacion de pantalla para Hyprland.
-// Usa hyprshot como backend principal de capturas y gpu-screen-recorder para video.
+// Capturas y grabación de pantalla: hyprshot y grim para las fotos,
+// gpu-screen-recorder para el vídeo.
 Singleton {
     id: cap
 
@@ -14,12 +14,11 @@ Singleton {
     readonly property string runtimeDir: Quickshell.env("XDG_RUNTIME_DIR") ?? "/tmp"
     readonly property string pidFile: runtimeDir + "/qs-screen-recording.pid"
 
-    // Disponibilidad de binarios vía Deps (detección centralizada, un solo
-    // proceso al arrancar). Bindings reactivos: valen false hasta que termina
-    // la detección y se re-evalúan solos.
+    // Disponibilidad de binarios vía Deps, con un solo proceso al arrancar. Los
+    // bindings son reactivos: valen false hasta que termina la detección.
     readonly property bool hyprshotAvailable: Deps.has("hyprshot")
-    // hyprshot solo congela la pantalla (-z) si hyprpicker existe; sin él lo
-    // omite en silencio. Detectarlo permite avisarlo en la toolbar.
+    // hyprshot solo congela la pantalla si hyprpicker existe, y si no lo omite
+    // en silencio; detectarlo permite avisarlo en la toolbar.
     readonly property bool hyprpickerAvailable: Deps.has("hyprpicker")
     readonly property bool grimAvailable: Deps.has("grim")
     readonly property bool slurpAvailable: Deps.has("slurp")
@@ -29,9 +28,8 @@ Singleton {
     readonly property bool hyprctlAvailable: Deps.has("hyprctl")
     readonly property bool ffmpegAvailable: Deps.has("ffmpeg")
 
-    // Carpetas XDG localizadas (Imágenes, Bilder…), resueltas una sola vez
-    // para todo el shell en Config/Settings.qml (antes cada servicio lanzaba
-    // su propio xdg-user-dir al arrancar).
+    // Carpetas XDG localizadas, resueltas una sola vez para todo el shell en
+    // Config/Settings.qml.
     readonly property string picturesDir: Settings.xdgPicturesDir
     readonly property string videosDir: Settings.xdgVideosDir
     property var monitorOptions: [{ text: "Enfocado", value: "focused" }]
@@ -147,7 +145,7 @@ Singleton {
         function close(): string { cap.closeToolbar(); return "closed" }
         function capture(): string { cap.capture(); return "capture" }
         // 'edit' se conserva como alias de captura normal para no romper el
-        // atajo Super+Shift+Print de Hyprland; ya no abre ningún editor.
+        // atajo de Hyprland que ya lo usa.
         function edit(): string { cap.capture(); return "capture" }
         function stop(): string { cap.stopRecording(); return "stop" }
         function pause(): string { cap.pauseRecording(); return "pause" }
@@ -173,10 +171,9 @@ Singleton {
         return val
     }
 
-    // Los ajustes se guardan en settings.json (Settings.screenCapture), unificados
-    // con el resto de la configuración. Aquí solo aplicamos ese sub-objeto (con
-    // nuestro saneo por rangos/enums) y lo volvemos a escribir al cambiar. Los
-    // guardas _applying/_persisting evitan bucles entre aplicar y persistir.
+    // Los ajustes viven en Settings.screenCapture. Aquí solo se aplica ese
+    // sub-objeto con el saneo por rangos y enums, y se reescribe al cambiar; los
+    // guardas _applying/_persisting evitan el bucle entre aplicar y persistir.
     function applyFromSettings() {
         const o = (Settings.screenCapture && typeof Settings.screenCapture === "object")
                     ? Settings.screenCapture : ({})
@@ -188,8 +185,8 @@ Singleton {
         }
         _applying = false
         _loaded = true
-        // Primera vez (sin ajustes guardados): vuelca los valores por defecto
-        // para que settings.json muestre todas las opciones editables.
+        // Sin ajustes guardados, vuelca los valores por defecto para que
+        // settings.json muestre todas las opciones editables.
         if (Object.keys(o).length === 0)
             persist()
     }
@@ -312,8 +309,8 @@ Singleton {
     }
 
     function capture() {
-        // "todo" y "región" van con grim (región además con slurp); "ventana" y
-        // "monitor" siguen con hyprshot.
+        // "todo" y "región" van con grim, la región además con slurp; "ventana"
+        // y "monitor" siguen con hyprshot.
         if ((captureMode === "all" || captureMode === "region") && !grimAvailable) {
             notify("Falta grim", "La captura de pantalla requiere grim.")
             setStatus("Falta grim")
@@ -344,10 +341,10 @@ Singleton {
         Qt.callLater(runScreenshot)
     }
 
-    // Espera antes de disparar: en modos SIN interacción (todo/monitor) hay
-    // que dar tiempo a que la toolbar termine su animación de cierre y el
-    // fundido de capa del compositor, o sale su fantasma en la foto. En los
-    // interactivos (región/ventana) el propio selector ya da ese tiempo.
+    // Espera antes de disparar: en los modos sin interacción hay que dar tiempo
+    // a que la toolbar termine su animación de cierre y el fundido de capa del
+    // compositor, o sale su fantasma en la foto. En los interactivos, el propio
+    // selector ya da ese tiempo.
     function captureDelay() {
         return (captureMode === "all" || captureMode === "monitor") ? "0.45" : "0.16"
     }
@@ -368,19 +365,17 @@ Singleton {
             cmd += "-m window "
         } else if (captureMode === "monitor") {
             cmd += "-m output "
-            // "-m output" a secas es INTERACTIVO (hyprshot lanza slurp para
-            // elegir monitor con un clic; con ESC no sale foto y parecía que
-            // "a veces no captura"). Enfocado = "-m active": el monitor con
-            // foco, al instante y sin interacción, que es lo esperado.
+            // "-m output" a secas es interactivo: hyprshot lanza slurp para
+            // elegir monitor con un clic, y con ESC no sale foto. Enfocado usa
+            // "-m active", que es el monitor con foco y sin interacción.
             if (captureMonitor !== "focused")
                 cmd += "-m " + Utils.shellQuote(captureMonitor) + " "
             else
                 cmd += "-m active "
         }
-        // OJO: usar la forma larga --raw. La versión de hyprshot instalada define
-        // el getopt corto como "r:" (con argumento), así que "-r" falla ("option
-        // requires an argument"), hyprshot ignora el modo raw y guarda su propia
-        // copia en vez de volcar la imagen a stdout (que es lo que capturamos).
+        // Forma larga --raw: la versión instalada define el getopt corto como
+        // "r:" con argumento, así que "-r" falla, hyprshot ignora el modo raw y
+        // guarda su propia copia en vez de volcar la imagen a stdout.
         cmd += "--raw"
         return cmd
     }
@@ -389,10 +384,9 @@ Singleton {
         return "grim " + (showPointer ? "-c " : "") + "-t png -"
     }
 
-    // Región con grim + slurp, la vía canónica y fiable en wlroots/Hyprland.
-    // slurp va en su propio paso: cancelar la selección (ESC) sale limpio y
-    // en silencio, y así un $TMP vacío DESPUÉS ya solo puede ser un fallo
-    // real de captura (que sí se notifica).
+    // Región con grim y slurp. slurp va en su propio paso para que cancelar la
+    // selección salga limpio y en silencio, y así un temporal vacío después solo
+    // pueda ser un fallo real de captura.
     function regionRawSteps() {
         return "REGION=$(slurp -d) || exit 0; [ -n \"$REGION\" ] || exit 0; "
              + "grim " + (showPointer ? "-c " : "") + "-g \"$REGION\" -t png - > \"$TMP\" 2>/dev/null; "
@@ -402,16 +396,15 @@ Singleton {
         const dir = effectiveScreenshotDir()
         const out = dir + "/" + screenshotFilenameResolved()
         const mime = mimeForImageFormat()
-        // "ventana" sigue siendo interactiva (elegir con clic): ahí un vacío
-        // puede ser simplemente ESC y se mantiene silencioso. "todo" y
-        // "monitor" ya no tienen interacción: si no sale imagen es un fallo
-        // de verdad y se avisa (antes fallaban en silencio: "no hace fotos").
+        // "ventana" es interactiva, así que un vacío puede ser una cancelación
+        // y se mantiene silencioso. "todo" y "monitor" no lo son: si no sale
+        // imagen es un fallo de verdad y se avisa.
         const interactive = captureMode === "region" || captureMode === "window"
 
         let script = "TMP=$(mktemp --suffix=.png); FINAL=\"$TMP\"; trap 'rm -f \"$TMP\" \"$CONVERTED\"' EXIT; CONVERTED=\"\"; "
-        // No abortamos por el código de salida de la orden de captura: hyprshot
-        // en modo --raw devuelve 1 aunque la captura sea correcta. Nos fiamos de
-        // que el archivo temporal no quede vacío.
+        // No se aborta por el código de salida: hyprshot en modo --raw devuelve
+        // 1 aunque la captura sea correcta, así que la señal es que el archivo
+        // temporal no quede vacío.
         if (captureMode === "region")
             script += regionRawSteps()
         else {
@@ -563,8 +556,8 @@ Singleton {
     function stopRecording() {
         Quickshell.execDetached(["sh", "-c",
             "pid=$(cat " + Utils.shellQuote(pidFile) + " 2>/dev/null || true); " +
-            // Si el proceso ya no existe (grabadora muerta, pidfile huérfano),
-            // limpia el pidfile y cierra el estado igualmente.
+            // Si el proceso ya no existe, limpia el pidfile y cierra el estado
+            // igualmente.
             "if [ -n \"$pid\" ] && kill -INT \"$pid\" 2>/dev/null; then :; " +
             "else rm -f " + Utils.shellQuote(pidFile) + "; " +
             "qs ipc --any-display call screenCapture recordingStopped >/dev/null 2>&1 || true; fi"])
@@ -644,8 +637,8 @@ Singleton {
         ensurePillScreen()
     }
 
-    // Guardado (debounce) al cambiar cualquier ajuste persistible.
-    // Mismo patrón que Services/Terminal.qml: la lista replica _keys.
+    // Guardado con rebote al cambiar cualquier ajuste persistible; la lista
+    // replica _keys.
     readonly property var _watch: [
         captureMode, captureMonitor, freeze,
         saveToDisk, copyToClipboard, showNotify, showPointer,
@@ -696,9 +689,8 @@ Singleton {
         onTriggered: cap.recordingElapsed++
     }
 
-    // Reaplica cuando Settings carga (o cuando cambia el sub-objeto por una
-    // recarga externa). Ignora los cambios que provienen de nuestro propio
-    // persist() para no entrar en bucle.
+    // Reaplica cuando Settings carga o cuando el sub-objeto cambia por una
+    // recarga externa, ignorando los cambios que vienen del propio persist().
     Connections {
         target: Settings
         function onScreenCaptureChanged() {
@@ -708,9 +700,9 @@ Singleton {
     }
 
     // Recuperación al arrancar: si el shell se recargó con una grabación en
-    // marcha, el pidfile sigue ahí y gpu-screen-recorder sigue grabando —
-    // antes el estado (y la píldora de grabación) se perdían y no había
-    // forma de parar desde la interfaz. Si el pid ya no vive, se limpia.
+    // marcha, el pidfile sigue ahí y la grabadora sigue grabando, así que se
+    // recupera el estado para poder pararla desde la interfaz. Si el pid ya no
+    // vive, se limpia.
     Process {
         id: recoverProc
         command: ["sh", "-c",

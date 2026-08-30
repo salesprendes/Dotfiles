@@ -4,21 +4,18 @@ import Quickshell.Io
 import qs.Config
 import "../security/Gate.js" as GT
 
-// EJECUCIÓN PERSISTENTE (la celda de oh-my-pi): un Python que sigue VIVO entre
-// llamadas. Definir una función en una celda y usarla tres turnos después
-// funciona, cargar un CSV una vez y consultarlo veinte veces no cuesta veinte
-// cargas.
+// Ejecución persistente: un intérprete de Python que sigue vivo entre llamadas.
+// Definir una función en una celda y usarla tres turnos después funciona, y
+// cargar un fichero una vez y consultarlo veinte no cuesta veinte cargas.
 //
-// Y el cierre del círculo: dentro de la celda existe `tool(nombre, **args)`,
-// que llama DE VUELTA a las herramientas del agente por un puente de ida y
-// vuelta. El criterio de qué se puede llamar es exactamente el del subagente:
-// la familia de SOLO LECTURA (leer, listar, buscar, consultas del sistema y de
-// servidores, ast_search) más el lsp de lectura — puede ser autónomo justo
-// porque nada de lo que alcanza cambia el equipo. La celda en sí es clase
-// exec: la aprobó el usuario, con todo lo que eso significa.
+// Dentro de la celda existe `tool(nombre, **args)`, que llama de vuelta a las
+// herramientas del agente por un puente de ida y vuelta. El criterio de qué se
+// puede llamar es el del subagente: la familia de solo lectura más el lsp de
+// lectura, porque puede ser autónomo justo porque nada de lo que alcanza cambia
+// el equipo. La celda en sí es de clase exec: la aprobó el usuario.
 //
-// El kernel muere con el hilo (_resetThread) y por inactividad larga: el
-// estado pertenece al encargo, no a la máquina.
+// El kernel muere con el hilo y por inactividad larga: el estado pertenece al
+// encargo, no a la máquina.
 Scope {
     id: repl
 
@@ -107,7 +104,6 @@ Scope {
                + " · el estado persiste para la siguiente celda]"
     }
 
-    // ── La celda ─────────────────────────────────────────────────────────────
     // exec({code, reset, timeout}, cb). Una celda cada vez: el ejecutor ya
     // serializa las herramientas, esto solo lo defiende.
     function exec(args, cb) {
@@ -143,7 +139,7 @@ Scope {
         }
     }
 
-    // ── El puente de vuelta: tool() dentro de la celda ───────────────────────
+    // El puente de vuelta: tool() dentro de la celda
     property var _toolReq: null        // la petición en curso (el kernel espera)
 
     function _routeTool(j) {
@@ -182,13 +178,11 @@ Scope {
             responder(built.error)
             return
         }
-        // LA MISMA PUERTA QUE EL AGENTE. Aquí faltaban dos invariantes —el
-        // reloj y el marco de "esto lo escribió un desconocido"— no por falta
-        // de criterio, sino porque la regla vivía escrita en el ejecutor y en
-        // el subagente, y a la tercera puerta se olvidó. Una
-        // `tool('fetch_url', …)` traía una página web al contexto pelada.
-        //
-        // Ahora esto no decide nada: pide permiso y aplica lo que le den.
+        // La misma puerta que el agente: esto no decide nada, pide permiso y
+        // aplica lo que le den. Es lo que garantiza que las tres entradas —el
+        // ejecutor, el subagente y la celda— compartan el reloj y el marco de
+        // "esto lo escribió un desconocido", en vez de que cada una recuerde
+        // aplicarlos por su cuenta.
         const permiso = GT.evaluar({ quien: "celda", herramienta: name, args: args })
         const listo = GT.envolver(permiso, built.cmd, built.env)
         if (listo === null) {

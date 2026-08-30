@@ -29,7 +29,7 @@ Scope {
     property var conversations: []      // [{id, title, updated, entries:[…]}]
     property string currentId: ""
 
-    // Totales de la conversación (los muestra el cajón, estilo aider).
+    // Totales de la conversación; los muestra el cajón.
     property int convTokens: 0
     property real convMs: 0
     // Llenado aproximado del contexto que viaja al modelo (0..1), medido contra
@@ -61,7 +61,7 @@ Scope {
         contextFill = Math.min(1, chars / (svc ? svc.charBudget : 1))
     }
 
-    // ── Añadir ───────────────────────────────────────────────────────────────
+    // Añadir
     function append(m) {
         messages.append({
             role: m.role || "user", content: m.content || "",
@@ -119,7 +119,7 @@ Scope {
         push({ role: "info", content: text })
     }
 
-    // ── Título e instantánea ─────────────────────────────────────────────────
+    // Título e instantánea
     readonly property string newTitle: I18n.tr("New conversation")
     function title() {
         for (let i = 0; i < messages.count; i++)
@@ -165,14 +165,11 @@ Scope {
         return out.join("\n")
     }
 
-    // ── Guardado con freno ───────────────────────────────────────────────────
-    // Antes cada mensaje reescribía todo el JSON a disco (instantánea de N
-    // mensajes + serialización + escritura); en un hilo largo y con streaming eso
-    // es mucha E/S en el camino caliente. Ahora el recuento para el medidor es
-    // inmediato (barato, y la UI lo necesita en vivo), pero el volcado a disco se
-    // agrupa: varias mutaciones seguidas se funden en una sola escritura. Las
-    // transiciones que no admiten pérdida (cambiar de conversación, cerrar)
-    // fuerzan un volcado con saveNow.
+    // El recuento para el medidor es inmediato, porque es barato y la interfaz lo
+    // necesita en vivo, pero el volcado a disco se agrupa: varias mutaciones
+    // seguidas se funden en una sola escritura. Reescribir el JSON entero por
+    // mensaje sería mucha E/S en el camino caliente de un hilo largo con
+    // streaming. Las transiciones que no admiten pérdida fuerzan saveNow.
     function save() {
         recountTotals()
         saveTimer.restart()
@@ -205,6 +202,7 @@ Scope {
 
     FileView {
         path: store.svc ? store.svc.dataDir + "/ai-history.json" : ""
+        printErrors: false
         onAdapterUpdated: writeAdapter()
         onLoaded: {
             if (store.messages.count > 0)
