@@ -56,21 +56,29 @@ PanelWindow {
     readonly property int margenBorde: (dock.esHotseat ? 0 : Theme.dp(10))
                                        + win.margenBarra
 
+    // Esconderse NO genera un 'salir' del ratón: el puntero no se mueve, se va el
+    // dock. Es lo que pasa al pulsar un icono —la ventana se enfoca, tapa el dock
+    // y este se retira— y sin esto el globo se queda flotando sobre el escritorio
+    // señalando un icono que ya no está. Va aquí y no en el clic porque cubre
+    // TODAS las formas de esconderse: pantalla completa, DND, el escritorio que
+    // deja de estar vacío.
+    onReveladoChanged: if (!win.revelado) globos.cerrarTodo()
+
+    // Y esto cubre el agujero que dejaba lo de arriba, que no es teórico: con el
+    // menú abierto, 'revelado' vale true POR el propio menú (ver 'abiertos' más
+    // abajo), así que un atajo que abriera un panel ponía visible=false sin que
+    // 'revelado' cambiara nunca — ningún cierre se ejecutaba y el menú volvía
+    // luego con la ranura y la posición de antes.
+    //
+    // El contrato queda claro: si la superficie desaparece, todo el estado que
+    // solo tenía sentido encima de ella desaparece con ella.
+    onVisibleChanged: if (!win.visible) globos.cerrarTodo()
+
     // Una sola propiedad con las razones en orden. No hay condición de bloqueo de
     // sesión a propósito: ext-session-lock hace que el compositor esconda todas las
     // superficies normales, layer-shell incluida, así que añadirla no escondería
     // nada y a cambio destruiría y reconstruiría una ventana por monitor en cada
     // bloqueo.
-    // Esconderse NO genera un 'salir' del ratón: el puntero no se mueve, se va el
-    // dock. Es lo que pasa al pulsar un icono —la ventana se enfoca, tapa el dock
-    // y este se retira— y sin esto el globo se queda flotando sobre el escritorio
-    // señalando un icono que ya no está. Va aquí y no en el clic porque cubre
-    // TODAS las formas de esconderse: pantalla completa, abrir un panel, DND.
-    onReveladoChanged: if (!win.revelado) {
-        globos.cerrarEtiqueta()
-        globos.cerrarVista()
-    }
-
     readonly property bool revelado: {
         if (globos.abiertos)
             return true
@@ -84,7 +92,7 @@ PanelWindow {
         // Que sea de este monitor importa — con dos pantallas, un navegador a
         // pantalla completa en la principal no debe esconder el dock de la
         // secundaria, que no tiene nada.
-        return !Dock.hayVentanasEn(win.nombre)
+        return !WindowManager.hayVentanasEn(win.nombre)
     }
 
     // Lo más delicado de este archivo: mal calculada deja una franja del ancho de
@@ -105,12 +113,18 @@ PanelWindow {
     // Las dos zonas se suman con una Region hija, que es para lo que están, y así
     // no hay que calcular a mano un rectángulo que las cubra —y que taparía el
     // hueco vacío entre ellas—.
+    //
+    // El rectángulo del dock sale de 'dock.implicitHeight', que desde el arreglo
+    // de la lupa incluye el aire por el que asoman los iconos ampliados. Antes no
+    // lo incluía y el borde de arriba de la máscara caía EXACTAMENTE en el borde
+    // de la pastilla, sin holgura: con la lupa por encima de 1,164 el trozo de
+    // icono que sobresalía se veía pero el clic se iba a la ventana de detrás.
     mask: Region {
         item: zonaRaton
         radius: globos.menuAbierto ? 0 : Math.round(dock.radio)
 
         Region {
-            item: cargaVista
+            item: globos.itemVista
             radius: Theme.shapeLg
             // Sin la vista previa abierta, el Loader mide 0×0 y la región
             // simplemente no aporta nada.
@@ -139,7 +153,11 @@ PanelWindow {
         id: dock
         onPideMenu: (r, x, y) => globos.abrirMenu(r, x)
         onHoverCambia: (r, b, dentro) => globos.hover(r, b, dentro)
-        onHoverAccion: (b, nombre, dentro) => globos.hoverEtiqueta(b, nombre, b, dentro)
+        // Los botones de acción no tienen ranura, así que su clave se compone
+        // con el nombre. Prefijada para que no pueda chocar con la de una app
+        // que se llamara igual que el botón.
+        onHoverAccion: (b, nombre, dentro) =>
+            globos.hoverEtiqueta("accion:" + nombre, nombre, b, dentro)
         anchoPantalla: win.screen ? win.screen.width : 0
         anchors.horizontalCenter: parent.horizontalCenter
         y: win.revelado
@@ -163,212 +181,14 @@ PanelWindow {
         }
     }
 
-    // La coordinación vive AQUÍ y no en cada botón porque las dos reglas que
-    // hacen usable la vista previa necesitan ver los dos botones a la vez:
-    //
-    //   · Al pasar del icono al globo, el globo NO debe cerrarse. De ahí el
-    //     retardo de salida: sin él, el hueco entre el icono y el globo lo mata
-    //     en el camino y la función es inservible.
-    //   · Al pasar de un icono al vecino, el globo debe RECOLOCARSE, no
-    //     cerrarse y volver a abrirse con su medio segundo de espera.
-    Item {
+    // Quién de los tres globos está abierto, por qué y dónde se pone: todo eso
+    // vive en DockPopovers. Este archivo se queda con la única pregunta que le
+    // toca —dónde está la superficie y cuándo existe—, que ya era bastante:
+    // layer-shell, máscara de entrada, autoocultar, reserva de espacio y
+    // animación de aparición.
+    DockPopovers {
         id: globos
         anchors.fill: parent
-
-        property var ranuraVista: null
-        property var ranuraPendiente: null
-        property var botonVista: null
-        property real centroVista: 0
-        property var ranuraMenu: null
-        property real centroMenu: 0
-        property bool ratonEnGlobo: false
-
-        // Estado de la etiqueta del nombre. Va aparte del de la vista previa a
-        // propósito: son dos globos con dos tiempos y dos condiciones, y
-        // mezclarlos obligaría a que uno heredase los frenos del otro.
-        // La clave identifica QUÉ se está señalando —una ranura de app o un
-        // botón de acción— y solo sirve para saber si el 'salir' que llega es
-        // del mismo sitio. El texto va aparte porque no todo lo que lleva
-        // etiqueta tiene una app detrás.
-        property var claveEtiqueta: null
-        property string textoEtiqueta: ""
-        property var botonEtiqueta: null
-        property real centroEtiqueta: 0
-        property bool etiquetaLista: false
-
-        readonly property bool vistaAbierta: globos.ranuraVista !== null
-                                             && Settings.dockPreviews
-        readonly property bool menuAbierto: globos.ranuraMenu !== null
-
-        // Cede el sitio a los otros dos: la vista previa ya lleva el nombre en
-        // su primera línea, y el menú tapa el icono del que hablaría.
-        readonly property bool etiquetaAbierta: globos.etiquetaLista
-                                                && globos.claveEtiqueta !== null
-                                                && !globos.vistaAbierta
-                                                && !globos.menuAbierto
-        readonly property bool abiertos: globos.vistaAbierta || globos.menuAbierto
-
-        function hover(ranura, boton, dentro) {
-            globos.hoverEtiqueta(ranura, Dock.nombreDe(ranura ? ranura.id : ""),
-                                 boton, dentro)
-            if (!Settings.dockPreviews)
-                return
-            if (dentro) {
-                globos.botonVista = boton
-                globos.ranuraPendiente = ranura
-                salir.stop()
-                // Con un globo ya abierto se salta la espera de entrada: ya
-                // estás mirando globos, hacerte esperar medio segundo por cada
-                // icono del dock sería absurdo.
-                if (globos.vistaAbierta)
-                    globos.mostrar(ranura, boton)
-                else
-                    entrar.restart()
-                return
-            }
-            entrar.stop()
-            if (globos.botonVista === boton)
-                salir.restart()
-        }
-
-        function mostrar(ranura, boton) {
-            if (!boton)
-                return
-            const p = boton.mapToItem(globos, boton.width / 2, 0)
-            globos.centroVista = p.x
-            globos.ranuraVista = ranura
-        }
-
-        // Espera corta y no medio segundo: saber cómo se llama un icono no
-        // puede costar lo mismo que abrir un globo con miniaturas. Pero alguna
-        // hay, o cruzar el dock de lado a lado encendería una etiqueta por
-        // icono en el camino.
-        function hoverEtiqueta(clave, texto, boton, dentro) {
-            if (dentro) {
-                globos.botonEtiqueta = boton
-                globos.claveEtiqueta = clave
-                globos.textoEtiqueta = texto
-                // Con una etiqueta ya puesta, pasar al vecino es inmediato.
-                if (globos.etiquetaLista)
-                    globos.colocarEtiqueta()
-                else
-                    etiquetaEntra.restart()
-                return
-            }
-            etiquetaEntra.stop()
-            if (globos.claveEtiqueta === clave)
-                globos.cerrarEtiqueta()
-        }
-
-        function cerrarEtiqueta() {
-            etiquetaEntra.stop()
-            globos.claveEtiqueta = null
-            globos.etiquetaLista = false
-        }
-
-        function colocarEtiqueta() {
-            if (!globos.botonEtiqueta)
-                return
-            const b = globos.botonEtiqueta
-            globos.centroEtiqueta = b.mapToItem(globos, b.width / 2, 0).x
-            globos.etiquetaLista = true
-        }
-
-        function cerrarVista() {
-            entrar.stop()
-            salir.stop()
-            globos.ranuraVista = null
-            globos.botonVista = null
-        }
-
-        function abrirMenu(ranura, xVentana) {
-            globos.cerrarVista()
-            globos.cerrarEtiqueta()
-            globos.centroMenu = xVentana
-            globos.ranuraMenu = ranura
-        }
-
-        function cerrarMenu() { globos.ranuraMenu = null }
-
-        Timer {
-            id: entrar
-            interval: 500
-            onTriggered: globos.mostrar(globos.ranuraPendiente, globos.botonVista)
-        }
-        Timer {
-            id: etiquetaEntra
-            interval: 150
-            onTriggered: globos.colocarEtiqueta()
-        }
-        Timer {
-            id: salir
-            interval: 250
-            onTriggered: if (!globos.ratonEnGlobo) globos.cerrarVista()
-        }
-
-        // Captador de clics de fondo: solo existe con el menú abierto, y solo
-        // entonces la máscara cubre la ventana entera. Con la vista previa NO
-        // se pone: la vista previa se cierra sola al retirar el ratón, y un
-        // captador a pantalla completa por pasar el ratón por encima de un
-        // icono se comería el primer clic de cualquier cosa que hicieras.
-        MouseArea {
-            anchors.fill: parent
-            visible: globos.menuAbierto
-            enabled: globos.menuAbierto
-            onClicked: globos.cerrarMenu()
-        }
-
-        Loader {
-            id: cargaVista
-            active: globos.vistaAbierta
-            visible: active
-            sourceComponent: DockPreview {
-                ranura: globos.ranuraVista
-                onPideCerrar: globos.cerrarVista()
-            }
-            // Centrado sobre el icono y acotado a la pantalla: un globo de la
-            // app más a la derecha se saldría por el borde y quedaría cortado.
-            x: Math.max(Theme.space8,
-                        Math.min(globos.width - width - Theme.space8,
-                                 globos.centroVista - width / 2))
-            y: dock.y - height - Theme.space8
-
-            // Con el ratón DENTRO del globo, el temporizador de salida no debe
-            // cerrarlo: es la otra mitad de la histéresis. HoverHandler y no un
-            // MouseArea porque un captador encima se comería los clics de las
-            // filas, que son justo para lo que está el globo.
-            HoverHandler {
-                onHoveredChanged: {
-                    globos.ratonEnGlobo = hovered
-                    if (hovered) salir.stop()
-                    else salir.restart()
-                }
-            }
-        }
-
-        Loader {
-            active: globos.etiquetaAbierta
-            visible: active
-            sourceComponent: DockLabel { texto: globos.textoEtiqueta }
-            // Mismo estante que la vista previa y misma sujeción a los bordes:
-            // la etiqueta de la app más a la derecha se saldría de la pantalla.
-            x: Math.max(Theme.space8,
-                        Math.min(globos.width - width - Theme.space8,
-                                 globos.centroEtiqueta - width / 2))
-            y: dock.y - height - Theme.space8
-        }
-
-        Loader {
-            active: globos.menuAbierto
-            visible: active
-            sourceComponent: DockMenu {
-                ranura: globos.ranuraMenu
-                onPideCerrar: globos.cerrarMenu()
-            }
-            x: Math.max(Theme.space8,
-                        Math.min(globos.width - width - Theme.space8,
-                                 globos.centroMenu - width / 2))
-            y: dock.y - height - Theme.space8
-        }
+        fila: dock
     }
 }

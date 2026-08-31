@@ -10,7 +10,13 @@ import qs.Services
 // no pide foco de teclado: se cierra al pulsar fuera o al ejecutar una fila.
 // Un menú de layer-shell con foco exclusivo se lo quitaría a la ventana en la
 // que estabas escribiendo solo por pulsar con el botón derecho en un icono.
-Rectangle {
+//
+// La superficie sale de DockSurface, igual que el dock, la etiqueta y la vista
+// previa. Antes era el único de los cuatro sin sombra y sin luz de canto: un
+// globo flotante con el filete plano de una tarjeta empotrada, justo al lado de
+// otros dos que sí flotaban. No había ninguna razón detrás — es lo que pasa al
+// tocar tres archivos en tres días distintos.
+DockSurface {
     id: root
 
     property var ranura: null
@@ -28,10 +34,9 @@ Rectangle {
     implicitHeight: col.implicitHeight + Theme.space6 * 2
 
     radius: Theme.shapeMd
-    color: Theme.surfaceContainer
-    border.width: 1
-    border.color: Theme.outlineVariant
-    antialiasing: true
+    // Igual que la vista previa: flota por encima del dock, así que su sombra
+    // cae un pelín más que la de él para que los dos planos no se confundan.
+    sombraBaja: Theme.dp(3)
 
     // Una fila del menú. Se declara aquí dentro y no como archivo suelto porque
     // no la usa nadie más: sacarla a Components/ sería un archivo más que leer

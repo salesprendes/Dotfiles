@@ -3,6 +3,7 @@ import Quickshell
 import Quickshell.Hyprland
 import qs.Components
 import qs.Config
+import qs.Services
 
 // Workspaces de Hyprland: el activo se ensancha, se ilumina y muestra su
 // número. Click en un punto salta a ese workspace; la rueda sobre la píldora
@@ -19,16 +20,13 @@ Pill {
         .filter(w => !w.monitor || !root.screen || w.monitor.name === root.screen.name)
         .sort((a, b) => a.id - b.id)
 
+    // La lista de escritorios se lee aquí directamente —esto ES el widget de
+    // escritorios—, pero la ORDEN va por WindowManager: la bifurcación entre la
+    // sintaxis Lua y la clásica estaba repetida en cuatro sitios y ya se rompió
+    // una vez entera al cambiar Hyprland.
     function focusWorkspace(workspace) {
-        const id = workspace && workspace.id !== undefined ? workspace.id : 1
-        // En modo Lua, dispatch() se interpreta como hl.dispatch(...), así
-        // que "workspace N" petaría con error de sintaxis. Hay que usar la
-        // API Lua (hl.dsp.focus).
-        if (Hyprland.usingLua) {
-            Hyprland.dispatch("hl.dsp.focus({ workspace = " + id + " })")
-        } else {
-            Hyprland.dispatch("workspace " + id)
-        }
+        WindowManager.enfocarEscritorio(
+            workspace && workspace.id !== undefined ? workspace.id : 1)
     }
 
     // Salta al workspace numérico vecino (dir = ±1). Va por número y no por la

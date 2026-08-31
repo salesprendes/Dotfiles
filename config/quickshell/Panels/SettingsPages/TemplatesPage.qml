@@ -4,6 +4,7 @@ import QtQuick
 import QtQuick.Layouts
 import qs.Components
 import qs.Config
+import qs.Services
 
 // Plantillas: el interruptor maestro vive en su propia tarjeta, separado de la
 // parrilla de casillas, para que quede claro que es un control aparte y no una

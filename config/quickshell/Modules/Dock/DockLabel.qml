@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Effects
 import qs.Components
 import qs.Config
 
@@ -19,9 +18,7 @@ Item {
 
     property string texto: ""
 
-    // La punta que señala al icono. Es lo que convierte un rectángulo que
-    // flota cerca en una etiqueta que habla de ESE icono, y con varios iconos
-    // seguidos es la diferencia entre saber de cuál habla y suponerlo.
+    // Lo que asoma de la punta por debajo de la pastilla (ver 'punta' abajo).
     readonly property int puntaAlto: Theme.dp(5)
     // Un nombre largo no puede cruzar media pantalla; a partir de aquí, elide.
     readonly property int anchoMax: Theme.dp(260)
@@ -47,56 +44,43 @@ Item {
         }
     }
 
-    // La misma sombra que el dock, para que los dos floten a la misma altura.
-    RectangularShadow {
-        anchors.fill: pastilla
-        visible: Settings.dockShadow
-        radius: pastilla.radius
-        blur: Theme.dp(14)
-        spread: Theme.dp(1)
-        offset: Qt.vector2d(0, Theme.dp(2))
-        color: Theme.withAlpha("#000000", Theme.isDark ? 0.45 : 0.22)
-        cached: true
-    }
-
-    // Va ANTES de la pastilla en el árbol para que su mitad de arriba —y el
-    // filete que la cruzaría por dentro— queden tapados por ella.
-    Rectangle {
-        id: punta
-        width: Theme.dp(10)
-        height: width
-        rotation: 45
-        antialiasing: true
-        color: pastilla.color
-        border.width: pastilla.border.width
-        border.color: pastilla.border.color
-        x: Math.round((root.width - width) / 2)
-        y: root.height - root.puntaAlto - Math.round(height / 2)
-    }
-
-    Rectangle {
+    // La pastilla, la sombra y la luz del canto salen de DockSurface, que es lo
+    // que comparten las cuatro superficies del dock. Aquí solo se ajusta lo que
+    // de verdad es distinto: una sombra algo más corta —esto flota un dedo por
+    // encima del dock, no un palmo— y un corte de luz más abajo, porque en una
+    // pastilla de 30 px el 0,45 de una de 73 px cae ya fuera del arco.
+    DockSurface {
         id: pastilla
         width: root.width
         height: etiqueta.implicitHeight + Theme.space6 * 2
         // Pastilla completa, como el propio dock: es una etiqueta, no una tarjeta.
         radius: height / 2
-        color: Theme.surfaceContainer
-        border.width: 1
+        // El mismo filete translúcido que el dock, y no el de los globos opacos:
+        // esto es la misma pieza de cristal, más pequeña.
         border.color: Theme.withAlpha(Theme.overlay, 0.35)
-        antialiasing: true
+        corteLuz: 0.5
+        sombraBlur: Theme.dp(14)
 
-        // La misma luz en el canto de arriba que la pastilla del dock. Es lo que
-        // hace que las dos superficies se lean como el mismo material.
+        // La punta que señala al icono. Es lo que convierte un rectángulo que
+        // flota cerca en una etiqueta que habla de ESE icono, y con varios iconos
+        // seguidos es la diferencia entre saber de cuál habla y suponerlo.
+        //
+        // Va con z negativo, que es lo que la deja DEBAJO del fondo de la
+        // pastilla: así la pastilla le tapa la mitad de arriba y el filete que
+        // la cruzaría por dentro. Con z negativo también queda por detrás de la
+        // sombra, que es hermana suya y se declara antes.
         Rectangle {
-            anchors.fill: parent
-            radius: parent.radius
-            gradient: Gradient {
-                GradientStop {
-                    position: 0.0
-                    color: Theme.withAlpha("#ffffff", Theme.isDark ? 0.07 : 0.30)
-                }
-                GradientStop { position: 0.5; color: "transparent" }
-            }
+            id: punta
+            z: -1
+            width: Theme.dp(10)
+            height: width
+            rotation: 45
+            antialiasing: true
+            color: pastilla.color
+            border.width: pastilla.border.width
+            border.color: pastilla.border.color
+            x: Math.round((pastilla.width - width) / 2)
+            y: pastilla.height - Math.round(height / 2)
         }
 
         ThemedText {

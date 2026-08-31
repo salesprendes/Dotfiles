@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Effects
 import qs.Config
 import qs.Services
 
@@ -42,11 +41,48 @@ Item {
     // como 'scale' y 'transform', que no tocan la disposición del Row, así que el
     // centro de reposo no cambia nunca y no hay bucle de vínculos posible.
     readonly property real cajaBoton: Theme.dp(Settings.dockIconSize) + Theme.dp(16)
-    // Dos botones y medio a cada lado: menos y la ola se ve dura, más y todo el
+
+    // Los cuatro números de la ola, con nombre. Sueltos dentro de las fórmulas
+    // había que reconstruir mentalmente qué significaba cada factor cada vez que
+    // se leía, y son justo los que uno quiere retocar para ajustar el tacto.
+    //
+    // No van a Theme: son parámetros de ESTE algoritmo, no del aspecto del shell.
+    // En Theme invitarían a que otro módulo los reutilizara para otra cosa, y a
+    // partir de ahí ya no se pueden tocar sin mirar quién más los usa.
+    //
+    // Dos botones y medio de alcance: menos y la ola se ve dura, más y todo el
     // dock se mueve a la vez y deja de leerse de dónde viene.
-    readonly property real alcance: (root.cajaBoton + root.hueco) * 2.5
+    readonly property real lupaAlcanceBotones: 2.5
+    readonly property real lupaFactorEnsanche: 1.4
+    readonly property real lupaFactorEmpuje: 0.9
+    // Por debajo de esto la lupa se considera apagada. No es 1.0 exacto porque
+    // el ajuste es un real que pasa por JSON y por un deslizador.
+    readonly property real lupaMinima: 1.001
+    readonly property bool lupaActiva: Settings.dockMagnify > root.lupaMinima
+
+    readonly property real alcance: (root.cajaBoton + root.hueco) * root.lupaAlcanceBotones
     property real cursorX: 0
     property bool cursorDentro: false
+
+    // El aire que hay que reservar POR ENCIMA de la pastilla para que quepa el
+    // icono ampliado. Esta es la medida que faltaba y de la que salían tres
+    // fallos distintos:
+    //
+    //   · el icono se dibujaba fuera de la máscara de entrada de layer-shell, o
+    //     sea que la mitad de arriba se veía pero el clic se iba a la ventana de
+    //     detrás (ver DockWindow, que ata su máscara a implicitHeight);
+    //   · con la fila desbordada, 'clip' lo cortaba por el canto de la pastilla;
+    //   · al subir el cursor hacia esa mitad se salía de la zona de hover y la
+    //     ola se desplomaba justo cuando la estabas apuntando.
+    //
+    // El botón crece (m-1)·caja desde su borde de abajo, y ya tiene 'relleno' de
+    // aire dentro de la pastilla; lo que sobresale es la diferencia. Con la lupa
+    // por defecto (1,12) sale 0 —no sobresale— y con el máximo del ajuste (1,6)
+    // salen unos 24 px. Es decir: hasta 1,164 esto no reserva nada y el dock
+    // mide exactamente lo que medía.
+    readonly property real aireLupa: root.lupaActiva
+        ? Math.max(0, (Settings.dockMagnify - 1) * root.cajaBoton - root.relleno)
+        : 0
 
     // Con la ola activa los iconos de los extremos se apartan y crecen. Sin
     // ensanchar la pastilla se saldrían de ella y el dock parecería roto.
@@ -61,8 +97,8 @@ Item {
     // Única propiedad del fichero que NO es readonly, y no por descuido: un
     // Behavior no puede animar una readonly. Nadie le asigna nada, que es lo
     // que la convención de arriba protege.
-    property real ensanche: (root.cursorDentro && Settings.dockMagnify > 1.001)
-        ? (Settings.dockMagnify - 1) * root.cajaBoton * 1.4
+    property real ensanche: (root.cursorDentro && root.lupaActiva)
+        ? (Settings.dockMagnify - 1) * root.cajaBoton * root.lupaFactorEnsanche
         : 0
     Behavior on ensanche {
         enabled: Theme.animNormal > 0
@@ -71,7 +107,7 @@ Item {
 
     // 1 en el cursor, 0 en el borde del alcance, con transición suave.
     function factorLupa(centro) {
-        if (!root.cursorDentro || Settings.dockMagnify <= 1.001)
+        if (!root.cursorDentro || !root.lupaActiva)
             return 0
         const t = 1 - Math.min(1, Math.abs(centro - root.cursorX) / root.alcance)
         return t * t * (3 - 2 * t)
@@ -81,16 +117,17 @@ Item {
     // solo crece— y constante más allá del alcance, que es lo que hace que los
     // de los extremos acompañen el ensanchamiento en vez de quedarse pegados.
     function empujeLupa(centro) {
-        if (!root.cursorDentro || Settings.dockMagnify <= 1.001)
+        if (!root.cursorDentro || !root.lupaActiva)
             return 0
         const d = centro - root.cursorX
         const u = Math.min(1, Math.abs(d) / root.alcance)
-        return Math.sign(d) * (Settings.dockMagnify - 1) * root.cajaBoton * 0.9
-               * (u * u * (3 - 2 * u))
+        return Math.sign(d) * (Settings.dockMagnify - 1) * root.cajaBoton
+               * root.lupaFactorEmpuje * (u * u * (3 - 2 * u))
     }
 
-    // El alto lo marca el botón más el relleno de arriba y abajo. Es la única
-    // medida que las dos formas comparten tal cual.
+    // El alto de la PASTILLA: el botón más el relleno de arriba y abajo. Es la
+    // única medida que las dos formas comparten tal cual, y la que sigue
+    // marcando la zona exclusiva y el sitio del fondo.
     readonly property int altoDock: Theme.dp(Settings.dockIconSize)
                                     + Theme.dp(16) + root.relleno * 2
 
@@ -98,7 +135,10 @@ Item {
     // pantalla, y a partir de ahí la fila se desplaza con la rueda.
     readonly property real anchoMax: root.anchoPantalla * 0.9
 
-    implicitHeight: root.altoDock
+    // El item mide MÁS que la pastilla: la pastilla abajo y el aire de la lupa
+    // encima. Todo lo que quiera hablar de "dónde está el dock" tiene que sumar
+    // 'aireLupa' a la 'y' de este item (ver DockWindow.topePastilla).
+    implicitHeight: root.altoDock + root.aireLupa
     implicitWidth: root.esHotseat
         ? root.anchoPantalla
         : Math.min(root.anchoMax,
@@ -113,61 +153,29 @@ Item {
     readonly property int radio: Settings.dockRadius >= 0
                                  ? Theme.dp(Settings.dockRadius) : root.radioAuto
 
-    // La sombra. Va antes del fondo en el árbol para quedar
-    // debajo, y no dentro de él: un hijo de 'fondo' se recortaría con sus
-    // esquinas redondeadas y la sombra es justo lo que tiene que desbordarlas.
-    RectangularShadow {
-        anchors.fill: fondo
-        visible: Settings.dockShadow
-        radius: root.radio
-        blur: Theme.dp(18)
-        spread: Theme.dp(1)
-        offset: Qt.vector2d(0, Theme.dp(2))
-        color: Theme.withAlpha("#000000", Theme.isDark ? 0.45 : 0.22)
-        cached: true
-    }
-
-    Rectangle {
+    // El fondo ocupa solo la parte de abajo: el aire de la lupa es transparente
+    // y está ahí para que quepan los iconos ampliados, no para agrandar la
+    // pastilla. Sombra y luz de canto las trae DockSurface.
+    DockSurface {
         id: fondo
-        anchors.fill: parent
-        color: Theme.withAlpha(Theme.bg, Settings.dockOpacity)
-        // El mismo tratamiento que la isla, que es la otra superficie flotante
-        // del shell: sin este filete, sobre un fondo de pantalla oscuro el dock
-        // no tiene borde y parece un recorte.
-        border.width: 1
-        border.color: Theme.withAlpha(Theme.overlay, 0.35)
-        antialiasing: true
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        height: root.altoDock
 
-        topLeftRadius: root.radio
-        topRightRadius: root.radio
-        bottomLeftRadius: root.esHotseat ? 0 : root.radio
-        bottomRightRadius: root.esHotseat ? 0 : root.radio
+        color: Theme.withAlpha(Theme.bg, Settings.dockOpacity)
+        // Filete de 'overlay' y no el de los globos: esta superficie es
+        // translúcida sobre el fondo de escritorio, y sin él, sobre un fondo
+        // oscuro, el dock no tiene borde y parece un recorte.
+        border.color: Theme.withAlpha(Theme.overlay, 0.35)
+
+        radius: root.radio
+        radioBL: root.esHotseat ? 0 : root.radio
+        radioBR: root.esHotseat ? 0 : root.radio
 
         Behavior on color {
             enabled: Theme.animNormal > 0
             ColorAnimation { duration: Theme.animFast }
-        }
-
-        // Luz en el canto de arriba. Es lo que separa "rectángulo semitransparente"
-        // de "cristal": una superficie translúcida se lee como material cuando el
-        // borde superior recoge algo de luz.
-        //
-        // Va como degradado y no como filete de 1 px porque en una pastilla el
-        // borde de arriba es un arco, y un rectángulo no lo sigue. El degradado sí,
-        // y sirve igual para el radio que tenga.
-        Rectangle {
-            anchors.fill: parent
-            topLeftRadius: fondo.topLeftRadius
-            topRightRadius: fondo.topRightRadius
-            bottomLeftRadius: fondo.bottomLeftRadius
-            bottomRightRadius: fondo.bottomRightRadius
-            gradient: Gradient {
-                GradientStop {
-                    position: 0.0
-                    color: Theme.withAlpha("#ffffff", Theme.isDark ? 0.07 : 0.30)
-                }
-                GradientStop { position: 0.45; color: "transparent" }
-            }
         }
     }
 
@@ -181,10 +189,13 @@ Item {
         anchors.fill: parent
         anchors.leftMargin: root.relleno
         anchors.rightMargin: root.relleno
+        // Ocupa TAMBIÉN el aire de la lupa, no solo la pastilla, y de ahí salen
+        // las dos mitades del arreglo: el recorte cae por encima de los iconos
+        // ampliados en vez de por su cintura, y el hover sigue vivo cuando el
+        // cursor sube hacia el icono que acaba de crecer.
+        //
         // Solo se recorta cuando hace falta: con la fila desplazable, para que
-        // no se pinte fuera del carril. Cuando cabe entera —el caso normal— se
-        // deja sin recortar para que los iconos ampliados asomen por encima de
-        // la píldora en vez de quedar cortados por su borde.
+        // no se pinte fuera del carril.
         clip: carril.contentWidth > carril.width + 0.5
         contentWidth: fila.implicitWidth
         contentHeight: height
@@ -192,15 +203,23 @@ Item {
         interactive: contentWidth > width
         boundsBehavior: Flickable.StopAtBounds
 
+        // El hover va aquí y no en 'fila' justo por lo de arriba: en 'fila',
+        // que mide solo la pastilla, subir el cursor al icono ampliado contaba
+        // como salir del dock y la ola se caía sola.
+        //
+        // La x se corrige con fila.x porque los centros de los botones están en
+        // coordenadas de 'fila', que va centrada dentro del carril.
+        HoverHandler {
+            id: raton
+            onPointChanged: root.cursorX = raton.point.position.x - fila.x
+            onHoveredChanged: root.cursorDentro = raton.hovered
+        }
+
         Row {
             id: fila
-            height: parent.height
-
-            HoverHandler {
-                id: raton
-                onPointChanged: root.cursorX = raton.point.position.x
-                onHoveredChanged: root.cursorDentro = raton.hovered
-            }
+            height: root.altoDock
+            // Pegada abajo: el aire de la lupa queda por encima.
+            y: root.aireLupa
             // En hotseat la fila va centrada dentro de una barra que ocupa toda
             // la pantalla; en pastilla, la pastilla ya mide lo que la fila.
             x: Math.max(0, Math.round((carril.width - implicitWidth) / 2))
@@ -301,9 +320,14 @@ Item {
         // El color sale de 'fondo' y no se vuelve a componer aquí: escrito dos
         // veces, el día que cambie el fondo el degradado se quedaría con el color
         // viejo y aparecería una banda que no cuadra con nada.
+        //
+        // Cubren solo el alto de la PASTILLA: extendidos al aire de la lupa
+        // pintarían una banda de color flotando por encima del dock, sobre el
+        // fondo de escritorio.
         component Velo: Rectangle {
             width: Theme.dp(24)
-            height: parent.height
+            y: root.aireLupa
+            height: root.altoDock
             gradient: Gradient {
                 orientation: Gradient.Horizontal
                 GradientStop { position: 0.0; color: fondo.color }

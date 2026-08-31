@@ -2,7 +2,6 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls.Basic
 import Quickshell
-import Quickshell.Hyprland
 import qs.Components
 import qs.Config
 import qs.Panels.SettingsPages
@@ -298,39 +297,28 @@ FloatingWindow {
         function onSettingsResummon() { cfg.summonOrClose() }
     }
 
-    // Busca el toplevel de Hyprland de ESTA ventana por su título (que
-    // conocemos aquí mismo, así no depende del idioma de la interfaz).
+    // Se busca por título —que conocemos aquí mismo— y así no depende del
+    // idioma de la interfaz.
     function settingsToplevel() {
-        const list = Hyprland.toplevels ? Hyprland.toplevels.values : []
-        for (let i = 0; i < list.length; i++)
-            if (list[i] && list[i].title === cfg.title) return list[i]
-        return null
+        return WindowManager.porTitulo(cfg.title)
     }
 
     // Reabrir cuando ya está abierta (llamado desde onSettingsResummon, que
     // dispara Globals.toggleSettings() si la ventana ya existe): si está en
     // este workspace se cierra (toggle); si está en otro, se trae al actual
-    // y se enfoca en vez de cerrarla. Como el destino es el workspace
-    // activo, el "seguir la ventana" no cambia la vista y deja la ventana
-    // enfocada. Este Hyprland está en modo Lua, así que la sintaxis clásica
-    // de dispatchers NO vale: hay que usar la API Lua.
+    // y se enfoca en vez de cerrarla. Como el destino es el workspace activo,
+    // el "seguir la ventana" no cambia la vista y deja la ventana enfocada.
+    //
+    // Cómo se le pide eso al compositor —y qué pasa si no hay— es asunto de
+    // WindowManager. Aquí solo está la decisión de esta ventana: cerrar si ya
+    // la tienes delante, traerla si no.
     function summonOrClose() {
         const tl = settingsToplevel()
-        const ws = Hyprland.focusedWorkspace
-        const here = tl && ws && tl.workspace && tl.workspace.id === ws.id
-        if (!tl || here) {
+        if (!tl || WindowManager.estaAqui(tl)) {
             Globals.settingsOpen = false
             return
         }
-        let addr = String(tl.address)
-        if (addr.indexOf("0x") !== 0) addr = "0x" + addr
-        if (Hyprland.usingLua) {
-            Hyprland.dispatch('hl.dsp.window.move({ workspace = ' + ws.id
-                + ', window = "address:' + addr + '" })')
-        } else {
-            Hyprland.dispatch("movetoworkspace " + ws.id + ",address:" + addr)
-            Hyprland.dispatch("focuswindow address:" + addr)
-        }
+        WindowManager.enfocar(tl)
     }
 
     readonly property string userName: Quickshell.env("USER") || "usuario"

@@ -6,11 +6,18 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import qs.Config
-import qs.Services
 
 // Plantillas de apps: una parrilla de apps con casillas; cada una vuelca los
 // colores del tema en el archivo de configuración de esa app. Todo en QML, con
 // FileView para leer y escribir y Process solo para comandos sueltos.
+//
+// Está en Services y no en Config, aunque parezca una tabla de datos, y la razón
+// es justo lo que hace: escribe ficheros de otras apps, lanza procesos y
+// pregunta a Deps qué hay instalado. Eso es un servicio. Mientras vivió en
+// Config tenía que importar qs.Services para llegar a Deps, y como casi todos
+// los servicios importan qs.Config, eso cerraba un ciclo de módulos —el mismo
+// que la cabecera de Config/DockCatalog.qml dice que hay que mantener cortado—.
+// Config son datos y funciones puras; lo que toca el disco vive aquí.
 //
 // La lista solo muestra las apps detectadas en el sistema (ver 'isInstalled'):
 // con quince candidatas y casi ninguna instalada, enseñarlas todas es ruido.

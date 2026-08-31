@@ -2,7 +2,6 @@ pragma Singleton
 
 import QtQuick
 import Quickshell
-import Quickshell.Hyprland
 import Quickshell.Wayland
 import qs.Config
 
@@ -12,6 +11,12 @@ import qs.Config
 // La lógica de listas —fusionar fijadas con abiertas, ordenar, sanear— vive en
 // Config/DockCatalog.qml, que es puro y comprobable sin sesión gráfica. Esta es
 // la mitad que no lo es, y por eso se ha dejado lo más delgada posible.
+//
+// Hablar con el compositor tampoco es asunto suyo: enfocar una ventana, traerla
+// al escritorio actual o preguntar si un monitor tiene ventanas vive en
+// Services/WindowManager.qml, que es quien conoce a Hyprland. Este archivo ya no
+// lo importa. Lo de aquí es qué apps hay, con qué icono se dibujan y qué pasa al
+// pulsarlas.
 Singleton {
     id: root
 
@@ -88,36 +93,6 @@ Singleton {
         return solo.indexOf(nombre) !== -1
     }
 
-    // ¿Tiene ventanas el espacio de trabajo activo de este monitor? Es lo que
-    // decide el autoocultar inteligente, y que sea por monitor importa: una
-    // ventana a pantalla completa en la principal no debe esconder el dock de
-    // la secundaria, que está vacía.
-    //
-    // Sin Hyprland no se sabe en qué monitor está cada ventana, y se devuelve
-    // false —"escritorio vacío"—, con lo que el modo inteligente se comporta
-    // como "siempre visible": esconder un dock sin saber si estorba sería peor.
-    function hayVentanasEn(monitor) {
-        if (!Settings.hyprlandAvailable)
-            return false
-        const mons = Hyprland.monitors ? Hyprland.monitors.values : []
-        let wsId = -1
-        for (const m of mons)
-            if (m && m.name === monitor && m.activeWorkspace) {
-                wsId = m.activeWorkspace.id
-                break
-            }
-        if (wsId === -1)
-            return false
-        for (const tl of (Hyprland.toplevels ? Hyprland.toplevels.values : [])) {
-            const ipc = tl ? tl.lastIpcObject : null
-            if (!ipc || ipc.mapped === false || ipc.hidden === true)
-                continue
-            if (tl.workspace && tl.workspace.id === wsId)
-                return true
-        }
-        return false
-    }
-
     // NotifService agrupa por el nombre que la app se pone a sí misma al enviar
     // el aviso, y el dock indexa por id de .desktop. No son la misma cosa ni hay
     // conversión general, así que se comparan plegados contra el nombre y el id
@@ -172,71 +147,92 @@ Singleton {
             root.lanzarNueva(ranura.id)
             return
         }
+        // El contador se RESINCRONIZA con la ventana enfocada de verdad antes de
+        // avanzar. Sin esto, cualquier cambio de foco que no venga del dock
+        // —Alt+Tab, un clic en la ventana, la vista previa— dejaba el índice
+        // apuntando a otro sitio, y el primer clic siguiente saltaba a una
+        // ventana que no era la que tocaba.
+        //
+        // Y se resincroniza en vez de sustituirse por completo por la ventana
+        // enfocada, que sería menos estado: Hyprland enfoca de forma asíncrona,
+        // así que dos clics seguidos leerían el mismo 'activeToplevel' de antes
+        // y volverían a enfocar la misma ventana. El contador es lo que hace que
+        // pulsar rápido siga avanzando.
+        const enfocada = vs.indexOf(ToplevelManager.activeToplevel)
         const prev = root._rotacion[ranura.id]
-        const i = (typeof prev === "number" ? (prev + 1) : 0) % vs.length
+        const base = enfocada >= 0 ? enfocada
+                   : (typeof prev === "number" ? prev : -1)
+        const i = (base + 1) % vs.length
         const copia = Object.assign({}, root._rotacion)
         copia[ranura.id] = i
         root._rotacion = copia
-        root.enfocar(vs[i])
+        WindowManager.enfocar(vs[i])
     }
 
-    // Trae una ventana, moviéndola al espacio de trabajo actual si estaba en
-    // otro. En modo Lua la sintaxis clásica de dispatchers no vale.
-    function enfocar(toplevel) {
-        if (!toplevel)
-            return
-        if (!Settings.hyprlandAvailable) {
-            // Sin Hyprland queda el camino del protocolo, que enfoca pero no
-            // puede traer la ventana de otro escritorio.
-            if (toplevel.activate)
-                toplevel.activate()
-            return
-        }
-        const hl = root._hyprDe(toplevel)
-        const ws = Hyprland.focusedWorkspace
-        if (!hl || !ws) {
-            if (toplevel.activate)
-                toplevel.activate()
-            return
-        }
-        let addr = String(hl.address)
-        if (addr.indexOf("0x") !== 0)
-            addr = "0x" + addr
-        if (hl.workspace && hl.workspace.id === ws.id) {
-            if (Hyprland.usingLua)
-                Hyprland.dispatch('hl.dsp.focus({ window = "address:' + addr + '" })')
-            else
-                Hyprland.dispatch("focuswindow address:" + addr)
-            return
-        }
-        if (Hyprland.usingLua)
-            Hyprland.dispatch('hl.dsp.window.move({ workspace = ' + ws.id
-                              + ', window = "address:' + addr + '" })')
-        else
-            Hyprland.dispatch("movetoworkspace " + ws.id + ",address:" + addr)
+    // Apps a las que se les acaba de dar la orden de arrancar, con el número de
+    // ventanas que tenían al pulsar. Es lo que hace botar su icono mientras no
+    // aparece nada.
+    //
+    // Vive AQUÍ y no en el botón, y esa es la parte importante: 'ranuras' se
+    // reconstruye entera en cada cambio y el Repeater del dock, al tener un
+    // array por modelo, destruye y rehace TODOS los delegates cuando el
+    // contenido cambia — comprobado con Qt 6.11. Un rebote guardado en el
+    // delegate se perdía en cuanto cualquier otra app abría una ventana, y el
+    // 'abierta' que debía pararlo no llegaba a dispararse nunca porque el objeto
+    // que lo escuchaba ya no existía.
+    //
+    // Se guarda la CUENTA y no un simple "estaba cerrada": el clic central pide
+    // otra ventana de una app que ya tiene una, y ahí "¿tiene ventanas?" ya era
+    // cierto antes de pulsar. Comparando cuentas, la primera ventana y la
+    // enésima se detectan igual.
+    property var _arrancando: ({})
+
+    function estaArrancando(id) {
+        return id !== "" && root._arrancando[id] !== undefined
     }
 
-    // El toplevel de Hyprland que corresponde a uno de Wayland. Quickshell ya
-    // enlaza ambos, así que se busca por la referencia y no por título o clase.
-    function _hyprDe(toplevel) {
-        for (const hl of (Hyprland.toplevels ? Hyprland.toplevels.values : []))
-            if (hl && hl.wayland === toplevel)
-                return hl
-        return null
+    function _ventanasDe(id) {
+        for (const r of root.abiertas)
+            if (r && r.id === id)
+                return (r.ventanas || []).length
+        return 0
     }
-
-    // Se avisa de que ARRANCA, no de que ha arrancado: es justo el hueco entre
-    // pulsar y ver la ventana lo que el icono tiene que rellenar diciendo "voy".
-    // Quien escuche decide cuándo parar; aquí no se sabe si la app tardará
-    // medio segundo o diez.
-    signal lanzada(string id)
 
     function lanzarNueva(id) {
         const e = root.entradaDe(id)
-        if (e && e.execute) {
-            e.execute()
-            root.lanzada(id)
+        if (!e || !e.execute)
+            return
+        const copia = Object.assign({}, root._arrancando)
+        copia[id] = root._ventanasDe(id)
+        root._arrancando = copia
+        e.execute()
+        rendicion.restart()
+    }
+
+    // La app ha llegado: en cuanto tiene MÁS ventanas que al pulsar, deja de
+    // estar arrancando. Se mira aquí y no con un temporizador porque el hueco
+    // que hay que rellenar es exactamente ese, y dura lo que dure la app.
+    onAbiertasChanged: {
+        let copia = null
+        for (const id in root._arrancando) {
+            if (root._ventanasDe(id) > root._arrancando[id]) {
+                if (!copia)
+                    copia = Object.assign({}, root._arrancando)
+                delete copia[id]
+            }
         }
+        if (copia)
+            root._arrancando = copia
+    }
+
+    // Plan B para una app que no llega a abrir nunca —falta una dependencia, el
+    // .desktop miente, la app arranca en bandeja— para no dejar un icono botando
+    // solo hasta el fin de la sesión. Diez segundos es de sobra para lo más
+    // lento que arranca en este equipo y poco para quedarse mirando.
+    Timer {
+        id: rendicion
+        interval: 10000
+        onTriggered: root._arrancando = ({})
     }
 
     function cerrarTodas(ranura) {
